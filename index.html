@@ -1363,11 +1363,20 @@ function MainApp({ user, onLogout }) {
             }
             setLoading(false); return;
         }
-        const unsub = db.collection('habits').where('userId','==',user.uid).orderBy('createdAt','desc').onSnapshot(snap => {
-            setHabits(snap.docs.map(d=>({id:d.id,...d.data()})));
+        const unsub = db.collection('habits').where('userId','==',user.uid).onSnapshot(snap => {
+            setHabits(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
+                const ta = a.createdAt?.toMillis?.() || 0;
+                const tb = b.createdAt?.toMillis?.() || 0;
+                return tb - ta;
+            }));
+            setLoading(false);
+        }, err => {
+            console.error('Firestore error:', err);
             setLoading(false);
         });
-        return ()=>unsub();
+        // 安全超時：最多等 8 秒
+        const timeout = setTimeout(() => setLoading(false), 8000);
+        return () => { unsub(); clearTimeout(timeout); };
     }, [user]);
 
     useEffect(() => {
