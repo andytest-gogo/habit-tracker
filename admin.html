@@ -296,6 +296,9 @@ tr:hover td { background:var(--gray-50); }
 </div><!-- /admin-page -->
 
 <script>
+// 等所有 script 載入完成再執行
+window.addEventListener('DOMContentLoaded', function() {
+
 // ── Firebase 設定（與主 App 相同）──
 const firebaseConfig = {
     apiKey: "AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
@@ -568,6 +571,8 @@ function calcRate(habit) {
     const totalDone = Object.entries(habit.todayCounts || {}).reduce((s,[,v]) => s + Math.min(timesPerCycle, Math.max(0,v||0)), 0);
     return Math.min(100, Math.round((totalDone / totalExpected) * 100));
 }
+
+}); // end DOMContentLoaded
 </script>
 </body>
 </html>
