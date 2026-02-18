@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="健康習慣追蹤社群 - 專業版">
+    <meta name="theme-color" content="#000000">
+    <title>健康習慣追蹤 Pro</title>
+
+    <!-- ── PWA ── -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="習慣追蹤">
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="./icons/icon-144x144.png">
+    <!-- Splash screens for iOS -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --black: #0a0a0a;
+            --gray-900: #1a1a1a;
+            --gray-800: #2a2a2a;
+            --gray-700: #3d3d3d;
+            --gray-600: #555555;
+            --gray-500: #737373;
+            --gray-400: #9a9a9a;
+            --gray-300: #c4c4c4;
+            --gray-200: #e0e0e0;
+            --gray-100: #f0f0f0;
+            --gray-50: #f8f8f8;
+            --white: #ffffff;
+            --font: 'DM Sans', sans-serif;
+            --mono: 'DM Mono', monospace;
+            --din: 'Barlow Condensed', 'DM Mono', monospace;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: var(--font);
+            background: var(--white);
+            color: var(--black);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: var(--white);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* ── PWA INSTALL BANNER ── */
+        .pwa-install-banner {
+            position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+            max-width:440px; width:calc(100% - 32px);
+            background:var(--black); color:var(--white);
+            padding:14px 16px; display:flex; align-items:center; gap:12px;
+            z-index:500; box-shadow:0 4px 24px rgba(0,0,0,.25);
+            animation: slideUp .3s ease;
+        }
+        @keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+        .pwa-install-icon { width:40px; height:40px; flex-shrink:0; border-radius:8px; overflow:hidden; }
+        .pwa-install-icon img { width:100%; height:100%; }
+        .pwa-install-text { flex:1; }
+        .pwa-install-text strong { display:block; font-size:13px; font-weight:700; margin-bottom:2px; }
+        .pwa-install-text span { font-size:11px; opacity:.6; }
+        .pwa-install-btn { padding:8px 14px; background:var(--white); color:var(--black); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; cursor:pointer; font-family:var(--font); white-space:nowrap; }
+        .pwa-install-close { background:none; border:none; color:rgba(255,255,255,.5); font-size:18px; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; }
+        /* ── NOTIF PROMPT ── */
+        .notif-prompt {
+            position:fixed; top:0; left:50%; transform:translateX(-50%);
+            max-width:480px; width:100%; background:var(--white);
+            border-bottom:2px solid var(--black); padding:14px 20px;
+            display:flex; align-items:center; gap:12px; z-index:600;
+            box-shadow:0 2px 16px rgba(0,0,0,.1);
+            animation: slideDown .3s ease;
+        }
+        @keyframes slideDown { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+        .notif-prompt-text { flex:1; font-size:12px; color:var(--gray-700); line-height:1.5; }
+        .notif-prompt-text strong { display:block; font-size:13px; font-weight:700; color:var(--black); margin-bottom:2px; }
+        .notif-yes { padding:7px 14px; background:var(--black); color:var(--white); border:none; font-size:11px; font-weight:700; cursor:pointer; font-family:var(--font); }
+        .notif-no  { padding:7px 10px; background:none; border:none; font-size:11px; color:var(--gray-400); cursor:pointer; font-family:var(--font); }
+
+        /* ── CLOUDINARY UPLOAD OVERLAY ── */
+        .upload-overlay {
+            position:fixed; inset:0; background:rgba(0,0,0,.6);
+            display:flex; align-items:center; justify-content:center; z-index:2000;
+        }
+        .upload-overlay-box {
+            background:var(--white); padding:32px 28px; max-width:320px; width:90%;
+            text-align:center; border-top:3px solid var(--black);
+        }
+        .upload-overlay-title { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+        .upload-overlay-sub { font-size:11px; color:var(--gray-400); }
+        .upload-progress-bar { height:4px; background:var(--gray-100); margin-top:16px; overflow:hidden; }
+        .upload-progress-fill { height:100%; background:var(--black); transition:width .3s; }
+        .cloudinary-setup-box {
+            background:#fffbe6; border:1px solid #e0c060; padding:14px 16px;
+            margin-bottom:16px; font-size:11px; color:#7a6000; line-height:1.6;
+        }
+        .cloudinary-setup-box a { color:#7a6000; font-weight:700; }
+        .cloudinary-setup-box code { background:#f5e97a; padding:1px 4px; font-size:10px; border-radius:2px; }
+
+        /* avatar upload */
+        .profile-avatar-wrap { position:relative; width:72px; margin:0 auto 14px; cursor:pointer; }
+        .profile-avatar-wrap:hover .avatar-edit-overlay { opacity:1; }
+        .avatar-edit-overlay {
+            position:absolute; inset:0; background:rgba(0,0,0,.45);
+            display:flex; align-items:center; justify-content:center;
+            font-size:9px; font-weight:700; text-transform:uppercase;
+            letter-spacing:.8px; color:white; opacity:0; transition:.2s;
+        }
+        .avatar-img { width:72px; height:72px; object-fit:cover; border:2px solid var(--black); display:block; }
+
+        /* ── AUTH ── */
+        .auth-page {
+            display:flex; flex-direction:column;
+            justify-content:center; align-items:center;
+            min-height:100vh; padding:40px 20px;
+            background: var(--white);
+        }
+        .auth-logo {
+            font-size:28px; font-weight:700; letter-spacing:-1px;
+            margin-bottom:4px; font-family:var(--din);
+        }
+        .auth-subtitle { font-size:13px; color:var(--gray-500); margin-bottom:48px; font-weight:400; letter-spacing:2px; text-transform:uppercase; }
+        .auth-form { width:100%; max-width:360px; }
+        .form-group { margin-bottom:16px; }
+        .form-label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px; color:var(--gray-600); }
+        .form-input { width:100%; padding:13px 14px; border:1px solid var(--gray-200); font-size:14px; font-family:var(--font); transition:border-color .2s; background:var(--white); color:var(--black); border-radius:0; outline:none; }
+        .form-input:focus { border-color:var(--black); }
+        .form-input option { font-family: var(--font); }
+        .button { width:100%; padding:13px; border:none; font-size:12px; font-weight:700; cursor:pointer; transition:all .2s; text-transform:uppercase; letter-spacing:1.5px; font-family:var(--font); border-radius:0; }
+        .button-primary { background:var(--black); color:var(--white); margin-bottom:10px; }
+        .button-primary:hover { background:var(--gray-800); }
+        .button-primary:disabled { background:var(--gray-400); cursor:not-allowed; }
+        .button-secondary { background:var(--white); color:var(--black); border:1px solid var(--gray-200); }
+        .button-secondary:hover { background:var(--gray-50); border-color:var(--black); }
+        .auth-switch { text-align:center; margin-top:24px; font-size:13px; color:var(--gray-500); }
+        .auth-switch a { color:var(--black); text-decoration:none; font-weight:700; cursor:pointer; }
+        .demo-badge { background:var(--gray-50); border:1px solid var(--gray-200); padding:12px 16px; margin-bottom:24px; font-size:12px; max-width:360px; width:100%; color:var(--gray-600); }
+        .demo-badge strong { color:var(--black); }
+        .error-message { background:var(--black); color:var(--white); padding:12px 16px; margin-bottom:16px; font-size:12px; max-width:360px; width:100%; }
+
+        /* ── HEADER ── */
+        .header {
+            background:var(--black); padding:18px 20px;
+            color:var(--white); display:flex;
+            justify-content:space-between; align-items:center;
+            position:sticky; top:0; z-index:100;
+        }
+        .header-title h1 { font-size:17px; font-weight:700; letter-spacing:-0.3px; font-family:var(--din); }
+        .header-title p { font-size:11px; opacity:.5; margin-top:2px; letter-spacing:.5px; }
+        .logout-btn { padding:6px 12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15); color:white; font-size:10px; cursor:pointer; text-transform:uppercase; letter-spacing:1px; font-weight:700; font-family:var(--font); transition:.2s; }
+        .logout-btn:hover { background:rgba(255,255,255,.16); }
+
+        /* ── CONTENT ── */
+        .content { padding:20px; padding-bottom:90px; }
+
+        /* ── TAB BAR ── */
+        .tab-bar {
+            position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+            max-width:480px; width:100%; background:var(--white);
+            border-top:1px solid var(--gray-200);
+            display:flex; justify-content:space-around; padding:10px 0 12px;
+            z-index:200;
+        }
+        .tab-item { flex:1; text-align:center; padding:4px; cursor:pointer; border:none; background:none; color:var(--gray-400); transition:color .15s; }
+        .tab-item.active { color:var(--black); }
+        .tab-item svg { width:20px; height:20px; display:block; margin:0 auto 3px; }
+        .tab-item span { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; display:block; }
+
+        /* ── HOME ADD BUTTON ── */
+        .home-top {
+            display:flex; justify-content:center;
+            margin-bottom:24px; padding-top:8px;
+        }
+        .center-add-btn-standalone {
+            width:56px; height:56px;
+            background:var(--black); border:none;
+            cursor:pointer; display:flex;
+            align-items:center; justify-content:center;
+            transition:all .2s;
+            box-shadow: 0 2px 16px rgba(0,0,0,.18);
+        }
+        .center-add-btn-standalone:hover { background:var(--gray-800); transform:scale(1.07); }
+        .center-add-btn-standalone svg { width:22px; height:22px; }
+
+        /* ── SECTION TITLE ── */
+        .section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:14px; color:var(--gray-500); }
+
+        /* ── HABIT CARDS (list) ── */
+        .habit-card {
+            border:1px solid var(--gray-200); padding:14px 16px;
+            margin-bottom:10px; transition:.2s; cursor:pointer;
+        }
+        .habit-card:hover { border-color:var(--black); }
+        .habit-header { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+        .habit-info { flex:1; }
+        .habit-title { font-size:14px; font-weight:600; color:var(--black); margin-bottom:6px; }
+        .habit-meta { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+        .habit-category { display:inline-block; padding:2px 7px; font-size:9px; background:var(--gray-100); color:var(--gray-600); font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+        .habit-streak { display:flex; align-items:center; gap:4px; font-size:12px; font-weight:700; color:var(--gray-600); }
+        .habit-time-range { font-size:10px; color:var(--gray-400); font-family:var(--din); }
+
+        /* habit progress bar (replaces check button) */
+        .habit-progress-section { flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+        .habit-progress-bar-wrap { width:80px; }
+        .habit-prog-label { display:flex; justify-content:space-between; font-size:9px; color:var(--gray-400); font-weight:600; letter-spacing:.5px; margin-bottom:4px; }
+        .habit-prog-track { height:5px; background:var(--gray-100); border-radius:0; overflow:hidden; }
+        .habit-prog-fill { height:100%; background:var(--black); transition:width .4s cubic-bezier(.4,0,.2,1); border-radius:0; }
+        .habit-prog-fill.done { background:var(--black); }
+        .habit-mark-btn { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; border:1px solid var(--gray-200); background:var(--white); color:var(--gray-600); padding:5px 10px; cursor:pointer; transition:.2s; font-family:var(--font); white-space:nowrap; }
+        .habit-mark-btn:hover { border-color:var(--black); color:var(--black); }
+        .habit-mark-btn.marked { background:var(--black); color:var(--white); border-color:var(--black); }
+
+        /* ── HABIT DETAIL VIEW ── */
+        .detail-back { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; margin-bottom:20px; color:var(--gray-600); padding:0; border:none; background:none; }
+        .detail-back svg { width:16px; height:16px; }
+        .detail-back:hover { color:var(--black); }
+        .detail-title { font-size:22px; font-weight:700; margin-bottom:4px; }
+        .detail-category { font-size:10px; color:var(--gray-400); text-transform:uppercase; letter-spacing:1px; margin-bottom:24px; }
+        .detail-stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--gray-200); border:1px solid var(--gray-200); margin-bottom:24px; }
+        .detail-stat-card { background:var(--white); padding:18px; text-align:center; }
+        .detail-stat-value { font-size:28px; font-weight:700; color:var(--black); font-family:var(--din); }
+        .detail-stat-label { font-size:10px; color:var(--gray-400); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-top:4px; }
+
+        /* ── MODAL ── */
+        .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:flex-end; justify-content:center; padding:0; z-index:1000; }
+        .modal-content { background:var(--white); padding:28px; max-width:480px; width:100%; max-height:85vh; overflow-y:auto; border-top:3px solid var(--black); }
+        .modal-header { font-size:16px; font-weight:700; margin-bottom:24px; text-transform:uppercase; letter-spacing:.5px; font-family:var(--din); }
+        .button-group { display:flex; gap:10px; margin-top:20px; }
+        .button-group .button { flex:1; }
+
+        /* time range row */
+        .time-range-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+        .time-range-row .form-input { padding:10px 8px; font-size:12px; }
+
+        /* ── GROUPS ── */
+        .group-card {
+            background:var(--white); border:1px solid var(--gray-200);
+            padding:16px; margin-bottom:12px; cursor:pointer; transition:.2s;
+        }
+        .group-card:hover { border-color:var(--black); }
+        .group-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+        .group-name { font-size:15px; font-weight:700; }
+        .group-category-tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:3px 8px; background:var(--gray-100); color:var(--gray-600); }
+        .group-info { font-size:11px; color:var(--gray-500); display:flex; gap:12px; margin-bottom:12px; }
+        .group-progress { margin-bottom:12px; }
+        .progress-label { display:flex; justify-content:space-between; margin-bottom:5px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--gray-500); }
+        .progress-bar { height:3px; background:var(--gray-100); }
+        .progress-fill { height:100%; background:var(--black); transition:width .3s; }
+        .group-bottom { display:flex; justify-content:space-between; align-items:center; }
+        .group-members { display:flex; gap:4px; }
+        .member-avatar-sm { width:26px; height:26px; background:var(--gray-100); border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+        .join-btn { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; border:1px solid var(--black); background:var(--white); color:var(--black); padding:6px 14px; cursor:pointer; transition:.2s; font-family:var(--font); }
+        .join-btn:hover { background:var(--black); color:var(--white); }
+        .join-btn.joined { background:var(--black); color:var(--white); }
+
+        /* ── GROUP DETAIL (member list) ── */
+        .group-detail-header { margin-bottom:20px; }
+        .group-detail-title { font-size:20px; font-weight:700; margin-bottom:6px; }
+        .group-detail-meta { font-size:12px; color:var(--gray-500); display:flex; gap:12px; margin-bottom:16px; }
+        .group-detail-progress { margin-bottom:8px; }
+        .member-list-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--gray-400); margin:20px 0 12px; }
+        .member-row {
+            display:flex; align-items:center; gap:14px;
+            padding:14px 0; border-bottom:1px solid var(--gray-100);
+            cursor:pointer; transition:.1s;
+        }
+        .member-row:hover { background:var(--gray-50); margin:0 -20px; padding:14px 20px; }
+        .member-avatar-lg { width:44px; height:44px; flex-shrink:0; background:var(--gray-100); border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:700; }
+        .member-info { flex:1; min-width:0; }
+        .member-name { font-size:14px; font-weight:600; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .member-sub { font-size:11px; color:var(--gray-400); margin-bottom:6px; }
+        .member-prog-wrap { display:flex; align-items:center; gap:8px; }
+        .member-prog-track { flex:1; height:4px; background:var(--gray-100); }
+        .member-prog-fill { height:100%; background:var(--black); transition:width .4s; }
+        .member-prog-pct { font-size:10px; font-weight:700; color:var(--gray-500); font-family:var(--din); flex-shrink:0; width:30px; text-align:right; }
+        .member-arrow { color:var(--gray-300); flex-shrink:0; }
+
+        /* ── MEMBER PROFILE VIEW ── */
+        .member-profile-header { padding:28px 0 20px; text-align:center; border-bottom:1px solid var(--gray-100); margin-bottom:20px; }
+        .member-profile-avatar { width:72px; height:72px; background:var(--gray-100); border:2px solid var(--black); margin:0 auto 14px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:700; }
+        .member-profile-name { font-size:20px; font-weight:700; margin-bottom:4px; }
+        .member-profile-handle { font-size:12px; color:var(--gray-400); margin-bottom:14px; }
+        .member-profile-actions { display:flex; gap:10px; justify-content:center; margin-bottom:16px; }
+        .follow-btn { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; border:1px solid var(--black); background:var(--black); color:var(--white); padding:8px 20px; cursor:pointer; transition:.2s; font-family:var(--font); }
+        .follow-btn.following { background:var(--white); color:var(--black); }
+        .follow-btn:hover { opacity:.8; }
+        .msg-btn { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; border:1px solid var(--gray-200); background:var(--white); color:var(--black); padding:8px 20px; cursor:pointer; transition:.2s; font-family:var(--font); }
+        .msg-btn:hover { border-color:var(--black); }
+        .profile-stat-row { display:flex; justify-content:center; gap:0; border:1px solid var(--gray-200); }
+        .profile-stat-cell { flex:1; text-align:center; padding:14px 8px; border-right:1px solid var(--gray-100); }
+        .profile-stat-cell:last-child { border-right:none; }
+        .profile-stat-num { font-size:20px; font-weight:700; font-family:var(--din); }
+        .profile-stat-lbl { font-size:9px; color:var(--gray-400); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-top:3px; }
+        .privacy-notice { background:var(--gray-50); border:1px solid var(--gray-200); padding:12px 16px; font-size:12px; color:var(--gray-500); text-align:center; margin-bottom:20px; }
+        .posts-grid { display:flex; flex-direction:column; gap:0; }
+
+        /* ── FEED / POSTS ── */
+        .feed-card { background:var(--white); border:1px solid var(--gray-200); margin-bottom:14px; }
+        .feed-header { padding:12px 14px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--gray-50); }
+        .feed-avatar { width:34px; height:34px; background:var(--gray-100); border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; }
+        .feed-user-info h4 { font-size:13px; font-weight:700; margin-bottom:1px; }
+        .feed-time { font-size:10px; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; }
+        .feed-content { padding:14px; }
+        .feed-text { font-size:13px; line-height:1.6; margin-bottom:10px; color:var(--gray-800); }
+        .feed-habit-tag { display:inline-block; padding:3px 9px; background:var(--gray-100); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--gray-600); }
+        .feed-media { margin-top:12px; border:1px solid var(--gray-100); overflow:hidden; }
+        .feed-media img { width:100%; height:180px; object-fit:cover; display:block; }
+        .feed-media-placeholder { width:100%; height:160px; background:var(--gray-100); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--gray-400); font-size:12px; }
+        .feed-actions { padding:10px 14px; border-top:1px solid var(--gray-50); display:flex; gap:18px; }
+        .feed-action { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--gray-500); cursor:pointer; transition:color .15s; font-weight:600; }
+        .feed-action:hover { color:var(--black); }
+        .feed-action svg { width:15px; height:15px; }
+        .feed-action.liked { color:var(--black); }
+
+        /* ── PROFILE PAGE ── */
+        .profile-header { padding:28px 0 20px; text-align:center; border-bottom:1px solid var(--gray-100); }
+        .profile-avatar { width:72px; height:72px; background:var(--gray-100); border:2px solid var(--black); margin:0 auto 14px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:700; }
+        .profile-name { font-size:20px; font-weight:700; margin-bottom:4px; }
+        .profile-email { font-size:12px; color:var(--gray-400); margin-bottom:16px; }
+        .profile-stats { display:flex; border:1px solid var(--gray-200); margin-top:12px; }
+        .profile-stat { flex:1; text-align:center; padding:14px 8px; border-right:1px solid var(--gray-100); }
+        .profile-stat:last-child { border-right:none; }
+        .profile-stat-value { font-size:20px; font-weight:700; font-family:var(--din); }
+        .profile-stat-label { font-size:9px; color:var(--gray-400); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-top:3px; }
+        .profile-privacy-section { margin-top:20px; padding-top:16px; border-top:1px solid var(--gray-100); }
+        .privacy-toggle-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--gray-50); }
+        .privacy-toggle-label { font-size:13px; font-weight:600; }
+        .privacy-toggle-sub { font-size:11px; color:var(--gray-400); margin-top:2px; }
+        .toggle-switch { position:relative; width:44px; height:24px; cursor:pointer; }
+        .toggle-switch input { opacity:0; width:0; height:0; }
+        .toggle-slider { position:absolute; inset:0; background:var(--gray-200); transition:.3s; }
+        .toggle-slider:before { position:absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background:white; transition:.3s; }
+        .toggle-switch input:checked + .toggle-slider { background:var(--black); }
+        .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px); }
+
+        /* ── POST COMPOSER ── */
+        .composer-wrap { margin-top:20px; border:1px solid var(--gray-200); }
+        .composer-textarea {
+            width:100%; padding:14px 16px; font-size:14px; font-family:var(--font);
+            border:none; outline:none; resize:none; min-height:100px;
+            color:var(--black); background:var(--white); line-height:1.6;
+        }
+        .composer-textarea::placeholder { color:var(--gray-300); }
+        .composer-media-preview {
+            position:relative; margin:0 16px 12px;
+            border:1px solid var(--gray-100); overflow:hidden;
+        }
+        .composer-media-preview img,
+        .composer-media-preview video {
+            width:100%; max-height:200px; object-fit:cover; display:block;
+        }
+        .composer-media-remove {
+            position:absolute; top:6px; right:6px;
+            width:24px; height:24px; background:rgba(0,0,0,.6); color:white;
+            border:none; cursor:pointer; font-size:14px; display:flex;
+            align-items:center; justify-content:center; font-weight:700;
+        }
+        .composer-toolbar {
+            display:flex; align-items:center; justify-content:space-between;
+            padding:10px 14px; border-top:1px solid var(--gray-100);
+            background:var(--gray-50);
+        }
+        .composer-media-btns { display:flex; gap:8px; }
+        .composer-media-btn {
+            display:flex; align-items:center; gap:5px;
+            font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px;
+            border:1px solid var(--gray-200); background:var(--white);
+            color:var(--gray-600); padding:6px 11px; cursor:pointer;
+            transition:.15s; font-family:var(--font);
+        }
+        .composer-media-btn:hover { border-color:var(--black); color:var(--black); }
+        .composer-media-btn svg { width:13px; height:13px; }
+        .composer-submit {
+            font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px;
+            border:none; background:var(--black); color:var(--white);
+            padding:8px 18px; cursor:pointer; transition:.15s; font-family:var(--font);
+        }
+        .composer-submit:hover { background:var(--gray-800); }
+        .composer-submit:disabled { background:var(--gray-300); cursor:not-allowed; }
+        .composer-char { font-size:10px; color:var(--gray-400); font-family:var(--mono); }
+        /* my posts list */
+        .my-posts-section { margin-top:24px; }
+        .my-post-item { border:1px solid var(--gray-200); margin-bottom:10px; }
+        .my-post-header { padding:10px 14px 0; display:flex; justify-content:space-between; align-items:center; }
+        .my-post-time { font-size:10px; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; }
+        .my-post-delete { border:none; background:none; font-size:10px; color:var(--gray-400); cursor:pointer; font-family:var(--font); font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:0; transition:.15s; }
+        .my-post-delete:hover { color:#c00; }
+        .my-post-body { padding:10px 14px 12px; font-size:13px; line-height:1.6; color:var(--gray-800); }
+        .my-post-media { border-top:1px solid var(--gray-100); }
+        .my-post-media img, .my-post-media video { width:100%; max-height:180px; object-fit:cover; display:block; }
+        .my-post-actions { padding:8px 14px; border-top:1px solid var(--gray-50); display:flex; gap:16px; }
+
+        /* ── EMPTY STATE ── */
+        .empty-state { text-align:center; padding:50px 20px; color:var(--gray-400); }
+        .empty-state svg { width:40px; height:40px; margin:0 auto 14px; opacity:.25; }
+        .empty-state h3 { font-size:15px; font-weight:700; margin-bottom:6px; color:var(--black); }
+        .empty-state p { font-size:12px; line-height:1.5; }
+
+        /* ── LOADING ── */
+        .loading { text-align:center; padding:60px 20px; font-size:13px; color:var(--gray-400); font-family:var(--din); }
+
+        /* ── BACK NAV ── */
+        .back-nav { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; margin-bottom:20px; color:var(--gray-500); border:none; background:none; padding:0; font-family:var(--font); }
+        .back-nav:hover { color:var(--black); }
+        .back-nav svg { width:14px; height:14px; }
+
+        /* ── CHIP TAG ── */
+        .chip { display:inline-block; padding:3px 9px; background:var(--gray-100); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--gray-600); margin-right:6px; margin-bottom:4px; }
+
+        /* ── FREQ / DURATION PILLS ── */
+        .pill-group { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+        .pill {
+            padding:6px 13px; border:1px solid var(--gray-200);
+            font-size:11px; font-weight:700; cursor:pointer;
+            font-family:var(--font); background:var(--white);
+            color:var(--gray-600); transition:.15s;
+            text-transform:uppercase; letter-spacing:.5px;
+            border-radius:0; white-space:nowrap;
+        }
+        .pill:hover { border-color:var(--black); color:var(--black); }
+        .pill.selected { background:var(--black); color:var(--white); border-color:var(--black); }
+        .pill-custom-wrap { display:flex; align-items:center; gap:6px; margin-top:8px; }
+        .pill-custom-input {
+            width:60px; padding:6px 8px; border:1px solid var(--gray-200);
+            font-size:12px; font-family:var(--mono); background:var(--white);
+            color:var(--black); border-radius:0; outline:none; text-align:center;
+        }
+        .pill-custom-input:focus { border-color:var(--black); }
+        .pill-unit-select {
+            padding:6px 8px; border:1px solid var(--gray-200);
+            font-size:11px; font-family:var(--font); background:var(--white);
+            color:var(--black); border-radius:0; outline:none; cursor:pointer;
+            font-weight:600;
+        }
+        .pill-unit-select:focus { border-color:var(--black); }
+        .section-divider { height:1px; background:var(--gray-100); margin:16px 0; }
+        .modal-section-label {
+            font-size:10px; font-weight:700; text-transform:uppercase;
+            letter-spacing:1.2px; color:var(--gray-400); margin-bottom:10px;
+        }
+
+        /* date-row: 精簡版本 */
+        .date-row { display:flex; gap:6px; align-items:center; }
+        .date-row .form-input { padding:9px 6px; font-size:12px; flex:1; }
+        .date-sep { font-size:12px; color:var(--gray-400); font-weight:700; flex-shrink:0; }
+
+        /* progress count badge on card */
+        .prog-count { font-size:10px; color:var(--gray-400); font-family:var(--mono); margin-bottom:3px; text-align:right; }
+
+        /* today counter buttons */
+        .counter-wrap { display:flex; align-items:center; gap:0; margin-top:8px; border:1px solid var(--gray-200); width:fit-content; }
+        .counter-btn { width:30px; height:30px; border:none; background:var(--white); font-size:16px; cursor:pointer; color:var(--gray-600); display:flex; align-items:center; justify-content:center; transition:.15s; font-family:var(--font); font-weight:700; }
+        .counter-btn:hover { background:var(--black); color:var(--white); }
+        .counter-val { min-width:30px; text-align:center; font-size:13px; font-weight:700; font-family:var(--mono); border-left:1px solid var(--gray-200); border-right:1px solid var(--gray-200); padding:0 4px; line-height:30px; }
+
+        /* delete row at bottom of card */
+        .card-delete-row {
+            margin-top:12px;
+            padding-top:10px;
+            border-top:1px solid var(--gray-100);
+            display:flex;
+            justify-content:flex-end;
+        }
+        .card-delete-btn {
+            border:none; background:none; cursor:pointer;
+            font-size:10px; font-weight:700; text-transform:uppercase;
+            letter-spacing:.8px; color:var(--gray-400);
+            font-family:var(--font); padding:4px 0;
+            display:flex; align-items:center; gap:5px;
+            transition:.15s;
+        }
+        .card-delete-btn:hover { color:#c00; }
+        .card-delete-btn svg { width:11px; height:11px; }
+
+        /* scrollbar */
+        ::-webkit-scrollbar { width:4px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--gray-200); }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- React -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── Firebase config ── */
+const firebaseConfig = {
+    apiKey: "AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
+    authDomain: "health-habit-tracker-e6b50.firebaseapp.com",
+    projectId: "health-habit-tracker-e6b50",
+    storageBucket: "health-habit-tracker-e6b50.firebasestorage.app",
+    messagingSenderId: "890093173627",
+    appId: "1:890093173627:web:54032fce30ae7ef3f41bde"
+};
+let app, auth, db;
+const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+if (isFirebaseConfigured) {
+    app = firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+}
+
+/* ── ICONS ── */
+const HomeIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>);
+const GroupIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>);
+const FeedIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>);
+const ProfileIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>);
+const PlusIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>);
+const HeartIcon = ({filled}) => (<svg fill={filled?"currentColor":"none"} viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>);
+const ChatIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>);
+const FlameIcon = () => (<svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M12 23a7.5 7.5 0 0 1-5.138-12.963C8.204 8.774 11.5 6.5 11 1.5c6 4 9 8 3 14 1 0 2.5 0 5-2.47.27.773.5 1.604.5 2.47A7.5 7.5 0 0 1 12 23z"/></svg>);
+const BackIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>);
+const ChevronRightIcon = () => (<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>);
+const ImageIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>);
+const VideoIcon = () => (<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.868v6.264a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>);
+const LockIcon = () => (<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>);
+const ShareIcon = () => (<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>);
+
+/* ══════════════════════════════════════════════════
+   ★ CLOUDINARY 設定 — 請填入你自己的資訊 ★
+   步驟：
+   1. 前往 https://cloudinary.com 免費註冊
+   2. 進入 Settings → Upload → Add upload preset
+      • Signing mode 選 "Unsigned"
+      • 記下 Preset name
+   3. 回到 Dashboard 記下 Cloud name
+   4. 填入下方兩個值即可，完全免費！
+   ══════════════════════════════════════════════════ */
+const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME';      // ← 改這裡
+const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; // ← 改這裡
+
+const isCloudinaryConfigured =
+    CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' &&
+    CLOUDINARY_UPLOAD_PRESET !== 'YOUR_UPLOAD_PRESET';
+
+async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
+    if (!isCloudinaryConfigured) {
+        // 未設定時退回 LocalObjectURL（僅本地預覽）
+        return { url: URL.createObjectURL(file), publicId: null, local: true };
+    }
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+        };
+        xhr.onload = () => {
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (data.secure_url) resolve({ url: data.secure_url, publicId: data.public_id });
+                else reject(new Error(data.error?.message || '上傳失敗'));
+            } catch(e) { reject(e); }
+        };
+        xhr.onerror = () => reject(new Error('網路錯誤'));
+        xhr.send(formData);
+    });
+}
+
+/* ── MOCK DATA ── */
+const mockGroups = [
+    { id:1, name:'30天早起挑戰', members:24, active:18, progress:75, category:'睡眠作息', joined:false },
+    { id:2, name:'每日運動打卡', members:156, active:132, progress:85, category:'運動健身', joined:true },
+    { id:3, name:'護膚保養日記', members:89, active:67, progress:60, category:'護膚保養', joined:false },
+    { id:4, name:'正念飲食計畫', members:43, active:31, progress:55, category:'飲食管理', joined:false },
+];
+
+const mockGroupMembers = [
+    { id:'m1', name:'陳志明', handle:'@alexc', avatar:'陳', progress:92, streak:14, habits:8, followers:34, following:21, isPublic:true, isFollowing:false, posts:[
+        { id:'p1', text:'連續第14天早起！晨間習慣真的改變了我整個早晨的節奏，精神超好。', time:'2小時前', habit:'早起習慣', likes:24, comments:5, hasImage:true, liked:false },
+        { id:'p2', text:'晨間冥想 + 冷水澡 = 整天精力充沛。試試看連續7天，你會感謝自己的。', time:'昨天', habit:'冥想放鬆', likes:18, comments:3, hasImage:false, liked:false },
+    ]},
+    { id:'m2', name:'李佳欣', handle:'@jordanl', avatar:'李', progress:78, streak:9, habits:5, followers:12, following:8, isPublic:false, isFollowing:true, followApproved:true, posts:[
+        { id:'p3', text:'第9天在日出前起床，還是很難，但絕對值得。', time:'3小時前', habit:'早起習慣', likes:11, comments:2, hasImage:false, liked:false },
+    ]},
+    { id:'m3', name:'王家豪', handle:'@samr', avatar:'王', progress:65, streak:7, habits:6, followers:8, following:15, isPublic:false, isFollowing:false, followApproved:false, posts:[] },
+    { id:'m4', name:'吳美琪', handle:'@morganw', avatar:'吳', progress:88, streak:21, habits:9, followers:67, following:44, isPublic:true, isFollowing:false, posts:[
+        { id:'p4', text:'21天連續打卡！堅持才是關鍵。分享我的晨間流程：', time:'1天前', habit:'早起習慣', likes:45, comments:12, hasImage:true, liked:false },
+        { id:'p5', text:'一週的餐點都備好了，吃得乾淨從來沒這麼容易過。', time:'2天前', habit:'飲食管理', likes:32, comments:7, hasImage:true, liked:false },
+    ]},
+    { id:'m5', name:'林育成', handle:'@rileyp', avatar:'林', progress:41, streak:3, habits:4, followers:5, following:9, isPublic:false, isFollowing:false, followApproved:false, posts:[] },
+    { id:'m6', name:'金大衛', handle:'@drewk', avatar:'金', progress:95, streak:30, habits:12, followers:120, following:60, isPublic:true, isFollowing:true, followApproved:true, posts:[
+        { id:'p6', text:'30天，就是這樣建立起一個真正持久的習慣。分享這個月學到的事。', time:'5小時前', habit:'所有習慣', likes:89, comments:23, hasImage:false, liked:false },
+    ]},
+];
+
+const mockFeedGlobal = [
+    { id:'f1', user:'金大衛', avatar:'金', time:'5小時前', habit:'所有習慣', text:'30天，就是這樣建立起一個真正持久的習慣。分享這個月學到的事。', likes:89, comments:23, hasImage:false, liked:false },
+    { id:'f2', user:'吳美琪', avatar:'吳', time:'1天前', habit:'早起習慣', text:'21天連續打卡！堅持才是關鍵。分享我的晨間流程：', likes:45, comments:12, hasImage:true, liked:false },
+    { id:'f3', user:'陳志明', avatar:'陳', time:'2小時前', habit:'早起習慣', text:'連續第14天早起！晨間習慣真的改變了我整個早晨的節奏，精神超好。', likes:24, comments:5, hasImage:true, liked:false },
+    { id:'f4', user:'吳美琪', avatar:'吳', time:'2天前', habit:'飲食管理', text:'一週的餐點都備好了，吃得乾淨從來沒這麼容易過。', likes:32, comments:7, hasImage:true, liked:false },
+    { id:'f5', user:'李佳欣', avatar:'李', time:'3小時前', habit:'早起習慣', text:'第9天在日出前起床，還是很難，但絕對值得。', likes:11, comments:2, hasImage:false, liked:false },
+];
+
+/* ── AUTH PAGE ── */
+function AuthPage({ onAuthSuccess }) {
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [displayName, setDisplayName] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleDemoLogin = () => {
+        const u = { uid:'demo-user', email:'demo@example.com', displayName:'You' };
+        localStorage.setItem('demoUser', JSON.stringify(u));
+        onAuthSuccess(u);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError(''); setLoading(true);
+        if (!isFirebaseConfigured) { handleDemoLogin(); return; }
+        try {
+            if (isLogin) {
+                const r = await auth.signInWithEmailAndPassword(email, password);
+                onAuthSuccess(r.user);
+            } else {
+                const r = await auth.createUserWithEmailAndPassword(email, password);
+                await r.user.updateProfile({ displayName });
+                await db.collection('users').doc(r.user.uid).set({ displayName, email, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+                onAuthSuccess(r.user);
+            }
+        } catch (err) { setError(err.message); }
+        finally { setLoading(false); }
+    };
+
+    return (
+        <div className="auth-page">
+            <div className="auth-logo">健康習慣追蹤</div>
+            <div className="auth-subtitle">健康管理專業版</div>
+            {!isFirebaseConfigured && (
+                <div className="demo-badge"><strong>演示模式：</strong>Firebase 尚未設定，點擊登入使用本地演示版本。</div>
+            )}
+            {error && <div className="error-message">{error}</div>}
+            <form className="auth-form" onSubmit={handleSubmit}>
+                {!isLogin && (
+                    <div className="form-group">
+                        <label className="form-label">姓名</label>
+                        <input type="text" className="form-input" value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="您的名字"/>
+                    </div>
+                )}
+                <div className="form-group">
+                    <label className="form-label">電子郵件</label>
+                    <input type="email" className="form-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com"/>
+                </div>
+                <div className="form-group">
+                    <label className="form-label">密碼</label>
+                    <input type="password" className="form-input" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" minLength="6"/>
+                </div>
+                <button type="submit" className="button button-primary" disabled={loading}>
+                    {loading ? '載入中...' : (isLogin ? '登入' : '註冊')}
+                </button>
+            </form>
+            <div className="auth-switch">
+                {isLogin ? '還沒有帳號？' : '已有帳號？'}
+                <a onClick={()=>setIsLogin(!isLogin)}>{isLogin ? '立即註冊' : '登入'}</a>
+            </div>
+        </div>
+    );
+}
+
+/* ── FEED CARD COMPONENT ── */
+function FeedCard({ post, onLike }) {
+    return (
+        <div className="feed-card">
+            <div className="feed-header">
+                <div className="feed-avatar">{post.avatar}</div>
+                <div className="feed-user-info">
+                    <h4>{post.user}</h4>
+                    <div className="feed-time">{post.time}</div>
+                </div>
+            </div>
+            <div className="feed-content">
+                <div className="feed-text">{post.text}</div>
+                <span className="feed-habit-tag">{post.habit}</span>
+                {post.hasImage && post.mediaUrl && (
+                    <div className="feed-media">
+                        <img src={post.mediaUrl} alt="post media" style={{width:'100%',maxHeight:240,objectFit:'cover',display:'block'}}/>
+                    </div>
+                )}
+                {post.hasImage && !post.mediaUrl && (
+                    <div className="feed-media">
+                        <div className="feed-media-placeholder">
+                            <ImageIcon/>
+                            <span>照片 · 點擊查看</span>
+                        </div>
+                    </div>
+                )}
+                {post.hasVideo && post.mediaUrl && (
+                    <div className="feed-media">
+                        <video src={post.mediaUrl} controls style={{width:'100%',maxHeight:240,display:'block'}}/>
+                    </div>
+                )}
+            </div>
+            <div className="feed-actions">
+                <div className={`feed-action${post.liked?' liked':''}`} onClick={()=>onLike && onLike(post.id)}>
+                    <HeartIcon filled={post.liked}/><span>{post.likes + (post.liked?1:0)}</span>
+                </div>
+                <div className="feed-action"><ChatIcon/><span>{post.comments}</span></div>
+                <div className="feed-action"><ShareIcon/><span>分享</span></div>
+            </div>
+        </div>
+    );
+}
+
+/* ── MEMBER PROFILE VIEW ── */
+function MemberProfileView({ member: initialMember, currentUser, onBack }) {
+    const [member, setMember] = useState(initialMember);
+    const [posts, setPosts] = useState(initialMember.posts || []);
+
+    const canSeePosts = member.isPublic || (member.isFollowing && member.followApproved);
+
+    const handleFollow = () => {
+        setMember(prev => ({
+            ...prev,
+            isFollowing: !prev.isFollowing,
+            followApproved: prev.isPublic ? !prev.isFollowing : (prev.isFollowing ? false : false)
+        }));
+    };
+
+    const handleLike = (postId) => {
+        setPosts(prev => prev.map(p => p.id === postId ? {...p, liked: !p.liked} : p));
+    };
+
+    const completionPct = member.progress;
+
+    return (
+        <div>
+            <button className="back-nav" onClick={onBack}><BackIcon/>返回成員列表</button>
+            <div className="member-profile-header">
+                <div className="member-profile-avatar">{member.avatar}</div>
+                <div className="member-profile-name">{member.name}</div>
+                <div className="member-profile-handle">{member.handle}</div>
+                <div className="member-profile-actions">
+                    <button className={`follow-btn${member.isFollowing?' following':''}`} onClick={handleFollow}>
+                        {member.isFollowing ? '已追蹤' : '追蹤'}
+                    </button>
+                    <button className="msg-btn">私訊</button>
+                </div>
+                <div className="profile-stat-row">
+                    <div className="profile-stat-cell">
+                        <div className="profile-stat-num">{member.habits}</div>
+                        <div className="profile-stat-lbl">習慣</div>
+                    </div>
+                    <div className="profile-stat-cell">
+                        <div className="profile-stat-num">{member.streak}</div>
+                        <div className="profile-stat-lbl">連續天</div>
+                    </div>
+                    <div className="profile-stat-cell">
+                        <div className="profile-stat-num">{member.followers}</div>
+                        <div className="profile-stat-lbl">追蹤者</div>
+                    </div>
+                    <div className="profile-stat-cell">
+                        <div className="profile-stat-num">{member.following}</div>
+                        <div className="profile-stat-lbl">追蹤中</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Group activity progress */}
+            <div className="section-title">本次活動完成度</div>
+            <div style={{marginBottom:24}}>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,color:'var(--gray-500)',marginBottom:6}}>
+                    <span>完成率</span><span style={{fontFamily:'var(--din)'}}>{completionPct}%</span>
+                </div>
+                <div style={{height:8,background:'var(--gray-100)',borderRadius:0}}>
+                    <div style={{height:'100%',background:'var(--black)',width:`${completionPct}%`,transition:'width .5s'}}></div>
+                </div>
+            </div>
+
+            {/* Posts */}
+            <div className="section-title">貼文</div>
+            {!canSeePosts ? (
+                <div className="privacy-notice">
+                    <LockIcon/>
+                    {member.isFollowing && !member.followApproved
+                        ? <span style={{display:'block',marginTop:6}}>追蹤申請待審核 · 對方同意後即可查看貼文</span>
+                        : <span style={{display:'block',marginTop:6}}>此帳號為私密帳號 · 追蹤後可查看貼文</span>
+                    }
+                </div>
+            ) : (
+                posts.length === 0 ? (
+                    <div className="empty-state">
+                        <ImageIcon/>
+                        <h3>尚無貼文</h3>
+                        <p>此用戶還未分享任何內容</p>
+                    </div>
+                ) : (
+                    <div className="posts-grid">
+                        {posts.map(p => (
+                            <FeedCard key={p.id} post={{...p, user:member.name, avatar:member.avatar}} onLike={handleLike}/>
+                        ))}
+                    </div>
+                )
+            )}
+        </div>
+    );
+}
+
+/* ── GROUP DETAIL VIEW ── */
+function GroupDetailView({ group, currentUser, onBack }) {
+    const [members, setMembers] = useState(mockGroupMembers);
+    const [selectedMember, setSelectedMember] = useState(null);
+    const [joined, setJoined] = useState(group.joined);
+
+    if (selectedMember) {
+        return (
+            <MemberProfileView
+                member={selectedMember}
+                currentUser={currentUser}
+                onBack={()=>setSelectedMember(null)}
+            />
+        );
+    }
+
+    return (
+        <div>
+            <button className="back-nav" onClick={onBack}><BackIcon/>返回小組列表</button>
+
+            <div className="group-detail-header">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+                    <div className="group-detail-title">{group.name}</div>
+                    <span className="group-category-tag">{group.category}</span>
+                </div>
+                <div className="group-detail-meta">
+                    <span>{group.members} 位成員</span>
+                    <span>•</span>
+                    <span>{group.active} 人參與中</span>
+                </div>
+                <div className="group-detail-progress">
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,color:'var(--gray-500)',marginBottom:6}}>
+                        <span>小組整體進度</span><span style={{fontFamily:'var(--din)'}}>{group.progress}%</span>
+                    </div>
+                    <div className="progress-bar" style={{height:6}}>
+                        <div className="progress-fill" style={{width:`${group.progress}%`}}></div>
+                    </div>
+                </div>
+                <button
+                    className={`join-btn${joined?' joined':''}`}
+                    style={{width:'100%',marginTop:14,padding:'11px'}}
+                    onClick={()=>setJoined(!joined)}
+                >
+                    {joined ? '✓ 已參與活動' : '參與活動'}
+                </button>
+            </div>
+
+            <div className="member-list-title">成員列表（{members.length} 人）</div>
+            {members.map(member => (
+                <div key={member.id} className="member-row" onClick={()=>setSelectedMember(member)}>
+                    <div className="member-avatar-lg">{member.avatar}</div>
+                    <div className="member-info">
+                        <div className="member-name">{member.name}</div>
+                        <div className="member-sub">{member.handle} · 連續 {member.streak} 天</div>
+                        <div className="member-prog-wrap">
+                            <div className="member-prog-track">
+                                <div className="member-prog-fill" style={{width:`${member.progress}%`}}></div>
+                            </div>
+                            <div className="member-prog-pct">{member.progress}%</div>
+                        </div>
+                    </div>
+                    <div className="member-arrow"><ChevronRightIcon/></div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+/* ── 日期工具：統一用 YYYY-MM-DD 格式，不受 locale 影響 ── */
+function toISODay(date) {
+    const d = date || new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+}
+function dateFromISO(str) {
+    const [y,m,d] = str.split('-').map(Number);
+    return new Date(y, m-1, d);
+}
+// 解析 timeRange 字串 "2026-02-17 ～ 2026-02-19" 取得開始/結束日
+function parseTimeRange(timeRange) {
+    if (!timeRange) return { start: null, end: null };
+    // 支援 "2026-02-17 ～ 2026-02-19" 及 "2026/02/17 ～ 2026/02/19"
+    const parts = timeRange.split(/～|~/).map(s => s.trim().replace(/\//g,'-'));
+    return { start: parts[0]||null, end: parts[1]||null };
+}
+
+/* ── 計算累計完成率（供多處共用） ──
+   公式：所有週期內已完成次數總和（每週期上限=timesPerCycle）
+         ÷ (總執行天數 ÷ intervalDays × timesPerCycle)
+   intervalDays=1 → 每天；intervalDays=3 → 每3天一個週期 */
+function calcCompletionRate(habit) {
+    const timesPerCycle = habit.dailyTarget || 1;
+    const intervalDays  = habit.intervalDays || 1;
+    const { start: startStr, end: endStr } = parseTimeRange(habit.timeRange);
+    const habitStart = startStr ? dateFromISO(startStr) : (habit.createdAt ? new Date(habit.createdAt) : new Date());
+    const habitEnd   = endStr   ? dateFromISO(endStr)   : new Date();
+    const msPerDay   = 1000 * 60 * 60 * 24;
+    const totalDays  = Math.max(1, Math.round((habitEnd - habitStart) / msPerDay) + 1);
+    // 總應完成次數（分母）
+    const totalExpected = Math.ceil(totalDays / intervalDays) * timesPerCycle;
+    // 實際完成次數（分子，每日上限=timesPerCycle）
+    const totalDone = Object.entries(habit.todayCounts || {}).reduce((s, [, v]) =>
+        s + Math.min(timesPerCycle, Math.max(0, v || 0)), 0);
+    return Math.min(100, Math.round((totalDone / totalExpected) * 100));
+}
+
+/* ── 判斷今天是否為「應執行日」 ──
+   從習慣開始日起算，每 intervalDays 天為一個週期的第1天 */
+function isTodayActiveDay(habit, todayKey) {
+    const intervalDays = habit.intervalDays || 1;
+    if (intervalDays === 1) return true;
+    const { start: startStr } = parseTimeRange(habit.timeRange);
+    const habitStart = startStr ? dateFromISO(startStr) : (habit.createdAt ? new Date(habit.createdAt) : new Date());
+    const today = dateFromISO(todayKey);
+    const diffDays = Math.round((today - habitStart) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && (diffDays % intervalDays === 0);
+}
+
+/* ── HABIT DETAIL VIEW ── */
+function HabitDetailView({ habit, onBack, onCount, currentDay }) {
+    const todayKey = currentDay || toISODay();
+    const target   = habit.dailyTarget || 1;
+    const todayCounts = habit.todayCounts || {};
+    const done = todayCounts[todayKey] !== undefined
+        ? todayCounts[todayKey]
+        : (todayCounts[new Date().toDateString()] || 0);
+    const progPct = Math.min(100, Math.round((done / target) * 100));
+
+    const intervalDays = habit.intervalDays || 1;
+    const isActiveDay = isTodayActiveDay(habit, todayKey);
+
+    // 今日完成率：今天實際完成次數（上限為目標）/ 每日目標（非執行日為 N/A）
+    const todayDone = Math.min(target, Math.max(0, done));
+    const todayRate = isActiveDay ? Math.min(100, Math.round((todayDone / target) * 100)) : null;
+
+    // 累積完成率：使用共用 helper
+    const completionRate = calcCompletionRate(habit);
+
+    return (
+        <div>
+            <button className="back-nav" onClick={onBack}><BackIcon/>我的習慣</button>
+            <div className="detail-title">{habit.name}</div>
+            <div className="detail-category">
+                {habit.category}
+                {habit.freqLabel && ` · ${habit.freqLabel}`}
+                {habit.durLabel  && ` · ${habit.durLabel}`}
+                {habit.timeRange ? ' · ' + habit.timeRange : ''}
+            </div>
+            <div className="detail-stats-grid">
+                <div className="detail-stat-card">
+                    <div className="detail-stat-value">{target}</div>
+                    <div className="detail-stat-label">每日目標</div>
+                </div>
+                <div className="detail-stat-card">
+                    <div className="detail-stat-value">{done}</div>
+                    <div className="detail-stat-label">今日完成</div>
+                </div>
+                <div className="detail-stat-card">
+                    <div className="detail-stat-value">{todayRate !== null ? `${todayRate}%` : '—'}</div>
+                    <div className="detail-stat-label">{todayRate !== null ? '今日完成率' : '休息日'}</div>
+                </div>
+                <div className="detail-stat-card">
+                    <div className="detail-stat-value">{completionRate}%</div>
+                    <div className="detail-stat-label">累積完成率</div>
+                </div>
+            </div>
+            <div className="section-title">今日進度</div>
+            <div style={{marginBottom:24}}>
+                {!isActiveDay ? (
+                    <div style={{
+                        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                        padding:'28px 0', border:'1px solid var(--gray-200)', gap:8
+                    }}>
+                        <div style={{fontSize:13,fontWeight:700,color:'var(--gray-500)',textTransform:'uppercase',letterSpacing:1.5}}>休息日</div>
+                        <div style={{fontSize:11,color:'var(--gray-400)'}}>每 {intervalDays} 天執行一次，今天不需打卡</div>
+                    </div>
+                ) : (
+                    <>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,color:'var(--gray-500)',marginBottom:8}}>
+                            <span>{done} / {target} 次</span><span style={{fontFamily:'var(--din)'}}>{progPct}%</span>
+                        </div>
+                        <div style={{height:8,background:'var(--gray-100)'}}>
+                            <div style={{height:'100%',background:'var(--black)',width:`${progPct}%`,transition:'width .4s'}}></div>
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:0,marginTop:14}}>
+                            <div className="counter-wrap" style={{width:'100%',justifyContent:'center'}}>
+                                <button className="counter-btn" style={{flex:1,height:44}} onClick={()=>onCount(habit.id,-1)}>−</button>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    className="counter-val"
+                                    style={{flex:2,height:44,fontSize:18,textAlign:'center',border:'none',borderLeft:'1px solid var(--gray-200)',borderRight:'1px solid var(--gray-200)',outline:'none',fontFamily:'var(--din)',fontWeight:700,background:'var(--white)',cursor:'text',MozAppearance:'textfield'}}
+                                    value={done}
+                                    onChange={e=>{
+                                        const v = parseInt(e.target.value);
+                                        if (!isNaN(v) && v >= 0) onCount(habit.id, Math.min(target, v) - done);
+                                        else if (e.target.value === '') onCount(habit.id, -done);
+                                    }}
+                                />
+                                <button className="counter-btn" style={{flex:1,height:44}} onClick={()=>onCount(habit.id,+1)}>＋</button>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ── PRESETS (定義在 component 外部，物件參考固定不變) ── */
+const DURATION_PRESETS = [
+    { label:'5 分鐘',  value:5,   unit:'min' },
+    { label:'15 分鐘', value:15,  unit:'min' },
+    { label:'30 分鐘', value:30,  unit:'min' },
+    { label:'1 小時',  value:60,  unit:'min' },
+    { label:'自訂',    value:null, unit:'min' },
+];
+const FREQ_PRESETS = [
+    { label:'每天 1 次', timesPerDay:1, intervalDays:1, periodUnit:'day' },
+    { label:'每天 2 次', timesPerDay:2, intervalDays:1, periodUnit:'day' },
+    { label:'每天 3 次', timesPerDay:3, intervalDays:1, periodUnit:'day' },
+    { label:'自訂',      timesPerDay:null, intervalDays:null, periodUnit:'custom' },
+];
+
+/* ── ADD HABIT MODAL ── */
+function AddHabitModal({ onClose, onAdd }) {
+    const now = new Date();
+    const [name, setName] = useState('');
+    const [category, setCategory] = useState('運動健身');
+
+    // 開始/結束日期 (date string for <input type="date">)
+    const todayStr = now.toISOString().slice(0,10);
+    const endOfYear = `${now.getFullYear()}-12-31`;
+    const [startDate, setStartDate] = useState(todayStr);
+    const [endDate, setEndDate]     = useState(endOfYear);
+
+    const [durPreset, setDurPreset]   = useState(null);   // null = 未選
+    const [durCustom, setDurCustom]   = useState('');
+    const [durUnit,   setDurUnit]     = useState('min');
+
+    const [freqPreset, setFreqPreset] = useState(null);
+    const [freqCustomN, setFreqCustomN] = useState('1');       // 每X天執行幾次
+    const [freqIntervalDays, setFreqIntervalDays] = useState('1'); // 每隔幾天
+
+    const categories = ['運動健身','飲食管理','護膚保養','睡眠作息','冥想放鬆','補水習慣','閱讀學習','其他'];
+
+    /* 計算頻率參數：{ timesPerCycle: 每個週期要完成幾次, intervalDays: 週期天數 } */
+    const getFreqParams = () => {
+        if (!freqPreset) return { timesPerCycle: 1, intervalDays: 1 };
+        if (freqPreset.periodUnit === 'custom') {
+            return {
+                timesPerCycle: Math.max(1, parseInt(freqCustomN) || 1),
+                intervalDays:  Math.max(1, parseInt(freqIntervalDays) || 1),
+            };
+        }
+        return {
+            timesPerCycle: freqPreset.timesPerDay || 1,
+            intervalDays:  freqPreset.intervalDays || 1,
+        };
+    };
+    // 向下相容：dailyTarget 仍儲存為「每個週期次數」
+    const getDailyTarget = () => getFreqParams().timesPerCycle;
+
+    /* 組合 freqLabel */
+    const getFreqLabel = () => {
+        if (!freqPreset) return '';
+        if (freqPreset.periodUnit === 'custom') {
+            const days = parseInt(freqIntervalDays) || 1;
+            const times = parseInt(freqCustomN) || 1;
+            if (days === 1) return `每天 ${times} 次`;
+            return `每 ${days} 天 ${times} 次`;
+        }
+        return freqPreset.label;
+    };
+
+    /* 組合 durLabel */
+    const getDurLabel = () => {
+        if (!durPreset) return '';
+        if (durPreset.value === null) {
+            const unitMap = { min:'分鐘', hour:'小時' };
+            return `${durCustom} ${unitMap[durUnit]||durUnit}`;
+        }
+        return durPreset.label;
+    };
+
+    const handleAdd = () => {
+        if (!name.trim()) return;
+        const timeRange = `${startDate} ～ ${endDate}`;
+        const freqLabel = getFreqLabel();
+        const durLabel  = getDurLabel();
+        const { timesPerCycle, intervalDays } = getFreqParams();
+        onAdd({ name: name.trim(), category, timeRange, freqLabel, durLabel, dailyTarget: timesPerCycle, intervalDays });
+    };
+
+    const isDurCustom  = durPreset?.value === null;
+    const isFreqCustom = freqPreset?.periodUnit === 'custom';
+
+    return (
+        <div className="modal" onClick={onClose}>
+            <div className="modal-content" onClick={e=>e.stopPropagation()}>
+                <div className="modal-header">新增習慣</div>
+
+                {/* 名稱 */}
+                <div className="form-group">
+                    <label className="form-label">習慣名稱</label>
+                    <input type="text" className="form-input" value={name} onChange={e=>setName(e.target.value)} placeholder="例：晨跑" autoFocus/>
+                </div>
+
+                {/* 分類 */}
+                <div className="form-group">
+                    <label className="form-label">分類</label>
+                    <select className="form-input" value={category} onChange={e=>setCategory(e.target.value)}>
+                        {categories.map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+
+                <div className="section-divider"/>
+
+                {/* 執行期間 */}
+                <div className="form-group">
+                    <div className="modal-section-label">執行期間</div>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <input type="date" className="form-input" style={{flex:1,padding:'9px 8px',fontSize:12}} value={startDate} onChange={e=>setStartDate(e.target.value)}/>
+                        <span className="date-sep">→</span>
+                        <input type="date" className="form-input" style={{flex:1,padding:'9px 8px',fontSize:12}} value={endDate} onChange={e=>setEndDate(e.target.value)}/>
+                    </div>
+                </div>
+
+                <div className="section-divider"/>
+
+                {/* 執行時長 */}
+                <div className="form-group">
+                    <div className="modal-section-label">每次時長</div>
+                    <div className="pill-group">
+                        {DURATION_PRESETS.map((p,i)=>(
+                            <button key={i} className={`pill${durPreset===p?' selected':''}`} onClick={()=>setDurPreset(p)}>
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                    {isDurCustom && (
+                        <div className="pill-custom-wrap">
+                            <input className="pill-custom-input" type="number" min="1" placeholder="30"
+                                value={durCustom} onChange={e=>setDurCustom(e.target.value)}/>
+                            <select className="pill-unit-select" value={durUnit} onChange={e=>setDurUnit(e.target.value)}>
+                                <option value="min">分鐘</option>
+                                <option value="hour">小時</option>
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                <div className="section-divider"/>
+
+                {/* 頻率 */}
+                <div className="form-group">
+                    <div className="modal-section-label">執行頻率</div>
+                    <div className="pill-group">
+                        {FREQ_PRESETS.map((p,i)=>(
+                            <button key={i} className={`pill${freqPreset===p?' selected':''}`} onClick={()=>setFreqPreset(p)}>
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                    {isFreqCustom && (
+                        <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:8}}>
+                            <div className="pill-custom-wrap">
+                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>每隔</span>
+                                <input className="pill-custom-input" type="number" min="1" placeholder="1"
+                                    value={freqIntervalDays} onChange={e=>setFreqIntervalDays(e.target.value)}/>
+                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>天，執行</span>
+                                <input className="pill-custom-input" type="number" min="1" placeholder="1"
+                                    value={freqCustomN} onChange={e=>setFreqCustomN(e.target.value)}/>
+                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>次</span>
+                            </div>
+                            <div style={{fontSize:10,color:'var(--gray-400)',paddingLeft:2}}>
+                                例：每隔 1 天執行 1 次 = 每天；每隔 2 天執行 3 次 = 2天內完成3次
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="button-group">
+                    <button className="button button-secondary" onClick={onClose}>取消</button>
+                    <button className="button button-primary" onClick={handleAdd}>建立</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ── MAIN APP ── */
+function MainApp({ user, onLogout }) {
+    const [activeTab, setActiveTab] = useState('home');
+    const [showModal, setShowModal] = useState(false);
+    const [habits, setHabits] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedHabit, setSelectedHabit] = useState(null);
+    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [groups, setGroups] = useState(mockGroups);
+    const [feedPosts, setFeedPosts] = useState(mockFeedGlobal);
+    const [myPosts, setMyPosts] = useState([]);
+    const [postText, setPostText] = useState('');
+    const [postMedia, setPostMedia] = useState(null); // { type:'image'|'video', url, file }
+    const fileInputRef = useRef(null);
+    const videoInputRef = useRef(null);
+
+    useEffect(() => {
+        if (!isFirebaseConfigured) {
+            const saved = localStorage.getItem(`habits_${user.uid}`);
+            if (saved) {
+                // 遷移舊格式 key → YYYY-MM-DD
+                const parsed = JSON.parse(saved);
+                const migrated = parsed.map(h => {
+                    // 遷移 checkedDates
+                    const newChecked = [...new Set((h.checkedDates||[]).map(d => {
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+                        const p = new Date(d); return isNaN(p) ? null : toISODay(p);
+                    }).filter(Boolean))];
+                    // 遷移 todayCounts
+                    const newCounts = {};
+                    Object.entries(h.todayCounts||{}).forEach(([k,v]) => {
+                        const isoKey = /^\d{4}-\d{2}-\d{2}$/.test(k) ? k : toISODay(new Date(k));
+                        if (isoKey) newCounts[isoKey] = (newCounts[isoKey]||0) + v;
+                    });
+                    // 重新計算 streak
+                    let streak = 0;
+                    let cur = new Date(); cur.setHours(0,0,0,0);
+                    while (newChecked.includes(toISODay(cur))) { streak++; cur.setDate(cur.getDate()-1); }
+                    return { ...h, checkedDates: newChecked, todayCounts: newCounts, streak };
+                });
+                setHabits(migrated);
+            } else {
+                setHabits([]);
+            }
+            setLoading(false); return;
+        }
+        const unsub = db.collection('habits').where('userId','==',user.uid).orderBy('createdAt','desc').onSnapshot(snap => {
+            setHabits(snap.docs.map(d=>({id:d.id,...d.data()})));
+            setLoading(false);
+        });
+        return ()=>unsub();
+    }, [user]);
+
+    useEffect(() => {
+        if (!isFirebaseConfigured && habits.length >= 0) {
+            localStorage.setItem(`habits_${user.uid}`, JSON.stringify(habits));
+        }
+    }, [habits, user]);
+
+    // 自動偵測跨日：計算距離明天凌晨 00:00 的毫秒數，時間到就強制 re-render
+    const [currentDay, setCurrentDay] = useState(toISODay());
+    useEffect(() => {
+        const scheduleNextMidnight = () => {
+            const now = new Date();
+            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+            const msUntilMidnight = tomorrow - now;
+            return setTimeout(() => {
+                setCurrentDay(toISODay()); // 觸發 re-render，所有 todayKey 都會更新
+                scheduleNextMidnight();    // 排程下一天的跨日偵測
+            }, msUntilMidnight);
+        };
+        const timer = scheduleNextMidnight();
+        return () => clearTimeout(timer);
+    }, []);
+
+    const addHabit = ({ name, category, timeRange, freqLabel, durLabel, dailyTarget, intervalDays }) => {
+        const habit = { name, category, timeRange, freqLabel: freqLabel||'', durLabel: durLabel||'', dailyTarget: dailyTarget||1, intervalDays: intervalDays||1, userId: user.uid, checkedDates:[], todayCounts:{}, streak:0, createdAt: new Date().toISOString() };
+        if (!isFirebaseConfigured) {
+            setHabits([{ ...habit, id: Date.now().toString() }, ...habits]);
+        } else {
+            db.collection('habits').add({ ...habit, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+        setShowModal(false);
+    };
+
+    const deleteHabit = (habitId) => {
+        if (!isFirebaseConfigured) {
+            setHabits(prev => prev.filter(h => h.id !== habitId));
+        } else {
+            db.collection('habits').doc(habitId).delete();
+        }
+    };
+
+    const countHabit = async (habitId, delta) => {
+        const todayKey = toISODay();                       // YYYY-MM-DD
+        const habit = habits.find(h=>h.id===habitId);
+        if (!habit) return;
+
+        // todayCounts：支援舊 key 格式並遷移
+        const rawCounts = { ...(habit.todayCounts||{}) };
+        // 若存有舊格式的今天 key，先搬移
+        const legacyTodayKey = new Date().toDateString();
+        if (rawCounts[legacyTodayKey] !== undefined && rawCounts[todayKey] === undefined) {
+            rawCounts[todayKey] = rawCounts[legacyTodayKey];
+            delete rawCounts[legacyTodayKey];
+        }
+        const counts = rawCounts;
+        // 判斷今日是否「完成」(達到 dailyTarget)
+        const target = habit.dailyTarget || 1;
+        const cur = counts[todayKey] || 0;
+        const next = Math.min(target, Math.max(0, cur + delta));
+        counts[todayKey] = next;
+
+        const wasDone = cur >= target;
+        const isDone  = next >= target;
+
+        // checkedDates 統一為 YYYY-MM-DD，去除舊格式重複
+        let checkedDates = [...new Set((habit.checkedDates||[]).map(d => {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+            const p = new Date(d); return isNaN(p) ? null : toISODay(p);
+        }).filter(Boolean))];
+
+        if (!wasDone && isDone)  checkedDates = [...new Set([...checkedDates, todayKey])];
+        if (wasDone  && !isDone) checkedDates = checkedDates.filter(d=>d!==todayKey);
+
+        // 連續天數：嚴格從今天往回，今天沒完成就是 0（不借用昨天）
+        let streak = 0;
+        let cur2 = new Date(); cur2.setHours(0,0,0,0);
+        while (checkedDates.includes(toISODay(cur2))) { streak++; cur2.setDate(cur2.getDate()-1); }
+
+        if (!isFirebaseConfigured) {
+            setHabits(habits.map(h=>h.id===habitId?{...h,todayCounts:counts,checkedDates,streak}:h));
+        } else {
+            await db.collection('habits').doc(habitId).update({ todayCounts:counts, checkedDates, streak });
+        }
+    };
+
+    const toggleHabit = async (habitId) => {
+        const today = toISODay();
+        const habit = habits.find(h=>h.id===habitId);
+        if (!habit) return;
+        // 統一 checkedDates 為 ISO 格式
+        const normalized = [...new Set((habit.checkedDates||[]).map(d => {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+            const p = new Date(d); return isNaN(p) ? null : toISODay(p);
+        }).filter(Boolean))];
+        const isChecked = normalized.includes(today);
+        const newDates = isChecked ? normalized.filter(d=>d!==today) : [...normalized, today];
+        let streak = 0;
+        let cur = new Date(); cur.setHours(0,0,0,0);
+        while (newDates.includes(toISODay(cur))) { streak++; cur.setDate(cur.getDate()-1); }
+        if (!isFirebaseConfigured) {
+            setHabits(habits.map(h=>h.id===habitId?{...h,checkedDates:newDates,streak}:h));
+        } else {
+            await db.collection('habits').doc(habitId).update({ checkedDates:newDates, streak });
+        }
+    };
+
+    const totalStreak = habits.reduce((s,h)=>s+(h.streak||0),0);
+    const todayStr = currentDay;
+    const todayCompleted = habits.filter(h=>{
+        const normalized = (h.checkedDates||[]).map(d=>{
+            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+            const p=new Date(d); return isNaN(p)?null:toISODay(p);
+        }).filter(Boolean);
+        return normalized.includes(todayStr);
+    }).length;
+    // 累積完成率：各習慣平均（使用共用 helper，支援自訂 intervalDays）
+    const rate = habits.length > 0
+        ? Math.round(habits.reduce((sum, h) => sum + calcCompletionRate(h), 0) / habits.length)
+        : 0;
+
+    const handleLikeFeed = (postId) => {
+        setFeedPosts(prev=>prev.map(p=>p.id===postId?{...p,liked:!p.liked}:p));
+    };
+
+    const [uploadingMedia, setUploadingMedia] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [avatarUrl, setAvatarUrl] = useState(() => localStorage.getItem(`avatar_${user?.uid}`) || null);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const avatarInputRef = useRef(null);
+
+    const handleMediaSelect = async (e, type) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+
+        // Immediately show local preview
+        const localUrl = URL.createObjectURL(file);
+        setPostMedia({ type, url: localUrl, file, uploading: true });
+        setUploadingMedia(true);
+        setUploadProgress(0);
+
+        try {
+            const resourceType = type === 'video' ? 'video' : 'image';
+            const result = await uploadToCloudinary(file, resourceType, (pct) => setUploadProgress(pct));
+            setPostMedia({ type, url: result.url, file: null, uploading: false, local: result.local });
+        } catch (err) {
+            alert('上傳失敗：' + err.message);
+            setPostMedia(null);
+        } finally {
+            setUploadingMedia(false);
+        }
+    };
+
+    const handleAvatarSelect = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+        setUploadingAvatar(true);
+        try {
+            const result = await uploadToCloudinary(file, 'image', null);
+            setAvatarUrl(result.url);
+            localStorage.setItem(`avatar_${user?.uid}`, result.url);
+        } catch (err) {
+            alert('頭像上傳失敗：' + err.message);
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
+    const handlePostSubmit = () => {
+        if (!postText.trim() && !postMedia) return;
+        if (postMedia?.uploading) return; // wait for upload
+        const newPost = {
+            id: 'my-' + Date.now(),
+            user: user.displayName || '用戶',
+            avatar: (user.displayName||user.email)?.[0]?.toUpperCase()||'U',
+            time: '剛剛',
+            habit: '',
+            text: postText.trim(),
+            likes: 0, comments: 0,
+            hasImage: postMedia?.type==='image',
+            hasVideo: postMedia?.type==='video',
+            mediaUrl: postMedia?.url || null,
+            liked: false,
+            isOwn: true,
+        };
+        setMyPosts(prev => [newPost, ...prev]);
+        setFeedPosts(prev => [newPost, ...prev]);
+        setPostText('');
+        setPostMedia(null);
+    };
+
+    if (loading) return <div className="app-container"><div className="loading">載入中...</div></div>;
+
+    const renderHome = () => {
+        if (selectedHabit) {
+            const habit = habits.find(h=>h.id===selectedHabit);
+            if (!habit) { setSelectedHabit(null); return null; }
+            return <HabitDetailView habit={habit} onBack={()=>setSelectedHabit(null)} onCount={countHabit} currentDay={currentDay}/>;
+        }
+        return (
+            <div>
+                {/* + button */}
+                <div className="home-top">
+                    <button className="center-add-btn-standalone" onClick={()=>setShowModal(true)}>
+                        <PlusIcon/>
+                    </button>
+                </div>
+
+                {habits.length > 0 && <div className="section-title">我的習慣</div>}
+                {habits.length === 0 ? (
+                    <div className="empty-state">
+                        <HomeIcon/>
+                        <h3>尚無習慣</h3>
+                        <p>點擊 + 建立你的第一個習慣</p>
+                    </div>
+                ) : (
+                    habits.map(habit => {
+                        const todayKey = currentDay;
+                        // 首頁 bar 條：累計完成率（支援自訂 intervalDays）
+                        const progPct = calcCompletionRate(habit);
+                        return (
+                            <div key={habit.id} className="habit-card" onClick={()=>setSelectedHabit(habit.id)}>
+                                <div className="habit-header">
+                                    <div className="habit-info">
+                                        <div className="habit-title">{habit.name}</div>
+                                        <div className="habit-meta">
+                                            <span className="habit-category">{habit.category}</span>
+                                            {habit.streak > 0 && (
+                                                <div className="habit-streak"><FlameIcon/><span>{habit.streak}</span></div>
+                                            )}
+                                        </div>
+                                        {/* 頻率 & 時長 tag */}
+                                        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4}}>
+                                            {habit.freqLabel && <span style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,padding:'2px 6px',background:'var(--gray-100)',color:'var(--gray-600)'}}>{habit.freqLabel}</span>}
+                                            {habit.durLabel  && <span style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,padding:'2px 6px',background:'var(--gray-100)',color:'var(--gray-600)'}}>{habit.durLabel}</span>}
+                                        </div>
+                                        {habit.timeRange && <div className="habit-time-range" style={{marginTop:4}}>{habit.timeRange}</div>}
+                                    </div>
+                                    <div className="habit-progress-section" onClick={e=>e.stopPropagation()}>
+                                        <div className="habit-progress-bar-wrap">
+                                            <div className="habit-prog-label">
+                                                <span>完成</span>
+                                                <span style={{fontFamily:'var(--din)'}}>{progPct}%</span>
+                                            </div>
+                                            <div className="habit-prog-track">
+                                                <div className={`habit-prog-fill${progPct>=100?' done':''}`} style={{width:`${progPct}%`}}></div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                                <div className="card-delete-row" onClick={e=>e.stopPropagation()}>
+                                    <button
+                                        className="card-delete-btn"
+                                        onClick={()=>deleteHabit(habit.id)}
+                                    >
+                                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                        刪除習慣
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+        );
+    };
+
+    const renderGroups = () => {
+        if (selectedGroup) {
+            return <GroupDetailView group={selectedGroup} currentUser={user} onBack={()=>setSelectedGroup(null)}/>;
+        }
+        return (
+            <div>
+                <div className="section-title">活躍小組</div>
+                {groups.map(group => (
+                    <div key={group.id} className="group-card">
+                        <div className="group-card-header">
+                            <div className="group-name">{group.name}</div>
+                            <span className="group-category-tag">{group.category}</span>
+                        </div>
+                        <div className="group-info">
+                            <span>{group.members} 位成員</span>
+                            <span>•</span>
+                            <span>{group.active} 人參與中</span>
+                        </div>
+                        <div className="group-progress">
+                            <div className="progress-label">
+                                <span>進度</span><span style={{fontFamily:'var(--din)'}}>{group.progress}%</span>
+                            </div>
+                            <div className="progress-bar"><div className="progress-fill" style={{width:`${group.progress}%`}}></div></div>
+                        </div>
+                        <div className="group-bottom">
+                            <div className="group-members">
+                                {[...Array(Math.min(group.active,6))].map((_,i)=>(
+                                    <div key={i} className="member-avatar-sm">{String.fromCharCode(65+i)}</div>
+                                ))}
+                            </div>
+                            <div style={{display:'flex',gap:8}}>
+                                <button
+                                    className={`join-btn${group.joined?' joined':''}`}
+                                    onClick={e=>{
+                                        e.stopPropagation();
+                                        setGroups(prev=>prev.map(g=>g.id===group.id?{...g,joined:!g.joined}:g));
+                                    }}
+                                >
+                                    {group.joined ? '✓ 已加入' : '加入'}
+                                </button>
+                                <button
+                                    className="join-btn"
+                                    onClick={()=>setSelectedGroup(group)}
+                                >
+                                    查看
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    const renderFeed = () => (
+        <div>
+            <div className="section-title">社群動態</div>
+            {feedPosts.map(post => (
+                <FeedCard key={post.id} post={post} onLike={handleLikeFeed}/>
+            ))}
+        </div>
+    );
+
+    const renderProfile = () => (
+        <div>
+            {!isCloudinaryConfigured && (
+                <div className="cloudinary-setup-box">
+                    <strong>⚡ 啟用媒體上傳：</strong> 請在程式碼頂端填入你的<br/>
+                    <code>CLOUDINARY_CLOUD_NAME</code> 和 <code>CLOUDINARY_UPLOAD_PRESET</code><br/>
+                    <a href="https://cloudinary.com" target="_blank">免費申請 Cloudinary →</a>（永久免費方案）
+                </div>
+            )}
+            <div className="profile-header">
+                <div className="profile-avatar-wrap" onClick={()=>avatarInputRef.current?.click()} title="點擊更換頭像">
+                    {avatarUrl
+                        ? <img src={avatarUrl} className="avatar-img" alt="頭像"/>
+                        : <div className="profile-avatar">{uploadingAvatar ? '⟳' : ((user.displayName||user.email)?.[0]?.toUpperCase()||'U')}</div>
+                    }
+                    <div className="avatar-edit-overlay">{uploadingAvatar ? '上傳中…' : '更換頭像'}</div>
+                    <input ref={avatarInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAvatarSelect}/>
+                </div>
+                <div className="profile-name">{user.displayName||'用戶'}</div>
+                <div className="profile-email">{user.email}</div>
+                <div className="profile-stats">
+                    <div className="profile-stat"><div className="profile-stat-value">{habits.length}</div><div className="profile-stat-label">習慣數</div></div>
+                    <div className="profile-stat"><div className="profile-stat-value">{myPosts.length}</div><div className="profile-stat-label">貼文</div></div>
+                    <div className="profile-stat"><div className="profile-stat-value">{rate}%</div><div className="profile-stat-label">完成率</div></div>
+                </div>
+            </div>
+
+            {/* ── 發表貼文 ── */}
+            <div className="composer-wrap">
+                <textarea
+                    className="composer-textarea"
+                    placeholder="分享你的習慣進度、心得…"
+                    value={postText}
+                    maxLength={300}
+                    onChange={e=>setPostText(e.target.value)}
+                />
+                {postMedia && (
+                    <div className="composer-media-preview">
+                        {postMedia.type==='image'
+                            ? <img src={postMedia.url} alt="preview"/>
+                            : <video src={postMedia.url} controls/>
+                        }
+                        <button className="composer-media-remove" onClick={()=>setPostMedia(null)}>✕</button>
+                    </div>
+                )}
+                <div className="composer-toolbar">
+                    <div className="composer-media-btns">
+                        <button className="composer-media-btn" onClick={()=>fileInputRef.current?.click()}>
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            照片
+                        </button>
+                        <button className="composer-media-btn" onClick={()=>videoInputRef.current?.click()}>
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.868v6.264a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            影片
+                        </button>
+                        <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleMediaSelect(e,'image')}/>
+                        <input ref={videoInputRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>handleMediaSelect(e,'video')}/>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:12}}>
+                        <span className="composer-char">{postText.length}/300</span>
+                        <button
+                            className="composer-submit"
+                            disabled={(!postText.trim() && !postMedia) || postMedia?.uploading}
+                            onClick={handlePostSubmit}
+                        >{postMedia?.uploading ? `上傳中 ${uploadProgress}%` : '發布'}</button>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── 我的貼文 ── */}
+            <div className="my-posts-section">
+                {myPosts.length > 0 && <div className="section-title">我的貼文</div>}
+                {myPosts.map(p => (
+                    <div key={p.id} className="my-post-item">
+                        <div className="my-post-header">
+                            <span className="my-post-time">{p.time}</span>
+                            <button className="my-post-delete" onClick={()=>{
+                                setMyPosts(prev=>prev.filter(x=>x.id!==p.id));
+                                setFeedPosts(prev=>prev.filter(x=>x.id!==p.id));
+                            }}>刪除</button>
+                        </div>
+                        {p.text && <div className="my-post-body">{p.text}</div>}
+                        {p.mediaUrl && (
+                            <div className="my-post-media">
+                                {p.hasImage
+                                    ? <img src={p.mediaUrl} alt="post"/>
+                                    : <video src={p.mediaUrl} controls style={{width:'100%',maxHeight:180}}/>
+                                }
+                            </div>
+                        )}
+                        <div className="my-post-actions">
+                            <div className="feed-action"><HeartIcon filled={false}/><span>{p.likes}</span></div>
+                            <div className="feed-action"><ChatIcon/><span>{p.comments}</span></div>
+                        </div>
+                    </div>
+                ))}
+                {myPosts.length === 0 && (
+                    <div className="empty-state" style={{paddingTop:32}}>
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{width:36,height:36,margin:'0 auto 12px',opacity:.2}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        <h3>尚無貼文</h3>
+                        <p>發表第一篇貼文，分享你的習慣旅程</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="app-container">
+            <div className="header">
+                <div className="header-title">
+                    <h1>健康習慣追蹤 PRO</h1>
+                    <p>{user.displayName||user.email}</p>
+                </div>
+                <button className="logout-btn" onClick={onLogout}>登出</button>
+            </div>
+            <div className="content">
+                {activeTab==='home' && renderHome()}
+{activeTab==='feed' && renderFeed()}
+                {activeTab==='profile' && renderProfile()}
+            </div>
+            {showModal && <AddHabitModal onClose={()=>setShowModal(false)} onAdd={addHabit}/>}
+            <div className="tab-bar">
+                <button className={`tab-item${activeTab==='home'?' active':''}`} onClick={()=>{setActiveTab('home');setSelectedHabit(null);}}>
+                    <HomeIcon/><span>首頁</span>
+                </button>
+<button className={`tab-item${activeTab==='feed'?' active':''}`} onClick={()=>setActiveTab('feed')}>
+                    <FeedIcon/><span>動態</span>
+                </button>
+                <button className={`tab-item${activeTab==='profile'?' active':''}`} onClick={()=>setActiveTab('profile')}>
+                    <ProfileIcon/><span>我的</span>
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* ── ROOT APP ── */
+function App() {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!isFirebaseConfigured) {
+            const u = localStorage.getItem('demoUser');
+            if (u) setUser(JSON.parse(u));
+            setLoading(false); return;
+        }
+        const unsub = auth.onAuthStateChanged(u=>{setUser(u);setLoading(false);});
+        return ()=>unsub();
+    }, []);
+
+    const handleLogout = () => {
+        if (!isFirebaseConfigured) { localStorage.removeItem('demoUser'); setUser(null); }
+        else auth.signOut();
+    };
+
+    if (loading) return <div className="app-container"><div className="loading">載入中...</div></div>;
+    return user ? <MainApp user={user} onLogout={handleLogout}/> : <AuthPage onAuthSuccess={setUser}/>;
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
+<!-- ── PWA: Service Worker + Install Prompt + Push Notifications ── -->
+<script>
+(function() {
+    /* 1. 註冊 Service Worker */
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => {
+                    console.log('[PWA] SW registered:', reg.scope);
+                    // 詢問推播通知（延遲 5 秒，等用戶熟悉 App）
+                    setTimeout(() => askNotifPermission(reg), 5000);
+                })
+                .catch(err => console.warn('[PWA] SW failed:', err));
+        });
+    }
+
+    /* 2. 攔截安裝提示事件 */
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        // 已安裝過就不再顯示
+        if (localStorage.getItem('pwa-installed')) return;
+        showInstallBanner();
+    });
+
+    /* 3. 顯示安裝 Banner */
+    function showInstallBanner() {
+        if (document.getElementById('pwa-banner')) return;
+        const banner = document.createElement('div');
+        banner.id = 'pwa-banner';
+        banner.className = 'pwa-install-banner';
+        banner.innerHTML = `
+            <div class="pwa-install-icon"><img src="./icons/icon-192x192.png" alt="icon"></div>
+            <div class="pwa-install-text">
+                <strong>安裝健康習慣追蹤 Pro</strong>
+                <span>加入桌面，隨時快速開啟</span>
+            </div>
+            <button class="pwa-install-btn" id="pwa-install-btn">安裝</button>
+            <button class="pwa-install-close" id="pwa-install-close">✕</button>
+        `;
+        document.body.appendChild(banner);
+
+        document.getElementById('pwa-install-btn').onclick = async () => {
+            banner.remove();
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') localStorage.setItem('pwa-installed', '1');
+            deferredPrompt = null;
+        };
+        document.getElementById('pwa-install-close').onclick = () => {
+            banner.remove();
+            localStorage.setItem('pwa-installed', '1');
+        };
+    }
+
+    /* 4. iOS Safari 安裝提示（iOS 不支援 beforeinstallprompt） */
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isIOS && !isInStandalone && !localStorage.getItem('ios-hint-shown')) {
+        setTimeout(() => {
+            const hint = document.createElement('div');
+            hint.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);max-width:340px;width:calc(100% - 32px);background:#0a0a0a;color:#fff;padding:14px 16px;font-size:12px;line-height:1.6;z-index:500;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.3)';
+            hint.innerHTML = `
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 安裝到 iPhone 桌面</div>
+                <div style="opacity:.75">點下方 <strong style="opacity:1">分享按鈕 ↑</strong> → 選「加入主畫面」即可像 App 一樣使用</div>
+                <button onclick="this.parentElement.remove();localStorage.setItem('ios-hint-shown','1')" style="margin-top:10px;background:white;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">知道了</button>
+            `;
+            document.body.appendChild(hint);
+        }, 3000);
+    }
+
+    /* 5. 推播通知申請 */
+    async function askNotifPermission(reg) {
+        if (!('Notification' in window)) return;
+        if (Notification.permission !== 'default') return;
+        if (localStorage.getItem('notif-asked')) return;
+
+        const prompt = document.createElement('div');
+        prompt.id = 'notif-prompt';
+        prompt.className = 'notif-prompt';
+        prompt.innerHTML = `
+            <div class="notif-prompt-text">
+                <strong>🔔 開啟每日提醒</strong>
+                讓我們在你該完成習慣時提醒你，不錯過任何一天
+            </div>
+            <button class="notif-yes" id="notif-yes">開啟</button>
+            <button class="notif-no"  id="notif-no">不用了</button>
+        `;
+        document.body.appendChild(prompt);
+
+        document.getElementById('notif-yes').onclick = async () => {
+            prompt.remove();
+            localStorage.setItem('notif-asked', '1');
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                scheduleDailyReminder(reg);
+                // 歡迎通知
+                reg.showNotification('🎉 提醒已開啟！', {
+                    body: '我們會在每天晚上 8 點提醒你完成習慣',
+                    icon: './icons/icon-192x192.png',
+                    badge: './icons/icon-72x72.png',
+                });
+            }
+        };
+        document.getElementById('notif-no').onclick = () => {
+            prompt.remove();
+            localStorage.setItem('notif-asked', '1');
+        };
+    }
+
+    /* 6. 每日提醒（本地，用 setTimeout 模擬，無需後端） */
+    function scheduleDailyReminder(reg) {
+        const now = new Date();
+        const next8pm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
+        if (next8pm <= now) next8pm.setDate(next8pm.getDate() + 1);
+        const ms = next8pm - now;
+        setTimeout(() => {
+            if (Notification.permission === 'granted') {
+                reg.showNotification('健康習慣追蹤 Pro', {
+                    body: '今天的習慣完成了嗎？點這裡記錄進度 💪',
+                    icon: './icons/icon-192x192.png',
+                    badge: './icons/icon-72x72.png',
+                    vibrate: [200, 100, 200],
+                });
+            }
+            // 排程明天
+            scheduleDailyReminder(reg);
+        }, ms);
+    }
+
+    /* 7. 偵測已安裝 → 不再顯示 banner */
+    window.addEventListener('appinstalled', () => {
+        localStorage.setItem('pwa-installed', '1');
+        const b = document.getElementById('pwa-banner');
+        if (b) b.remove();
+        console.log('[PWA] App installed!');
+    });
+})();
+</script>
+</body>
+</html>
