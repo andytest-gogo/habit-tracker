@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>健康習慣追蹤 — 管理後台</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+    --black: #0a0a0a;
+    --white: #ffffff;
+    --gray-50: #f8f8f8;
+    --gray-100: #f0f0f0;
+    --gray-200: #e0e0e0;
+    --gray-300: #c4c4c4;
+    --gray-400: #9a9a9a;
+    --gray-500: #737373;
+    --gray-600: #555;
+    --gray-800: #2a2a2a;
+    --accent: #0a0a0a;
+    --font: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+    --din: 'Barlow Condensed', monospace;
+    --sidebar: 220px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--font); background:var(--gray-50); color:var(--black); min-height:100vh; display:flex; -webkit-font-smoothing:antialiased; }
+
+/* ── LOGIN ── */
+.login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; width:100%; background:var(--black); }
+.login-box { background:var(--white); padding:40px 36px; width:100%; max-width:360px; }
+.login-logo { font-family:var(--din); font-size:22px; font-weight:800; letter-spacing:1px; margin-bottom:4px; }
+.login-sub { font-size:11px; color:var(--gray-400); text-transform:uppercase; letter-spacing:2px; margin-bottom:32px; }
+.login-label { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-500); margin-bottom:6px; }
+.login-input { width:100%; padding:11px 12px; border:1px solid var(--gray-200); font-size:14px; font-family:var(--font); outline:none; margin-bottom:14px; }
+.login-input:focus { border-color:var(--black); }
+.login-btn { width:100%; padding:12px; background:var(--black); color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); }
+.login-btn:hover { background:var(--gray-800); }
+.login-error { font-size:12px; color:#c00; margin-bottom:12px; padding:10px 12px; background:#fff0f0; border:1px solid #fcc; }
+.login-note { font-size:11px; color:var(--gray-400); margin-top:16px; text-align:center; line-height:1.6; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+    width:var(--sidebar); min-height:100vh;
+    background:var(--black); color:var(--white);
+    display:flex; flex-direction:column;
+    position:fixed; top:0; left:0; z-index:100;
+}
+.sidebar-logo { padding:24px 20px 20px; border-bottom:1px solid rgba(255,255,255,.08); }
+.sidebar-logo h1 { font-family:var(--din); font-size:16px; font-weight:800; letter-spacing:1px; line-height:1.2; }
+.sidebar-logo p { font-size:9px; opacity:.4; margin-top:3px; text-transform:uppercase; letter-spacing:1.5px; }
+.sidebar-nav { flex:1; padding:16px 0; }
+.nav-item {
+    display:flex; align-items:center; gap:10px;
+    padding:11px 20px; font-size:12px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.8px;
+    cursor:pointer; transition:.15s; color:rgba(255,255,255,.45);
+    border:none; background:none; width:100%; text-align:left;
+    font-family:var(--font);
+}
+.nav-item:hover { color:var(--white); background:rgba(255,255,255,.05); }
+.nav-item.active { color:var(--white); background:rgba(255,255,255,.1); }
+.nav-item svg { width:16px; height:16px; flex-shrink:0; }
+.sidebar-footer { padding:16px 20px; border-top:1px solid rgba(255,255,255,.08); font-size:10px; color:rgba(255,255,255,.3); }
+.logout-link { color:rgba(255,255,255,.4); cursor:pointer; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.8px; background:none; border:none; font-family:var(--font); margin-top:6px; display:block; }
+.logout-link:hover { color:rgba(255,255,255,.7); }
+
+/* ── MAIN ── */
+.main { margin-left:var(--sidebar); flex:1; padding:28px 28px 60px; min-height:100vh; }
+.page { display:none; }
+.page.active { display:block; }
+.page-title { font-family:var(--din); font-size:26px; font-weight:800; letter-spacing:.5px; margin-bottom:4px; }
+.page-sub { font-size:12px; color:var(--gray-400); margin-bottom:28px; }
+
+/* ── STAT CARDS ── */
+.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px; }
+.stat-card { background:var(--white); border:1px solid var(--gray-200); padding:20px; }
+.stat-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:var(--gray-400); margin-bottom:8px; }
+.stat-value { font-family:var(--din); font-size:36px; font-weight:800; color:var(--black); line-height:1; }
+.stat-sub { font-size:11px; color:var(--gray-400); margin-top:5px; }
+.stat-card.highlight { background:var(--black); border-color:var(--black); }
+.stat-card.highlight .stat-label { color:rgba(255,255,255,.4); }
+.stat-card.highlight .stat-value { color:var(--white); }
+.stat-card.highlight .stat-sub { color:rgba(255,255,255,.4); }
+
+/* ── CHART ── */
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:28px; }
+.chart-card { background:var(--white); border:1px solid var(--gray-200); padding:20px; }
+.chart-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-500); margin-bottom:16px; }
+.chart-wrap { position:relative; height:200px; }
+
+/* ── TABLE ── */
+.table-card { background:var(--white); border:1px solid var(--gray-200); margin-bottom:20px; }
+.table-header { padding:16px 20px; border-bottom:1px solid var(--gray-100); display:flex; justify-content:space-between; align-items:center; }
+.table-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-500); }
+.table-count { font-size:11px; color:var(--gray-400); font-family:var(--mono); }
+table { width:100%; border-collapse:collapse; }
+th { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-400); padding:10px 20px; text-align:left; border-bottom:1px solid var(--gray-100); background:var(--gray-50); }
+td { font-size:12px; padding:12px 20px; border-bottom:1px solid var(--gray-50); color:var(--gray-800); vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:var(--gray-50); }
+.user-avatar-sm { width:28px; height:28px; background:var(--black); color:var(--white); display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+.user-cell { display:flex; align-items:center; gap:10px; }
+.badge { display:inline-block; padding:2px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; background:var(--gray-100); color:var(--gray-600); }
+.badge.green { background:#e6f9f0; color:#0a7a3e; }
+.badge.red { background:#fff0f0; color:#c00; }
+
+/* ── DELETE BTN ── */
+.del-btn { padding:5px 12px; background:none; border:1px solid var(--gray-200); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; cursor:pointer; color:var(--gray-500); font-family:var(--font); transition:.15s; }
+.del-btn:hover { border-color:#c00; color:#c00; }
+
+/* ── SEARCH ── */
+.search-bar { width:100%; padding:10px 14px; border:1px solid var(--gray-200); font-size:13px; font-family:var(--font); outline:none; margin-bottom:14px; }
+.search-bar:focus { border-color:var(--black); }
+
+/* ── POST CARD ── */
+.post-row td:first-child { max-width:320px; }
+.post-text { font-size:12px; color:var(--gray-800); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }
+.post-media-thumb { width:40px; height:40px; object-fit:cover; border:1px solid var(--gray-100); }
+
+/* ── LOADING ── */
+.loading-row td { text-align:center; padding:32px; color:var(--gray-400); font-size:12px; font-family:var(--din); letter-spacing:1px; text-transform:uppercase; }
+
+/* ── REFRESH BTN ── */
+.refresh-btn { padding:7px 14px; background:var(--white); border:1px solid var(--gray-200); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; cursor:pointer; color:var(--gray-600); font-family:var(--font); transition:.15s; }
+.refresh-btn:hover { border-color:var(--black); color:var(--black); }
+
+/* ── HABIT BAR ── */
+.habit-bar-wrap { display:flex; align-items:center; gap:8px; }
+.habit-bar-track { flex:1; height:4px; background:var(--gray-100); }
+.habit-bar-fill { height:100%; background:var(--black); }
+.habit-bar-pct { font-size:10px; font-weight:700; color:var(--gray-500); font-family:var(--mono); width:32px; text-align:right; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN PAGE ── -->
+<div id="login-page" style="width:100%;">
+    <div class="login-wrap">
+        <div class="login-box">
+            <div class="login-logo">健康習慣追蹤</div>
+            <div class="login-sub">管理後台</div>
+            <div id="login-error" class="login-error" style="display:none;"></div>
+            <label class="login-label">管理員 Email</label>
+            <input id="admin-email" class="login-input" type="email" placeholder="admin@example.com"/>
+            <label class="login-label">密碼</label>
+            <input id="admin-password" class="login-input" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+            <button class="login-btn" onclick="doLogin()">登入後台</button>
+            <p class="login-note">⚠️ 請使用你的 Firebase 帳號登入<br>只有你自己能看到此後台</p>
+        </div>
+    </div>
+</div>
+
+<!-- ── ADMIN DASHBOARD ── -->
+<div id="admin-page" style="display:none; width:100%;">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <h1>習慣追蹤<br>管理後台</h1>
+            <p>Admin Dashboard</p>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="nav-item active" onclick="showPage('dashboard')">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10-3a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z"/></svg>
+                總覽
+            </button>
+            <button class="nav-item" onclick="showPage('users')">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                用戶列表
+            </button>
+            <button class="nav-item" onclick="showPage('posts')">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+                貼文管理
+            </button>
+            <button class="nav-item" onclick="showPage('habits')">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                習慣數據
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <div id="admin-email-display" style="margin-bottom:6px;"></div>
+            <button class="logout-link" onclick="doLogout()">登出</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+
+        <!-- ── 總覽 ── -->
+        <div id="page-dashboard" class="page active">
+            <div class="page-title">總覽</div>
+            <div class="page-sub" id="last-updated">載入中...</div>
+
+            <div class="stat-grid">
+                <div class="stat-card highlight">
+                    <div class="stat-label">總用戶數</div>
+                    <div class="stat-value" id="stat-users">—</div>
+                    <div class="stat-sub">已註冊帳號</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">總貼文數</div>
+                    <div class="stat-value" id="stat-posts">—</div>
+                    <div class="stat-sub">社群動態</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">總習慣數</div>
+                    <div class="stat-value" id="stat-habits">—</div>
+                    <div class="stat-sub">建立中的習慣</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">總留言數</div>
+                    <div class="stat-value" id="stat-comments">—</div>
+                    <div class="stat-sub">所有留言</div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <div class="chart-title">習慣分類分佈</div>
+                    <div class="chart-wrap"><canvas id="chart-category"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">每位用戶平均習慣數</div>
+                    <div class="chart-wrap"><canvas id="chart-habits-per-user"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Recent posts -->
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title">最新貼文</div>
+                    <button class="refresh-btn" onclick="loadAll()">重新整理</button>
+                </div>
+                <table>
+                    <thead><tr><th>用戶</th><th>內容</th><th>按讚</th><th>留言</th><th>時間</th></tr></thead>
+                    <tbody id="recent-posts-tbody"><tr class="loading-row"><td colspan="5">載入中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ── 用戶列表 ── -->
+        <div id="page-users" class="page">
+            <div class="page-title">用戶列表</div>
+            <div class="page-sub">所有已註冊用戶（從 Firestore 習慣資料推算）</div>
+            <input class="search-bar" id="user-search" placeholder="搜尋用戶名稱 / Email…" oninput="filterUsers()"/>
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title">用戶</div>
+                    <div class="table-count" id="user-count">—</div>
+                </div>
+                <table>
+                    <thead><tr><th>用戶</th><th>Email / UID</th><th>習慣數</th><th>貼文數</th><th>平均完成率</th></tr></thead>
+                    <tbody id="users-tbody"><tr class="loading-row"><td colspan="5">載入中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ── 貼文管理 ── -->
+        <div id="page-posts" class="page">
+            <div class="page-title">貼文管理</div>
+            <div class="page-sub">可刪除不當貼文</div>
+            <input class="search-bar" id="post-search" placeholder="搜尋貼文內容 / 用戶名稱…" oninput="filterPosts()"/>
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title">所有貼文</div>
+                    <div class="table-count" id="post-count">—</div>
+                </div>
+                <table>
+                    <thead><tr><th>用戶</th><th>內容</th><th>媒體</th><th>按讚</th><th>留言</th><th>時間</th><th>操作</th></tr></thead>
+                    <tbody id="posts-tbody"><tr class="loading-row"><td colspan="7">載入中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ── 習慣數據 ── -->
+        <div id="page-habits" class="page">
+            <div class="page-title">習慣數據</div>
+            <div class="page-sub">所有用戶的習慣建立情況</div>
+            <input class="search-bar" id="habit-search" placeholder="搜尋習慣名稱 / 用戶…" oninput="filterHabits()"/>
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title">所有習慣</div>
+                    <div class="table-count" id="habit-count">—</div>
+                </div>
+                <table>
+                    <thead><tr><th>習慣名稱</th><th>用戶</th><th>分類</th><th>頻率</th><th>連續天數</th><th>累積完成率</th></tr></thead>
+                    <tbody id="habits-tbody"><tr class="loading-row"><td colspan="6">載入中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /main -->
+</div><!-- /admin-page -->
+
+<script>
+// ── Firebase 設定（與主 App 相同）──
+const firebaseConfig = {
+    apiKey: "AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
+    authDomain: "health-habit-tracker-e6b50.firebaseapp.com",
+    projectId: "health-habit-tracker-e6b50",
+    storageBucket: "health-habit-tracker-e6b50.firebasestorage.app",
+    messagingSenderId: "890093173627",
+    appId: "1:890093173627:web:54032fce30ae7ef3f41bde"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ── 全域資料 ──
+let allUsers = [], allPosts = [], allHabits = [];
+let categoryChart = null, habitsPerUserChart = null;
+
+// ── Auth ──
+auth.onAuthStateChanged(user => {
+    if (user) {
+        document.getElementById('login-page').style.display = 'none';
+        document.getElementById('admin-page').style.display = 'flex';
+        document.getElementById('admin-email-display').textContent = user.email;
+        loadAll();
+    } else {
+        document.getElementById('login-page').style.display = 'flex';
+        document.getElementById('admin-page').style.display = 'none';
+    }
+});
+
+async function doLogin() {
+    const email = document.getElementById('admin-email').value.trim();
+    const pass  = document.getElementById('admin-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    try {
+        await auth.signInWithEmailAndPassword(email, pass);
+    } catch(e) {
+        errEl.style.display = 'block';
+        errEl.textContent = '登入失敗：' + e.message;
+    }
+}
+function doLogout() { auth.signOut(); }
+
+// ── Navigation ──
+function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+// ── Load All Data ──
+async function loadAll() {
+    document.getElementById('last-updated').textContent = '載入中…';
+    await Promise.all([loadHabits(), loadPosts()]);
+    buildUserList();
+    updateStats();
+    renderCharts();
+    renderRecentPosts();
+    renderUsersTable();
+    renderPostsTable();
+    renderHabitsTable();
+    document.getElementById('last-updated').textContent = '最後更新：' + new Date().toLocaleString('zh-TW');
+}
+
+async function loadHabits() {
+    const snap = await db.collection('habits').orderBy('createdAt','desc').get();
+    allHabits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadPosts() {
+    const snap = await db.collection('posts').orderBy('createdAt','desc').get();
+    allPosts = snap.docs.map(d => {
+        const data = d.data();
+        const ts = data.createdAt?.toDate?.();
+        return { id: d.id, ...data, timeStr: ts ? ts.toLocaleString('zh-TW') : '—' };
+    });
+    // load comment counts
+    for (const post of allPosts) {
+        try {
+            const cSnap = await db.collection('posts').doc(post.id).collection('comments').get();
+            post.commentCount = cSnap.size;
+        } catch(e) { post.commentCount = post.comments || 0; }
+    }
+}
+
+function buildUserList() {
+    const userMap = {};
+    allHabits.forEach(h => {
+        if (!h.userId) return;
+        if (!userMap[h.userId]) userMap[h.userId] = { uid: h.userId, name: '用戶', habits: [], posts: [] };
+        userMap[h.userId].habits.push(h);
+    });
+    allPosts.forEach(p => {
+        if (!p.userId) return;
+        if (!userMap[p.userId]) userMap[p.userId] = { uid: p.userId, name: p.user || '用戶', habits: [], posts: [] };
+        userMap[p.userId].name = p.user || userMap[p.userId].name;
+        userMap[p.userId].posts.push(p);
+    });
+    allUsers = Object.values(userMap);
+}
+
+// ── Stats ──
+function updateStats() {
+    document.getElementById('stat-users').textContent  = allUsers.length;
+    document.getElementById('stat-posts').textContent  = allPosts.length;
+    document.getElementById('stat-habits').textContent = allHabits.length;
+    const totalComments = allPosts.reduce((s, p) => s + (p.commentCount || 0), 0);
+    document.getElementById('stat-comments').textContent = totalComments;
+}
+
+// ── Charts ──
+function renderCharts() {
+    // Category distribution
+    const catMap = {};
+    allHabits.forEach(h => { catMap[h.category || '其他'] = (catMap[h.category || '其他'] || 0) + 1; });
+    const catLabels = Object.keys(catMap);
+    const catData   = Object.values(catMap);
+
+    if (categoryChart) categoryChart.destroy();
+    categoryChart = new Chart(document.getElementById('chart-category'), {
+        type: 'doughnut',
+        data: {
+            labels: catLabels,
+            datasets: [{ data: catData, backgroundColor: ['#0a0a0a','#3d3d3d','#737373','#9a9a9a','#c4c4c4','#e0e0e0','#f0f0f0','#555'] }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ font:{ size:10 }, boxWidth:12 } } } }
+    });
+
+    // Habits per user bar chart
+    const userData = allUsers.map(u => ({ name: u.name, count: u.habits.length }))
+        .sort((a,b) => b.count - a.count).slice(0, 8);
+
+    if (habitsPerUserChart) habitsPerUserChart.destroy();
+    habitsPerUserChart = new Chart(document.getElementById('chart-habits-per-user'), {
+        type: 'bar',
+        data: {
+            labels: userData.map(u => u.name),
+            datasets: [{ label: '習慣數', data: userData.map(u => u.count), backgroundColor: '#0a0a0a' }]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ display:false } },
+            scales:{ x:{ ticks:{ font:{ size:10 } } }, y:{ ticks:{ stepSize:1, font:{ size:10 } } } }
+        }
+    });
+}
+
+// ── Recent Posts ──
+function renderRecentPosts() {
+    const tbody = document.getElementById('recent-posts-tbody');
+    const recent = allPosts.slice(0, 10);
+    if (recent.length === 0) { tbody.innerHTML = '<tr class="loading-row"><td colspan="5">尚無貼文</td></tr>'; return; }
+    tbody.innerHTML = recent.map(p => `
+        <tr>
+            <td><div class="user-cell"><div class="user-avatar-sm">${(p.avatar||p.user||'?')[0]}</div><span>${p.user||'—'}</span></div></td>
+            <td><div class="post-text">${p.text || '（無文字）'}</div></td>
+            <td>${p.likes || 0}</td>
+            <td>${p.commentCount || 0}</td>
+            <td style="font-size:11px;color:var(--gray-400)">${p.timeStr}</td>
+        </tr>
+    `).join('');
+}
+
+// ── Users Table ──
+function renderUsersTable(filter = '') {
+    const tbody = document.getElementById('users-tbody');
+    const filtered = allUsers.filter(u =>
+        !filter || u.name.includes(filter) || u.uid.includes(filter)
+    );
+    document.getElementById('user-count').textContent = `${filtered.length} 位用戶`;
+    if (filtered.length === 0) { tbody.innerHTML = '<tr class="loading-row"><td colspan="5">沒有符合的用戶</td></tr>'; return; }
+    tbody.innerHTML = filtered.map(u => {
+        const avgRate = u.habits.length > 0
+            ? Math.round(u.habits.reduce((s,h) => s + calcRate(h), 0) / u.habits.length)
+            : 0;
+        return `
+        <tr>
+            <td><div class="user-cell"><div class="user-avatar-sm">${(u.name||'?')[0]}</div><span style="font-weight:600">${u.name}</span></div></td>
+            <td style="font-size:10px;color:var(--gray-400);font-family:var(--mono)">${u.uid}</td>
+            <td>${u.habits.length}</td>
+            <td>${u.posts.length}</td>
+            <td>
+                <div class="habit-bar-wrap">
+                    <div class="habit-bar-track"><div class="habit-bar-fill" style="width:${avgRate}%"></div></div>
+                    <div class="habit-bar-pct">${avgRate}%</div>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+function filterUsers() { renderUsersTable(document.getElementById('user-search').value.trim()); }
+
+// ── Posts Table ──
+function renderPostsTable(filter = '') {
+    const tbody = document.getElementById('posts-tbody');
+    const filtered = allPosts.filter(p =>
+        !filter || (p.text||'').includes(filter) || (p.user||'').includes(filter)
+    );
+    document.getElementById('post-count').textContent = `共 ${filtered.length} 篇`;
+    if (filtered.length === 0) { tbody.innerHTML = '<tr class="loading-row"><td colspan="7">沒有符合的貼文</td></tr>'; return; }
+    tbody.innerHTML = filtered.map(p => `
+        <tr>
+            <td><div class="user-cell"><div class="user-avatar-sm">${(p.avatar||p.user||'?')[0]}</div><span>${p.user||'—'}</span></div></td>
+            <td><div class="post-text">${p.text || '（無文字）'}</div></td>
+            <td>${p.hasImage ? '📷' : p.hasVideo ? '🎬' : '—'}</td>
+            <td>${p.likes || 0}</td>
+            <td>${p.commentCount || 0}</td>
+            <td style="font-size:10px;color:var(--gray-400)">${p.timeStr}</td>
+            <td><button class="del-btn" onclick="deletePost('${p.id}')">刪除</button></td>
+        </tr>
+    `).join('');
+}
+function filterPosts() { renderPostsTable(document.getElementById('post-search').value.trim()); }
+
+async function deletePost(postId) {
+    if (!confirm('確定要刪除這篇貼文嗎？')) return;
+    try {
+        await db.collection('posts').doc(postId).delete();
+        allPosts = allPosts.filter(p => p.id !== postId);
+        updateStats();
+        renderRecentPosts();
+        renderPostsTable(document.getElementById('post-search').value.trim());
+    } catch(e) { alert('刪除失敗：' + e.message); }
+}
+
+// ── Habits Table ──
+function renderHabitsTable(filter = '') {
+    const tbody = document.getElementById('habits-tbody');
+    const filtered = allHabits.filter(h =>
+        !filter || (h.name||'').includes(filter) || (h.category||'').includes(filter)
+    );
+    document.getElementById('habit-count').textContent = `共 ${filtered.length} 個習慣`;
+    if (filtered.length === 0) { tbody.innerHTML = '<tr class="loading-row"><td colspan="6">沒有符合的習慣</td></tr>'; return; }
+    const userNameMap = {};
+    allUsers.forEach(u => { userNameMap[u.uid] = u.name; });
+    tbody.innerHTML = filtered.map(h => {
+        const rate = calcRate(h);
+        return `
+        <tr>
+            <td style="font-weight:600">${h.name || '—'}</td>
+            <td>${userNameMap[h.userId] || h.userId?.slice(0,8) || '—'}</td>
+            <td><span class="badge">${h.category || '—'}</span></td>
+            <td style="font-size:11px">${h.freqLabel || '每天'}</td>
+            <td style="font-family:var(--mono);font-size:12px">${h.streak || 0} 天</td>
+            <td>
+                <div class="habit-bar-wrap">
+                    <div class="habit-bar-track"><div class="habit-bar-fill" style="width:${rate}%"></div></div>
+                    <div class="habit-bar-pct">${rate}%</div>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+function filterHabits() { renderHabitsTable(document.getElementById('habit-search').value.trim()); }
+
+// ── 計算完成率（與主 App 相同邏輯）──
+function calcRate(habit) {
+    const timesPerCycle = habit.dailyTarget || 1;
+    const intervalDays  = habit.intervalDays || 1;
+    const timeRange = habit.timeRange || '';
+    const parts = timeRange.split(/～|~/).map(s => s.trim().replace(/\//g,'-'));
+    const startStr = parts[0] || null;
+    const endStr   = parts[1] || null;
+    const toDate = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+    const habitStart = startStr ? toDate(startStr) : (habit.createdAt ? new Date(habit.createdAt) : new Date());
+    const habitEnd   = endStr   ? toDate(endStr)   : new Date();
+    const totalDays  = Math.max(1, Math.round((habitEnd - habitStart) / 86400000) + 1);
+    const totalExpected = Math.ceil(totalDays / intervalDays) * timesPerCycle;
+    const totalDone = Object.entries(habit.todayCounts || {}).reduce((s,[,v]) => s + Math.min(timesPerCycle, Math.max(0,v||0)), 0);
+    return Math.min(100, Math.round((totalDone / totalExpected) * 100));
+}
+</script>
+</body>
+</html>
