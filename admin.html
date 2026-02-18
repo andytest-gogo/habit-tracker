@@ -11,7 +11,7 @@
 body{font-family:var(--font);background:var(--g50);color:var(--black);min-height:100vh;-webkit-font-smoothing:antialiased}
 
 /* LOGIN */
-.login-wrap{display:none;align-items:center;justify-content:center;min-height:100vh;background:var(--black)}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--black)}
 .login-box{background:var(--white);padding:40px 36px;width:100%;max-width:360px}
 .login-logo{font-family:var(--din);font-size:22px;font-weight:800;letter-spacing:1px}
 .login-sub{font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:2px;margin-bottom:32px}
@@ -223,10 +223,21 @@ auth.onAuthStateChanged(function(user){
   }
 });
 
-// Login
+// 處理 redirect 登入回來的結果
+auth.getRedirectResult().then(function(result){
+  // 登入成功由 onAuthStateChanged 處理
+}).catch(function(e){
+  if(e.code !== 'auth/no-current-user'){
+    var b=document.getElementById('errBox');
+    b.style.display='block';
+    b.textContent='登入失敗：'+e.message;
+  }
+});
+
+// Login - 用 redirect 避免被瀏覽器擋掉彈出視窗
 document.getElementById('loginBtn').onclick = function(){
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(function(e){
+  auth.signInWithRedirect(provider).catch(function(e){
     var b=document.getElementById('errBox');
     b.style.display='block';
     b.textContent='登入失敗：'+e.message;
