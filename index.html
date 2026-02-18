@@ -54,6 +54,22 @@
             position: relative;
         }
 
+        /* ── COMMENTS ── */
+        .comments-section { border-top:1px solid var(--gray-100); padding:10px 14px; }
+        .comment-item { display:flex; gap:9px; margin-bottom:10px; }
+        .comment-avatar { width:26px; height:26px; background:var(--gray-100); border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; }
+        .comment-body { flex:1; }
+        .comment-user { font-size:11px; font-weight:700; color:var(--black); margin-bottom:2px; }
+        .comment-text { font-size:12px; color:var(--gray-700); line-height:1.5; }
+        .comment-time { font-size:9px; color:var(--gray-400); margin-top:2px; text-transform:uppercase; letter-spacing:.4px; }
+        .comment-input-row { display:flex; gap:8px; margin-top:8px; }
+        .comment-input { flex:1; padding:8px 10px; border:1px solid var(--gray-200); font-size:12px; font-family:var(--font); outline:none; background:var(--white); color:var(--black); border-radius:0; }
+        .comment-input:focus { border-color:var(--black); }
+        .comment-send { padding:8px 13px; background:var(--black); color:var(--white); border:none; font-size:10px; font-weight:700; cursor:pointer; font-family:var(--font); text-transform:uppercase; letter-spacing:.8px; flex-shrink:0; }
+        .comment-send:disabled { background:var(--gray-300); cursor:not-allowed; }
+        .comments-toggle { font-size:11px; color:var(--gray-500); cursor:pointer; font-weight:600; padding:4px 0; display:inline-block; }
+        .comments-toggle:hover { color:var(--black); }
+
         /* ── PWA INSTALL BANNER ── */
         .pwa-install-banner {
             position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
@@ -545,8 +561,8 @@ const ShareIcon = () => (<svg width="15" height="15" fill="none" viewBox="0 0 24
    3. 回到 Dashboard 記下 Cloud name
    4. 填入下方兩個值即可，完全免費！
    ══════════════════════════════════════════════════ */
-const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME';      // ← 改這裡
-const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; // ← 改這裡
+const CLOUDINARY_CLOUD_NAME = 'di21uvipg';
+const CLOUDINARY_UPLOAD_PRESET = 'mxt3i95r';
 
 const isCloudinaryConfigured =
     CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' &&
@@ -683,46 +699,133 @@ function AuthPage({ onAuthSuccess }) {
     );
 }
 
-/* ── FEED CARD COMPONENT ── */
-function FeedCard({ post, onLike }) {
+/* ── FEED CARD COMPONENT（Firebase 真實按讚 + 留言） ── */
+function FeedCard({ post, currentUser, onLike }) {
+    const [showComments, setShowComments] = useState(false);
+    const [comments, setComments] = useState([]);
+    const [commentText, setCommentText] = useState('');
+    const [sendingComment, setSendingComment] = useState(false);
+    const [loadingComments, setLoadingComments] = useState(false);
+
+    // 載入留言（展開時才載入）
+    useEffect(() => {
+        if (!showComments || !isFirebaseConfigured || !post.id) return;
+        setLoadingComments(true);
+        const unsub = db.collection('posts').doc(post.id)
+            .collection('comments')
+            .orderBy('createdAt', 'asc')
+            .onSnapshot(snap => {
+                setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                setLoadingComments(false);
+            }, () => setLoadingComments(false));
+        return () => unsub();
+    }, [showComments, post.id]);
+
+    const handleSendComment = async () => {
+        if (!commentText.trim() || !currentUser) return;
+        setSendingComment(true);
+        try {
+            if (isFirebaseConfigured) {
+                await db.collection('posts').doc(post.id).collection('comments').add({
+                    text: commentText.trim(),
+                    userId: currentUser.uid,
+                    userName: currentUser.displayName || '用戶',
+                    userAvatar: (currentUser.displayName || currentUser.email)?.[0]?.toUpperCase() || 'U',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                // 更新留言數
+                await db.collection('posts').doc(post.id).update({
+                    comments: firebase.firestore.FieldValue.increment(1)
+                });
+            } else {
+                setComments(prev => [...prev, {
+                    id: Date.now().toString(),
+                    text: commentText.trim(),
+                    userName: currentUser.displayName || '用戶',
+                    userAvatar: (currentUser.displayName || currentUser.email)?.[0]?.toUpperCase() || 'U',
+                    createdAt: null,
+                }]);
+            }
+            setCommentText('');
+        } catch(e) { alert('留言失敗：' + e.message); }
+        finally { setSendingComment(false); }
+    };
+
+    const likeCount = post.likes + (post.liked ? 0 : 0); // likes already updated by parent
+
     return (
         <div className="feed-card">
             <div className="feed-header">
-                <div className="feed-avatar">{post.avatar}</div>
+                <div className="feed-avatar">{post.avatarUrl
+                    ? <img src={post.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>
+                    : post.avatar}
+                </div>
                 <div className="feed-user-info">
                     <h4>{post.user}</h4>
                     <div className="feed-time">{post.time}</div>
                 </div>
             </div>
             <div className="feed-content">
-                <div className="feed-text">{post.text}</div>
-                <span className="feed-habit-tag">{post.habit}</span>
+                {post.text && <div className="feed-text">{post.text}</div>}
+                {post.habit && <span className="feed-habit-tag">{post.habit}</span>}
                 {post.hasImage && post.mediaUrl && (
                     <div className="feed-media">
-                        <img src={post.mediaUrl} alt="post media" style={{width:'100%',maxHeight:240,objectFit:'cover',display:'block'}}/>
+                        <img src={post.mediaUrl} alt="post" style={{width:'100%',maxHeight:280,objectFit:'cover',display:'block'}}/>
                     </div>
                 )}
                 {post.hasImage && !post.mediaUrl && (
                     <div className="feed-media">
-                        <div className="feed-media-placeholder">
-                            <ImageIcon/>
-                            <span>照片 · 點擊查看</span>
-                        </div>
+                        <div className="feed-media-placeholder"><ImageIcon/><span>照片</span></div>
                     </div>
                 )}
                 {post.hasVideo && post.mediaUrl && (
                     <div className="feed-media">
-                        <video src={post.mediaUrl} controls style={{width:'100%',maxHeight:240,display:'block'}}/>
+                        <video src={post.mediaUrl} controls style={{width:'100%',maxHeight:280,display:'block'}}/>
                     </div>
                 )}
             </div>
             <div className="feed-actions">
                 <div className={`feed-action${post.liked?' liked':''}`} onClick={()=>onLike && onLike(post.id)}>
-                    <HeartIcon filled={post.liked}/><span>{post.likes + (post.liked?1:0)}</span>
+                    <HeartIcon filled={post.liked}/><span>{post.likes}</span>
                 </div>
-                <div className="feed-action"><ChatIcon/><span>{post.comments}</span></div>
+                <div className="feed-action" onClick={()=>setShowComments(s=>!s)}>
+                    <ChatIcon/><span>{post.comments}</span>
+                </div>
                 <div className="feed-action"><ShareIcon/><span>分享</span></div>
             </div>
+            {showComments && (
+                <div className="comments-section">
+                    {loadingComments && <div style={{fontSize:11,color:'var(--gray-400)',padding:'4px 0'}}>載入留言中…</div>}
+                    {comments.map(c => (
+                        <div key={c.id} className="comment-item">
+                            <div className="comment-avatar">{c.userAvatar}</div>
+                            <div className="comment-body">
+                                <div className="comment-user">{c.userName}</div>
+                                <div className="comment-text">{c.text}</div>
+                                <div className="comment-time">{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '剛剛'}</div>
+                            </div>
+                        </div>
+                    ))}
+                    {comments.length === 0 && !loadingComments && (
+                        <div style={{fontSize:11,color:'var(--gray-400)',padding:'4px 0 8px'}}>還沒有留言，來第一個留言吧！</div>
+                    )}
+                    {currentUser && (
+                        <div className="comment-input-row">
+                            <input
+                                className="comment-input"
+                                placeholder="留言…"
+                                value={commentText}
+                                onChange={e=>setCommentText(e.target.value)}
+                                onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&handleSendComment()}
+                                maxLength={200}
+                            />
+                            <button className="comment-send" onClick={handleSendComment} disabled={!commentText.trim()||sendingComment}>
+                                {sendingComment ? '…' : '送出'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -812,7 +915,7 @@ function MemberProfileView({ member: initialMember, currentUser, onBack }) {
                 ) : (
                     <div className="posts-grid">
                         {posts.map(p => (
-                            <FeedCard key={p.id} post={{...p, user:member.name, avatar:member.avatar}} onLike={handleLike}/>
+                            <FeedCard key={p.id} post={{...p, user:member.name, avatar:member.avatar}} currentUser={currentUser} onLike={handleLike}/>
                         ))}
                     </div>
                 )
@@ -1386,8 +1489,52 @@ function MainApp({ user, onLogout }) {
         ? Math.round(habits.reduce((sum, h) => sum + calcCompletionRate(h), 0) / habits.length)
         : 0;
 
-    const handleLikeFeed = (postId) => {
-        setFeedPosts(prev=>prev.map(p=>p.id===postId?{...p,liked:!p.liked}:p));
+    // ── 從 Firebase 即時載入動態貼文 ──
+    useEffect(() => {
+        if (!isFirebaseConfigured) return;
+        const unsub = db.collection('posts')
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .onSnapshot(snap => {
+                const posts = snap.docs.map(d => {
+                    const data = d.data();
+                    const createdAt = data.createdAt?.toDate?.();
+                    const timeStr = createdAt ? formatTime(createdAt) : '剛剛';
+                    return { id: d.id, ...data, time: timeStr };
+                });
+                setFeedPosts(posts);
+                // 更新 myPosts（自己的貼文）
+                setMyPosts(posts.filter(p => p.userId === user.uid));
+            });
+        return () => unsub();
+    }, [user]);
+
+    function formatTime(date) {
+        const now = new Date();
+        const diff = Math.floor((now - date) / 1000);
+        if (diff < 60) return '剛剛';
+        if (diff < 3600) return `${Math.floor(diff/60)} 分鐘前`;
+        if (diff < 86400) return `${Math.floor(diff/3600)} 小時前`;
+        return `${Math.floor(diff/86400)} 天前`;
+    }
+
+    const handleLikeFeed = async (postId) => {
+        if (!isFirebaseConfigured) {
+            setFeedPosts(prev => prev.map(p => p.id===postId ? {...p, liked:!p.liked, likes: p.liked ? p.likes-1 : p.likes+1} : p));
+            return;
+        }
+        const post = feedPosts.find(p => p.id === postId);
+        if (!post) return;
+        const likedBy = post.likedBy || [];
+        const hasLiked = likedBy.includes(user.uid);
+        try {
+            await db.collection('posts').doc(postId).update({
+                likes: firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1),
+                likedBy: hasLiked
+                    ? firebase.firestore.FieldValue.arrayRemove(user.uid)
+                    : firebase.firestore.FieldValue.arrayUnion(user.uid),
+            });
+        } catch(e) { console.error(e); }
     };
 
     const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -1435,25 +1582,36 @@ function MainApp({ user, onLogout }) {
         }
     };
 
-    const handlePostSubmit = () => {
+    const handlePostSubmit = async () => {
         if (!postText.trim() && !postMedia) return;
-        if (postMedia?.uploading) return; // wait for upload
+        if (postMedia?.uploading) return;
+        const avatar = (user.displayName || user.email)?.[0]?.toUpperCase() || 'U';
         const newPost = {
-            id: 'my-' + Date.now(),
+            userId: user.uid,
             user: user.displayName || '用戶',
-            avatar: (user.displayName||user.email)?.[0]?.toUpperCase()||'U',
-            time: '剛剛',
-            habit: '',
+            avatar,
+            avatarUrl: localStorage.getItem(`avatar_${user.uid}`) || null,
             text: postText.trim(),
-            likes: 0, comments: 0,
-            hasImage: postMedia?.type==='image',
-            hasVideo: postMedia?.type==='video',
+            habit: '',
+            likes: 0,
+            comments: 0,
+            likedBy: [],
+            hasImage: postMedia?.type === 'image',
+            hasVideo: postMedia?.type === 'video',
             mediaUrl: postMedia?.url || null,
-            liked: false,
-            isOwn: true,
         };
-        setMyPosts(prev => [newPost, ...prev]);
-        setFeedPosts(prev => [newPost, ...prev]);
+        if (isFirebaseConfigured) {
+            try {
+                await db.collection('posts').add({
+                    ...newPost,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            } catch(e) { alert('發布失敗：' + e.message); return; }
+        } else {
+            const localPost = { ...newPost, id: 'my-' + Date.now(), time: '剛剛', liked: false, isOwn: true };
+            setMyPosts(prev => [localPost, ...prev]);
+            setFeedPosts(prev => [localPost, ...prev]);
+        }
         setPostText('');
         setPostMedia(null);
     };
@@ -1592,9 +1750,25 @@ function MainApp({ user, onLogout }) {
     const renderFeed = () => (
         <div>
             <div className="section-title">社群動態</div>
-            {feedPosts.map(post => (
-                <FeedCard key={post.id} post={post} onLike={handleLikeFeed}/>
-            ))}
+            {feedPosts.length === 0 && (
+                <div className="empty-state">
+                    <ChatIcon/>
+                    <h3>還沒有貼文</h3>
+                    <p>到「我的」頁面發表第一篇貼文吧！</p>
+                </div>
+            )}
+            {feedPosts.map(post => {
+                const likedBy = post.likedBy || [];
+                const liked = likedBy.includes(user.uid);
+                return (
+                    <FeedCard
+                        key={post.id}
+                        post={{...post, liked}}
+                        currentUser={user}
+                        onLike={handleLikeFeed}
+                    />
+                );
+            })}
         </div>
     );
 
@@ -1674,9 +1848,14 @@ function MainApp({ user, onLogout }) {
                     <div key={p.id} className="my-post-item">
                         <div className="my-post-header">
                             <span className="my-post-time">{p.time}</span>
-                            <button className="my-post-delete" onClick={()=>{
-                                setMyPosts(prev=>prev.filter(x=>x.id!==p.id));
-                                setFeedPosts(prev=>prev.filter(x=>x.id!==p.id));
+                            <button className="my-post-delete" onClick={async ()=>{
+                                if (isFirebaseConfigured) {
+                                    try { await db.collection('posts').doc(p.id).delete(); }
+                                    catch(e) { alert('刪除失敗：' + e.message); }
+                                } else {
+                                    setMyPosts(prev=>prev.filter(x=>x.id!==p.id));
+                                    setFeedPosts(prev=>prev.filter(x=>x.id!==p.id));
+                                }
                             }}>刪除</button>
                         </div>
                         {p.text && <div className="my-post-body">{p.text}</div>}
