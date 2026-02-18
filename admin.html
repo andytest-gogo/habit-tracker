@@ -213,6 +213,15 @@ var catChart=null, userChart=null;
 // Auth state
 auth.onAuthStateChanged(function(user){
   if(user){
+    // 把用戶資料存入 Firestore，讓後台可以看到
+    db.collection('users').doc(user.uid).set({
+      uid: user.uid,
+      email: user.email||'',
+      displayName: user.displayName||'',
+      photoURL: user.photoURL||'',
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true}).catch(function(){});
+
     document.getElementById('loginWrap').style.display='none';
     document.getElementById('layout').style.display='flex';
     document.getElementById('adminEmail').textContent = user.email||user.displayName||'';
@@ -227,20 +236,26 @@ auth.onAuthStateChanged(function(user){
 auth.getRedirectResult().then(function(result){
   // 登入成功由 onAuthStateChanged 處理
 }).catch(function(e){
-  if(e.code !== 'auth/no-current-user'){
+  if(e.code && e.code !== 'auth/no-current-user'){
     var b=document.getElementById('errBox');
     b.style.display='block';
     b.textContent='登入失敗：'+e.message;
   }
 });
 
-// Login - 用 redirect 避免被瀏覽器擋掉彈出視窗
+// Login - 先試 popup，被擋就改用 redirect
 document.getElementById('loginBtn').onclick = function(){
+  var b=document.getElementById('errBox');
+  b.style.display='none';
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider).catch(function(e){
-    var b=document.getElementById('errBox');
-    b.style.display='block';
-    b.textContent='登入失敗：'+e.message;
+  auth.signInWithPopup(provider).catch(function(e){
+    // popup 被擋，改用 redirect
+    if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
+      auth.signInWithRedirect(provider);
+    } else {
+      b.style.display='block';
+      b.textContent='登入失敗：'+e.message;
+    }
   });
 };
 
@@ -268,7 +283,7 @@ document.getElementById('habitSearch').oninput = function(){ renderHabits(this.v
 // Load
 function loadAll(){
   document.getElementById('lastUpdated').textContent='載入中…';
-  Promise.all([loadHabits(), loadPosts()]).then(function(){
+  Promise.all([loadHabits(), loadPosts(), loadUsers()]).then(function(){
     buildUsers();
     renderStats();
     renderCharts();
@@ -278,6 +293,16 @@ function loadAll(){
     renderHabits('');
     document.getElementById('lastUpdated').textContent='最後更新：'+new Date().toLocaleString('zh-TW');
   });
+}
+
+function loadUsers(){
+  return db.collection('users').get().then(function(snap){
+    // 先把 Firestore users 集合的資料存起來
+    window.fsUsers = {};
+    snap.docs.forEach(function(d){
+      window.fsUsers[d.id] = d.data();
+    });
+  }).catch(function(){ window.fsUsers={}; });
 }
 
 function loadHabits(){
@@ -304,17 +329,28 @@ function loadPosts(){
 
 function buildUsers(){
   var map={};
+
+  // 先加入 Firestore users 集合的用戶（有登入過的）
+  Object.entries(window.fsUsers||{}).forEach(function(entry){
+    var uid=entry[0], u=entry[1];
+    map[uid]={uid:uid, name:u.displayName||u.email||'用戶', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen};
+  });
+
+  // 再從 habits 補充
   allHabits.forEach(function(h){
     if(!h.userId) return;
-    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'用戶',habits:[],posts:[]};
+    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'用戶',email:'',habits:[],posts:[]};
     map[h.userId].habits.push(h);
   });
+
+  // 再從 posts 補充
   allPosts.forEach(function(p){
     if(!p.userId) return;
-    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'用戶',habits:[],posts:[]};
+    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'用戶',email:'',habits:[],posts:[]};
     if(p.user) map[p.userId].name=p.user;
     map[p.userId].posts.push(p);
   });
+
   allUsers=Object.values(map);
 }
 
@@ -358,13 +394,13 @@ function renderRecent(){
 
 function renderUsers(f){
   var tb=document.getElementById('userTbody');
-  var list=allUsers.filter(function(u){ return !f||u.name.includes(f)||u.uid.includes(f); });
+  var list=allUsers.filter(function(u){ return !f||u.name.includes(f)||u.uid.includes(f)||(u.email||'').includes(f); });
   document.getElementById('userCnt').textContent=list.length+' 位用戶';
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">沒有符合的用戶</td></tr>';return;}
   tb.innerHTML=list.map(function(u){
     var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
-    return '<tr><td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><strong>'+htmlEsc(u.name)+'</strong></div></td>'+
-      '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid+'</td>'+
+    return '<tr><td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong><div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
+      '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
   }).join('');

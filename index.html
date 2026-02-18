@@ -1934,7 +1934,20 @@ function App() {
             if (u) setUser(JSON.parse(u));
             setLoading(false); return;
         }
-        const unsub = auth.onAuthStateChanged(u=>{setUser(u);setLoading(false);});
+        const unsub = auth.onAuthStateChanged(u=>{
+            if (u && isFirebaseConfigured) {
+                // 把用戶資料寫入 Firestore，讓後台可以看到
+                db.collection('users').doc(u.uid).set({
+                    uid: u.uid,
+                    email: u.email || '',
+                    displayName: u.displayName || '',
+                    photoURL: u.photoURL || '',
+                    lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true }).catch(()=>{});
+            }
+            setUser(u);
+            setLoading(false);
+        });
         return ()=>unsub();
     }, []);
 
