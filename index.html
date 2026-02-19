@@ -728,16 +728,18 @@ function AuthPage({ onAuthSuccess }) {
                     startCooldown();
                     return;
                 }
+                // ✅ 只有 email 驗證通過才寫入 Firestore，假 email 不會出現在後台
+                await db.collection('users').doc(r.user.uid).set({
+                    displayName: r.user.displayName || displayName || '',
+                    email: r.user.email || '',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
                 onAuthSuccess(r.user);
             } else {
                 /* ── Registration flow ── */
                 const r = await auth.createUserWithEmailAndPassword(email, password);
                 await r.user.updateProfile({ displayName });
-                await db.collection('users').doc(r.user.uid).set({
-                    displayName, email,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                // Send verification email
+                // ✅ 只寄驗證信，不寫入 Firestore（等登入且驗證通過後才寫）
                 await r.user.sendEmailVerification();
                 await auth.signOut();
                 setSentEmail(email);
