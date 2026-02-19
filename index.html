@@ -568,14 +568,125 @@ const isCloudinaryConfigured =
     CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' &&
     CLOUDINARY_UPLOAD_PRESET !== 'YOUR_UPLOAD_PRESET';
 
+/* ══════════════════════════════════════════════════
+   ★ Upload Quota Settings — 調整這裡的限制數值 ★
+   ══════════════════════════════════════════════════ */
+const UPLOAD_LIMITS = {
+    IMAGE_MAX_MB: 2,          // 單張圖片上傳上限 (MB)
+    VIDEO_MAX_MB: 20,         // 單個影片上傳上限 (MB)
+    DAILY_IMAGE_COUNT: 5,     // 每日最多上傳圖片數
+    DAILY_VIDEO_COUNT: 2,     // 每日最多上傳影片數
+    MONTHLY_TOTAL_MB: 500,    // 每月總流量上限 (MB)，Cloudinary 免費版約 25GB，保守設定
+    IMAGE_COMPRESS_MAX_PX: 1280, // 圖片壓縮後最大邊長 (px)
+    IMAGE_COMPRESS_QUALITY: 0.80, // 圖片壓縮品質 (0-1)
+};
+
+/* ── 圖片壓縮 ── */
+async function compressImage(file) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const maxPx = UPLOAD_LIMITS.IMAGE_COMPRESS_MAX_PX;
+            let { width, height } = img;
+            if (width > maxPx || height > maxPx) {
+                if (width > height) { height = Math.round(height * maxPx / width); width = maxPx; }
+                else { width = Math.round(width * maxPx / height); height = maxPx; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => {
+                // 若壓縮後比原始大，保留原始
+                if (blob.size >= file.size) { resolve(file); return; }
+                resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+            }, 'image/jpeg', UPLOAD_LIMITS.IMAGE_COMPRESS_QUALITY);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+    });
+}
+
+/* ── Quota 儲存 (localStorage) ── */
+function getQuotaKey(uid) { return `upload_quota_${uid}`; }
+function getQuota(uid) {
+    try {
+        const raw = localStorage.getItem(getQuotaKey(uid));
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch(e) { return null; }
+}
+function saveQuota(uid, quota) {
+    localStorage.setItem(getQuotaKey(uid), JSON.stringify(quota));
+}
+function getTodayKey() { return new Date().toISOString().slice(0, 10); } // "2025-01-15"
+function getMonthKey() { return new Date().toISOString().slice(0, 7); } // "2025-01"
+
+function ensureQuota(uid) {
+    let q = getQuota(uid) || {};
+    const today = getTodayKey(), month = getMonthKey();
+    if (!q.daily || q.daily.date !== today) q.daily = { date: today, images: 0, videos: 0 };
+    if (!q.monthly || q.monthly.month !== month) q.monthly = { month, totalMB: 0 };
+    return q;
+}
+
+function checkQuota(uid, file, isVideo) {
+    const q = ensureQuota(uid);
+    const fileMB = file.size / 1024 / 1024;
+    const maxMB = isVideo ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB;
+
+    if (fileMB > maxMB)
+        throw new Error(`檔案太大！${isVideo ? '影片' : '圖片'}上限 ${maxMB} MB，此檔案約 ${fileMB.toFixed(1)} MB`);
+
+    if (!isVideo && q.daily.images >= UPLOAD_LIMITS.DAILY_IMAGE_COUNT)
+        throw new Error(`今日圖片上傳已達上限 ${UPLOAD_LIMITS.DAILY_IMAGE_COUNT} 張，明天再試！`);
+
+    if (isVideo && q.daily.videos >= UPLOAD_LIMITS.DAILY_VIDEO_COUNT)
+        throw new Error(`今日影片上傳已達上限 ${UPLOAD_LIMITS.DAILY_VIDEO_COUNT} 支，明天再試！`);
+
+    if (q.monthly.totalMB + fileMB > UPLOAD_LIMITS.MONTHLY_TOTAL_MB)
+        throw new Error(`本月上傳流量已達上限 ${UPLOAD_LIMITS.MONTHLY_TOTAL_MB} MB，下月重置！`);
+
+    return q;
+}
+
+function recordUpload(uid, fileMB, isVideo) {
+    const q = ensureQuota(uid);
+    if (isVideo) q.daily.videos++; else q.daily.images++;
+    q.monthly.totalMB = +(q.monthly.totalMB + fileMB).toFixed(2);
+    saveQuota(uid, q);
+}
+
+/* ── 取得目前 user uid（Firebase） ── */
+function getCurrentUid() {
+    try { return auth?.currentUser?.uid || 'guest'; }
+    catch(e) { return 'guest'; }
+}
+
+/* ── 主上傳函數（含限制 + 壓縮） ── */
 async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
     if (!isCloudinaryConfigured) {
-        // Fall back to LocalObjectURL when not configured (local preview only)
         return { url: URL.createObjectURL(file), publicId: null, local: true };
     }
+
+    const isVideo = file.type.startsWith('video/') || resourceType === 'video';
+    const uid = getCurrentUid();
+
+    // ① 檢查 quota（上傳前）
+    const quota = checkQuota(uid, file, isVideo);
+
+    // ② 壓縮圖片
+    let uploadFile = file;
+    if (!isVideo && file.type.startsWith('image/')) {
+        uploadFile = await compressImage(file);
+        console.log(`[Upload] 圖片壓縮: ${(file.size/1024/1024).toFixed(2)}MB → ${(uploadFile.size/1024/1024).toFixed(2)}MB`);
+    }
+
+    const finalMB = uploadFile.size / 1024 / 1024;
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', uploadFile);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
     return new Promise((resolve, reject) => {
@@ -587,13 +698,35 @@ async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
         xhr.onload = () => {
             try {
                 const data = JSON.parse(xhr.responseText);
-                if (data.secure_url) resolve({ url: data.secure_url, publicId: data.public_id });
-                else reject(new Error(data.error?.message || 'Upload failed'));
+                if (data.secure_url) {
+                    // ③ 上傳成功後才記錄配額
+                    recordUpload(uid, finalMB, isVideo);
+                    const q = ensureQuota(uid);
+                    console.log(`[Upload] ✅ 完成 | 今日圖片:${q.daily.images}/${UPLOAD_LIMITS.DAILY_IMAGE_COUNT} 影片:${q.daily.videos}/${UPLOAD_LIMITS.DAILY_VIDEO_COUNT} | 本月:${q.monthly.totalMB}MB/${UPLOAD_LIMITS.MONTHLY_TOTAL_MB}MB`);
+                    resolve({ url: data.secure_url, publicId: data.public_id });
+                } else {
+                    reject(new Error(data.error?.message || 'Upload failed'));
+                }
             } catch(e) { reject(e); }
         };
         xhr.onerror = () => reject(new Error('Network error'));
         xhr.send(formData);
     });
+}
+
+/* ── 查詢目前配額用量 (供 UI 顯示) ── */
+function getUploadQuotaStatus(uid) {
+    const q = ensureQuota(uid || getCurrentUid());
+    return {
+        daily: {
+            images: q.daily.images, imageLimit: UPLOAD_LIMITS.DAILY_IMAGE_COUNT,
+            videos: q.daily.videos, videoLimit: UPLOAD_LIMITS.DAILY_VIDEO_COUNT,
+        },
+        monthly: {
+            usedMB: q.monthly.totalMB, limitMB: UPLOAD_LIMITS.MONTHLY_TOTAL_MB,
+            pct: Math.min(100, Math.round(q.monthly.totalMB / UPLOAD_LIMITS.MONTHLY_TOTAL_MB * 100)),
+        }
+    };
 }
 
 /* ── MOCK DATA ── */
