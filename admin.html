@@ -213,14 +213,8 @@ var catChart=null, userChart=null;
 // Auth state
 auth.onAuthStateChanged(function(user){
   if(user){
-    // Save user data to Firestore for admin visibility
-    db.collection('users').doc(user.uid).set({
-      uid: user.uid,
-      email: user.email||'',
-      displayName: user.displayName||'',
-      photoURL: user.photoURL||'',
-      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-    }, {merge:true}).catch(function(){});
+    // ✅ 後台登入（Google OAuth）不寫入一般 users 集合
+    // 避免 Admin 帳號被當成一般用戶顯示在後台列表
 
     document.getElementById('loginWrap').style.display='none';
     document.getElementById('layout').style.display='flex';

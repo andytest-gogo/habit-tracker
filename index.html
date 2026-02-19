@@ -2090,16 +2090,24 @@ function App() {
         }
         const unsub = auth.onAuthStateChanged(u=>{
             if (u && isFirebaseConfigured) {
-                // Write user data to Firestore
-                db.collection('users').doc(u.uid).set({
-                    uid: u.uid,
-                    email: u.email || '',
-                    displayName: u.displayName || '',
-                    photoURL: u.photoURL || '',
-                    lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true }).catch(()=>{});
+                // ✅ 只有 email 已驗證的用戶才寫入 Firestore
+                if (u.emailVerified) {
+                    db.collection('users').doc(u.uid).set({
+                        uid: u.uid,
+                        email: u.email || '',
+                        displayName: u.displayName || '',
+                        photoURL: u.photoURL || '',
+                        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true }).catch(()=>{});
+                    setUser(u);
+                } else {
+                    // 未驗證的帳號：不寫入 Firestore，不讓進 App
+                    auth.signOut();
+                    setUser(null);
+                }
+            } else {
+                setUser(u);
             }
-            setUser(u);
             setLoading(false);
         });
         return ()=>unsub();
