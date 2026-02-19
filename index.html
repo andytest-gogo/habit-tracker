@@ -631,8 +631,8 @@ async function compressImage(file) {
     });
 }
 
-function getTodayKey() { return new Date().toISOString().slice(0, 10); } // "2025-01-15"
-function getMonthKey() { return new Date().toISOString().slice(0, 7); } // "2025-01"
+function getTodayKey() { return toISODay(); } // uses local date, not UTC
+function getMonthKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; } // local month
 
 /* ── 取得目前 user uid ── */
 function getCurrentUid() {
@@ -1134,7 +1134,7 @@ function FeedCard({ post, currentUser, onLike }) {
                             <div className="comment-body">
                                 <div className="comment-user">{c.userName}</div>
                                 <div className="comment-text">{c.text}</div>
-                                <div className="comment-time">{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now'}</div>
+                                <div className="comment-time">{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now'}</div>
                             </div>
                         </div>
                     ))}
@@ -1489,7 +1489,7 @@ function AddHabitModal({ onClose, onAdd }) {
     const [category, setCategory] = useState('Fitness');
 
     // Start/End Date (date string for <input type="date">)
-    const todayStr = now.toISOString().slice(0,10);
+    const todayStr = toISODay(now); // use local date, not UTC
     const endOfYear = `${now.getFullYear()}-12-31`;
     const [startDate, setStartDate] = useState(todayStr);
     const [endDate, setEndDate]     = useState(endOfYear);
@@ -2576,9 +2576,11 @@ ReactDOM.render(<App/>, document.getElementById('root'));
     /* 6. Daily reminder (local, simulated with setTimeout, no backend needed) */
     function scheduleDailyReminder(reg) {
         const now = new Date();
-        const next8pm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
-        if (next8pm <= now) next8pm.setDate(next8pm.getDate() + 1);
-        const ms = next8pm - now;
+        // Read user's preferred reminder hour (0-23), default = 20 (8pm local time)
+        const reminderHour = parseInt(localStorage.getItem('reminder-hour') || '20', 10);
+        const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), reminderHour, 0, 0);
+        if (next <= now) next.setDate(next.getDate() + 1);
+        const ms = next - now;
         setTimeout(() => {
             if (Notification.permission === 'granted') {
                 reg.showNotification('Habit Tracker Pro', {
