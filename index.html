@@ -842,7 +842,7 @@ function AuthPage({ onAuthSuccess }) {
                 </button>
             </form>
             <div className="auth-switch">
-                {isLogin ? 'Don\'t have an account?' : 'Already have an account?'}
+                {isLogin ? "Don't have an account?" : "Already have an account?"}
                 <a onClick={()=>{ setIsLogin(!isLogin); setError(''); }}>
                     {isLogin ? 'Sign Up' : 'Sign In'}
                 </a>
@@ -1237,7 +1237,7 @@ function HabitDetailView({ habit, onBack, onCount, currentDay }) {
                 </div>
                 <div className="detail-stat-card">
                     <div className="detail-stat-value">{todayRate !== null ? `${todayRate}%` : '—'}</div>
-                    <div className="detail-stat-label">{todayRate !== null ? 'Today's DoneRate' : 'Rest Day'}</div>
+                    <div className="detail-stat-label">{todayRate !== null ? "Today's Completion" : 'Rest Day'}</div>
                 </div>
                 <div className="detail-stat-card">
                     <div className="detail-stat-value">{completionRate}%</div>
