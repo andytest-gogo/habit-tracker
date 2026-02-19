@@ -608,63 +608,97 @@ async function compressImage(file) {
     });
 }
 
-/* ── Quota 儲存 (localStorage) ── */
-function getQuotaKey(uid) { return `upload_quota_${uid}`; }
-function getQuota(uid) {
-    try {
-        const raw = localStorage.getItem(getQuotaKey(uid));
-        if (!raw) return null;
-        return JSON.parse(raw);
-    } catch(e) { return null; }
-}
-function saveQuota(uid, quota) {
-    localStorage.setItem(getQuotaKey(uid), JSON.stringify(quota));
-}
 function getTodayKey() { return new Date().toISOString().slice(0, 10); } // "2025-01-15"
 function getMonthKey() { return new Date().toISOString().slice(0, 7); } // "2025-01"
 
-function ensureQuota(uid) {
-    let q = getQuota(uid) || {};
-    const today = getTodayKey(), month = getMonthKey();
-    if (!q.daily || q.daily.date !== today) q.daily = { date: today, images: 0, videos: 0 };
-    if (!q.monthly || q.monthly.month !== month) q.monthly = { month, totalMB: 0 };
-    return q;
+/* ── 取得目前 user uid ── */
+function getCurrentUid() {
+    try { return auth?.currentUser?.uid || null; }
+    catch(e) { return null; }
 }
 
-function checkQuota(uid, file, isVideo) {
-    const q = ensureQuota(uid);
+/* ── 從 Firestore 讀取配額文件 ── */
+async function fetchQuotaDoc(uid) {
+    if (!uid || !db) return null;
+    try {
+        const snap = await db.collection('upload_quotas').doc(uid).get();
+        return snap.exists ? snap.data() : null;
+    } catch(e) {
+        console.warn('[Quota] 讀取失敗:', e);
+        return null;
+    }
+}
+
+/* ── 檢查配額（上傳前，從 Firestore 讀） ── */
+async function checkQuotaFS(uid, file, isVideo) {
     const fileMB = file.size / 1024 / 1024;
     const maxMB = isVideo ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB;
 
+    // 先檢查單檔大小（不需讀 DB）
     if (fileMB > maxMB)
         throw new Error(`檔案太大！${isVideo ? '影片' : '圖片'}上限 ${maxMB} MB，此檔案約 ${fileMB.toFixed(1)} MB`);
 
-    if (!isVideo && q.daily.images >= UPLOAD_LIMITS.DAILY_IMAGE_COUNT)
+    const q = await fetchQuotaDoc(uid);
+    const today = getTodayKey(), month = getMonthKey();
+
+    // 每日計數（若日期不同代表新的一天，計數歸零）
+    const dailyImages = (q?.dailyDate === today ? q.dailyImages : 0) || 0;
+    const dailyVideos = (q?.dailyDate === today ? q.dailyVideos : 0) || 0;
+
+    // 每月流量（若月份不同代表新月份，歸零）
+    const monthlyMB = (q?.monthlyMonth === month ? q.monthlyMB : 0) || 0;
+
+    if (!isVideo && dailyImages >= UPLOAD_LIMITS.DAILY_IMAGE_COUNT)
         throw new Error(`今日圖片上傳已達上限 ${UPLOAD_LIMITS.DAILY_IMAGE_COUNT} 張，明天再試！`);
 
-    if (isVideo && q.daily.videos >= UPLOAD_LIMITS.DAILY_VIDEO_COUNT)
+    if (isVideo && dailyVideos >= UPLOAD_LIMITS.DAILY_VIDEO_COUNT)
         throw new Error(`今日影片上傳已達上限 ${UPLOAD_LIMITS.DAILY_VIDEO_COUNT} 支，明天再試！`);
 
-    if (q.monthly.totalMB + fileMB > UPLOAD_LIMITS.MONTHLY_TOTAL_MB)
+    if (monthlyMB + fileMB > UPLOAD_LIMITS.MONTHLY_TOTAL_MB)
         throw new Error(`本月上傳流量已達上限 ${UPLOAD_LIMITS.MONTHLY_TOTAL_MB} MB，下月重置！`);
 
-    return q;
+    return { dailyImages, dailyVideos, monthlyMB };
 }
 
-function recordUpload(uid, fileMB, isVideo) {
-    const q = ensureQuota(uid);
-    if (isVideo) q.daily.videos++; else q.daily.images++;
-    q.monthly.totalMB = +(q.monthly.totalMB + fileMB).toFixed(2);
-    saveQuota(uid, q);
+/* ── 上傳成功後寫回 Firestore（用 merge 避免覆蓋） ── */
+async function recordUploadFS(uid, fileMB, isVideo, userName, userEmail) {
+    if (!uid || !db) return;
+    const today = getTodayKey(), month = getMonthKey();
+    try {
+        // 先讀現有資料（確保跨裝置累加正確）
+        const q = await fetchQuotaDoc(uid);
+        const dailyImages = (q?.dailyDate === today ? q.dailyImages : 0) || 0;
+        const dailyVideos = (q?.dailyDate === today ? q.dailyVideos : 0) || 0;
+        const monthlyMB   = (q?.monthlyMonth === month ? q.monthlyMB : 0) || 0;
+        const totalImages = (q?.totalImages || 0);
+        const totalVideos = (q?.totalVideos || 0);
+        const totalMB     = (q?.totalMB || 0);
+
+        const newDoc = {
+            uid,
+            displayName: userName || q?.displayName || '',
+            email: userEmail || q?.email || '',
+            // 每日
+            dailyDate: today,
+            dailyImages: isVideo ? dailyImages : dailyImages + 1,
+            dailyVideos: isVideo ? dailyVideos + 1 : dailyVideos,
+            // 每月
+            monthlyMonth: month,
+            monthlyMB: +( monthlyMB + fileMB ).toFixed(3),
+            // 累計總量
+            totalImages: isVideo ? totalImages : totalImages + 1,
+            totalVideos: isVideo ? totalVideos + 1 : totalVideos,
+            totalMB: +( totalMB + fileMB ).toFixed(3),
+            lastUploadAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        await db.collection('upload_quotas').doc(uid).set(newDoc, { merge: true });
+        console.log(`[Quota] ✅ 已寫入 Firestore | 今日圖:${newDoc.dailyImages}/${UPLOAD_LIMITS.DAILY_IMAGE_COUNT} 影:${newDoc.dailyVideos}/${UPLOAD_LIMITS.DAILY_VIDEO_COUNT} | 本月:${newDoc.monthlyMB}MB`);
+    } catch(e) {
+        console.warn('[Quota] 寫入失敗:', e);
+    }
 }
 
-/* ── 取得目前 user uid（Firebase） ── */
-function getCurrentUid() {
-    try { return auth?.currentUser?.uid || 'guest'; }
-    catch(e) { return 'guest'; }
-}
-
-/* ── 主上傳函數（含限制 + 壓縮） ── */
+/* ── 主上傳函數（含限制 + 壓縮 + Firestore quota） ── */
 async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
     if (!isCloudinaryConfigured) {
         return { url: URL.createObjectURL(file), publicId: null, local: true };
@@ -672,9 +706,10 @@ async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
 
     const isVideo = file.type.startsWith('video/') || resourceType === 'video';
     const uid = getCurrentUid();
+    const currentUser = auth?.currentUser;
 
-    // ① 檢查 quota（上傳前）
-    const quota = checkQuota(uid, file, isVideo);
+    // ① 檢查配額（Firestore，跨裝置真實數字）
+    await checkQuotaFS(uid, file, isVideo);
 
     // ② 壓縮圖片
     let uploadFile = file;
@@ -683,7 +718,7 @@ async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
         console.log(`[Upload] 圖片壓縮: ${(file.size/1024/1024).toFixed(2)}MB → ${(uploadFile.size/1024/1024).toFixed(2)}MB`);
     }
 
-    const finalMB = uploadFile.size / 1024 / 1024;
+    const finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
     const formData = new FormData();
     formData.append('file', uploadFile);
@@ -695,14 +730,16 @@ async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
         };
-        xhr.onload = () => {
+        xhr.onload = async () => {
             try {
                 const data = JSON.parse(xhr.responseText);
                 if (data.secure_url) {
-                    // ③ 上傳成功後才記錄配額
-                    recordUpload(uid, finalMB, isVideo);
-                    const q = ensureQuota(uid);
-                    console.log(`[Upload] ✅ 完成 | 今日圖片:${q.daily.images}/${UPLOAD_LIMITS.DAILY_IMAGE_COUNT} 影片:${q.daily.videos}/${UPLOAD_LIMITS.DAILY_VIDEO_COUNT} | 本月:${q.monthly.totalMB}MB/${UPLOAD_LIMITS.MONTHLY_TOTAL_MB}MB`);
+                    // ③ 上傳成功後寫配額到 Firestore
+                    await recordUploadFS(
+                        uid, finalMB, isVideo,
+                        currentUser?.displayName || currentUser?.email || '',
+                        currentUser?.email || ''
+                    );
                     resolve({ url: data.secure_url, publicId: data.public_id });
                 } else {
                     reject(new Error(data.error?.message || 'Upload failed'));
@@ -712,21 +749,6 @@ async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
         xhr.onerror = () => reject(new Error('Network error'));
         xhr.send(formData);
     });
-}
-
-/* ── 查詢目前配額用量 (供 UI 顯示) ── */
-function getUploadQuotaStatus(uid) {
-    const q = ensureQuota(uid || getCurrentUid());
-    return {
-        daily: {
-            images: q.daily.images, imageLimit: UPLOAD_LIMITS.DAILY_IMAGE_COUNT,
-            videos: q.daily.videos, videoLimit: UPLOAD_LIMITS.DAILY_VIDEO_COUNT,
-        },
-        monthly: {
-            usedMB: q.monthly.totalMB, limitMB: UPLOAD_LIMITS.MONTHLY_TOTAL_MB,
-            pct: Math.min(100, Math.round(q.monthly.totalMB / UPLOAD_LIMITS.MONTHLY_TOTAL_MB * 100)),
-        }
-    };
 }
 
 /* ── MOCK DATA ── */
