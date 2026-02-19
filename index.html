@@ -369,10 +369,11 @@
         .composer-media-preview {
             position:relative; margin:0 16px 12px;
             border:1px solid var(--gray-100); overflow:hidden;
+            min-height:200px; background:#000;
         }
         .composer-media-preview img,
         .composer-media-preview video {
-            width:100%; max-height:200px; object-fit:cover; display:block;
+            width:100%; height:200px; object-fit:cover; display:block;
         }
         .composer-media-remove {
             position:absolute; top:6px; right:6px;
@@ -1110,8 +1111,14 @@ function FeedCard({ post, currentUser, onLike }) {
                     </div>
                 )}
                 {post.hasVideo && post.mediaUrl && (
-                    <div className="feed-media">
-                        <video src={post.mediaUrl} controls style={{width:'100%',maxHeight:280,display:'block'}}/>
+                    <div className="feed-media" style={{background:'#000',minHeight:200}}>
+                        <video
+                            src={post.mediaUrl}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            style={{width:'100%',height:240,objectFit:'contain',display:'block',background:'#000'}}
+                        />
                     </div>
                 )}
             </div>
@@ -2226,10 +2233,27 @@ function MainApp({ user, onLogout }) {
                 {postMedia && (
                     <div className="composer-media-preview">
                         {postMedia.type==='image'
-                            ? <img src={postMedia.url} alt="preview"/>
-                            : <video src={postMedia.url} controls/>
+                            ? <img src={postMedia.url} alt="preview" style={{width:'100%',height:200,objectFit:'cover',display:'block'}}/>
+                            : <video
+                                key={postMedia.url}
+                                src={postMedia.url}
+                                controls
+                                playsInline
+                                preload="metadata"
+                                style={{width:'100%',height:200,objectFit:'cover',display:'block',background:'#000'}}
+                              />
                         }
-                        <button className="composer-media-remove" onClick={()=>setPostMedia(null)}>✕</button>
+                        {postMedia.uploading && (
+                            <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10}}>
+                                <div style={{fontSize:12,color:'white',fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>Uploading {uploadProgress}%</div>
+                                <div style={{width:160,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,overflow:'hidden'}}>
+                                    <div style={{width:uploadProgress+'%',height:'100%',background:'white',transition:'width 0.3s'}}/>
+                                </div>
+                            </div>
+                        )}
+                        {!postMedia.uploading && (
+                            <button className="composer-media-remove" onClick={()=>setPostMedia(null)}>✕</button>
+                        )}
                     </div>
                 )}
                 <div className="composer-toolbar">
@@ -2251,7 +2275,7 @@ function MainApp({ user, onLogout }) {
                             className="composer-submit"
                             disabled={(!postText.trim() && !postMedia) || postMedia?.uploading}
                             onClick={handlePostSubmit}
-                        >{postMedia?.uploading ? `Uploading ${uploadProgress}%` : 'Post'}</button>
+                        >{postMedia?.uploading ? 'Uploading…' : 'Post'}</button>
                     </div>
                 </div>
             </div>
@@ -2278,7 +2302,13 @@ function MainApp({ user, onLogout }) {
                             <div className="my-post-media">
                                 {p.hasImage
                                     ? <img src={p.mediaUrl} alt="post"/>
-                                    : <video src={p.mediaUrl} controls style={{width:'100%',maxHeight:180}}/>
+                                    : <video
+                                        src={p.mediaUrl}
+                                        controls
+                                        playsInline
+                                        preload="metadata"
+                                        style={{width:'100%',height:180,objectFit:'contain',display:'block',background:'#000'}}
+                                      />
                                 }
                             </div>
                         )}
