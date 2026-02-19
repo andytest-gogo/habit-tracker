@@ -551,25 +551,17 @@ function loadQuota(){
   }).catch(function(e){
     document.getElementById('quotaUpdated').textContent = '⚠️ Load failed: '+e.message;
     document.getElementById('quotaTbody').innerHTML =
-      '<tr><td colspan="8" style="padding:20px 18px;color:#c00;font-size:12px;line-height:1.8">'+
-      '<strong>❌ Firestore 權限不足</strong><br>'+
-      'Admin 帳號尚未被授權讀取 upload_quotas collection。<br>'+
-      '請在 Firebase Console → Firestore → Rules 加入以下規則：<br>'+
-      '<code style="background:#1e293b;color:#94a3b8;padding:10px 14px;display:block;margin-top:10px;font-size:11px;border-radius:2px;white-space:pre">'+
-      'match /upload_quotas/{uid} {
-'+
-      '  // 允許本人讀寫自己的配額
-'+
-      '  allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid
-'+
-      '    &amp;&amp; request.resource.data.uid == request.auth.uid;
-'+
-      '  // 允許 Admin 信箱讀取所有配額（改成你的 admin 信箱）
-'+
-      '  allow read: if request.auth != null
-'+
-      '    &amp;&amp; request.auth.token.email == "YOUR_ADMIN@EMAIL.COM";
-'+
+      '<tr><td colspan="8" style="padding:20px 18px;color:#c00;font-size:12px;line-height:1.8">' +
+      '<strong>&#10060; Firestore &#27491;&#38480;&#19981;&#36275;</strong><br>' +
+      'Admin &#24115;&#34399;&#23616;&#26410;&#34987;&#25480;&#27177;&#35712;&#21462; upload_quotas collection&#12290;<br>' +
+      '&#35531;&#22312; Firebase Console &#8594; Firestore &#8594; Rules &#21152;&#20837;&#20197;&#19979;&#35215;&#21017;&#65306;<br><br>' +
+      '<code style="background:#1e293b;color:#94a3b8;padding:10px 14px;display:block;margin-top:6px;font-size:11px;border-radius:2px;white-space:pre-wrap">' +
+      'match /upload_quotas/{uid} {\n' +
+      '  allow read, write: if request.auth != null\n' +
+      '    &amp;&amp; request.auth.uid == uid;\n' +
+      '  // Admin read-all (replace with your email)\n' +
+      '  allow read: if request.auth != null\n' +
+      '    &amp;&amp; request.auth.token.email == \"YOUR_ADMIN@EMAIL.COM\";\n' +
       '}</code></td></tr>';
   });
 }
