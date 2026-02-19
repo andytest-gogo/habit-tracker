@@ -369,11 +369,11 @@
         .composer-media-preview {
             position:relative; margin:0 16px 12px;
             border:1px solid var(--gray-100); overflow:hidden;
-            min-height:200px; background:#000;
+            height:200px; background:#000; flex-shrink:0;
         }
         .composer-media-preview img,
         .composer-media-preview video {
-            width:100%; height:200px; object-fit:cover; display:block;
+            width:100%; height:100%; object-fit:cover; display:block;
         }
         .composer-media-remove {
             position:absolute; top:6px; right:6px;
@@ -1111,14 +1111,8 @@ function FeedCard({ post, currentUser, onLike }) {
                     </div>
                 )}
                 {post.hasVideo && post.mediaUrl && (
-                    <div className="feed-media" style={{background:'#000',minHeight:200}}>
-                        <video
-                            src={post.mediaUrl}
-                            controls
-                            playsInline
-                            preload="metadata"
-                            style={{width:'100%',height:240,objectFit:'contain',display:'block',background:'#000'}}
-                        />
+                    <div className="feed-media">
+                        <video src={post.mediaUrl} controls playsInline preload="metadata" style={{width:'100%',height:260,objectFit:'contain',display:'block',background:'#000'}}/>
                     </div>
                 )}
             </div>
@@ -2233,27 +2227,19 @@ function MainApp({ user, onLogout }) {
                 {postMedia && (
                     <div className="composer-media-preview">
                         {postMedia.type==='image'
-                            ? <img src={postMedia.url} alt="preview" style={{width:'100%',height:200,objectFit:'cover',display:'block'}}/>
-                            : <video
-                                key={postMedia.url}
-                                src={postMedia.url}
-                                controls
-                                playsInline
-                                preload="metadata"
-                                style={{width:'100%',height:200,objectFit:'cover',display:'block',background:'#000'}}
-                              />
+                            ? <img src={postMedia.url} alt="preview" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                            : <video key={postMedia.url} src={postMedia.url} controls playsInline preload="metadata"
+                                style={{width:'100%',height:'100%',objectFit:'cover',display:'block',background:'#000'}}/>
                         }
-                        {postMedia.uploading && (
-                            <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10}}>
-                                <div style={{fontSize:12,color:'white',fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>Uploading {uploadProgress}%</div>
-                                <div style={{width:160,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,overflow:'hidden'}}>
+                        {postMedia.uploading
+                            ? <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.65)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10}}>
+                                <div style={{fontSize:12,color:'white',fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>{`Uploading ${uploadProgress}%`}</div>
+                                <div style={{width:'60%',height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,overflow:'hidden'}}>
                                     <div style={{width:uploadProgress+'%',height:'100%',background:'white',transition:'width 0.3s'}}/>
                                 </div>
-                            </div>
-                        )}
-                        {!postMedia.uploading && (
-                            <button className="composer-media-remove" onClick={()=>setPostMedia(null)}>✕</button>
-                        )}
+                              </div>
+                            : <button className="composer-media-remove" onClick={()=>setPostMedia(null)}>&#x2715;</button>
+                        }
                     </div>
                 )}
                 <div className="composer-toolbar">
@@ -2269,7 +2255,12 @@ function MainApp({ user, onLogout }) {
                         <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleMediaSelect(e,'image')}/>
                         <input ref={videoInputRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>handleMediaSelect(e,'video')}/>
                     </div>
-                    <div style={{display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                        {postMedia && !postMedia.uploading && !postMedia.local && (
+                            <span style={{fontSize:9,color:'var(--gray-400)',letterSpacing:.3,width:'100%',textAlign:'right'}}>
+                                Media uploaded &middot; quota counted
+                            </span>
+                        )}
                         <span className="composer-char">{postText.length}/300</span>
                         <button
                             className="composer-submit"
@@ -2302,13 +2293,7 @@ function MainApp({ user, onLogout }) {
                             <div className="my-post-media">
                                 {p.hasImage
                                     ? <img src={p.mediaUrl} alt="post"/>
-                                    : <video
-                                        src={p.mediaUrl}
-                                        controls
-                                        playsInline
-                                        preload="metadata"
-                                        style={{width:'100%',height:180,objectFit:'contain',display:'block',background:'#000'}}
-                                      />
+                                    : <video src={p.mediaUrl} controls playsInline preload="metadata" style={{width:'100%',height:180,objectFit:'contain',display:'block',background:'#000'}}/>
                                 }
                             </div>
                         )}
