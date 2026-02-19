@@ -549,7 +549,28 @@ function loadQuota(){
     renderQuota();
     document.getElementById('quotaUpdated').textContent = 'Last updated: '+new Date().toLocaleString('zh-TW');
   }).catch(function(e){
-    document.getElementById('quotaUpdated').textContent = 'Load failed: '+e.message;
+    document.getElementById('quotaUpdated').textContent = '⚠️ Load failed: '+e.message;
+    document.getElementById('quotaTbody').innerHTML =
+      '<tr><td colspan="8" style="padding:20px 18px;color:#c00;font-size:12px;line-height:1.8">'+
+      '<strong>❌ Firestore 權限不足</strong><br>'+
+      'Admin 帳號尚未被授權讀取 upload_quotas collection。<br>'+
+      '請在 Firebase Console → Firestore → Rules 加入以下規則：<br>'+
+      '<code style="background:#1e293b;color:#94a3b8;padding:10px 14px;display:block;margin-top:10px;font-size:11px;border-radius:2px;white-space:pre">'+
+      'match /upload_quotas/{uid} {
+'+
+      '  // 允許本人讀寫自己的配額
+'+
+      '  allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid
+'+
+      '    &amp;&amp; request.resource.data.uid == request.auth.uid;
+'+
+      '  // 允許 Admin 信箱讀取所有配額（改成你的 admin 信箱）
+'+
+      '  allow read: if request.auth != null
+'+
+      '    &amp;&amp; request.auth.token.email == "YOUR_ADMIN@EMAIL.COM";
+'+
+      '}</code></td></tr>';
   });
 }
 
@@ -626,11 +647,13 @@ function renderQuota(){
       '<td style="font-family:var(--mono);font-size:11px">'+
         '<span style="'+imgCls+'">📷 '+dImg+'/'+QUOTA_LIMITS.DAILY_IMAGE_COUNT+'</span>　'+
         '<span style="'+vidCls+'">🎬 '+dVid+'/'+QUOTA_LIMITS.DAILY_VIDEO_COUNT+'</span></td>'+
-      '<td style="min-width:130px">'+
-        '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">'+
-          '<span style="font-family:var(--mono)">'+mMB.toFixed(1)+' MB</span>'+
-          '<span style="color:var(--g400)">'+mPct+'%</span></div>'+
-        '<div class="pct-bar"><div class="pct-fill '+mCls+'" style="width:'+mPct+'%"></div></div></td>'+
+      '<td style="min-width:160px">'+
+        '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">'+
+          '<span style="font-family:var(--mono);font-weight:700;color:var(--black)">'+mMB.toFixed(1)+' MB</span>'+
+          '<span style="color:var(--g400)">/ '+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB &nbsp;('+mPct+'%)</span></div>'+
+        '<div class="pct-bar" style="height:8px"><div class="pct-fill '+mCls+'" style="width:'+mPct+'%"></div></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--g400);margin-top:2px">'+
+          '<span>0</span><span>'+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB</span></div></td>'+
       '<td style="font-family:var(--mono);font-size:12px">'+(q.totalImages||0)+'</td>'+
       '<td style="font-family:var(--mono);font-size:12px">'+(q.totalVideos||0)+'</td>'+
       '<td style="font-family:var(--mono);font-size:12px;font-weight:700">'+((q.totalMB||0).toFixed(2))+' MB</td>'+

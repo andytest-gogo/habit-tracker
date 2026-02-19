@@ -497,6 +497,28 @@
         .card-delete-btn:hover { color:#c00; }
         .card-delete-btn svg { width:11px; height:11px; }
 
+
+        /* ── DELETE ACCOUNT MODAL ── */
+        .delete-account-btn {
+            width:100%; padding:12px; background:none; border:1px solid #fca5a5;
+            color:#dc2626; font-size:11px; font-weight:700; text-transform:uppercase;
+            letter-spacing:1px; cursor:pointer; font-family:var(--font); margin-top:8px;
+            transition:.2s;
+        }
+        .delete-account-btn:hover { background:#fef2f2; border-color:#dc2626; }
+        .danger-modal { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:3000; padding:20px; }
+        .danger-modal-box { background:var(--white); padding:28px; max-width:360px; width:100%; border-top:4px solid #dc2626; }
+        .danger-modal-title { font-size:16px; font-weight:700; color:#dc2626; margin-bottom:8px; font-family:var(--din); text-transform:uppercase; letter-spacing:.5px; }
+        .danger-modal-body { font-size:12px; color:var(--gray-600); line-height:1.7; margin-bottom:20px; }
+        .danger-modal-body strong { color:var(--black); }
+        .danger-confirm-input { width:100%; padding:10px 12px; border:1px solid var(--gray-200); font-size:13px; font-family:var(--font); outline:none; margin-bottom:14px; }
+        .danger-confirm-input:focus { border-color:#dc2626; }
+        .danger-confirm-btn { width:100%; padding:12px; background:#dc2626; color:white; border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); margin-bottom:8px; }
+        .danger-confirm-btn:disabled { background:#fca5a5; cursor:not-allowed; }
+        .danger-cancel-btn { width:100%; padding:10px; background:none; border:1px solid var(--gray-200); font-size:11px; font-weight:600; cursor:pointer; font-family:var(--font); color:var(--gray-600); }
+        .danger-step { font-size:10px; color:var(--gray-400); text-align:center; margin-bottom:12px; text-transform:uppercase; letter-spacing:.8px; }
+        .danger-deleting { text-align:center; padding:20px 0; }
+        .danger-deleting p { font-size:12px; color:var(--gray-500); margin-top:8px; }
         /* scrollbar */
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:transparent; }
@@ -1629,6 +1651,10 @@ function AddHabitModal({ onClose, onAdd }) {
 /* ── MAIN APP ── */
 function MainApp({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('home');
+    const [deleteModal, setDeleteModal] = useState(false);  // 刪帳 modal
+    const [deleteStep, setDeleteStep] = useState(1);         // 1=確認 2=輸入密碼 3=刪除中
+    const [deletePassword, setDeletePassword] = useState('');
+    const [deleteError, setDeleteError] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [habits, setHabits] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1934,6 +1960,77 @@ function MainApp({ user, onLogout }) {
         setPostMedia(null);
     };
 
+
+    /* ── 刪除帳號 — 清除所有用戶資料後刪除 Firebase Auth 帳號 ── */
+    const handleDeleteAccount = async () => {
+        if (!isFirebaseConfigured) {
+            localStorage.removeItem('demoUser');
+            onLogout();
+            return;
+        }
+        setDeleteStep(3);
+        setDeleteError('');
+        try {
+            const uid = user.uid;
+            // Step 1: 重新驗證（Firebase 刪帳需要近期登入）
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, deletePassword);
+            await auth.currentUser.reauthenticateWithCredential(credential);
+
+            // Step 2: 刪除 Firestore 資料（所有 collection）
+            // 刪除 habits
+            const habitsSnap = await db.collection('habits').where('userId','==',uid).get();
+            const batch1 = db.batch();
+            habitsSnap.docs.forEach(d => batch1.delete(d.ref));
+            if (habitsSnap.docs.length) await batch1.commit();
+
+            // 刪除 posts 與其 subcollection comments
+            const postsSnap = await db.collection('posts').where('userId','==',uid).get();
+            for (const postDoc of postsSnap.docs) {
+                const commentsSnap = await postDoc.ref.collection('comments').get();
+                const batchC = db.batch();
+                commentsSnap.docs.forEach(d => batchC.delete(d.ref));
+                if (commentsSnap.docs.length) await batchC.commit();
+                await postDoc.ref.delete();
+            }
+
+            // 刪除用戶自己在其他貼文下的 comments
+            const allPosts = await db.collection('posts').get();
+            for (const postDoc of allPosts.docs) {
+                const myComments = await postDoc.ref.collection('comments').where('userId','==',uid).get();
+                const batchMC = db.batch();
+                myComments.docs.forEach(d => batchMC.delete(d.ref));
+                if (myComments.docs.length) await batchMC.commit();
+            }
+
+            // 刪除 upload_quotas
+            try { await db.collection('upload_quotas').doc(uid).delete(); } catch(e){}
+
+            // 刪除 users 文件
+            try { await db.collection('users').doc(uid).delete(); } catch(e){}
+
+            // 清除 localStorage
+            localStorage.removeItem('demoUser');
+            localStorage.removeItem('pwa-installed');
+            localStorage.removeItem('notif-asked');
+            localStorage.removeItem('ios-hint-shown');
+            localStorage.removeItem('avatar_' + uid);
+
+            // Step 3: 刪除 Firebase Auth 帳號（最後執行）
+            await auth.currentUser.delete();
+
+            // 完成 — onAuthStateChanged 會自動把用戶踢出
+        } catch(e) {
+            setDeleteStep(2);
+            const errMap = {
+                'auth/wrong-password':       '密碼錯誤，請再試一次',
+                'auth/invalid-credential':   '密碼錯誤，請再試一次',
+                'auth/too-many-requests':    '嘗試次數過多，請稍後再試',
+                'auth/requires-recent-login':'請重新登入後再試',
+            };
+            setDeleteError(errMap[e.code] || ('刪除失敗：' + e.message));
+        }
+    };
+
     if (loading) return <div className="app-container"><div className="loading">Loading...</div></div>;
 
     const renderHome = () => {
@@ -2199,6 +2296,76 @@ function MainApp({ user, onLogout }) {
                     </div>
                 )}
             </div>
+
+            {/* ── 帳號管理區 ── */}
+            <div style={{margin:'32px 0 8px',borderTop:'1px solid var(--gray-100)',paddingTop:24}}>
+                <div className="section-title" style={{marginBottom:12}}>Account</div>
+                <button className="delete-account-btn" onClick={()=>{setDeleteModal(true);setDeleteStep(1);setDeletePassword('');setDeleteError('');}}>
+                    <svg style={{width:13,height:13,marginRight:6,verticalAlign:'middle'}} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Delete My Account &amp; All Data
+                </button>
+            </div>
+
+            {/* ── 刪帳確認 Modal ── */}
+            {deleteModal && (
+                <div className="danger-modal" onClick={e=>{if(e.target===e.currentTarget&&deleteStep!==3)setDeleteModal(false);}}>
+                    <div className="danger-modal-box">
+                        {deleteStep === 3 ? (
+                            <div className="danger-deleting">
+                                <div style={{fontSize:32}}>⏳</div>
+                                <p>Deleting your account and all data...<br/>Please do not close the app.</p>
+                            </div>
+                        ) : deleteStep === 1 ? (
+                            <>
+                                <div className="danger-modal-title">⚠ Delete Account</div>
+                                <div className="danger-modal-body">
+                                    This will permanently delete:<br/>
+                                    <strong>All your habits</strong>, completion records &amp; streaks<br/>
+                                    <strong>All your posts</strong> and comments<br/>
+                                    <strong>All uploaded photos &amp; videos</strong><br/>
+                                    <strong>Your account</strong> and profile data<br/><br/>
+                                    <strong>This action cannot be undone.</strong>
+                                </div>
+                                <button className="danger-confirm-btn" onClick={()=>setDeleteStep(2)}>
+                                    I understand, continue →
+                                </button>
+                                <button className="danger-cancel-btn" onClick={()=>setDeleteModal(false)}>Cancel</button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="danger-modal-title">Confirm with Password</div>
+                                <div className="danger-step">Step 2 of 2 — Final Confirmation</div>
+                                <div className="danger-modal-body">
+                                    Enter your password to confirm deletion of<br/>
+                                    <strong>{user.email}</strong>
+                                </div>
+                                <input
+                                    type="password"
+                                    className="danger-confirm-input"
+                                    placeholder="Enter your password"
+                                    value={deletePassword}
+                                    onChange={e=>setDeletePassword(e.target.value)}
+                                    onKeyDown={e=>e.key==='Enter'&&deletePassword&&handleDeleteAccount()}
+                                    autoFocus
+                                />
+                                {deleteError && (
+                                    <div style={{color:'#dc2626',fontSize:11,marginBottom:12,padding:'8px 10px',background:'#fef2f2',border:'1px solid #fca5a5'}}>
+                                        {deleteError}
+                                    </div>
+                                )}
+                                <button
+                                    className="danger-confirm-btn"
+                                    disabled={!deletePassword}
+                                    onClick={handleDeleteAccount}
+                                >
+                                    🗑 Permanently Delete Everything
+                                </button>
+                                <button className="danger-cancel-btn" onClick={()=>setDeleteModal(false)}>Cancel</button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 
