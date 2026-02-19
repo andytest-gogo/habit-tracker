@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>健康習慣追蹤 — 管理後台</title>
+<title>Habit Tracker — Admin Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;600;700&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -92,100 +92,100 @@ tr:hover td{background:var(--g50)}
 <!-- LOGIN -->
 <div class="login-wrap" id="loginWrap">
   <div class="login-box">
-    <div class="login-logo">健康習慣追蹤</div>
-    <div class="login-sub">管理後台</div>
+    <div class="login-logo">Habit Tracker</div>
+    <div class="login-sub">Admin Dashboard</div>
     <div class="err-box" id="errBox"></div>
     <button class="g-btn" id="loginBtn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-      使用 Google 帳號登入
+      Sign in with Google
     </button>
-    <p class="login-note">只有你自己的 Google 帳號能登入此後台</p>
+    <p class="login-note">Only your authorized Google account can access this dashboard</p>
   </div>
 </div>
 
 <!-- DASHBOARD -->
 <div class="layout" id="layout">
   <div class="sidebar">
-    <div class="sb-logo"><h1>習慣追蹤<br>管理後台</h1><p>Admin Dashboard</p></div>
+    <div class="sb-logo"><h1>Habit Tracker<br>Admin</h1><p>Admin Dashboard</p></div>
     <nav class="sb-nav">
       <button class="nav-btn on" data-page="dashboard">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        總覽
+        Overview
       </button>
       <button class="nav-btn" data-page="users">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        用戶列表
+        Users
       </button>
       <button class="nav-btn" data-page="posts">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        貼文管理
+        Posts
       </button>
       <button class="nav-btn" data-page="habits">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-        習慣數據
+        Habits
       </button>
     </nav>
     <div class="sb-foot">
       <div class="sb-email" id="adminEmail"></div>
-      <button class="logout-btn" id="logoutBtn">登出</button>
+      <button class="logout-btn" id="logoutBtn">Sign Out</button>
     </div>
   </div>
 
   <div class="main">
-    <!-- 總覽 -->
+    <!-- Overview -->
     <div class="pg on" id="pg-dashboard">
-      <div class="pg-title">總覽</div>
-      <div class="pg-sub" id="lastUpdated">載入中...</div>
+      <div class="pg-title">Overview</div>
+      <div class="pg-sub" id="lastUpdated">Loading...</div>
       <div class="stat-grid">
-        <div class="stat dark"><div class="stat-lbl">總用戶數</div><div class="stat-val" id="sUsers">—</div><div class="stat-note">已註冊</div></div>
-        <div class="stat"><div class="stat-lbl">總貼文數</div><div class="stat-val" id="sPosts">—</div><div class="stat-note">社群動態</div></div>
-        <div class="stat"><div class="stat-lbl">總習慣數</div><div class="stat-val" id="sHabits">—</div><div class="stat-note">建立中</div></div>
-        <div class="stat"><div class="stat-lbl">總留言數</div><div class="stat-val" id="sComments">—</div><div class="stat-note">所有留言</div></div>
+        <div class="stat dark"><div class="stat-lbl">Total Users</div><div class="stat-val" id="sUsers">—</div><div class="stat-note">Registered</div></div>
+        <div class="stat"><div class="stat-lbl">Total Posts</div><div class="stat-val" id="sPosts">—</div><div class="stat-note">Community feed</div></div>
+        <div class="stat"><div class="stat-lbl">Total Habits</div><div class="stat-val" id="sHabits">—</div><div class="stat-note">Active</div></div>
+        <div class="stat"><div class="stat-lbl">Total Comments</div><div class="stat-val" id="sComments">—</div><div class="stat-note">All comments</div></div>
       </div>
       <div class="chart-row">
-        <div class="chart-box"><div class="chart-ttl">習慣分類分佈</div><div class="chart-wrap"><canvas id="chartCat"></canvas></div></div>
-        <div class="chart-box"><div class="chart-ttl">各用戶習慣數 (Top 8)</div><div class="chart-wrap"><canvas id="chartUsers"></canvas></div></div>
+        <div class="chart-box"><div class="chart-ttl">Habit Category Distribution</div><div class="chart-wrap"><canvas id="chartCat"></canvas></div></div>
+        <div class="chart-box"><div class="chart-ttl">Habits per User (Top 8)</div><div class="chart-wrap"><canvas id="chartUsers"></canvas></div></div>
       </div>
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">最新貼文</div><button class="refresh" id="refreshBtn">重新整理</button></div>
-        <table><thead><tr><th>用戶</th><th>內容</th><th>按讚</th><th>留言</th><th>時間</th></tr></thead>
-        <tbody id="recentTbody"><tr class="loading-row"><td colspan="5">載入中...</td></tr></tbody></table>
+        <div class="tbl-hd"><div class="tbl-ttl">Latest Posts</div><button class="refresh" id="refreshBtn">Refresh</button></div>
+        <table><thead><tr><th>User</th><th>Content</th><th>Likes</th><th>Comments</th><th>Time</th></tr></thead>
+        <tbody id="recentTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
-    <!-- 用戶 -->
+    <!-- Users -->
     <div class="pg" id="pg-users">
-      <div class="pg-title">用戶列表</div>
-      <div class="pg-sub">所有已互動的用戶</div>
-      <input class="search" id="userSearch" placeholder="搜尋用戶名稱 / UID…">
+      <div class="pg-title">Users</div>
+      <div class="pg-sub">All registered users</div>
+      <input class="search" id="userSearch" placeholder="Search by name / UID...">
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">用戶</div><div class="tbl-cnt" id="userCnt">—</div></div>
-        <table><thead><tr><th>用戶</th><th>UID</th><th>習慣數</th><th>貼文數</th><th>平均完成率</th></tr></thead>
-        <tbody id="userTbody"><tr class="loading-row"><td colspan="5">載入中...</td></tr></tbody></table>
+        <div class="tbl-hd"><div class="tbl-ttl">Users</div><div class="tbl-cnt" id="userCnt">—</div></div>
+        <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th></tr></thead>
+        <tbody id="userTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
-    <!-- 貼文 -->
+    <!-- Posts -->
     <div class="pg" id="pg-posts">
-      <div class="pg-title">貼文管理</div>
-      <div class="pg-sub">可刪除不當貼文</div>
-      <input class="search" id="postSearch" placeholder="搜尋貼文內容 / 用戶名稱…">
+      <div class="pg-title">Posts</div>
+      <div class="pg-sub">Review and remove inappropriate posts</div>
+      <input class="search" id="postSearch" placeholder="Search by content / username...">
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">所有貼文</div><div class="tbl-cnt" id="postCnt">—</div></div>
-        <table><thead><tr><th>用戶</th><th>內容</th><th>媒體</th><th>讚</th><th>留言</th><th>時間</th><th>操作</th></tr></thead>
-        <tbody id="postTbody"><tr class="loading-row"><td colspan="7">載入中...</td></tr></tbody></table>
+        <div class="tbl-hd"><div class="tbl-ttl">All Posts</div><div class="tbl-cnt" id="postCnt">—</div></div>
+        <table><thead><tr><th>User</th><th>Content</th><th>Media</th><th>Likes</th><th>Comments</th><th>Time</th><th>Action</th></tr></thead>
+        <tbody id="postTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
-    <!-- 習慣 -->
+    <!-- Habits -->
     <div class="pg" id="pg-habits">
-      <div class="pg-title">習慣數據</div>
-      <div class="pg-sub">所有用戶的習慣建立情況</div>
-      <input class="search" id="habitSearch" placeholder="搜尋習慣名稱 / 分類…">
+      <div class="pg-title">Habits</div>
+      <div class="pg-sub">Habit creation across all users</div>
+      <input class="search" id="habitSearch" placeholder="Search by habit name / category...">
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">所有習慣</div><div class="tbl-cnt" id="habitCnt">—</div></div>
-        <table><thead><tr><th>習慣名稱</th><th>用戶</th><th>分類</th><th>頻率</th><th>連續天數</th><th>完成率</th></tr></thead>
-        <tbody id="habitTbody"><tr class="loading-row"><td colspan="6">載入中...</td></tr></tbody></table>
+        <div class="tbl-hd"><div class="tbl-ttl">All Habits</div><div class="tbl-cnt" id="habitCnt">—</div></div>
+        <table><thead><tr><th>Habit Name</th><th>User</th><th>Category</th><th>Frequency</th><th>Streak</th><th>Completion</th></tr></thead>
+        <tbody id="habitTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody></table>
       </div>
     </div>
   </div>
@@ -213,7 +213,7 @@ var catChart=null, userChart=null;
 // Auth state
 auth.onAuthStateChanged(function(user){
   if(user){
-    // 把用戶資料存入 Firestore，讓後台可以看到
+    // Save user data to Firestore for admin visibility
     db.collection('users').doc(user.uid).set({
       uid: user.uid,
       email: user.email||'',
@@ -232,29 +232,29 @@ auth.onAuthStateChanged(function(user){
   }
 });
 
-// 處理 redirect 登入回來的結果
+// Handle redirect sign-in result
 auth.getRedirectResult().then(function(result){
-  // 登入成功由 onAuthStateChanged 處理
+  // Successful login handled by onAuthStateChanged
 }).catch(function(e){
   if(e.code && e.code !== 'auth/no-current-user'){
     var b=document.getElementById('errBox');
     b.style.display='block';
-    b.textContent='登入失敗：'+e.message;
+    b.textContent='Sign in failed: '+e.message;
   }
 });
 
-// Login - 先試 popup，被擋就改用 redirect
+// Login - try popup first, fall back to redirect if blocked
 document.getElementById('loginBtn').onclick = function(){
   var b=document.getElementById('errBox');
   b.style.display='none';
   var provider = new firebase.auth.GoogleAuthProvider();
   auth.signInWithPopup(provider).catch(function(e){
-    // popup 被擋，改用 redirect
+    // Popup blocked, fall back to redirect
     if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
       auth.signInWithRedirect(provider);
     } else {
       b.style.display='block';
-      b.textContent='登入失敗：'+e.message;
+      b.textContent='Sign in failed: '+e.message;
     }
   });
 };
@@ -282,7 +282,7 @@ document.getElementById('habitSearch').oninput = function(){ renderHabits(this.v
 
 // Load
 function loadAll(){
-  document.getElementById('lastUpdated').textContent='載入中…';
+  document.getElementById('lastUpdated').textContent='Loading...';
   Promise.all([loadHabits(), loadPosts(), loadUsers()]).then(function(){
     buildUsers();
     renderStats();
@@ -291,13 +291,13 @@ function loadAll(){
     renderUsers('');
     renderPosts('');
     renderHabits('');
-    document.getElementById('lastUpdated').textContent='最後更新：'+new Date().toLocaleString('zh-TW');
+    document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-US');
   });
 }
 
 function loadUsers(){
   return db.collection('users').get().then(function(snap){
-    // 先把 Firestore users 集合的資料存起來
+    // Load Firestore users collection first
     window.fsUsers = {};
     snap.docs.forEach(function(d){
       window.fsUsers[d.id] = d.data();
@@ -330,23 +330,23 @@ function loadPosts(){
 function buildUsers(){
   var map={};
 
-  // 先加入 Firestore users 集合的用戶（有登入過的）
+  // Add users from Firestore users collection (those who have logged in)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'用戶', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen};
+    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen};
   });
 
-  // 再從 habits 補充
+  // Supplement from habits
   allHabits.forEach(function(h){
     if(!h.userId) return;
-    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'用戶',email:'',habits:[],posts:[]};
+    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'User',email:'',habits:[],posts:[]};
     map[h.userId].habits.push(h);
   });
 
-  // 再從 posts 補充
+  // Supplement from posts
   allPosts.forEach(function(p){
     if(!p.userId) return;
-    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'用戶',email:'',habits:[],posts:[]};
+    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[]};
     if(p.user) map[p.userId].name=p.user;
     map[p.userId].posts.push(p);
   });
@@ -364,7 +364,7 @@ function renderStats(){
 
 function renderCharts(){
   var catMap={};
-  allHabits.forEach(function(h){ var k=h.category||'其他'; catMap[k]=(catMap[k]||0)+1; });
+  allHabits.forEach(function(h){ var k=h.category||'Other'; catMap[k]=(catMap[k]||0)+1; });
   if(catChart) catChart.destroy();
   catChart=new Chart(document.getElementById('chartCat'),{
     type:'doughnut',
@@ -375,7 +375,7 @@ function renderCharts(){
   if(userChart) userChart.destroy();
   userChart=new Chart(document.getElementById('chartUsers'),{
     type:'bar',
-    data:{labels:ud.map(function(u){return u.name;}),datasets:[{label:'習慣數',data:ud.map(function(u){return u.habits.length;}),backgroundColor:'#0a0a0a'}]},
+    data:{labels:ud.map(function(u){return u.name;}),datasets:[{label:'Habits',data:ud.map(function(u){return u.habits.length;}),backgroundColor:'#0a0a0a'}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{stepSize:1,font:{size:10}}}}}
   });
 }
@@ -383,10 +383,10 @@ function renderCharts(){
 function renderRecent(){
   var tb=document.getElementById('recentTbody');
   var list=allPosts.slice(0,10);
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">尚無貼文</td></tr>';return;}
+  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No posts yet</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
     return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
-      '<td><div class="ptxt">'+htmlEsc(p.text||'（無文字）')+'</div></td>'+
+      '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
       '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
       '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td></tr>';
   }).join('');
@@ -395,8 +395,8 @@ function renderRecent(){
 function renderUsers(f){
   var tb=document.getElementById('userTbody');
   var list=allUsers.filter(function(u){ return !f||u.name.includes(f)||u.uid.includes(f)||(u.email||'').includes(f); });
-  document.getElementById('userCnt').textContent=list.length+' 位用戶';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">沒有符合的用戶</td></tr>';return;}
+  document.getElementById('userCnt').textContent=list.length+' user(s)';
+  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No matching users</td></tr>';return;}
   tb.innerHTML=list.map(function(u){
     var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
     return '<tr><td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong><div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
@@ -409,31 +409,31 @@ function renderUsers(f){
 function renderPosts(f){
   var tb=document.getElementById('postTbody');
   var list=allPosts.filter(function(p){ return !f||(p.text||'').includes(f)||(p.user||'').includes(f); });
-  document.getElementById('postCnt').textContent='共 '+list.length+' 篇';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="7">沒有符合的貼文</td></tr>';return;}
+  document.getElementById('postCnt').textContent=list.length+' post(s)';
+  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="7">No matching posts</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
     return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
-      '<td><div class="ptxt">'+htmlEsc(p.text||'（無文字）')+'</div></td>'+
+      '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
       '<td>'+(p.hasImage?'📷':p.hasVideo?'🎬':'—')+'</td>'+
       '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
       '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td>'+
-      '<td><button class="del" onclick="delPost(\''+p.id+'\')">刪除</button></td></tr>';
+      '<td><button class="del" onclick="delPost(\''+p.id+'\')">Delete</button></td></tr>';
   }).join('');
 }
 
 function delPost(id){
-  if(!confirm('確定要刪除這篇貼文嗎？')) return;
+  if(!confirm('Are you sure you want to delete this post?')) return;
   db.collection('posts').doc(id).delete().then(function(){
     allPosts=allPosts.filter(function(p){return p.id!==id;});
     renderStats(); renderRecent(); renderPosts(document.getElementById('postSearch').value);
-  }).catch(function(e){ alert('刪除失敗：'+e.message); });
+  }).catch(function(e){ alert('Delete failed: '+e.message); });
 }
 
 function renderHabits(f){
   var tb=document.getElementById('habitTbody');
   var list=allHabits.filter(function(h){ return !f||(h.name||'').includes(f)||(h.category||'').includes(f); });
-  document.getElementById('habitCnt').textContent='共 '+list.length+' 個習慣';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="6">沒有符合的習慣</td></tr>';return;}
+  document.getElementById('habitCnt').textContent=list.length+' habit(s)';
+  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="6">No matching habits</td></tr>';return;}
   var nm={};
   allUsers.forEach(function(u){ nm[u.uid]=u.name; });
   tb.innerHTML=list.map(function(h){
@@ -441,8 +441,8 @@ function renderHabits(f){
     return '<tr><td><strong>'+htmlEsc(h.name||'—')+'</strong></td>'+
       '<td>'+(nm[h.userId]||((h.userId||'').slice(0,8))||'—')+'</td>'+
       '<td><span class="badge">'+htmlEsc(h.category||'—')+'</span></td>'+
-      '<td style="font-size:11px">'+(h.freqLabel||'每天')+'</td>'+
-      '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' 天</td>'+
+      '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
+      '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
   }).join('');
 }

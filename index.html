@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="健康習慣追蹤社群 - 專業版">
+    <meta name="description" content="Habit Tracker Pro - Community Edition">
     <meta name="theme-color" content="#000000">
-    <title>健康習慣追蹤 Pro</title>
+    <title>Habit Tracker Pro</title>
 
     <!-- ── PWA ── -->
     <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="習慣追蹤">
+    <meta name="apple-mobile-web-app-title" content="HabitTracker">
     <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
     <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="144x144" href="./icons/icon-144x144.png">
@@ -464,7 +464,7 @@
             letter-spacing:1.2px; color:var(--gray-400); margin-bottom:10px;
         }
 
-        /* date-row: 精簡版本 */
+        /* date-row: simplified */
         .date-row { display:flex; gap:6px; align-items:center; }
         .date-row .form-input { padding:9px 6px; font-size:12px; flex:1; }
         .date-sep { font-size:12px; color:var(--gray-400); font-weight:700; flex-shrink:0; }
@@ -552,14 +552,14 @@ const LockIcon = () => (<svg width="14" height="14" fill="none" viewBox="0 0 24 
 const ShareIcon = () => (<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>);
 
 /* ══════════════════════════════════════════════════
-   ★ CLOUDINARY 設定 — 請填入你自己的資訊 ★
-   步驟：
-   1. 前往 https://cloudinary.com 免費註冊
-   2. 進入 Settings → Upload → Add upload preset
-      • Signing mode 選 "Unsigned"
-      • 記下 Preset name
-   3. 回到 Dashboard 記下 Cloud name
-   4. 填入下方兩個值即可，完全免費！
+   ★ CLOUDINARY Settings — Please fill in your own info ★
+   Steps:
+   1. Go to https://cloudinary.com and register for free
+   2. Enter Settings → Upload → Add upload preset
+      • Set Signing mode to "Unsigned"
+      • Note Preset name
+   3. Go back to Dashboard and note your Cloud name
+   4. Fill in the two values below — completely free!
    ══════════════════════════════════════════════════ */
 const CLOUDINARY_CLOUD_NAME = 'di21uvipg';
 const CLOUDINARY_UPLOAD_PRESET = 'mxt3i95r';
@@ -570,7 +570,7 @@ const isCloudinaryConfigured =
 
 async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
     if (!isCloudinaryConfigured) {
-        // 未設定時退回 LocalObjectURL（僅本地預覽）
+        // Fall back to LocalObjectURL when not configured (local preview only)
         return { url: URL.createObjectURL(file), publicId: null, local: true };
     }
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
@@ -588,47 +588,47 @@ async function uploadToCloudinary(file, resourceType = 'auto', onProgress) {
             try {
                 const data = JSON.parse(xhr.responseText);
                 if (data.secure_url) resolve({ url: data.secure_url, publicId: data.public_id });
-                else reject(new Error(data.error?.message || '上傳失敗'));
+                else reject(new Error(data.error?.message || 'Upload failed'));
             } catch(e) { reject(e); }
         };
-        xhr.onerror = () => reject(new Error('網路錯誤'));
+        xhr.onerror = () => reject(new Error('Network error'));
         xhr.send(formData);
     });
 }
 
 /* ── MOCK DATA ── */
 const mockGroups = [
-    { id:1, name:'30天早起挑戰', members:24, active:18, progress:75, category:'睡眠作息', joined:false },
-    { id:2, name:'每日運動打卡', members:156, active:132, progress:85, category:'運動健身', joined:true },
-    { id:3, name:'護膚保養日記', members:89, active:67, progress:60, category:'護膚保養', joined:false },
-    { id:4, name:'正念飲食計畫', members:43, active:31, progress:55, category:'飲食管理', joined:false },
+    { id:1, name:'30-Day Early Rise Challenge', members:24, active:18, progress:75, category:'Sleep', joined:false },
+    { id:2, name:'Daily Workout Check-in', members:156, active:132, progress:85, category:'Fitness', joined:true },
+    { id:3, name:'Skincare Routine Diary', members:89, active:67, progress:60, category:'Skincare', joined:false },
+    { id:4, name:'Mindful Eating Plan', members:43, active:31, progress:55, category:'Nutrition', joined:false },
 ];
 
 const mockGroupMembers = [
-    { id:'m1', name:'陳志明', handle:'@alexc', avatar:'陳', progress:92, streak:14, habits:8, followers:34, following:21, isPublic:true, isFollowing:false, posts:[
-        { id:'p1', text:'連續第14天早起！晨間習慣真的改變了我整個早晨的節奏，精神超好。', time:'2小時前', habit:'早起習慣', likes:24, comments:5, hasImage:true, liked:false },
-        { id:'p2', text:'晨間冥想 + 冷水澡 = 整天精力充沛。試試看連續7天，你會感謝自己的。', time:'昨天', habit:'冥想放鬆', likes:18, comments:3, hasImage:false, liked:false },
+    { id:'m1', name:'Alex Chen', handle:'@alexc', avatar:'A', progress:92, streak:14, habits:8, followers:34, following:21, isPublic:true, isFollowing:false, posts:[
+        { id:'p1', text:'Day 14 of waking up early! My morning routine has completely transformed my mornings — I feel amazing.', time:'2 hr ago', habit:'Early Rising', likes:24, comments:5, hasImage:true, liked:false },
+        { id:'p2', text:'Morning meditation + cold shower = all-day energy. Try it for 7 days straight — you will thank yourself.', time:'Yesterday', habit:'Mindfulness', likes:18, comments:3, hasImage:false, liked:false },
     ]},
-    { id:'m2', name:'李佳欣', handle:'@jordanl', avatar:'李', progress:78, streak:9, habits:5, followers:12, following:8, isPublic:false, isFollowing:true, followApproved:true, posts:[
-        { id:'p3', text:'第9天在日出前起床，還是很難，但絕對值得。', time:'3小時前', habit:'早起習慣', likes:11, comments:2, hasImage:false, liked:false },
+    { id:'m2', name:'Jordan Lee', handle:'@jordanl', avatar:'J', progress:78, streak:9, habits:5, followers:12, following:8, isPublic:false, isFollowing:true, followApproved:true, posts:[
+        { id:'p3', text:'Day 9 waking up before sunrise. Still hard, but absolutely worth it.', time:'3 hr ago', habit:'Early Rising', likes:11, comments:2, hasImage:false, liked:false },
     ]},
-    { id:'m3', name:'王家豪', handle:'@samr', avatar:'王', progress:65, streak:7, habits:6, followers:8, following:15, isPublic:false, isFollowing:false, followApproved:false, posts:[] },
-    { id:'m4', name:'吳美琪', handle:'@morganw', avatar:'吳', progress:88, streak:21, habits:9, followers:67, following:44, isPublic:true, isFollowing:false, posts:[
-        { id:'p4', text:'21天連續打卡！堅持才是關鍵。分享我的晨間流程：', time:'1天前', habit:'早起習慣', likes:45, comments:12, hasImage:true, liked:false },
-        { id:'p5', text:'一週的餐點都備好了，吃得乾淨從來沒這麼容易過。', time:'2天前', habit:'飲食管理', likes:32, comments:7, hasImage:true, liked:false },
+    { id:'m3', name:'Sam Wang', handle:'@samr', avatar:'S', progress:65, streak:7, habits:6, followers:8, following:15, isPublic:false, isFollowing:false, followApproved:false, posts:[] },
+    { id:'m4', name:'Morgan Wu', handle:'@morganw', avatar:'M', progress:88, streak:21, habits:9, followers:67, following:44, isPublic:true, isFollowing:false, posts:[
+        { id:'p4', text:'21-day streak! Consistency is the key. Here is my morning routine:', time:'1 day ago', habit:'Early Rising', likes:45, comments:12, hasImage:true, liked:false },
+        { id:'p5', text:'All my meals prepped for the week. Eating clean has never been this easy.', time:'2 days ago', habit:'Nutrition', likes:32, comments:7, hasImage:true, liked:false },
     ]},
-    { id:'m5', name:'林育成', handle:'@rileyp', avatar:'林', progress:41, streak:3, habits:4, followers:5, following:9, isPublic:false, isFollowing:false, followApproved:false, posts:[] },
-    { id:'m6', name:'金大衛', handle:'@drewk', avatar:'金', progress:95, streak:30, habits:12, followers:120, following:60, isPublic:true, isFollowing:true, followApproved:true, posts:[
-        { id:'p6', text:'30天，就是這樣建立起一個真正持久的習慣。分享這個月學到的事。', time:'5小時前', habit:'所有習慣', likes:89, comments:23, hasImage:false, liked:false },
+    { id:'m5', name:'Riley Park', handle:'@rileyp', avatar:'R', progress:41, streak:3, habits:4, followers:5, following:9, isPublic:false, isFollowing:false, followApproved:false, posts:[] },
+    { id:'m6', name:'Drew Kim', handle:'@drewk', avatar:'D', progress:95, streak:30, habits:12, followers:120, following:60, isPublic:true, isFollowing:true, followApproved:true, posts:[
+        { id:'p6', text:'30 days — that is how you build a truly lasting habit. Here is what I learned this month.', time:'5 hr ago', habit:'All Habits', likes:89, comments:23, hasImage:false, liked:false },
     ]},
 ];
 
 const mockFeedGlobal = [
-    { id:'f1', user:'金大衛', avatar:'金', time:'5小時前', habit:'所有習慣', text:'30天，就是這樣建立起一個真正持久的習慣。分享這個月學到的事。', likes:89, comments:23, hasImage:false, liked:false },
-    { id:'f2', user:'吳美琪', avatar:'吳', time:'1天前', habit:'早起習慣', text:'21天連續打卡！堅持才是關鍵。分享我的晨間流程：', likes:45, comments:12, hasImage:true, liked:false },
-    { id:'f3', user:'陳志明', avatar:'陳', time:'2小時前', habit:'早起習慣', text:'連續第14天早起！晨間習慣真的改變了我整個早晨的節奏，精神超好。', likes:24, comments:5, hasImage:true, liked:false },
-    { id:'f4', user:'吳美琪', avatar:'吳', time:'2天前', habit:'飲食管理', text:'一週的餐點都備好了，吃得乾淨從來沒這麼容易過。', likes:32, comments:7, hasImage:true, liked:false },
-    { id:'f5', user:'李佳欣', avatar:'李', time:'3小時前', habit:'早起習慣', text:'第9天在日出前起床，還是很難，但絕對值得。', likes:11, comments:2, hasImage:false, liked:false },
+    { id:'f1', user:'Drew Kim', avatar:'D', time:'5 hr ago', habit:'All Habits', text:'30 days — that is how you build a truly lasting habit. Here is what I learned this month.', likes:89, comments:23, hasImage:false, liked:false },
+    { id:'f2', user:'Morgan Wu', avatar:'M', time:'1 day ago', habit:'Early Rising', text:'21-day streak! Consistency is the key. Here is my morning routine:', likes:45, comments:12, hasImage:true, liked:false },
+    { id:'f3', user:'Alex Chen', avatar:'A', time:'2 hr ago', habit:'Early Rising', text:'Day 14 of waking up early! My morning routine has completely transformed my mornings — I feel amazing.', likes:24, comments:5, hasImage:true, liked:false },
+    { id:'f4', user:'Morgan Wu', avatar:'M', time:'2 days ago', habit:'Nutrition', text:'All my meals prepped for the week. Eating clean has never been this easy.', likes:32, comments:7, hasImage:true, liked:false },
+    { id:'f5', user:'Jordan Lee', avatar:'J', time:'3 hr ago', habit:'Early Rising', text:'Day 9 waking up before sunrise. Still hard, but absolutely worth it.', likes:11, comments:2, hasImage:false, liked:false },
 ];
 
 /* ── AUTH PAGE ── */
@@ -639,7 +639,7 @@ function AuthPage({ onAuthSuccess }) {
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    // 「驗證信已寄出」畫面
+    // "Verification email sent" screen
     const [verificationSent, setVerificationSent] = useState(false);
     const [sentEmail, setSentEmail] = useState('');
     const [resendCooldown, setResendCooldown] = useState(0);
@@ -650,36 +650,36 @@ function AuthPage({ onAuthSuccess }) {
         onAuthSuccess(u);
     };
 
-    /* 密碼強度驗證 */
+    /* Password strength validation */
     const validateForm = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email.trim()) return '請輸入電子郵件';
-        if (!emailRegex.test(email.trim())) return '請輸入有效的電子郵件格式（例如：user@example.com）';
-        if (!password) return '請輸入密碼';
-        if (password.length < 8) return '密碼長度至少需要 8 個字元';
-        if (!/[A-Z]/.test(password)) return '密碼需包含至少一個大寫英文字母（A-Z）';
-        if (!/[a-z]/.test(password)) return '密碼需包含至少一個小寫英文字母（a-z）';
-        if (!/[0-9]/.test(password)) return '密碼需包含至少一個數字（0-9）';
+        if (!email.trim()) return 'Please enter your email address';
+        if (!emailRegex.test(email.trim())) return 'Please enter a valid email address (e.g., user@example.com)';
+        if (!password) return 'Please enter a password';
+        if (password.length < 8) return 'Password must be at least 8 characters';
+        if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter (A-Z)';
+        if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter (a-z)';
+        if (!/[0-9]/.test(password)) return 'Password must contain at least one number (0-9)';
         if (!isLogin) {
-            if (!displayName.trim()) return '請輸入您的姓名';
-            if (displayName.trim().length < 2) return '姓名至少需要 2 個字元';
+            if (!displayName.trim()) return 'Please enter your name';
+            if (displayName.trim().length < 2) return 'Name must be at least 2 characters';
         }
         return null;
     };
 
-    /* Firebase 錯誤碼 → 中文 */
+    /* Firebase error code → message */
     const firebaseErrMsg = (code) => ({
-        'auth/email-already-in-use': '此電子郵件已被註冊，請直接登入或使用其他信箱',
-        'auth/invalid-email':        '電子郵件格式不正確',
-        'auth/weak-password':        '密碼強度不足，請使用更複雜的密碼',
-        'auth/user-not-found':       '找不到此帳號，請確認電子郵件是否正確',
-        'auth/wrong-password':       '密碼錯誤，請重新確認',
-        'auth/too-many-requests':    '嘗試次數過多，請稍後再試',
-        'auth/network-request-failed':'網路連線失敗，請檢查網路後重試',
-        'auth/user-disabled':        '此帳號已被停用，請聯繫客服',
+        'auth/email-already-in-use': 'This email is already registered. Please sign in or use a different email',
+        'auth/invalid-email':        'Invalid email format',
+        'auth/weak-password':        'Password is too weak. Please use a stronger password',
+        'auth/user-not-found':       'Account not found. Please check your email address',
+        'auth/wrong-password':       'Incorrect password. Please try again',
+        'auth/too-many-requests':    'Too many attempts. Please try again later',
+        'auth/network-request-failed':'Network error. Please check your connection and try again',
+        'auth/user-disabled':        'This account has been disabled. Please contact support',
     }[code] || null);
 
-    /* 倒數計時（重寄冷卻） */
+    /* Countdown timer (resend cooldown) */
     const startCooldown = () => {
         setResendCooldown(60);
         const t = setInterval(() => {
@@ -690,7 +690,7 @@ function AuthPage({ onAuthSuccess }) {
         }, 1000);
     };
 
-    /* 重新寄驗證信 */
+    /* Resend verification email */
     const handleResend = async () => {
         if (resendCooldown > 0) return;
         try {
@@ -718,10 +718,10 @@ function AuthPage({ onAuthSuccess }) {
 
         try {
             if (isLogin) {
-                /* ── 登入流程 ── */
+                /* ── Login flow ── */
                 const r = await auth.signInWithEmailAndPassword(email, password);
                 if (!r.user.emailVerified) {
-                    // 信箱尚未驗證，登出並提示
+                    // Email not verified — sign out and prompt
                     await auth.signOut();
                     setSentEmail(email);
                     setVerificationSent(true);
@@ -730,14 +730,14 @@ function AuthPage({ onAuthSuccess }) {
                 }
                 onAuthSuccess(r.user);
             } else {
-                /* ── 註冊流程 ── */
+                /* ── Registration flow ── */
                 const r = await auth.createUserWithEmailAndPassword(email, password);
                 await r.user.updateProfile({ displayName });
                 await db.collection('users').doc(r.user.uid).set({
                     displayName, email,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                // 寄出驗證信
+                // Send verification email
                 await r.user.sendEmailVerification();
                 await auth.signOut();
                 setSentEmail(email);
@@ -751,7 +751,7 @@ function AuthPage({ onAuthSuccess }) {
         }
     };
 
-    /* ── 驗證信已寄出畫面 ── */
+    /* ── Verification email sent screen ── */
     if (verificationSent) {
         return (
             <div className="auth-page">
@@ -760,35 +760,35 @@ function AuthPage({ onAuthSuccess }) {
                     display:'flex', alignItems:'center', justifyContent:'center',
                     margin:'0 auto 20px', fontSize:28
                 }}>✉️</div>
-                <div className="auth-logo" style={{textAlign:'center', marginBottom:8}}>驗證信已寄出</div>
+                <div className="auth-logo" style={{textAlign:'center', marginBottom:8}}>Verification Email Sent</div>
                 <div style={{
                     fontSize:13, color:'var(--gray-500)', textAlign:'center',
                     marginBottom:32, lineHeight:1.7, maxWidth:320
                 }}>
-                    我們已將驗證信寄至<br/>
+                    We've sent a verification email to<br/>
                     <strong style={{color:'var(--black)'}}>{sentEmail}</strong><br/>
-                    請到信箱點擊驗證連結，完成後再回來登入。
+                    Please check your inbox and click the verification link, then come back to sign in.
                 </div>
 
                 {error && <div className="error-message" style={{maxWidth:360, width:'100%', marginBottom:16}}>{error}</div>}
 
                 <div style={{width:'100%', maxWidth:360}}>
-                    {/* 驗證完成後，直接登入 */}
+                    {/* After verification, go to sign in */}
                     <button
                         className="button button-primary"
                         onClick={() => { setVerificationSent(false); setIsLogin(true); setPassword(''); }}
                     >
-                        已驗證，前往登入
+                        Verified — Sign In Now
                     </button>
 
-                    {/* 重寄驗證信 */}
+                    {/* Resend verification email */}
                     <button
                         className="button button-secondary"
                         onClick={handleResend}
                         disabled={resendCooldown > 0}
                         style={{marginTop:0}}
                     >
-                        {resendCooldown > 0 ? `重寄驗證信（${resendCooldown}s）` : '重新寄送驗證信'}
+                        {resendCooldown > 0 ? `Resend Email (${resendCooldown}s)` : 'Resend Verification Email'}
                     </button>
 
                     <div style={{
@@ -796,62 +796,62 @@ function AuthPage({ onAuthSuccess }) {
                         background:'var(--gray-50)', border:'1px solid var(--gray-200)',
                         fontSize:11, color:'var(--gray-500)', lineHeight:1.7
                     }}>
-                        <strong style={{color:'var(--gray-700)'}}>沒收到信？</strong><br/>
-                        請檢查垃圾郵件資料夾，或確認信箱地址是否正確。
-                        驗證信有效期限為 24 小時。
+                        <strong style={{color:'var(--gray-700)'}}>Didn't receive the email?</strong><br/>
+                        Please check your spam folder, or make sure the email address is correct.
+                        The verification link expires in 24 hours.
                     </div>
                 </div>
             </div>
         );
     }
 
-    /* ── 一般登入 / 註冊畫面 ── */
+    /* ── Login / Sign Up screen ── */
     return (
         <div className="auth-page">
-            <div className="auth-logo">健康習慣追蹤</div>
-            <div className="auth-subtitle">健康管理專業版</div>
+            <div className="auth-logo">Habit Tracker</div>
+            <div className="auth-subtitle">PROFESSIONAL WELLNESS</div>
             {!isFirebaseConfigured && (
-                <div className="demo-badge"><strong>演示模式：</strong>Firebase 尚未設定，點擊登入使用本地演示版本。</div>
+                <div className="demo-badge"><strong>Demo Mode:</strong>Firebase not configured. Click to use the local demo version.</div>
             )}
             {error && <div className="error-message">{error}</div>}
             <form className="auth-form" onSubmit={handleSubmit}>
                 {!isLogin && (
                     <div className="form-group">
-                        <label className="form-label">姓名</label>
+                        <label className="form-label">Name</label>
                         <input type="text" className="form-input" value={displayName}
-                            onChange={e=>setDisplayName(e.target.value)} placeholder="您的名字"/>
+                            onChange={e=>setDisplayName(e.target.value)} placeholder="Your name"/>
                     </div>
                 )}
                 <div className="form-group">
-                    <label className="form-label">電子郵件</label>
+                    <label className="form-label">Email</label>
                     <input type="email" className="form-input" value={email}
                         onChange={e=>setEmail(e.target.value)} placeholder="your@email.com"/>
                 </div>
                 <div className="form-group">
-                    <label className="form-label">密碼</label>
+                    <label className="form-label">Password</label>
                     <input type="password" className="form-input" value={password}
                         onChange={e=>setPassword(e.target.value)} placeholder="••••••••" minLength="8"/>
                     {!isLogin && (
                         <div style={{fontSize:11, color:'var(--gray-400)', marginTop:6, lineHeight:1.6}}>
-                            密碼需至少 8 碼，包含大寫字母、小寫字母及數字
+                            Password must be at least 8 chars, with uppercase, lowercase, and a number
                         </div>
                     )}
                 </div>
                 <button type="submit" className="button button-primary" disabled={loading}>
-                    {loading ? '處理中...' : (isLogin ? '登入' : '註冊')}
+                    {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
                 </button>
             </form>
             <div className="auth-switch">
-                {isLogin ? '還沒有帳號？' : '已有帳號？'}
+                {isLogin ? 'Don\'t have an account?' : 'Already have an account?'}
                 <a onClick={()=>{ setIsLogin(!isLogin); setError(''); }}>
-                    {isLogin ? '立即註冊' : '登入'}
+                    {isLogin ? 'Sign Up' : 'Sign In'}
                 </a>
             </div>
         </div>
     );
 }
 
-/* ── FEED CARD COMPONENT（Firebase 真實按讚 + 留言） ── */
+/* ── FEED CARD COMPONENT (Firebase real likes + comments) ── */
 function FeedCard({ post, currentUser, onLike }) {
     const [showComments, setShowComments] = useState(false);
     const [comments, setComments] = useState([]);
@@ -859,7 +859,7 @@ function FeedCard({ post, currentUser, onLike }) {
     const [sendingComment, setSendingComment] = useState(false);
     const [loadingComments, setLoadingComments] = useState(false);
 
-    // 載入留言（展開時才載入）
+    // Load comments (only when expanded)
     useEffect(() => {
         if (!showComments || !isFirebaseConfigured || !post.id) return;
         setLoadingComments(true);
@@ -881,11 +881,11 @@ function FeedCard({ post, currentUser, onLike }) {
                 await db.collection('posts').doc(post.id).collection('comments').add({
                     text: commentText.trim(),
                     userId: currentUser.uid,
-                    userName: currentUser.displayName || '用戶',
+                    userName: currentUser.displayName || 'User',
                     userAvatar: (currentUser.displayName || currentUser.email)?.[0]?.toUpperCase() || 'U',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
-                // 更新留言數
+                // Update comment count
                 await db.collection('posts').doc(post.id).update({
                     comments: firebase.firestore.FieldValue.increment(1)
                 });
@@ -893,13 +893,13 @@ function FeedCard({ post, currentUser, onLike }) {
                 setComments(prev => [...prev, {
                     id: Date.now().toString(),
                     text: commentText.trim(),
-                    userName: currentUser.displayName || '用戶',
+                    userName: currentUser.displayName || 'User',
                     userAvatar: (currentUser.displayName || currentUser.email)?.[0]?.toUpperCase() || 'U',
                     createdAt: null,
                 }]);
             }
             setCommentText('');
-        } catch(e) { alert('留言失敗：' + e.message); }
+        } catch(e) { alert('Comment failed: ' + e.message); }
         finally { setSendingComment(false); }
     };
 
@@ -927,7 +927,7 @@ function FeedCard({ post, currentUser, onLike }) {
                 )}
                 {post.hasImage && !post.mediaUrl && (
                     <div className="feed-media">
-                        <div className="feed-media-placeholder"><ImageIcon/><span>照片</span></div>
+                        <div className="feed-media-placeholder"><ImageIcon/><span>Photo</span></div>
                     </div>
                 )}
                 {post.hasVideo && post.mediaUrl && (
@@ -943,36 +943,36 @@ function FeedCard({ post, currentUser, onLike }) {
                 <div className="feed-action" onClick={()=>setShowComments(s=>!s)}>
                     <ChatIcon/><span>{post.comments}</span>
                 </div>
-                <div className="feed-action"><ShareIcon/><span>分享</span></div>
+                <div className="feed-action"><ShareIcon/><span>Share</span></div>
             </div>
             {showComments && (
                 <div className="comments-section">
-                    {loadingComments && <div style={{fontSize:11,color:'var(--gray-400)',padding:'4px 0'}}>載入留言中…</div>}
+                    {loadingComments && <div style={{fontSize:11,color:'var(--gray-400)',padding:'4px 0'}}>Loading comments...</div>}
                     {comments.map(c => (
                         <div key={c.id} className="comment-item">
                             <div className="comment-avatar">{c.userAvatar}</div>
                             <div className="comment-body">
                                 <div className="comment-user">{c.userName}</div>
                                 <div className="comment-text">{c.text}</div>
-                                <div className="comment-time">{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '剛剛'}</div>
+                                <div className="comment-time">{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now'}</div>
                             </div>
                         </div>
                     ))}
                     {comments.length === 0 && !loadingComments && (
-                        <div style={{fontSize:11,color:'var(--gray-400)',padding:'4px 0 8px'}}>還沒有留言，來第一個留言吧！</div>
+                        <div style={{fontSize:11,color:'var(--gray-400)',padding:'4px 0 8px'}}>No comments yet. Be the first!</div>
                     )}
                     {currentUser && (
                         <div className="comment-input-row">
                             <input
                                 className="comment-input"
-                                placeholder="留言…"
+                                placeholder="Add a comment..."
                                 value={commentText}
                                 onChange={e=>setCommentText(e.target.value)}
                                 onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&handleSendComment()}
                                 maxLength={200}
                             />
                             <button className="comment-send" onClick={handleSendComment} disabled={!commentText.trim()||sendingComment}>
-                                {sendingComment ? '…' : '送出'}
+                                {sendingComment ? '…' : 'Send'}
                             </button>
                         </div>
                     )}
@@ -1005,42 +1005,42 @@ function MemberProfileView({ member: initialMember, currentUser, onBack }) {
 
     return (
         <div>
-            <button className="back-nav" onClick={onBack}><BackIcon/>返回成員列表</button>
+            <button className="back-nav" onClick={onBack}><BackIcon/>BackMembers</button>
             <div className="member-profile-header">
                 <div className="member-profile-avatar">{member.avatar}</div>
                 <div className="member-profile-name">{member.name}</div>
                 <div className="member-profile-handle">{member.handle}</div>
                 <div className="member-profile-actions">
                     <button className={`follow-btn${member.isFollowing?' following':''}`} onClick={handleFollow}>
-                        {member.isFollowing ? '已追蹤' : '追蹤'}
+                        {member.isFollowing ? 'hasFollow' : 'Follow'}
                     </button>
-                    <button className="msg-btn">私訊</button>
+                    <button className="msg-btn">Message</button>
                 </div>
                 <div className="profile-stat-row">
                     <div className="profile-stat-cell">
                         <div className="profile-stat-num">{member.habits}</div>
-                        <div className="profile-stat-lbl">習慣</div>
+                        <div className="profile-stat-lbl">Habit</div>
                     </div>
                     <div className="profile-stat-cell">
                         <div className="profile-stat-num">{member.streak}</div>
-                        <div className="profile-stat-lbl">連續天</div>
+                        <div className="profile-stat-lbl">Day Streak</div>
                     </div>
                     <div className="profile-stat-cell">
                         <div className="profile-stat-num">{member.followers}</div>
-                        <div className="profile-stat-lbl">追蹤者</div>
+                        <div className="profile-stat-lbl">Followers</div>
                     </div>
                     <div className="profile-stat-cell">
                         <div className="profile-stat-num">{member.following}</div>
-                        <div className="profile-stat-lbl">追蹤中</div>
+                        <div className="profile-stat-lbl">Follow</div>
                     </div>
                 </div>
             </div>
 
             {/* Group activity progress */}
-            <div className="section-title">本次活動完成度</div>
+            <div className="section-title">Activity Completion</div>
             <div style={{marginBottom:24}}>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,color:'var(--gray-500)',marginBottom:6}}>
-                    <span>完成率</span><span style={{fontFamily:'var(--din)'}}>{completionPct}%</span>
+                    <span>Completion Rate</span><span style={{fontFamily:'var(--din)'}}>{completionPct}%</span>
                 </div>
                 <div style={{height:8,background:'var(--gray-100)',borderRadius:0}}>
                     <div style={{height:'100%',background:'var(--black)',width:`${completionPct}%`,transition:'width .5s'}}></div>
@@ -1048,21 +1048,21 @@ function MemberProfileView({ member: initialMember, currentUser, onBack }) {
             </div>
 
             {/* Posts */}
-            <div className="section-title">貼文</div>
+            <div className="section-title">Post</div>
             {!canSeePosts ? (
                 <div className="privacy-notice">
                     <LockIcon/>
                     {member.isFollowing && !member.followApproved
-                        ? <span style={{display:'block',marginTop:6}}>追蹤申請待審核 · 對方同意後即可查看貼文</span>
-                        : <span style={{display:'block',marginTop:6}}>此帳號為私密帳號 · 追蹤後可查看貼文</span>
+                        ? <span style={{display:'block',marginTop:6}}>Follow request pending · Posts visible once approved</span>
+                        : <span style={{display:'block',marginTop:6}}>This account is private · Followonce approved toViewPost</span>
                     }
                 </div>
             ) : (
                 posts.length === 0 ? (
                     <div className="empty-state">
                         <ImageIcon/>
-                        <h3>尚無貼文</h3>
-                        <p>此用戶還未分享任何內容</p>
+                        <h3>No posts yet</h3>
+                        <p>This user has not shared any content yet</p>
                     </div>
                 ) : (
                     <div className="posts-grid">
@@ -1094,7 +1094,7 @@ function GroupDetailView({ group, currentUser, onBack }) {
 
     return (
         <div>
-            <button className="back-nav" onClick={onBack}><BackIcon/>返回小組列表</button>
+            <button className="back-nav" onClick={onBack}><BackIcon/>Back to Groups</button>
 
             <div className="group-detail-header">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
@@ -1102,13 +1102,13 @@ function GroupDetailView({ group, currentUser, onBack }) {
                     <span className="group-category-tag">{group.category}</span>
                 </div>
                 <div className="group-detail-meta">
-                    <span>{group.members} 位成員</span>
+                    <span>{group.members}  members</span>
                     <span>•</span>
-                    <span>{group.active} 人參與中</span>
+                    <span>{group.active}  active</span>
                 </div>
                 <div className="group-detail-progress">
                     <div style={{display:'flex',justifyContent:'space-between',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,color:'var(--gray-500)',marginBottom:6}}>
-                        <span>小組整體進度</span><span style={{fontFamily:'var(--din)'}}>{group.progress}%</span>
+                        <span>Group Overall Progress</span><span style={{fontFamily:'var(--din)'}}>{group.progress}%</span>
                     </div>
                     <div className="progress-bar" style={{height:6}}>
                         <div className="progress-fill" style={{width:`${group.progress}%`}}></div>
@@ -1119,17 +1119,17 @@ function GroupDetailView({ group, currentUser, onBack }) {
                     style={{width:'100%',marginTop:14,padding:'11px'}}
                     onClick={()=>setJoined(!joined)}
                 >
-                    {joined ? '✓ 已參與活動' : '參與活動'}
+                    {joined ? '✓ hasJoin Challenge' : 'Join Challenge'}
                 </button>
             </div>
 
-            <div className="member-list-title">成員列表（{members.length} 人）</div>
+            <div className="member-list-title">Members ({members.length})</div>
             {members.map(member => (
                 <div key={member.id} className="member-row" onClick={()=>setSelectedMember(member)}>
                     <div className="member-avatar-lg">{member.avatar}</div>
                     <div className="member-info">
                         <div className="member-name">{member.name}</div>
-                        <div className="member-sub">{member.handle} · 連續 {member.streak} 天</div>
+                        <div className="member-sub">{member.handle} · {member.streak}-day streak</div>
                         <div className="member-prog-wrap">
                             <div className="member-prog-track">
                                 <div className="member-prog-fill" style={{width:`${member.progress}%`}}></div>
@@ -1144,7 +1144,7 @@ function GroupDetailView({ group, currentUser, onBack }) {
     );
 }
 
-/* ── 日期工具：統一用 YYYY-MM-DD 格式，不受 locale 影響 ── */
+/* ── Date utilities: use YYYY-MM-DD format, locale-independent ── */
 function toISODay(date) {
     const d = date || new Date();
     const y = d.getFullYear();
@@ -1156,18 +1156,18 @@ function dateFromISO(str) {
     const [y,m,d] = str.split('-').map(Number);
     return new Date(y, m-1, d);
 }
-// 解析 timeRange 字串 "2026-02-17 ～ 2026-02-19" 取得開始/結束日
+// Parse timeRange string "2026-02-17 ~ 2026-02-19" to get Start/End Date
 function parseTimeRange(timeRange) {
     if (!timeRange) return { start: null, end: null };
-    // 支援 "2026-02-17 ～ 2026-02-19" 及 "2026/02/17 ～ 2026/02/19"
+    // Supports "2026-02-17 ~ 2026-02-19" and "2026/02/17 ~ 2026/02/19"
     const parts = timeRange.split(/～|~/).map(s => s.trim().replace(/\//g,'-'));
     return { start: parts[0]||null, end: parts[1]||null };
 }
 
-/* ── 計算累計完成率（供多處共用） ──
-   公式：所有週期內已完成次數總和（每週期上限=timesPerCycle）
-         ÷ (總執行天數 ÷ intervalDays × timesPerCycle)
-   intervalDays=1 → 每天；intervalDays=3 → 每3天一個週期 */
+/* ── Calculate cumulative completion rate (shared helper) ──
+   Formula: sum of completed sessions across all cycles (max per cycle = timesPerCycle)
+         ÷ (Total Days ÷ intervalDays × timesPerCycle)
+   intervalDays=1 → every day; intervalDays=3 → every 3-day cycle */
 function calcCompletionRate(habit) {
     const timesPerCycle = habit.dailyTarget || 1;
     const intervalDays  = habit.intervalDays || 1;
@@ -1176,16 +1176,16 @@ function calcCompletionRate(habit) {
     const habitEnd   = endStr   ? dateFromISO(endStr)   : new Date();
     const msPerDay   = 1000 * 60 * 60 * 24;
     const totalDays  = Math.max(1, Math.round((habitEnd - habitStart) / msPerDay) + 1);
-    // 總應完成次數（分母）
+    // Total expected completions (denominator)
     const totalExpected = Math.ceil(totalDays / intervalDays) * timesPerCycle;
-    // 實際完成次數（分子，每日上限=timesPerCycle）
+    // Actual completions (numerator, capped per day = timesPerCycle)
     const totalDone = Object.entries(habit.todayCounts || {}).reduce((s, [, v]) =>
         s + Math.min(timesPerCycle, Math.max(0, v || 0)), 0);
     return Math.min(100, Math.round((totalDone / totalExpected) * 100));
 }
 
-/* ── 判斷今天是否為「應執行日」 ──
-   從習慣開始日起算，每 intervalDays 天為一個週期的第1天 */
+/* ── Check if today is a scheduled day ──
+   Starting from habit start date, every intervalDays-day cycle, day 1 */
 function isTodayActiveDay(habit, todayKey) {
     const intervalDays = habit.intervalDays || 1;
     if (intervalDays === 1) return true;
@@ -1209,16 +1209,16 @@ function HabitDetailView({ habit, onBack, onCount, currentDay }) {
     const intervalDays = habit.intervalDays || 1;
     const isActiveDay = isTodayActiveDay(habit, todayKey);
 
-    // 今日完成率：今天實際完成次數（上限為目標）/ 每日目標（非執行日為 N/A）
+    // Today's completion rate: actual completions today (capped at goal) / daily goal (N/A on non-scheduled days)
     const todayDone = Math.min(target, Math.max(0, done));
     const todayRate = isActiveDay ? Math.min(100, Math.round((todayDone / target) * 100)) : null;
 
-    // 累積完成率：使用共用 helper
+    // Cumulative completion rate: use shared helper
     const completionRate = calcCompletionRate(habit);
 
     return (
         <div>
-            <button className="back-nav" onClick={onBack}><BackIcon/>我的習慣</button>
+            <button className="back-nav" onClick={onBack}><BackIcon/>My Habits</button>
             <div className="detail-title">{habit.name}</div>
             <div className="detail-category">
                 {habit.category}
@@ -1229,35 +1229,35 @@ function HabitDetailView({ habit, onBack, onCount, currentDay }) {
             <div className="detail-stats-grid">
                 <div className="detail-stat-card">
                     <div className="detail-stat-value">{target}</div>
-                    <div className="detail-stat-label">每日目標</div>
+                    <div className="detail-stat-label">Daily Goal</div>
                 </div>
                 <div className="detail-stat-card">
                     <div className="detail-stat-value">{done}</div>
-                    <div className="detail-stat-label">今日完成</div>
+                    <div className="detail-stat-label">Today's Done</div>
                 </div>
                 <div className="detail-stat-card">
                     <div className="detail-stat-value">{todayRate !== null ? `${todayRate}%` : '—'}</div>
-                    <div className="detail-stat-label">{todayRate !== null ? '今日完成率' : '休息日'}</div>
+                    <div className="detail-stat-label">{todayRate !== null ? 'Today's DoneRate' : 'Rest Day'}</div>
                 </div>
                 <div className="detail-stat-card">
                     <div className="detail-stat-value">{completionRate}%</div>
-                    <div className="detail-stat-label">累積完成率</div>
+                    <div className="detail-stat-label">Overall Rate</div>
                 </div>
             </div>
-            <div className="section-title">今日進度</div>
+            <div className="section-title">Today's Progress</div>
             <div style={{marginBottom:24}}>
                 {!isActiveDay ? (
                     <div style={{
                         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
                         padding:'28px 0', border:'1px solid var(--gray-200)', gap:8
                     }}>
-                        <div style={{fontSize:13,fontWeight:700,color:'var(--gray-500)',textTransform:'uppercase',letterSpacing:1.5}}>休息日</div>
-                        <div style={{fontSize:11,color:'var(--gray-400)'}}>每 {intervalDays} 天執行一次，今天不需打卡</div>
+                        <div style={{fontSize:13,fontWeight:700,color:'var(--gray-500)',textTransform:'uppercase',letterSpacing:1.5}}>Rest Day</div>
+                        <div style={{fontSize:11,color:'var(--gray-400)'}}>Every {intervalDays} days — no check-in needed today</div>
                     </div>
                 ) : (
                     <>
                         <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,color:'var(--gray-500)',marginBottom:8}}>
-                            <span>{done} / {target} 次</span><span style={{fontFamily:'var(--din)'}}>{progPct}%</span>
+                            <span>{done} / {target}  times</span><span style={{fontFamily:'var(--din)'}}>{progPct}%</span>
                         </div>
                         <div style={{height:8,background:'var(--gray-100)'}}>
                             <div style={{height:'100%',background:'var(--black)',width:`${progPct}%`,transition:'width .4s'}}></div>
@@ -1287,44 +1287,44 @@ function HabitDetailView({ habit, onBack, onCount, currentDay }) {
     );
 }
 
-/* ── PRESETS (定義在 component 外部，物件參考固定不變) ── */
+/* ── PRESETS (defined outside component, stable object references) ── */
 const DURATION_PRESETS = [
-    { label:'5 分鐘',  value:5,   unit:'min' },
-    { label:'15 分鐘', value:15,  unit:'min' },
-    { label:'30 分鐘', value:30,  unit:'min' },
-    { label:'1 小時',  value:60,  unit:'min' },
-    { label:'自訂',    value:null, unit:'min' },
+    { label:'5 min',  value:5,   unit:'min' },
+    { label:'15 min', value:15,  unit:'min' },
+    { label:'30 min', value:30,  unit:'min' },
+    { label:'1 hr',  value:60,  unit:'min' },
+    { label:'Custom',    value:null, unit:'min' },
 ];
 const FREQ_PRESETS = [
-    { label:'每天 1 次', timesPerDay:1, intervalDays:1, periodUnit:'day' },
-    { label:'每天 2 次', timesPerDay:2, intervalDays:1, periodUnit:'day' },
-    { label:'每天 3 次', timesPerDay:3, intervalDays:1, periodUnit:'day' },
-    { label:'自訂',      timesPerDay:null, intervalDays:null, periodUnit:'custom' },
+    { label:'Every day 1  times', timesPerDay:1, intervalDays:1, periodUnit:'day' },
+    { label:'Every day 2  times', timesPerDay:2, intervalDays:1, periodUnit:'day' },
+    { label:'Every day 3  times', timesPerDay:3, intervalDays:1, periodUnit:'day' },
+    { label:'Custom',      timesPerDay:null, intervalDays:null, periodUnit:'custom' },
 ];
 
 /* ── ADD HABIT MODAL ── */
 function AddHabitModal({ onClose, onAdd }) {
     const now = new Date();
     const [name, setName] = useState('');
-    const [category, setCategory] = useState('運動健身');
+    const [category, setCategory] = useState('Fitness');
 
-    // 開始/結束日期 (date string for <input type="date">)
+    // Start/End Date (date string for <input type="date">)
     const todayStr = now.toISOString().slice(0,10);
     const endOfYear = `${now.getFullYear()}-12-31`;
     const [startDate, setStartDate] = useState(todayStr);
     const [endDate, setEndDate]     = useState(endOfYear);
 
-    const [durPreset, setDurPreset]   = useState(null);   // null = 未選
+    const [durPreset, setDurPreset]   = useState(null);   // null = Not set
     const [durCustom, setDurCustom]   = useState('');
     const [durUnit,   setDurUnit]     = useState('min');
 
     const [freqPreset, setFreqPreset] = useState(null);
-    const [freqCustomN, setFreqCustomN] = useState('1');       // 每X天執行幾次
-    const [freqIntervalDays, setFreqIntervalDays] = useState('1'); // 每隔幾天
+    const [freqCustomN, setFreqCustomN] = useState('1');       // Every X days — how many times
+    const [freqIntervalDays, setFreqIntervalDays] = useState('1'); // Every N days
 
-    const categories = ['運動健身','飲食管理','護膚保養','睡眠作息','冥想放鬆','補水習慣','閱讀學習','其他'];
+    const categories = ['Fitness','Nutrition','Skincare','Sleep','Mindfulness','Hydration','Learning','Other'];
 
-    /* 計算頻率參數：{ timesPerCycle: 每個週期要完成幾次, intervalDays: 週期天數 } */
+    /* Calculate frequency params: { timesPerCycle: completions per cycle, intervalDays: days per cycle } */
     const getFreqParams = () => {
         if (!freqPreset) return { timesPerCycle: 1, intervalDays: 1 };
         if (freqPreset.periodUnit === 'custom') {
@@ -1338,26 +1338,26 @@ function AddHabitModal({ onClose, onAdd }) {
             intervalDays:  freqPreset.intervalDays || 1,
         };
     };
-    // 向下相容：dailyTarget 仍儲存為「每個週期次數」
+    // Backward compat: dailyTarget stored as "times per cycle"
     const getDailyTarget = () => getFreqParams().timesPerCycle;
 
-    /* 組合 freqLabel */
+    /* Build frequency label */
     const getFreqLabel = () => {
         if (!freqPreset) return '';
         if (freqPreset.periodUnit === 'custom') {
             const days = parseInt(freqIntervalDays) || 1;
             const times = parseInt(freqCustomN) || 1;
-            if (days === 1) return `每天 ${times} 次`;
-            return `每 ${days} 天 ${times} 次`;
+            if (days === 1) return `Every day ${times}  times`;
+            return `Every ${days} days, ${times} time${times>1?'s':''}`;
         }
         return freqPreset.label;
     };
 
-    /* 組合 durLabel */
+    /* Build duration label */
     const getDurLabel = () => {
         if (!durPreset) return '';
         if (durPreset.value === null) {
-            const unitMap = { min:'分鐘', hour:'小時' };
+            const unitMap = { min:'min', hour:'hr' };
             return `${durCustom} ${unitMap[durUnit]||durUnit}`;
         }
         return durPreset.label;
@@ -1378,17 +1378,17 @@ function AddHabitModal({ onClose, onAdd }) {
     return (
         <div className="modal" onClick={onClose}>
             <div className="modal-content" onClick={e=>e.stopPropagation()}>
-                <div className="modal-header">新增習慣</div>
+                <div className="modal-header">Add Habit</div>
 
-                {/* 名稱 */}
+                {/* Name */}
                 <div className="form-group">
-                    <label className="form-label">習慣名稱</label>
-                    <input type="text" className="form-input" value={name} onChange={e=>setName(e.target.value)} placeholder="例：晨跑" autoFocus/>
+                    <label className="form-label">Habit Name</label>
+                    <input type="text" className="form-input" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Morning Run" autoFocus/>
                 </div>
 
-                {/* 分類 */}
+                {/* Category */}
                 <div className="form-group">
-                    <label className="form-label">分類</label>
+                    <label className="form-label">Category</label>
                     <select className="form-input" value={category} onChange={e=>setCategory(e.target.value)}>
                         {categories.map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
@@ -1396,9 +1396,9 @@ function AddHabitModal({ onClose, onAdd }) {
 
                 <div className="section-divider"/>
 
-                {/* 執行期間 */}
+                {/* Duration Period */}
                 <div className="form-group">
-                    <div className="modal-section-label">執行期間</div>
+                    <div className="modal-section-label">Duration Period</div>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
                         <input type="date" className="form-input" style={{flex:1,padding:'9px 8px',fontSize:12}} value={startDate} onChange={e=>setStartDate(e.target.value)}/>
                         <span className="date-sep">→</span>
@@ -1408,9 +1408,9 @@ function AddHabitModal({ onClose, onAdd }) {
 
                 <div className="section-divider"/>
 
-                {/* 執行時長 */}
+                {/* Session Duration */}
                 <div className="form-group">
-                    <div className="modal-section-label">每次時長</div>
+                    <div className="modal-section-label">Duration per Session</div>
                     <div className="pill-group">
                         {DURATION_PRESETS.map((p,i)=>(
                             <button key={i} className={`pill${durPreset===p?' selected':''}`} onClick={()=>setDurPreset(p)}>
@@ -1423,8 +1423,8 @@ function AddHabitModal({ onClose, onAdd }) {
                             <input className="pill-custom-input" type="number" min="1" placeholder="30"
                                 value={durCustom} onChange={e=>setDurCustom(e.target.value)}/>
                             <select className="pill-unit-select" value={durUnit} onChange={e=>setDurUnit(e.target.value)}>
-                                <option value="min">分鐘</option>
-                                <option value="hour">小時</option>
+                                <option value="min">min</option>
+                                <option value="hour">hr</option>
                             </select>
                         </div>
                     )}
@@ -1432,9 +1432,9 @@ function AddHabitModal({ onClose, onAdd }) {
 
                 <div className="section-divider"/>
 
-                {/* 頻率 */}
+                {/* Frequency */}
                 <div className="form-group">
-                    <div className="modal-section-label">執行頻率</div>
+                    <div className="modal-section-label">Frequency</div>
                     <div className="pill-group">
                         {FREQ_PRESETS.map((p,i)=>(
                             <button key={i} className={`pill${freqPreset===p?' selected':''}`} onClick={()=>setFreqPreset(p)}>
@@ -1445,24 +1445,24 @@ function AddHabitModal({ onClose, onAdd }) {
                     {isFreqCustom && (
                         <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:8}}>
                             <div className="pill-custom-wrap">
-                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>每隔</span>
+                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>Every</span>
                                 <input className="pill-custom-input" type="number" min="1" placeholder="1"
                                     value={freqIntervalDays} onChange={e=>setFreqIntervalDays(e.target.value)}/>
-                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>天，執行</span>
+                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>days, do it</span>
                                 <input className="pill-custom-input" type="number" min="1" placeholder="1"
                                     value={freqCustomN} onChange={e=>setFreqCustomN(e.target.value)}/>
-                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>次</span>
+                                <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}> times</span>
                             </div>
                             <div style={{fontSize:10,color:'var(--gray-400)',paddingLeft:2}}>
-                                例：每隔 1 天執行 1 次 = 每天；每隔 2 天執行 3 次 = 2天內完成3次
+                                e.g. Every 1 day = daily; Every 2 days, 3 times = 3 sessions within 2 daysimes
                             </div>
                         </div>
                     )}
                 </div>
 
                 <div className="button-group">
-                    <button className="button button-secondary" onClick={onClose}>取消</button>
-                    <button className="button button-primary" onClick={handleAdd}>建立</button>
+                    <button className="button button-secondary" onClick={onClose}>Cancel</button>
+                    <button className="button button-primary" onClick={handleAdd}>Create</button>
                 </div>
             </div>
         </div>
@@ -1489,21 +1489,21 @@ function MainApp({ user, onLogout }) {
         if (!isFirebaseConfigured) {
             const saved = localStorage.getItem(`habits_${user.uid}`);
             if (saved) {
-                // 遷移舊格式 key → YYYY-MM-DD
+                // Migrate old key format → YYYY-MM-DD
                 const parsed = JSON.parse(saved);
                 const migrated = parsed.map(h => {
-                    // 遷移 checkedDates
+                    // Migrate checkedDates
                     const newChecked = [...new Set((h.checkedDates||[]).map(d => {
                         if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
                         const p = new Date(d); return isNaN(p) ? null : toISODay(p);
                     }).filter(Boolean))];
-                    // 遷移 todayCounts
+                    // Migrate todayCounts
                     const newCounts = {};
                     Object.entries(h.todayCounts||{}).forEach(([k,v]) => {
                         const isoKey = /^\d{4}-\d{2}-\d{2}$/.test(k) ? k : toISODay(new Date(k));
                         if (isoKey) newCounts[isoKey] = (newCounts[isoKey]||0) + v;
                     });
-                    // 重新計算 streak
+                    // Recalculate streak
                     let streak = 0;
                     let cur = new Date(); cur.setHours(0,0,0,0);
                     while (newChecked.includes(toISODay(cur))) { streak++; cur.setDate(cur.getDate()-1); }
@@ -1526,7 +1526,7 @@ function MainApp({ user, onLogout }) {
             console.error('Firestore error:', err);
             setLoading(false);
         });
-        // 安全超時：最多等 8 秒
+        // Safety timeout: wait max 8s
         const timeout = setTimeout(() => setLoading(false), 8000);
         return () => { unsub(); clearTimeout(timeout); };
     }, [user]);
@@ -1537,7 +1537,7 @@ function MainApp({ user, onLogout }) {
         }
     }, [habits, user]);
 
-    // 自動偵測跨日：計算距離明天凌晨 00:00 的毫秒數，時間到就強制 re-render
+    // Auto-detect midnight rollover: schedule re-render at next 00:00
     const [currentDay, setCurrentDay] = useState(toISODay());
     useEffect(() => {
         const scheduleNextMidnight = () => {
@@ -1545,8 +1545,8 @@ function MainApp({ user, onLogout }) {
             const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
             const msUntilMidnight = tomorrow - now;
             return setTimeout(() => {
-                setCurrentDay(toISODay()); // 觸發 re-render，所有 todayKey 都會更新
-                scheduleNextMidnight();    // 排程下一天的跨日偵測
+                setCurrentDay(toISODay()); // trigger re-render, all todayKey will update
+                scheduleNextMidnight();    // schedule next midnight detection
             }, msUntilMidnight);
         };
         const timer = scheduleNextMidnight();
@@ -1576,16 +1576,16 @@ function MainApp({ user, onLogout }) {
         const habit = habits.find(h=>h.id===habitId);
         if (!habit) return;
 
-        // todayCounts：支援舊 key 格式並遷移
+        // todayCounts: support old key format and migrate
         const rawCounts = { ...(habit.todayCounts||{}) };
-        // 若存有舊格式的今天 key，先搬移
+        // If old-format key exists for today, migrate it
         const legacyTodayKey = new Date().toDateString();
         if (rawCounts[legacyTodayKey] !== undefined && rawCounts[todayKey] === undefined) {
             rawCounts[todayKey] = rawCounts[legacyTodayKey];
             delete rawCounts[legacyTodayKey];
         }
         const counts = rawCounts;
-        // 判斷今日是否「完成」(達到 dailyTarget)
+        // Check if today is "Done" (reached dailyTarget)
         const target = habit.dailyTarget || 1;
         const cur = counts[todayKey] || 0;
         const next = Math.min(target, Math.max(0, cur + delta));
@@ -1594,7 +1594,7 @@ function MainApp({ user, onLogout }) {
         const wasDone = cur >= target;
         const isDone  = next >= target;
 
-        // checkedDates 統一為 YYYY-MM-DD，去除舊格式重複
+        // Normalize checkedDates to YYYY-MM-DD, remove old format duplicates
         let checkedDates = [...new Set((habit.checkedDates||[]).map(d => {
             if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
             const p = new Date(d); return isNaN(p) ? null : toISODay(p);
@@ -1603,7 +1603,7 @@ function MainApp({ user, onLogout }) {
         if (!wasDone && isDone)  checkedDates = [...new Set([...checkedDates, todayKey])];
         if (wasDone  && !isDone) checkedDates = checkedDates.filter(d=>d!==todayKey);
 
-        // 連續天數：嚴格從今天往回，今天沒完成就是 0（不借用昨天）
+        // Streak: strictly counting back from today, 0 if today not done
         let streak = 0;
         let cur2 = new Date(); cur2.setHours(0,0,0,0);
         while (checkedDates.includes(toISODay(cur2))) { streak++; cur2.setDate(cur2.getDate()-1); }
@@ -1619,7 +1619,7 @@ function MainApp({ user, onLogout }) {
         const today = toISODay();
         const habit = habits.find(h=>h.id===habitId);
         if (!habit) return;
-        // 統一 checkedDates 為 ISO 格式
+        // Normalize checkedDates to ISO format
         const normalized = [...new Set((habit.checkedDates||[]).map(d => {
             if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
             const p = new Date(d); return isNaN(p) ? null : toISODay(p);
@@ -1645,12 +1645,12 @@ function MainApp({ user, onLogout }) {
         }).filter(Boolean);
         return normalized.includes(todayStr);
     }).length;
-    // 累積完成率：各習慣平均（使用共用 helper，支援自訂 intervalDays）
+    // Cumulative completion rate: average across habits (using shared helper)
     const rate = habits.length > 0
         ? Math.round(habits.reduce((sum, h) => sum + calcCompletionRate(h), 0) / habits.length)
         : 0;
 
-    // ── 從 Firebase 即時載入動態貼文 ──
+    // ── Load feed posts from Firebase in real-time ──
     useEffect(() => {
         if (!isFirebaseConfigured) return;
         const unsub = db.collection('posts')
@@ -1660,11 +1660,11 @@ function MainApp({ user, onLogout }) {
                 const posts = snap.docs.map(d => {
                     const data = d.data();
                     const createdAt = data.createdAt?.toDate?.();
-                    const timeStr = createdAt ? formatTime(createdAt) : '剛剛';
+                    const timeStr = createdAt ? formatTime(createdAt) : 'Just now';
                     return { id: d.id, ...data, time: timeStr };
                 });
                 setFeedPosts(posts);
-                // 更新 myPosts（自己的貼文）
+                // Update myPosts (own posts)
                 setMyPosts(posts.filter(p => p.userId === user.uid));
             });
         return () => unsub();
@@ -1673,10 +1673,10 @@ function MainApp({ user, onLogout }) {
     function formatTime(date) {
         const now = new Date();
         const diff = Math.floor((now - date) / 1000);
-        if (diff < 60) return '剛剛';
-        if (diff < 3600) return `${Math.floor(diff/60)} 分鐘前`;
-        if (diff < 86400) return `${Math.floor(diff/3600)} 小時前`;
-        return `${Math.floor(diff/86400)} 天前`;
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return `${Math.floor(diff/60)} min ago`;
+        if (diff < 86400) return `${Math.floor(diff/3600)} hr ago`;
+        return `${Math.floor(diff/86400)} day ago`;
     }
 
     const handleLikeFeed = async (postId) => {
@@ -1720,7 +1720,7 @@ function MainApp({ user, onLogout }) {
             const result = await uploadToCloudinary(file, resourceType, (pct) => setUploadProgress(pct));
             setPostMedia({ type, url: result.url, file: null, uploading: false, local: result.local });
         } catch (err) {
-            alert('上傳失敗：' + err.message);
+            alert('Upload failed：' + err.message);
             setPostMedia(null);
         } finally {
             setUploadingMedia(false);
@@ -1737,7 +1737,7 @@ function MainApp({ user, onLogout }) {
             setAvatarUrl(result.url);
             localStorage.setItem(`avatar_${user?.uid}`, result.url);
         } catch (err) {
-            alert('頭像上傳失敗：' + err.message);
+            alert('AvatarUpload failed：' + err.message);
         } finally {
             setUploadingAvatar(false);
         }
@@ -1749,7 +1749,7 @@ function MainApp({ user, onLogout }) {
         const avatar = (user.displayName || user.email)?.[0]?.toUpperCase() || 'U';
         const newPost = {
             userId: user.uid,
-            user: user.displayName || '用戶',
+            user: user.displayName || 'User',
             avatar,
             avatarUrl: localStorage.getItem(`avatar_${user.uid}`) || null,
             text: postText.trim(),
@@ -1767,9 +1767,9 @@ function MainApp({ user, onLogout }) {
                     ...newPost,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
-            } catch(e) { alert('發布失敗：' + e.message); return; }
+            } catch(e) { alert('Post failed: ' + e.message); return; }
         } else {
-            const localPost = { ...newPost, id: 'my-' + Date.now(), time: '剛剛', liked: false, isOwn: true };
+            const localPost = { ...newPost, id: 'my-' + Date.now(), time: 'Just now', liked: false, isOwn: true };
             setMyPosts(prev => [localPost, ...prev]);
             setFeedPosts(prev => [localPost, ...prev]);
         }
@@ -1777,7 +1777,7 @@ function MainApp({ user, onLogout }) {
         setPostMedia(null);
     };
 
-    if (loading) return <div className="app-container"><div className="loading">載入中...</div></div>;
+    if (loading) return <div className="app-container"><div className="loading">Loading...</div></div>;
 
     const renderHome = () => {
         if (selectedHabit) {
@@ -1794,17 +1794,17 @@ function MainApp({ user, onLogout }) {
                     </button>
                 </div>
 
-                {habits.length > 0 && <div className="section-title">我的習慣</div>}
+                {habits.length > 0 && <div className="section-title">My Habits</div>}
                 {habits.length === 0 ? (
                     <div className="empty-state">
                         <HomeIcon/>
-                        <h3>尚無習慣</h3>
-                        <p>點擊 + 建立你的第一個習慣</p>
+                        <h3>No habits yet</h3>
+                        <p>Tap + Create your first habit</p>
                     </div>
                 ) : (
                     habits.map(habit => {
                         const todayKey = currentDay;
-                        // 首頁 bar 條：累計完成率（支援自訂 intervalDays）
+                        // Home bar: cumulative completion rate (supports custom intervalDays)
                         const progPct = calcCompletionRate(habit);
                         return (
                             <div key={habit.id} className="habit-card" onClick={()=>setSelectedHabit(habit.id)}>
@@ -1817,7 +1817,7 @@ function MainApp({ user, onLogout }) {
                                                 <div className="habit-streak"><FlameIcon/><span>{habit.streak}</span></div>
                                             )}
                                         </div>
-                                        {/* 頻率 & 時長 tag */}
+                                        {/* Frequency & Duration tag */}
                                         <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4}}>
                                             {habit.freqLabel && <span style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,padding:'2px 6px',background:'var(--gray-100)',color:'var(--gray-600)'}}>{habit.freqLabel}</span>}
                                             {habit.durLabel  && <span style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,padding:'2px 6px',background:'var(--gray-100)',color:'var(--gray-600)'}}>{habit.durLabel}</span>}
@@ -1827,7 +1827,7 @@ function MainApp({ user, onLogout }) {
                                     <div className="habit-progress-section" onClick={e=>e.stopPropagation()}>
                                         <div className="habit-progress-bar-wrap">
                                             <div className="habit-prog-label">
-                                                <span>完成</span>
+                                                <span>Done</span>
                                                 <span style={{fontFamily:'var(--din)'}}>{progPct}%</span>
                                             </div>
                                             <div className="habit-prog-track">
@@ -1843,7 +1843,7 @@ function MainApp({ user, onLogout }) {
                                         onClick={()=>deleteHabit(habit.id)}
                                     >
                                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                        刪除習慣
+                                        Delete Habit
                                     </button>
                                 </div>
                             </div>
@@ -1860,7 +1860,7 @@ function MainApp({ user, onLogout }) {
         }
         return (
             <div>
-                <div className="section-title">活躍小組</div>
+                <div className="section-title">Active Groups</div>
                 {groups.map(group => (
                     <div key={group.id} className="group-card">
                         <div className="group-card-header">
@@ -1868,13 +1868,13 @@ function MainApp({ user, onLogout }) {
                             <span className="group-category-tag">{group.category}</span>
                         </div>
                         <div className="group-info">
-                            <span>{group.members} 位成員</span>
+                            <span>{group.members}  members</span>
                             <span>•</span>
-                            <span>{group.active} 人參與中</span>
+                            <span>{group.active}  active</span>
                         </div>
                         <div className="group-progress">
                             <div className="progress-label">
-                                <span>進度</span><span style={{fontFamily:'var(--din)'}}>{group.progress}%</span>
+                                <span>Progress</span><span style={{fontFamily:'var(--din)'}}>{group.progress}%</span>
                             </div>
                             <div className="progress-bar"><div className="progress-fill" style={{width:`${group.progress}%`}}></div></div>
                         </div>
@@ -1892,13 +1892,13 @@ function MainApp({ user, onLogout }) {
                                         setGroups(prev=>prev.map(g=>g.id===group.id?{...g,joined:!g.joined}:g));
                                     }}
                                 >
-                                    {group.joined ? '✓ 已加入' : '加入'}
+                                    {group.joined ? '✓ hasJoin' : 'Join'}
                                 </button>
                                 <button
                                     className="join-btn"
                                     onClick={()=>setSelectedGroup(group)}
                                 >
-                                    查看
+                                    View
                                 </button>
                             </div>
                         </div>
@@ -1910,12 +1910,12 @@ function MainApp({ user, onLogout }) {
 
     const renderFeed = () => (
         <div>
-            <div className="section-title">社群動態</div>
+            <div className="section-title">Community Feed</div>
             {feedPosts.length === 0 && (
                 <div className="empty-state">
                     <ChatIcon/>
-                    <h3>還沒有貼文</h3>
-                    <p>到「我的」頁面發表第一篇貼文吧！</p>
+                    <h3>No posts yet</h3>
+                    <p>Go to your Profile to publish your first post!</p>
                 </div>
             )}
             {feedPosts.map(post => {
@@ -1937,34 +1937,34 @@ function MainApp({ user, onLogout }) {
         <div>
             {!isCloudinaryConfigured && (
                 <div className="cloudinary-setup-box">
-                    <strong>⚡ 啟用媒體上傳：</strong> 請在程式碼頂端填入你的<br/>
-                    <code>CLOUDINARY_CLOUD_NAME</code> 和 <code>CLOUDINARY_UPLOAD_PRESET</code><br/>
-                    <a href="https://cloudinary.com" target="_blank">免費申請 Cloudinary →</a>（永久免費方案）
+                    <strong>⚡ Enable media uploads:</strong> Fill in your info at the top of the code<br/>
+                    <code>CLOUDINARY_CLOUD_NAME</code> and <code>CLOUDINARY_UPLOAD_PRESET</code><br/>
+                    <a href="https://cloudinary.com" target="_blank">Sign up free on Cloudinary →</a> (free forever plan)
                 </div>
             )}
             <div className="profile-header">
-                <div className="profile-avatar-wrap" onClick={()=>avatarInputRef.current?.click()} title="點擊更換頭像">
+                <div className="profile-avatar-wrap" onClick={()=>avatarInputRef.current?.click()} title="TapChange Photo">
                     {avatarUrl
-                        ? <img src={avatarUrl} className="avatar-img" alt="頭像"/>
+                        ? <img src={avatarUrl} className="avatar-img" alt="Avatar"/>
                         : <div className="profile-avatar">{uploadingAvatar ? '⟳' : ((user.displayName||user.email)?.[0]?.toUpperCase()||'U')}</div>
                     }
-                    <div className="avatar-edit-overlay">{uploadingAvatar ? '上傳中…' : '更換頭像'}</div>
+                    <div className="avatar-edit-overlay">{uploadingAvatar ? 'Uploading…' : 'Change Photo'}</div>
                     <input ref={avatarInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAvatarSelect}/>
                 </div>
-                <div className="profile-name">{user.displayName||'用戶'}</div>
+                <div className="profile-name">{user.displayName||'User'}</div>
                 <div className="profile-email">{user.email}</div>
                 <div className="profile-stats">
-                    <div className="profile-stat"><div className="profile-stat-value">{habits.length}</div><div className="profile-stat-label">習慣數</div></div>
-                    <div className="profile-stat"><div className="profile-stat-value">{myPosts.length}</div><div className="profile-stat-label">貼文</div></div>
-                    <div className="profile-stat"><div className="profile-stat-value">{rate}%</div><div className="profile-stat-label">完成率</div></div>
+                    <div className="profile-stat"><div className="profile-stat-value">{habits.length}</div><div className="profile-stat-label">Habits</div></div>
+                    <div className="profile-stat"><div className="profile-stat-value">{myPosts.length}</div><div className="profile-stat-label">Post</div></div>
+                    <div className="profile-stat"><div className="profile-stat-value">{rate}%</div><div className="profile-stat-label">Completion Rate</div></div>
                 </div>
             </div>
 
-            {/* ── 發表貼文 ── */}
+            {/* ── Post ── */}
             <div className="composer-wrap">
                 <textarea
                     className="composer-textarea"
-                    placeholder="分享你的習慣進度、心得…"
+                    placeholder="Share your habit progress or thoughts..."
                     value={postText}
                     maxLength={300}
                     onChange={e=>setPostText(e.target.value)}
@@ -1982,11 +1982,11 @@ function MainApp({ user, onLogout }) {
                     <div className="composer-media-btns">
                         <button className="composer-media-btn" onClick={()=>fileInputRef.current?.click()}>
                             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                            照片
+                            Photo
                         </button>
                         <button className="composer-media-btn" onClick={()=>videoInputRef.current?.click()}>
                             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.868v6.264a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                            影片
+                            Video
                         </button>
                         <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleMediaSelect(e,'image')}/>
                         <input ref={videoInputRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>handleMediaSelect(e,'video')}/>
@@ -1997,14 +1997,14 @@ function MainApp({ user, onLogout }) {
                             className="composer-submit"
                             disabled={(!postText.trim() && !postMedia) || postMedia?.uploading}
                             onClick={handlePostSubmit}
-                        >{postMedia?.uploading ? `上傳中 ${uploadProgress}%` : '發布'}</button>
+                        >{postMedia?.uploading ? `Uploading ${uploadProgress}%` : 'Post'}</button>
                     </div>
                 </div>
             </div>
 
-            {/* ── 我的貼文 ── */}
+            {/* ── My Posts ── */}
             <div className="my-posts-section">
-                {myPosts.length > 0 && <div className="section-title">我的貼文</div>}
+                {myPosts.length > 0 && <div className="section-title">My Posts</div>}
                 {myPosts.map(p => (
                     <div key={p.id} className="my-post-item">
                         <div className="my-post-header">
@@ -2012,12 +2012,12 @@ function MainApp({ user, onLogout }) {
                             <button className="my-post-delete" onClick={async ()=>{
                                 if (isFirebaseConfigured) {
                                     try { await db.collection('posts').doc(p.id).delete(); }
-                                    catch(e) { alert('刪除失敗：' + e.message); }
+                                    catch(e) { alert('Delete failed: ' + e.message); }
                                 } else {
                                     setMyPosts(prev=>prev.filter(x=>x.id!==p.id));
                                     setFeedPosts(prev=>prev.filter(x=>x.id!==p.id));
                                 }
-                            }}>刪除</button>
+                            }}>Delete</button>
                         </div>
                         {p.text && <div className="my-post-body">{p.text}</div>}
                         {p.mediaUrl && (
@@ -2037,8 +2037,8 @@ function MainApp({ user, onLogout }) {
                 {myPosts.length === 0 && (
                     <div className="empty-state" style={{paddingTop:32}}>
                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{width:36,height:36,margin:'0 auto 12px',opacity:.2}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                        <h3>尚無貼文</h3>
-                        <p>發表第一篇貼文，分享你的習慣旅程</p>
+                        <h3>No posts yet</h3>
+                        <p>Share your first post and start your habit journey</p>
                     </div>
                 )}
             </div>
@@ -2049,10 +2049,10 @@ function MainApp({ user, onLogout }) {
         <div className="app-container">
             <div className="header">
                 <div className="header-title">
-                    <h1>健康習慣追蹤 PRO</h1>
+                    <h1>Habit Tracker PRO</h1>
                     <p>{user.displayName||user.email}</p>
                 </div>
-                <button className="logout-btn" onClick={onLogout}>登出</button>
+                <button className="logout-btn" onClick={onLogout}>Sign Out</button>
             </div>
             <div className="content">
                 {activeTab==='home' && renderHome()}
@@ -2062,13 +2062,13 @@ function MainApp({ user, onLogout }) {
             {showModal && <AddHabitModal onClose={()=>setShowModal(false)} onAdd={addHabit}/>}
             <div className="tab-bar">
                 <button className={`tab-item${activeTab==='home'?' active':''}`} onClick={()=>{setActiveTab('home');setSelectedHabit(null);}}>
-                    <HomeIcon/><span>首頁</span>
+                    <HomeIcon/><span>Home</span>
                 </button>
 <button className={`tab-item${activeTab==='feed'?' active':''}`} onClick={()=>setActiveTab('feed')}>
-                    <FeedIcon/><span>動態</span>
+                    <FeedIcon/><span>Feed</span>
                 </button>
                 <button className={`tab-item${activeTab==='profile'?' active':''}`} onClick={()=>setActiveTab('profile')}>
-                    <ProfileIcon/><span>我的</span>
+                    <ProfileIcon/><span>Profile</span>
                 </button>
             </div>
         </div>
@@ -2088,7 +2088,7 @@ function App() {
         }
         const unsub = auth.onAuthStateChanged(u=>{
             if (u && isFirebaseConfigured) {
-                // 把用戶資料寫入 Firestore，讓後台可以看到
+                // Write user data to Firestore
                 db.collection('users').doc(u.uid).set({
                     uid: u.uid,
                     email: u.email || '',
@@ -2108,7 +2108,7 @@ function App() {
         else auth.signOut();
     };
 
-    if (loading) return <div className="app-container"><div className="loading">載入中...</div></div>;
+    if (loading) return <div className="app-container"><div className="loading">Loading...</div></div>;
     return user ? <MainApp user={user} onLogout={handleLogout}/> : <AuthPage onAuthSuccess={setUser}/>;
 }
 
@@ -2117,30 +2117,30 @@ ReactDOM.render(<App/>, document.getElementById('root'));
 <!-- ── PWA: Service Worker + Install Prompt + Push Notifications ── -->
 <script>
 (function() {
-    /* 1. 註冊 Service Worker */
+    /* 1. Register Service Worker */
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')
                 .then(reg => {
                     console.log('[PWA] SW registered:', reg.scope);
-                    // 詢問推播通知（延遲 5 秒，等用戶熟悉 App）
+                    // Ask for push notification permission (delayed 5s, let user explore first)
                     setTimeout(() => askNotifPermission(reg), 5000);
                 })
                 .catch(err => console.warn('[PWA] SW failed:', err));
         });
     }
 
-    /* 2. 攔截安裝提示事件 */
+    /* 2. Intercept install prompt event */
     let deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        // 已安裝過就不再顯示
+        // Already installed — skip banner
         if (localStorage.getItem('pwa-installed')) return;
         showInstallBanner();
     });
 
-    /* 3. 顯示安裝 Banner */
+    /* 3. Show install banner */
     function showInstallBanner() {
         if (document.getElementById('pwa-banner')) return;
         const banner = document.createElement('div');
@@ -2149,10 +2149,10 @@ ReactDOM.render(<App/>, document.getElementById('root'));
         banner.innerHTML = `
             <div class="pwa-install-icon"><img src="./icons/icon-192x192.png" alt="icon"></div>
             <div class="pwa-install-text">
-                <strong>安裝健康習慣追蹤 Pro</strong>
-                <span>加入桌面，隨時快速開啟</span>
+                <strong>Install Habit Tracker Pro</strong>
+                <span>Add to home screen for quick access</span>
             </div>
-            <button class="pwa-install-btn" id="pwa-install-btn">安裝</button>
+            <button class="pwa-install-btn" id="pwa-install-btn">Install</button>
             <button class="pwa-install-close" id="pwa-install-close">✕</button>
         `;
         document.body.appendChild(banner);
@@ -2171,7 +2171,7 @@ ReactDOM.render(<App/>, document.getElementById('root'));
         };
     }
 
-    /* 4. iOS Safari 安裝提示（iOS 不支援 beforeinstallprompt） */
+    /* 4. iOS Safari install hint (iOS does not support beforeinstallprompt) */
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     if (isIOS && !isInStandalone && !localStorage.getItem('ios-hint-shown')) {
@@ -2179,15 +2179,15 @@ ReactDOM.render(<App/>, document.getElementById('root'));
             const hint = document.createElement('div');
             hint.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);max-width:340px;width:calc(100% - 32px);background:#0a0a0a;color:#fff;padding:14px 16px;font-size:12px;line-height:1.6;z-index:500;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.3)';
             hint.innerHTML = `
-                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 安裝到 iPhone 桌面</div>
-                <div style="opacity:.75">點下方 <strong style="opacity:1">分享按鈕 ↑</strong> → 選「加入主畫面」即可像 App 一樣使用</div>
-                <button onclick="this.parentElement.remove();localStorage.setItem('ios-hint-shown','1')" style="margin-top:10px;background:white;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">知道了</button>
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 Add to iPhone Home Screen</div>
+                <div style="opacity:.75">Tap the <strong style="opacity:1">Share button ↑</strong> below → Select "Add to Home Screen" to use like an app</div>
+                <button onclick="this.parentElement.remove();localStorage.setItem('ios-hint-shown','1')" style="margin-top:10px;background:white;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">Got it</button>
             `;
             document.body.appendChild(hint);
         }, 3000);
     }
 
-    /* 5. 推播通知申請 */
+    /* 5. Push notification request */
     async function askNotifPermission(reg) {
         if (!('Notification' in window)) return;
         if (Notification.permission !== 'default') return;
@@ -2198,11 +2198,11 @@ ReactDOM.render(<App/>, document.getElementById('root'));
         prompt.className = 'notif-prompt';
         prompt.innerHTML = `
             <div class="notif-prompt-text">
-                <strong>🔔 開啟每日提醒</strong>
-                讓我們在你該完成習慣時提醒你，不錯過任何一天
+                <strong>🔔 Enable Daily Reminders</strong>
+                We'll remind you when it's time to complete your habits, every day
             </div>
-            <button class="notif-yes" id="notif-yes">開啟</button>
-            <button class="notif-no"  id="notif-no">不用了</button>
+            <button class="notif-yes" id="notif-yes">Enable</button>
+            <button class="notif-no"  id="notif-no">No thanks</button>
         `;
         document.body.appendChild(prompt);
 
@@ -2212,9 +2212,9 @@ ReactDOM.render(<App/>, document.getElementById('root'));
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
                 scheduleDailyReminder(reg);
-                // 歡迎通知
-                reg.showNotification('🎉 提醒已開啟！', {
-                    body: '我們會在每天晚上 8 點提醒你完成習慣',
+                // Welcome notification
+                reg.showNotification('🎉 Reminders Enabled!', {
+                    body: 'We will remind you to complete your habits every day at 8 PM',
                     icon: './icons/icon-192x192.png',
                     badge: './icons/icon-72x72.png',
                 });
@@ -2226,7 +2226,7 @@ ReactDOM.render(<App/>, document.getElementById('root'));
         };
     }
 
-    /* 6. 每日提醒（本地，用 setTimeout 模擬，無需後端） */
+    /* 6. Daily reminder (local, simulated with setTimeout, no backend needed) */
     function scheduleDailyReminder(reg) {
         const now = new Date();
         const next8pm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
@@ -2234,19 +2234,19 @@ ReactDOM.render(<App/>, document.getElementById('root'));
         const ms = next8pm - now;
         setTimeout(() => {
             if (Notification.permission === 'granted') {
-                reg.showNotification('健康習慣追蹤 Pro', {
-                    body: '今天的習慣完成了嗎？點這裡記錄進度 💪',
+                reg.showNotification('Habit Tracker Pro', {
+                    body: "Have you completed today's habits? Tap here to log your progress 💪",
                     icon: './icons/icon-192x192.png',
                     badge: './icons/icon-72x72.png',
                     vibrate: [200, 100, 200],
                 });
             }
-            // 排程明天
+            // Schedule next day
             scheduleDailyReminder(reg);
         }, ms);
     }
 
-    /* 7. 偵測已安裝 → 不再顯示 banner */
+    /* 7. Detect app installed → hide banner */
     window.addEventListener('appinstalled', () => {
         localStorage.setItem('pwa-installed', '1');
         const b = document.getElementById('pwa-banner');
