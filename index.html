@@ -639,6 +639,10 @@ function AuthPage({ onAuthSuccess }) {
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    // 「驗證信已寄出」畫面
+    const [verificationSent, setVerificationSent] = useState(false);
+    const [sentEmail, setSentEmail] = useState('');
+    const [resendCooldown, setResendCooldown] = useState(0);
 
     const handleDemoLogin = () => {
         const u = { uid:'demo-user', email:'demo@example.com', displayName:'You' };
@@ -646,24 +650,162 @@ function AuthPage({ onAuthSuccess }) {
         onAuthSuccess(u);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError(''); setLoading(true);
-        if (!isFirebaseConfigured) { handleDemoLogin(); return; }
-        try {
-            if (isLogin) {
-                const r = await auth.signInWithEmailAndPassword(email, password);
-                onAuthSuccess(r.user);
-            } else {
-                const r = await auth.createUserWithEmailAndPassword(email, password);
-                await r.user.updateProfile({ displayName });
-                await db.collection('users').doc(r.user.uid).set({ displayName, email, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-                onAuthSuccess(r.user);
-            }
-        } catch (err) { setError(err.message); }
-        finally { setLoading(false); }
+    /* 密碼強度驗證 */
+    const validateForm = () => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email.trim()) return '請輸入電子郵件';
+        if (!emailRegex.test(email.trim())) return '請輸入有效的電子郵件格式（例如：user@example.com）';
+        if (!password) return '請輸入密碼';
+        if (password.length < 8) return '密碼長度至少需要 8 個字元';
+        if (!/[A-Z]/.test(password)) return '密碼需包含至少一個大寫英文字母（A-Z）';
+        if (!/[a-z]/.test(password)) return '密碼需包含至少一個小寫英文字母（a-z）';
+        if (!/[0-9]/.test(password)) return '密碼需包含至少一個數字（0-9）';
+        if (!isLogin) {
+            if (!displayName.trim()) return '請輸入您的姓名';
+            if (displayName.trim().length < 2) return '姓名至少需要 2 個字元';
+        }
+        return null;
     };
 
+    /* Firebase 錯誤碼 → 中文 */
+    const firebaseErrMsg = (code) => ({
+        'auth/email-already-in-use': '此電子郵件已被註冊，請直接登入或使用其他信箱',
+        'auth/invalid-email':        '電子郵件格式不正確',
+        'auth/weak-password':        '密碼強度不足，請使用更複雜的密碼',
+        'auth/user-not-found':       '找不到此帳號，請確認電子郵件是否正確',
+        'auth/wrong-password':       '密碼錯誤，請重新確認',
+        'auth/too-many-requests':    '嘗試次數過多，請稍後再試',
+        'auth/network-request-failed':'網路連線失敗，請檢查網路後重試',
+        'auth/user-disabled':        '此帳號已被停用，請聯繫客服',
+    }[code] || null);
+
+    /* 倒數計時（重寄冷卻） */
+    const startCooldown = () => {
+        setResendCooldown(60);
+        const t = setInterval(() => {
+            setResendCooldown(prev => {
+                if (prev <= 1) { clearInterval(t); return 0; }
+                return prev - 1;
+            });
+        }, 1000);
+    };
+
+    /* 重新寄驗證信 */
+    const handleResend = async () => {
+        if (resendCooldown > 0) return;
+        try {
+            const r = await auth.signInWithEmailAndPassword(email, password);
+            if (!r.user.emailVerified) {
+                await r.user.sendEmailVerification();
+                startCooldown();
+                setError('');
+            }
+            await auth.signOut();
+        } catch(err) {
+            setError(firebaseErrMsg(err.code) || err.message);
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+
+        const validErr = validateForm();
+        if (validErr) { setError(validErr); return; }
+
+        setLoading(true);
+        if (!isFirebaseConfigured) { handleDemoLogin(); return; }
+
+        try {
+            if (isLogin) {
+                /* ── 登入流程 ── */
+                const r = await auth.signInWithEmailAndPassword(email, password);
+                if (!r.user.emailVerified) {
+                    // 信箱尚未驗證，登出並提示
+                    await auth.signOut();
+                    setSentEmail(email);
+                    setVerificationSent(true);
+                    startCooldown();
+                    return;
+                }
+                onAuthSuccess(r.user);
+            } else {
+                /* ── 註冊流程 ── */
+                const r = await auth.createUserWithEmailAndPassword(email, password);
+                await r.user.updateProfile({ displayName });
+                await db.collection('users').doc(r.user.uid).set({
+                    displayName, email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                // 寄出驗證信
+                await r.user.sendEmailVerification();
+                await auth.signOut();
+                setSentEmail(email);
+                setVerificationSent(true);
+                startCooldown();
+            }
+        } catch(err) {
+            setError(firebaseErrMsg(err.code) || err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /* ── 驗證信已寄出畫面 ── */
+    if (verificationSent) {
+        return (
+            <div className="auth-page">
+                <div style={{
+                    width:64, height:64, background:'var(--black)',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    margin:'0 auto 20px', fontSize:28
+                }}>✉️</div>
+                <div className="auth-logo" style={{textAlign:'center', marginBottom:8}}>驗證信已寄出</div>
+                <div style={{
+                    fontSize:13, color:'var(--gray-500)', textAlign:'center',
+                    marginBottom:32, lineHeight:1.7, maxWidth:320
+                }}>
+                    我們已將驗證信寄至<br/>
+                    <strong style={{color:'var(--black)'}}>{sentEmail}</strong><br/>
+                    請到信箱點擊驗證連結，完成後再回來登入。
+                </div>
+
+                {error && <div className="error-message" style={{maxWidth:360, width:'100%', marginBottom:16}}>{error}</div>}
+
+                <div style={{width:'100%', maxWidth:360}}>
+                    {/* 驗證完成後，直接登入 */}
+                    <button
+                        className="button button-primary"
+                        onClick={() => { setVerificationSent(false); setIsLogin(true); setPassword(''); }}
+                    >
+                        已驗證，前往登入
+                    </button>
+
+                    {/* 重寄驗證信 */}
+                    <button
+                        className="button button-secondary"
+                        onClick={handleResend}
+                        disabled={resendCooldown > 0}
+                        style={{marginTop:0}}
+                    >
+                        {resendCooldown > 0 ? `重寄驗證信（${resendCooldown}s）` : '重新寄送驗證信'}
+                    </button>
+
+                    <div style={{
+                        marginTop:20, padding:'12px 16px',
+                        background:'var(--gray-50)', border:'1px solid var(--gray-200)',
+                        fontSize:11, color:'var(--gray-500)', lineHeight:1.7
+                    }}>
+                        <strong style={{color:'var(--gray-700)'}}>沒收到信？</strong><br/>
+                        請檢查垃圾郵件資料夾，或確認信箱地址是否正確。
+                        驗證信有效期限為 24 小時。
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    /* ── 一般登入 / 註冊畫面 ── */
     return (
         <div className="auth-page">
             <div className="auth-logo">健康習慣追蹤</div>
@@ -676,24 +818,34 @@ function AuthPage({ onAuthSuccess }) {
                 {!isLogin && (
                     <div className="form-group">
                         <label className="form-label">姓名</label>
-                        <input type="text" className="form-input" value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="您的名字"/>
+                        <input type="text" className="form-input" value={displayName}
+                            onChange={e=>setDisplayName(e.target.value)} placeholder="您的名字"/>
                     </div>
                 )}
                 <div className="form-group">
                     <label className="form-label">電子郵件</label>
-                    <input type="email" className="form-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com"/>
+                    <input type="email" className="form-input" value={email}
+                        onChange={e=>setEmail(e.target.value)} placeholder="your@email.com"/>
                 </div>
                 <div className="form-group">
                     <label className="form-label">密碼</label>
-                    <input type="password" className="form-input" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" minLength="6"/>
+                    <input type="password" className="form-input" value={password}
+                        onChange={e=>setPassword(e.target.value)} placeholder="••••••••" minLength="8"/>
+                    {!isLogin && (
+                        <div style={{fontSize:11, color:'var(--gray-400)', marginTop:6, lineHeight:1.6}}>
+                            密碼需至少 8 碼，包含大寫字母、小寫字母及數字
+                        </div>
+                    )}
                 </div>
                 <button type="submit" className="button button-primary" disabled={loading}>
-                    {loading ? '載入中...' : (isLogin ? '登入' : '註冊')}
+                    {loading ? '處理中...' : (isLogin ? '登入' : '註冊')}
                 </button>
             </form>
             <div className="auth-switch">
                 {isLogin ? '還沒有帳號？' : '已有帳號？'}
-                <a onClick={()=>setIsLogin(!isLogin)}>{isLogin ? '立即註冊' : '登入'}</a>
+                <a onClick={()=>{ setIsLogin(!isLogin); setError(''); }}>
+                    {isLogin ? '立即註冊' : '登入'}
+                </a>
             </div>
         </div>
     );
