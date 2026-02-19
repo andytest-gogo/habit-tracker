@@ -9,8 +9,6 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--black:#0a0a0a;--white:#fff;--g50:#f8f8f8;--g100:#f0f0f0;--g200:#e0e0e0;--g400:#9a9a9a;--g500:#737373;--g800:#2a2a2a;--font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--din:'Barlow Condensed',sans-serif}
 body{font-family:var(--font);background:var(--g50);color:var(--black);min-height:100vh;-webkit-font-smoothing:antialiased}
-
-/* LOGIN */
 .login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--black)}
 .login-box{background:var(--white);padding:40px 36px;width:100%;max-width:360px}
 .login-logo{font-family:var(--din);font-size:22px;font-weight:800;letter-spacing:1px}
@@ -19,8 +17,6 @@ body{font-family:var(--font);background:var(--g50);color:var(--black);min-height
 .g-btn:hover{background:var(--g800)}
 .login-note{font-size:11px;color:var(--g400);margin-top:14px;text-align:center}
 .err-box{padding:10px 12px;background:#fff0f0;border:1px solid #fcc;font-size:12px;color:#c00;margin-bottom:14px;display:none}
-
-/* LAYOUT */
 .layout{display:none;min-height:100vh}
 .sidebar{width:220px;min-height:100vh;background:var(--black);color:var(--white);position:fixed;top:0;left:0;display:flex;flex-direction:column}
 .sb-logo{padding:22px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -35,15 +31,11 @@ body{font-family:var(--font);background:var(--g50);color:var(--black);min-height
 .sb-email{font-size:10px;color:rgba(255,255,255,.35);margin-bottom:8px;word-break:break-all}
 .logout-btn{background:none;border:none;color:rgba(255,255,255,.4);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;font-family:var(--font)}
 .logout-btn:hover{color:rgba(255,255,255,.7)}
-
-/* MAIN */
 .main{margin-left:220px;padding:28px;min-height:100vh}
 .pg{display:none}
 .pg.on{display:block}
 .pg-title{font-family:var(--din);font-size:26px;font-weight:800;letter-spacing:.5px;margin-bottom:2px}
 .pg-sub{font-size:11px;color:var(--g400);margin-bottom:24px}
-
-/* STAT GRID */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
 .stat{background:var(--white);border:1px solid var(--g200);padding:18px}
 .stat.dark{background:var(--black);border-color:var(--black)}
@@ -53,14 +45,10 @@ body{font-family:var(--font);background:var(--g50);color:var(--black);min-height
 .stat.dark .stat-val{color:var(--white)}
 .stat-note{font-size:10px;color:var(--g400);margin-top:4px}
 .stat.dark .stat-note{color:rgba(255,255,255,.35)}
-
-/* CHARTS */
 .chart-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
 .chart-box{background:var(--white);border:1px solid var(--g200);padding:18px}
 .chart-ttl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g500);margin-bottom:14px}
 .chart-wrap{position:relative;height:190px}
-
-/* TABLE */
 .tbl-card{background:var(--white);border:1px solid var(--g200);margin-bottom:20px}
 .tbl-hd{padding:14px 18px;border-bottom:1px solid var(--g100);display:flex;justify-content:space-between;align-items:center}
 .tbl-ttl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g500)}
@@ -92,11 +80,14 @@ tr:hover td{background:var(--g50)}
 .pct-fill.warn{background:#e0a800}
 .pct-fill.danger{background:#c00}
 .uid-small{font-size:9px;color:var(--g400);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+.ptxt{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-thumb{width:64px;height:48px;object-fit:cover;display:block;border:1px solid var(--g200)}
+.media-video-tag{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border:1px solid var(--g200);padding:3px 8px;color:var(--g800);background:var(--g50);text-decoration:none}
+.media-video-tag:hover{border-color:var(--black)}
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
 <div class="login-wrap" id="loginWrap">
   <div class="login-box">
     <div class="login-logo">Habit Tracker</div>
@@ -110,7 +101,6 @@ tr:hover td{background:var(--g50)}
   </div>
 </div>
 
-<!-- DASHBOARD -->
 <div class="layout" id="layout">
   <div class="sidebar">
     <div class="sb-logo"><h1>Habit Tracker<br>Admin</h1><p>Admin Dashboard</p></div>
@@ -143,15 +133,14 @@ tr:hover td{background:var(--g50)}
   </div>
 
   <div class="main">
-    <!-- Overview -->
     <div class="pg on" id="pg-dashboard">
       <div class="pg-title">Overview</div>
       <div class="pg-sub" id="lastUpdated">Loading...</div>
       <div class="stat-grid">
-        <div class="stat dark"><div class="stat-lbl">Total Users</div><div class="stat-val" id="sUsers">—</div><div class="stat-note">Registered</div></div>
-        <div class="stat"><div class="stat-lbl">Total Posts</div><div class="stat-val" id="sPosts">—</div><div class="stat-note">Community feed</div></div>
-        <div class="stat"><div class="stat-lbl">Total Habits</div><div class="stat-val" id="sHabits">—</div><div class="stat-note">Active</div></div>
-        <div class="stat"><div class="stat-lbl">Total Comments</div><div class="stat-val" id="sComments">—</div><div class="stat-note">All comments</div></div>
+        <div class="stat dark"><div class="stat-lbl">Total Users</div><div class="stat-val" id="sUsers">0</div><div class="stat-note">Registered</div></div>
+        <div class="stat"><div class="stat-lbl">Total Posts</div><div class="stat-val" id="sPosts">0</div><div class="stat-note">Community feed</div></div>
+        <div class="stat"><div class="stat-lbl">Total Habits</div><div class="stat-val" id="sHabits">0</div><div class="stat-note">Active</div></div>
+        <div class="stat"><div class="stat-lbl">Total Comments</div><div class="stat-val" id="sComments">0</div><div class="stat-note">All comments</div></div>
       </div>
       <div class="chart-row">
         <div class="chart-box"><div class="chart-ttl">Habit Category Distribution</div><div class="chart-wrap"><canvas id="chartCat"></canvas></div></div>
@@ -164,61 +153,57 @@ tr:hover td{background:var(--g50)}
       </div>
     </div>
 
-    <!-- Users -->
     <div class="pg" id="pg-users">
       <div class="pg-title">Users</div>
       <div class="pg-sub">All registered users</div>
       <input class="search" id="userSearch" placeholder="Search by name / UID...">
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">Users</div><div class="tbl-cnt" id="userCnt">—</div></div>
+        <div class="tbl-hd"><div class="tbl-ttl">Users</div><div class="tbl-cnt" id="userCnt">0</div></div>
         <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th></tr></thead>
         <tbody id="userTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
-    <!-- Posts -->
     <div class="pg" id="pg-posts">
       <div class="pg-title">Posts</div>
       <div class="pg-sub">Review and remove inappropriate posts</div>
       <input class="search" id="postSearch" placeholder="Search by content / username...">
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">All Posts</div><div class="tbl-cnt" id="postCnt">—</div></div>
+        <div class="tbl-hd"><div class="tbl-ttl">All Posts</div><div class="tbl-cnt" id="postCnt">0</div></div>
         <table><thead><tr><th>User</th><th>Content</th><th>Media</th><th>Likes</th><th>Comments</th><th>Time</th><th>Action</th></tr></thead>
         <tbody id="postTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
-    <!-- Habits -->
     <div class="pg" id="pg-habits">
       <div class="pg-title">Habits</div>
       <div class="pg-sub">Habit creation across all users</div>
       <input class="search" id="habitSearch" placeholder="Search by habit name / category...">
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">All Habits</div><div class="tbl-cnt" id="habitCnt">—</div></div>
+        <div class="tbl-hd"><div class="tbl-ttl">All Habits</div><div class="tbl-cnt" id="habitCnt">0</div></div>
         <table><thead><tr><th>Habit Name</th><th>User</th><th>Category</th><th>Frequency</th><th>Streak</th><th>Completion</th></tr></thead>
         <tbody id="habitTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
-    <!-- Upload Quota -->
     <div class="pg" id="pg-quota">
       <div class="pg-title">Upload Quota</div>
       <div class="pg-sub" id="quotaUpdated">Loading...</div>
       <div class="quota-warn" id="quotaWarn"></div>
       <div class="quota-summary">
-        <div class="stat dark"><div class="stat-lbl">Users w/ Uploads</div><div class="stat-val" id="qTotalUsers">—</div><div class="stat-note">Have uploaded</div></div>
-        <div class="stat"><div class="stat-lbl">Total Images</div><div class="stat-val" id="qTotalImages">—</div><div class="stat-note">All time</div></div>
-        <div class="stat"><div class="stat-lbl">Total Videos</div><div class="stat-val" id="qTotalVideos">—</div><div class="stat-note">All time</div></div>
-        <div class="stat"><div class="stat-lbl">Total Data</div><div class="stat-val" id="qTotalMB">—</div><div class="stat-note">MB (all time)</div></div>
+        <div class="stat dark"><div class="stat-lbl">Users w/ Uploads</div><div class="stat-val" id="qTotalUsers">0</div><div class="stat-note">Have uploaded</div></div>
+        <div class="stat"><div class="stat-lbl">Total Images</div><div class="stat-val" id="qTotalImages">0</div><div class="stat-note">All time</div></div>
+        <div class="stat"><div class="stat-lbl">Total Videos</div><div class="stat-val" id="qTotalVideos">0</div><div class="stat-note">All time</div></div>
+        <div class="stat"><div class="stat-lbl">Total Data</div><div class="stat-val" id="qTotalMB">0</div><div class="stat-note">MB (all time)</div></div>
       </div>
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div class="chart-ttl" style="margin:0">This Month — Combined Usage of All Users</div>
-          <div style="font-size:11px;color:var(--g400);font-family:var(--mono)" id="qMonthLabel">—</div>
+          <div style="font-size:11px;color:var(--g400);font-family:var(--mono)" id="qMonthLabel">0 MB</div>
         </div>
         <div class="pct-bar" style="height:10px"><div class="pct-fill" id="qMonthBar" style="width:0%"></div></div>
         <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--g400)">
-          <span>0 MB</span><span id="qMonthLimit">Limit per user: — MB</span>
+          <span>0 MB</span><span id="qMonthLimit">Limit per user: 500 MB</span>
         </div>
       </div>
       <div class="tbl-card">
@@ -226,25 +211,20 @@ tr:hover td{background:var(--g50)}
           <div class="tbl-ttl">Per-User Upload Usage</div>
           <div style="display:flex;align-items:center;gap:8px">
             <select id="quotaSort" style="padding:5px 8px;border:1px solid var(--g200);font-size:10px;font-family:var(--font);outline:none;cursor:pointer">
-              <option value="totalMB">Sort: Total MB ↓</option>
-              <option value="monthlyMB">Sort: This Month ↓</option>
-              <option value="totalImages">Sort: Images ↓</option>
-              <option value="totalVideos">Sort: Videos ↓</option>
-              <option value="lastUpload">Sort: Last Upload ↓</option>
+              <option value="totalMB">Sort: Total MB</option>
+              <option value="monthlyMB">Sort: This Month</option>
+              <option value="totalImages">Sort: Images</option>
+              <option value="totalVideos">Sort: Videos</option>
+              <option value="lastUpload">Sort: Last Upload</option>
             </select>
             <button class="refresh" id="quotaRefreshBtn">Refresh</button>
           </div>
         </div>
         <table>
           <thead><tr>
-            <th>User</th>
-            <th>Today (img / vid)</th>
-            <th>This Month</th>
-            <th>All Images</th>
-            <th>All Videos</th>
-            <th>Total MB</th>
-            <th>Last Upload</th>
-            <th>Reset Daily</th>
+            <th>User</th><th>Today (img / vid)</th><th>This Month</th>
+            <th>All Images</th><th>All Videos</th><th>Total MB</th>
+            <th>Last Upload</th><th>Reset Daily</th>
           </tr></thead>
           <tbody id="quotaTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
         </table>
@@ -259,87 +239,82 @@ tr:hover td{background:var(--g50)}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 firebase.initializeApp({
-  apiKey:"AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
-  authDomain:"health-habit-tracker-e6b50.firebaseapp.com",
-  projectId:"health-habit-tracker-e6b50",
-  storageBucket:"health-habit-tracker-e6b50.firebasestorage.app",
-  messagingSenderId:"890093173627",
-  appId:"1:890093173627:web:54032fce30ae7ef3f41bde"
+  apiKey: "AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
+  authDomain: "health-habit-tracker-e6b50.firebaseapp.com",
+  projectId: "health-habit-tracker-e6b50",
+  storageBucket: "health-habit-tracker-e6b50.firebasestorage.app",
+  messagingSenderId: "890093173627",
+  appId: "1:890093173627:web:54032fce30ae7ef3f41bde"
 });
 var auth = firebase.auth();
-var db   = firebase.firestore();
+var db = firebase.firestore();
+var allUsers = [], allPosts = [], allHabits = [];
+var catChart = null, userChart = null;
+var allQuotas = [];
+var QUOTA_LIMITS = { DAILY_IMAGE_COUNT: 5, DAILY_VIDEO_COUNT: 2, MONTHLY_TOTAL_MB: 500 };
 
-var allUsers=[], allPosts=[], allHabits=[];
-var catChart=null, userChart=null;
+function htmlEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function getThisMonth() { return new Date().toISOString().slice(0,7); }
+function getToday()     { return new Date().toISOString().slice(0,10); }
 
-// Auth state
-auth.onAuthStateChanged(function(user){
-  if(user){
-    // ✅ 後台登入（Google OAuth）不寫入一般 users 集合
-    // 避免 Admin 帳號被當成一般用戶顯示在後台列表
-
-    document.getElementById('loginWrap').style.display='none';
-    document.getElementById('layout').style.display='flex';
-    document.getElementById('adminEmail').textContent = user.email||user.displayName||'';
+// ---------- AUTH ----------
+auth.onAuthStateChanged(function(user) {
+  if (user) {
+    document.getElementById('loginWrap').style.display = 'none';
+    document.getElementById('layout').style.display = 'flex';
+    document.getElementById('adminEmail').textContent = user.email || user.displayName || '';
     loadAll();
   } else {
-    document.getElementById('loginWrap').style.display='flex';
-    document.getElementById('layout').style.display='none';
+    document.getElementById('loginWrap').style.display = 'flex';
+    document.getElementById('layout').style.display = 'none';
   }
 });
 
-// Handle redirect sign-in result
-auth.getRedirectResult().then(function(result){
-  // Successful login handled by onAuthStateChanged
-}).catch(function(e){
-  if(e.code && e.code !== 'auth/no-current-user'){
-    var b=document.getElementById('errBox');
-    b.style.display='block';
-    b.textContent='Sign in failed: '+e.message;
+auth.getRedirectResult().then(function() {}).catch(function(e) {
+  if (e.code && e.code !== 'auth/no-current-user') {
+    var b = document.getElementById('errBox');
+    b.style.display = 'block';
+    b.textContent = 'Sign in failed: ' + e.message;
   }
 });
 
-// Login - try popup first, fall back to redirect if blocked
-document.getElementById('loginBtn').onclick = function(){
-  var b=document.getElementById('errBox');
-  b.style.display='none';
+document.getElementById('loginBtn').onclick = function() {
+  var b = document.getElementById('errBox');
+  b.style.display = 'none';
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(function(e){
-    // Popup blocked, fall back to redirect
-    if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
+  auth.signInWithPopup(provider).catch(function(e) {
+    if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
       auth.signInWithRedirect(provider);
     } else {
-      b.style.display='block';
-      b.textContent='Sign in failed: '+e.message;
+      b.style.display = 'block';
+      b.textContent = 'Sign in failed: ' + e.message;
     }
   });
 };
-
-// Logout
-document.getElementById('logoutBtn').onclick = function(){ auth.signOut(); };
-
-// Refresh
+document.getElementById('logoutBtn').onclick = function() { auth.signOut(); };
 document.getElementById('refreshBtn').onclick = loadAll;
 
-// Nav
-document.querySelectorAll('.nav-btn').forEach(function(btn){
-  btn.onclick = function(){
-    document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('on'); });
-    document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
+// ---------- NAV ----------
+document.querySelectorAll('.nav-btn').forEach(function(btn) {
+  btn.onclick = function() {
+    document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('on'); });
+    document.querySelectorAll('.pg').forEach(function(p) { p.classList.remove('on'); });
     btn.classList.add('on');
-    document.getElementById('pg-'+btn.dataset.page).classList.add('on');
+    document.getElementById('pg-' + btn.dataset.page).classList.add('on');
   };
 });
+document.getElementById('userSearch').oninput  = function() { renderUsers(this.value); };
+document.getElementById('postSearch').oninput  = function() { renderPosts(this.value); };
+document.getElementById('habitSearch').oninput = function() { renderHabits(this.value); };
+document.getElementById('quotaRefreshBtn').onclick = loadQuota;
+document.getElementById('quotaSort').onchange = function() { renderQuota(); };
 
-// Search
-document.getElementById('userSearch').oninput = function(){ renderUsers(this.value); };
-document.getElementById('postSearch').oninput = function(){ renderPosts(this.value); };
-document.getElementById('habitSearch').oninput = function(){ renderHabits(this.value); };
-
-// Load
-function loadAll(){
-  document.getElementById('lastUpdated').textContent='Loading...';
-  Promise.all([loadHabits(), loadPosts(), loadUsers()]).then(function(){
+// ---------- LOAD ----------
+function loadAll() {
+  document.getElementById('lastUpdated').textContent = 'Loading...';
+  Promise.all([loadUsers(), loadHabits(), loadPosts()]).then(function() {
     buildUsers();
     renderStats();
     renderCharts();
@@ -347,335 +322,313 @@ function loadAll(){
     renderUsers('');
     renderPosts('');
     renderHabits('');
-    document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-US');
+    document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleString('en-US');
   });
-  // Quota 獨立載入（不影響主畫面速度）
   loadQuota();
 }
 
-function loadUsers(){
-  return db.collection('users').get().then(function(snap){
-    // Load Firestore users collection first
+function loadUsers() {
+  return db.collection('users').get().then(function(snap) {
     window.fsUsers = {};
-    snap.docs.forEach(function(d){
-      window.fsUsers[d.id] = d.data();
-    });
-  }).catch(function(){ window.fsUsers={}; });
+    snap.docs.forEach(function(d) { window.fsUsers[d.id] = d.data(); });
+  }).catch(function() { window.fsUsers = {}; });
 }
 
-function loadHabits(){
-  return db.collection('habits').get().then(function(snap){
-    allHabits = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
-  }).catch(function(){ allHabits=[]; });
+function loadHabits() {
+  return db.collection('habits').get().then(function(snap) {
+    allHabits = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+  }).catch(function() { allHabits = []; });
 }
 
-function loadPosts(){
-  return db.collection('posts').orderBy('createdAt','desc').get().then(function(snap){
-    allPosts = snap.docs.map(function(d){
-      var data=d.data();
-      var ts=data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : null;
-      return Object.assign({id:d.id},data,{timeStr:ts?ts.toLocaleString('zh-TW'):'—'});
+function loadPosts() {
+  return db.collection('posts').orderBy('createdAt', 'desc').get().then(function(snap) {
+    allPosts = snap.docs.map(function(d) {
+      var data = d.data();
+      var ts = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : null;
+      return Object.assign({ id: d.id }, data, { timeStr: ts ? ts.toLocaleString('zh-TW') : '—' });
     });
-    var promises = allPosts.map(function(p){
+    return Promise.all(allPosts.map(function(p) {
       return db.collection('posts').doc(p.id).collection('comments').get()
-        .then(function(cs){ p.commentCount=cs.size; })
-        .catch(function(){ p.commentCount=p.comments||0; });
-    });
-    return Promise.all(promises);
-  }).catch(function(){ allPosts=[]; });
+        .then(function(cs) { p.commentCount = cs.size; })
+        .catch(function() { p.commentCount = p.comments || 0; });
+    }));
+  }).catch(function() { allPosts = []; });
 }
 
-function buildUsers(){
-  var map={};
-
-  // Add users from Firestore users collection (those who have logged in)
-  Object.entries(window.fsUsers||{}).forEach(function(entry){
-    var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen};
+function buildUsers() {
+  var map = {};
+  Object.entries(window.fsUsers || {}).forEach(function(entry) {
+    var uid = entry[0], u = entry[1];
+    map[uid] = { uid: uid, name: u.displayName || u.email || 'User', email: u.email || '', habits: [], posts: [], lastSeen: u.lastSeen };
   });
-
-  // Supplement from habits
-  allHabits.forEach(function(h){
-    if(!h.userId) return;
-    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'User',email:'',habits:[],posts:[]};
+  allHabits.forEach(function(h) {
+    if (!h.userId) return;
+    if (!map[h.userId]) map[h.userId] = { uid: h.userId, name: 'User', email: '', habits: [], posts: [] };
     map[h.userId].habits.push(h);
   });
-
-  // Supplement from posts
-  allPosts.forEach(function(p){
-    if(!p.userId) return;
-    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[]};
-    if(p.user) map[p.userId].name=p.user;
+  allPosts.forEach(function(p) {
+    if (!p.userId) return;
+    if (!map[p.userId]) map[p.userId] = { uid: p.userId, name: p.user || 'User', email: '', habits: [], posts: [] };
+    if (p.user) map[p.userId].name = p.user;
     map[p.userId].posts.push(p);
   });
-
-  allUsers=Object.values(map);
+  allUsers = Object.values(map);
 }
 
-function renderStats(){
-  document.getElementById('sUsers').textContent=allUsers.length;
-  document.getElementById('sPosts').textContent=allPosts.length;
-  document.getElementById('sHabits').textContent=allHabits.length;
-  var c=allPosts.reduce(function(s,p){ return s+(p.commentCount||0); },0);
-  document.getElementById('sComments').textContent=c;
+// ---------- STATS ----------
+function renderStats() {
+  document.getElementById('sUsers').textContent = allUsers.length;
+  document.getElementById('sPosts').textContent = allPosts.length;
+  document.getElementById('sHabits').textContent = allHabits.length;
+  var c = allPosts.reduce(function(s, p) { return s + (p.commentCount || 0); }, 0);
+  document.getElementById('sComments').textContent = c;
 }
 
-function renderCharts(){
-  var catMap={};
-  allHabits.forEach(function(h){ var k=h.category||'Other'; catMap[k]=(catMap[k]||0)+1; });
-  if(catChart) catChart.destroy();
-  catChart=new Chart(document.getElementById('chartCat'),{
-    type:'doughnut',
-    data:{labels:Object.keys(catMap),datasets:[{data:Object.values(catMap),backgroundColor:['#0a0a0a','#3d3d3d','#737373','#9a9a9a','#c4c4c4','#e0e0e0','#555','#888']}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:12}}}}
+function renderCharts() {
+  var catMap = {};
+  allHabits.forEach(function(h) { var k = h.category || 'Other'; catMap[k] = (catMap[k] || 0) + 1; });
+  if (catChart) catChart.destroy();
+  catChart = new Chart(document.getElementById('chartCat'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(catMap),
+      datasets: [{ data: Object.values(catMap), backgroundColor: ['#0a0a0a','#3d3d3d','#737373','#9a9a9a','#c4c4c4','#e0e0e0','#555','#888'] }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 12 } } } }
   });
-  var ud=allUsers.slice().sort(function(a,b){return b.habits.length-a.habits.length;}).slice(0,8);
-  if(userChart) userChart.destroy();
-  userChart=new Chart(document.getElementById('chartUsers'),{
-    type:'bar',
-    data:{labels:ud.map(function(u){return u.name;}),datasets:[{label:'Habits',data:ud.map(function(u){return u.habits.length;}),backgroundColor:'#0a0a0a'}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{stepSize:1,font:{size:10}}}}}
+  var ud = allUsers.slice().sort(function(a, b) { return b.habits.length - a.habits.length; }).slice(0, 8);
+  if (userChart) userChart.destroy();
+  userChart = new Chart(document.getElementById('chartUsers'), {
+    type: 'bar',
+    data: {
+      labels: ud.map(function(u) { return u.name; }),
+      datasets: [{ label: 'Habits', data: ud.map(function(u) { return u.habits.length; }), backgroundColor: '#0a0a0a' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { ticks: { stepSize: 1, font: { size: 10 } } } } }
   });
 }
 
-function renderRecent(){
-  var tb=document.getElementById('recentTbody');
-  var list=allPosts.slice(0,10);
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No posts yet</td></tr>';return;}
-  tb.innerHTML=list.map(function(p){
-    return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
-      '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
-      '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
-      '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td></tr>';
-  }).join('');
-}
-
-function renderUsers(f){
-  var tb=document.getElementById('userTbody');
-  var list=allUsers.filter(function(u){ return !f||u.name.includes(f)||u.uid.includes(f)||(u.email||'').includes(f); });
-  document.getElementById('userCnt').textContent=list.length+' user(s)';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No matching users</td></tr>';return;}
-  tb.innerHTML=list.map(function(u){
-    var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
-    return '<tr><td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong><div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
-      '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
-      '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
-  }).join('');
-}
-
-function renderPosts(f){
-  var tb=document.getElementById('postTbody');
-  var list=allPosts.filter(function(p){ return !f||(p.text||'').includes(f)||(p.user||'').includes(f); });
-  document.getElementById('postCnt').textContent=list.length+' post(s)';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="7">No matching posts</td></tr>';return;}
-  tb.innerHTML=list.map(function(p){
-    var mc='—';
-    if(p.mediaUrl){
-      if(p.hasVideo){
-        mc='<a href="'+htmlEsc(p.mediaUrl)+'" target="_blank" style="display:inline-block;text-decoration:none;color:var(--black);font-size:10px;font-weight:700;border:1px solid var(--g200);padding:3px 8px;background:var(--g50)">VIDEO</a>';
-      } else {
-        var t=p.mediaUrl.replace('/upload/','/upload/w_80,h_60,c_fill/');
-        mc='<a href="'+htmlEsc(p.mediaUrl)+'" target="_blank" style="display:inline-block;line-height:0;border:1px solid var(--g200)"><img src="'+htmlEsc(t)+'" style="width:80px;height:60px;object-fit:cover;display:block" onerror="this.style.display=&quot;none&quot;"/></a>';
-      }
-    }
-    return '<tr>'+
-      '<td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
-      '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
-      '<td>'+mc+'</td>'+
-      '<td>'+(p.likes||0)+'</td>'+
-      '<td>'+(p.commentCount||0)+'</td>'+
-      '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td>'+
-      '<td><button class="del" onclick="delPost(\''+p.id+'\')">Delete</button></td>'+
+function renderRecent() {
+  var tb = document.getElementById('recentTbody');
+  var list = allPosts.slice(0, 10);
+  if (!list.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="5">No posts yet</td></tr>'; return; }
+  tb.innerHTML = list.map(function(p) {
+    return '<tr>' +
+      '<td><div class="uc"><div class="av">' + (p.avatar || p.user || '?')[0] + '</div>' + htmlEsc(p.user || '-') + '</div></td>' +
+      '<td><div class="ptxt">' + htmlEsc(p.text || '(no text)') + '</div></td>' +
+      '<td>' + (p.likes || 0) + '</td>' +
+      '<td>' + (p.commentCount || 0) + '</td>' +
+      '<td style="font-size:10px;color:var(--g400)">' + p.timeStr + '</td>' +
       '</tr>';
   }).join('');
 }
 
-function delPost(id){
-  if(!confirm('Are you sure you want to delete this post?')) return;
-  db.collection('posts').doc(id).delete().then(function(){
-    allPosts=allPosts.filter(function(p){return p.id!==id;});
-    buildUsers(); // ✅ 重新計算每位用戶的 post 數量
-    renderStats();
-    renderRecent();
-    renderPosts(document.getElementById('postSearch').value);
-    renderUsers(document.getElementById('userSearch').value); // ✅ 同步更新 Users 頁面
-  }).catch(function(e){ alert('Delete failed: '+e.message); });
-}
-
-function renderHabits(f){
-  var tb=document.getElementById('habitTbody');
-  var list=allHabits.filter(function(h){ return !f||(h.name||'').includes(f)||(h.category||'').includes(f); });
-  document.getElementById('habitCnt').textContent=list.length+' habit(s)';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="6">No matching habits</td></tr>';return;}
-  var nm={};
-  allUsers.forEach(function(u){ nm[u.uid]=u.name; });
-  tb.innerHTML=list.map(function(h){
-    var r=calcRate(h);
-    return '<tr><td><strong>'+htmlEsc(h.name||'—')+'</strong></td>'+
-      '<td>'+(nm[h.userId]||((h.userId||'').slice(0,8))||'—')+'</td>'+
-      '<td><span class="badge">'+htmlEsc(h.category||'—')+'</span></td>'+
-      '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
-      '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
+function renderUsers(f) {
+  var tb = document.getElementById('userTbody');
+  var list = allUsers.filter(function(u) { return !f || u.name.includes(f) || u.uid.includes(f) || (u.email || '').includes(f); });
+  document.getElementById('userCnt').textContent = list.length + ' user(s)';
+  if (!list.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="5">No matching users</td></tr>'; return; }
+  tb.innerHTML = list.map(function(u) {
+    var r = u.habits.length ? Math.round(u.habits.reduce(function(s, h) { return s + calcRate(h); }, 0) / u.habits.length) : 0;
+    return '<tr>' +
+      '<td><div class="uc"><div class="av">' + (u.name || '?')[0] + '</div>' +
+        '<div><strong>' + htmlEsc(u.name) + '</strong>' +
+        '<div style="font-size:10px;color:var(--g400)">' + htmlEsc(u.email || '') + '</div></div></div></td>' +
+      '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">' + u.uid.slice(0, 16) + '...</td>' +
+      '<td>' + u.habits.length + '</td>' +
+      '<td>' + u.posts.length + '</td>' +
+      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:' + r + '%"></div></div><div class="bar-pct">' + r + '%</div></div></td>' +
+      '</tr>';
   }).join('');
 }
 
-function calcRate(h){
-  var tpc=h.dailyTarget||1, id=h.intervalDays||1;
-  var tr=h.timeRange||'', parts=tr.split(/～|~/).map(function(s){return s.trim().replace(/\//g,'-');});
-  var td=function(s){var a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2]);};
-  var s=parts[0]?td(parts[0]):new Date(), e=parts[1]?td(parts[1]):new Date();
-  var days=Math.max(1,Math.round((e-s)/86400000)+1);
-  var exp=Math.ceil(days/id)*tpc;
-  var done=Object.entries(h.todayCounts||{}).reduce(function(sum,kv){return sum+Math.min(tpc,Math.max(0,kv[1]||0));},0);
-  return Math.min(100,Math.round(done/exp*100));
+function renderPosts(f) {
+  var tb = document.getElementById('postTbody');
+  var list = allPosts.filter(function(p) { return !f || (p.text || '').includes(f) || (p.user || '').includes(f); });
+  document.getElementById('postCnt').textContent = list.length + ' post(s)';
+  if (!list.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="7">No matching posts</td></tr>'; return; }
+  tb.innerHTML = list.map(function(p) {
+    var mediaHtml = '-';
+    if (p.mediaUrl) {
+      if (p.hasVideo) {
+        mediaHtml = '<a href="' + htmlEsc(p.mediaUrl) + '" target="_blank" class="media-video-tag">VIDEO</a>';
+      } else {
+        var thumb = p.mediaUrl.replace('/upload/', '/upload/w_64,h_48,c_fill/');
+        mediaHtml = '<a href="' + htmlEsc(p.mediaUrl) + '" target="_blank">' +
+          '<img class="media-thumb" src="' + htmlEsc(thumb) + '" alt="img" onerror="this.parentNode.innerHTML=\'IMG\'">' +
+          '</a>';
+      }
+    }
+    return '<tr>' +
+      '<td><div class="uc"><div class="av">' + (p.avatar || p.user || '?')[0] + '</div>' + htmlEsc(p.user || '-') + '</div></td>' +
+      '<td><div class="ptxt">' + htmlEsc(p.text || '(no text)') + '</div></td>' +
+      '<td>' + mediaHtml + '</td>' +
+      '<td>' + (p.likes || 0) + '</td>' +
+      '<td>' + (p.commentCount || 0) + '</td>' +
+      '<td style="font-size:10px;color:var(--g400)">' + p.timeStr + '</td>' +
+      '<td><button class="del" onclick="delPost(\'' + p.id + '\')">Delete</button></td>' +
+      '</tr>';
+  }).join('');
 }
 
-function htmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function delPost(id) {
+  if (!confirm('Are you sure you want to delete this post?')) return;
+  db.collection('posts').doc(id).delete().then(function() {
+    allPosts = allPosts.filter(function(p) { return p.id !== id; });
+    buildUsers();
+    renderStats();
+    renderRecent();
+    renderPosts(document.getElementById('postSearch').value);
+    renderUsers(document.getElementById('userSearch').value);
+  }).catch(function(e) { alert('Delete failed: ' + e.message); });
+}
 
-/* ══════════════════════════════════════════
-   UPLOAD QUOTA
-   ══════════════════════════════════════════ */
-var QUOTA_LIMITS = {
-  DAILY_IMAGE_COUNT: 5,
-  DAILY_VIDEO_COUNT: 2,
-  MONTHLY_TOTAL_MB: 500,
-};
-var allQuotas = [];
+function renderHabits(f) {
+  var tb = document.getElementById('habitTbody');
+  var list = allHabits.filter(function(h) { return !f || (h.name || '').includes(f) || (h.category || '').includes(f); });
+  document.getElementById('habitCnt').textContent = list.length + ' habit(s)';
+  if (!list.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="6">No matching habits</td></tr>'; return; }
+  var nm = {};
+  allUsers.forEach(function(u) { nm[u.uid] = u.name; });
+  tb.innerHTML = list.map(function(h) {
+    var r = calcRate(h);
+    return '<tr>' +
+      '<td><strong>' + htmlEsc(h.name || '-') + '</strong></td>' +
+      '<td>' + htmlEsc(nm[h.userId] || (h.userId || '').slice(0, 8) || '-') + '</td>' +
+      '<td><span class="badge">' + htmlEsc(h.category || '-') + '</span></td>' +
+      '<td style="font-size:11px">' + (h.freqLabel || 'Daily') + '</td>' +
+      '<td style="font-family:var(--mono);font-size:11px">' + (h.streak || 0) + ' days</td>' +
+      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:' + r + '%"></div></div><div class="bar-pct">' + r + '%</div></div></td>' +
+      '</tr>';
+  }).join('');
+}
 
-document.getElementById('quotaRefreshBtn').onclick = loadQuota;
-document.getElementById('quotaSort').onchange = function(){ renderQuota(); };
+function calcRate(h) {
+  var tpc = h.dailyTarget || 1, id = h.intervalDays || 1;
+  var tr = h.timeRange || '', parts = tr.split(/~/).map(function(s) { return s.trim().replace(/\//g, '-'); });
+  var td = function(s) { var a = s.split('-').map(Number); return new Date(a[0], a[1] - 1, a[2]); };
+  var s = parts[0] ? td(parts[0]) : new Date(), e = parts[1] ? td(parts[1]) : new Date();
+  var days = Math.max(1, Math.round((e - s) / 86400000) + 1);
+  var exp = Math.ceil(days / id) * tpc;
+  var done = Object.entries(h.todayCounts || {}).reduce(function(sum, kv) { return sum + Math.min(tpc, Math.max(0, kv[1] || 0)); }, 0);
+  return Math.min(100, Math.round(done / exp * 100));
+}
 
-function getThisMonth(){ return new Date().toISOString().slice(0,7); }
-function getToday(){ return new Date().toISOString().slice(0,10); }
-
-function loadQuota(){
+// ---------- QUOTA ----------
+function loadQuota() {
   document.getElementById('quotaUpdated').textContent = 'Loading...';
-  db.collection('upload_quotas').get().then(function(snap){
-    allQuotas = snap.docs.map(function(d){
+  db.collection('upload_quotas').get().then(function(snap) {
+    allQuotas = snap.docs.map(function(d) {
       var data = d.data();
       var lastAt = data.lastUploadAt && data.lastUploadAt.toDate ? data.lastUploadAt.toDate() : null;
-      return Object.assign({id:d.id}, data, {lastUploadDate: lastAt});
+      return Object.assign({ id: d.id }, data, { lastUploadDate: lastAt });
     });
     renderQuota();
-    document.getElementById('quotaUpdated').textContent = 'Last updated: '+new Date().toLocaleString('zh-TW');
-  }).catch(function(e){
-    document.getElementById('quotaUpdated').textContent = '⚠️ Load failed: '+e.message;
+    document.getElementById('quotaUpdated').textContent = 'Last updated: ' + new Date().toLocaleString('zh-TW');
+  }).catch(function(e) {
+    document.getElementById('quotaUpdated').textContent = 'Load failed: ' + e.message;
     document.getElementById('quotaTbody').innerHTML =
-      '<tr><td colspan="8" style="padding:20px 18px;color:#c00;font-size:12px;line-height:1.8">' +
-      '<strong>&#10060; Firestore &#27491;&#38480;&#19981;&#36275;</strong><br>' +
-      'Admin &#24115;&#34399;&#23616;&#26410;&#34987;&#25480;&#27177;&#35712;&#21462; upload_quotas collection&#12290;<br>' +
-      '&#35531;&#22312; Firebase Console &#8594; Firestore &#8594; Rules &#21152;&#20837;&#20197;&#19979;&#35215;&#21017;&#65306;<br><br>' +
-      '<code style="background:#1e293b;color:#94a3b8;padding:10px 14px;display:block;margin-top:6px;font-size:11px;border-radius:2px;white-space:pre-wrap">' +
+      '<tr><td colspan="8" style="padding:20px;color:#c00;font-size:12px;line-height:2">' +
+      '<strong>Firestore permission denied</strong><br>' +
+      'Add this rule in Firebase Console &rarr; Firestore &rarr; Rules:<br>' +
+      '<code style="background:#f5f5f5;display:block;padding:10px;margin-top:8px;font-size:11px;white-space:pre">' +
       'match /upload_quotas/{uid} {\n' +
-      '  allow read, write: if request.auth != null\n' +
-      '    &amp;&amp; request.auth.uid == uid;\n' +
-      '  // Admin read-all (replace with your email)\n' +
+      '  allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;\n' +
       '  allow read: if request.auth != null\n' +
-      '    &amp;&amp; request.auth.token.email == \"YOUR_ADMIN@EMAIL.COM\";\n' +
+      '    &amp;&amp; request.auth.token.email == "YOUR_ADMIN@EMAIL.COM";\n' +
       '}</code></td></tr>';
   });
 }
 
-function renderQuota(){
+function renderQuota() {
   var month = getThisMonth(), today = getToday();
   var sortKey = document.getElementById('quotaSort').value;
-
-  // Sort
-  var list = allQuotas.slice().sort(function(a,b){
-    if(sortKey==='lastUpload'){
-      var at = a.lastUploadDate||new Date(0), bt = b.lastUploadDate||new Date(0);
-      return bt-at;
+  var list = allQuotas.slice().sort(function(a, b) {
+    if (sortKey === 'lastUpload') { return (b.lastUploadDate || new Date(0)) - (a.lastUploadDate || new Date(0)); }
+    if (sortKey === 'monthlyMB') {
+      var am = a.monthlyMonth === month ? (a.monthlyMB || 0) : 0;
+      var bm = b.monthlyMonth === month ? (b.monthlyMB || 0) : 0;
+      return bm - am;
     }
-    if(sortKey==='monthlyMB'){
-      var am = a.monthlyMonth===month ? (a.monthlyMB||0) : 0;
-      var bm = b.monthlyMonth===month ? (b.monthlyMB||0) : 0;
-      return bm-am;
-    }
-    return (b[sortKey]||0)-(a[sortKey]||0);
+    return (b[sortKey] || 0) - (a[sortKey] || 0);
   });
 
-  // Summary stats
-  var sumImages=0, sumVideos=0, sumMB=0, sumMonthMB=0;
-  list.forEach(function(q){
-    sumImages += q.totalImages||0;
-    sumVideos += q.totalVideos||0;
-    sumMB     += q.totalMB||0;
-    if(q.monthlyMonth===month) sumMonthMB += q.monthlyMB||0;
+  var sumImages = 0, sumVideos = 0, sumMB = 0, sumMonthMB = 0;
+  list.forEach(function(q) {
+    sumImages += q.totalImages || 0;
+    sumVideos += q.totalVideos || 0;
+    sumMB     += q.totalMB    || 0;
+    if (q.monthlyMonth === month) sumMonthMB += q.monthlyMB || 0;
   });
 
   document.getElementById('qTotalUsers').textContent  = list.length;
   document.getElementById('qTotalImages').textContent = sumImages;
   document.getElementById('qTotalVideos').textContent = sumVideos;
-  document.getElementById('qTotalMB').textContent     = sumMB.toFixed(1)+' MB';
+  document.getElementById('qTotalMB').textContent     = sumMB.toFixed(1) + ' MB';
 
-  // Monthly bar (combined all users vs limit * users)
   var combinedLimit = QUOTA_LIMITS.MONTHLY_TOTAL_MB * Math.max(1, list.length);
   var monthPct = Math.min(100, Math.round(sumMonthMB / combinedLimit * 100));
-  document.getElementById('qMonthLabel').textContent = sumMonthMB.toFixed(1)+' / '+combinedLimit+' MB';
-  document.getElementById('qMonthLimit').textContent = 'Limit: '+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB / user';
-  var bar = document.getElementById('qMonthBar');
-  bar.style.width = monthPct+'%';
-  bar.className = 'pct-fill'+(monthPct>=90?' danger':monthPct>=70?' warn':'');
+  document.getElementById('qMonthLabel').textContent = sumMonthMB.toFixed(1) + ' / ' + combinedLimit + ' MB';
+  document.getElementById('qMonthLimit').textContent = 'Limit: ' + QUOTA_LIMITS.MONTHLY_TOTAL_MB + ' MB / user';
+  var mbar = document.getElementById('qMonthBar');
+  mbar.style.width = monthPct + '%';
+  mbar.className = 'pct-fill' + (monthPct >= 90 ? ' danger' : monthPct >= 70 ? ' warn' : '');
 
-  // Warn box
-  var heavyUsers = list.filter(function(q){
-    var mm = q.monthlyMonth===month ? q.monthlyMB||0 : 0;
+  var heavyUsers = list.filter(function(q) {
+    var mm = q.monthlyMonth === month ? (q.monthlyMB || 0) : 0;
     return mm > QUOTA_LIMITS.MONTHLY_TOTAL_MB * 0.8;
   });
   var warnEl = document.getElementById('quotaWarn');
-  if(heavyUsers.length){
-    warnEl.className='quota-warn show';
-    warnEl.textContent = '⚠️ '+heavyUsers.length+' user(s) have used over 80% of their monthly quota: '+heavyUsers.map(function(q){return q.displayName||q.uid.slice(0,8);}).join(', ');
+  if (heavyUsers.length) {
+    warnEl.className = 'quota-warn show';
+    warnEl.textContent = heavyUsers.length + ' user(s) over 80% monthly quota: ' + heavyUsers.map(function(q) { return q.displayName || q.uid.slice(0, 8); }).join(', ');
   } else {
-    warnEl.className='quota-warn';
+    warnEl.className = 'quota-warn';
   }
 
-  // Table
   var tb = document.getElementById('quotaTbody');
-  if(!list.length){ tb.innerHTML='<tr class="loading-row"><td colspan="8">No upload records yet</td></tr>'; return; }
-  tb.innerHTML = list.map(function(q){
-    var dImg = q.dailyDate===today ? (q.dailyImages||0) : 0;
-    var dVid = q.dailyDate===today ? (q.dailyVideos||0) : 0;
-    var mMB  = q.monthlyMonth===month ? (q.monthlyMB||0) : 0;
+  if (!list.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="8">No upload records yet</td></tr>'; return; }
+  tb.innerHTML = list.map(function(q) {
+    var dImg = q.dailyDate === today ? (q.dailyImages || 0) : 0;
+    var dVid = q.dailyDate === today ? (q.dailyVideos || 0) : 0;
+    var mMB  = q.monthlyMonth === month ? (q.monthlyMB || 0) : 0;
     var mPct = Math.min(100, Math.round(mMB / QUOTA_LIMITS.MONTHLY_TOTAL_MB * 100));
-    var mCls = mPct>=90?'danger':mPct>=70?'warn':'';
-    var lastStr = q.lastUploadDate ? q.lastUploadDate.toLocaleString('zh-TW') : '—';
-    var imgCls = dImg>=QUOTA_LIMITS.DAILY_IMAGE_COUNT ? 'color:#c00;font-weight:700' : '';
-    var vidCls = dVid>=QUOTA_LIMITS.DAILY_VIDEO_COUNT ? 'color:#c00;font-weight:700' : '';
-    return '<tr>'+
-      '<td><div class="uc"><div class="av">'+((q.displayName||q.uid||'?')[0].toUpperCase())+'</div>'+
-        '<div><strong>'+htmlEsc(q.displayName||'Unknown')+'</strong>'+
-        '<div class="uid-small">'+htmlEsc(q.email||q.uid||'')+'</div></div></div></td>'+
-      '<td style="font-family:var(--mono);font-size:11px">'+
-        '<span style="'+imgCls+'">📷 '+dImg+'/'+QUOTA_LIMITS.DAILY_IMAGE_COUNT+'</span>　'+
-        '<span style="'+vidCls+'">🎬 '+dVid+'/'+QUOTA_LIMITS.DAILY_VIDEO_COUNT+'</span></td>'+
-      '<td style="min-width:160px">'+
-        '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">'+
-          '<span style="font-family:var(--mono);font-weight:700;color:var(--black)">'+mMB.toFixed(1)+' MB</span>'+
-          '<span style="color:var(--g400)">/ '+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB &nbsp;('+mPct+'%)</span></div>'+
-        '<div class="pct-bar" style="height:8px"><div class="pct-fill '+mCls+'" style="width:'+mPct+'%"></div></div>'+
-        '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--g400);margin-top:2px">'+
-          '<span>0</span><span>'+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB</span></div></td>'+
-      '<td style="font-family:var(--mono);font-size:12px">'+(q.totalImages||0)+'</td>'+
-      '<td style="font-family:var(--mono);font-size:12px">'+(q.totalVideos||0)+'</td>'+
-      '<td style="font-family:var(--mono);font-size:12px;font-weight:700">'+((q.totalMB||0).toFixed(2))+' MB</td>'+
-      '<td style="font-size:10px;color:var(--g400)">'+lastStr+'</td>'+
-      '<td><button class="del" onclick="resetUserDaily(\''+q.id+'\')">Reset Daily</button></td>'+
-    '</tr>';
+    var mCls = mPct >= 90 ? 'danger' : mPct >= 70 ? 'warn' : '';
+    var lastStr = q.lastUploadDate ? q.lastUploadDate.toLocaleString('zh-TW') : '-';
+    var imgStyle = dImg >= QUOTA_LIMITS.DAILY_IMAGE_COUNT ? 'color:#c00;font-weight:700' : '';
+    var vidStyle = dVid >= QUOTA_LIMITS.DAILY_VIDEO_COUNT ? 'color:#c00;font-weight:700' : '';
+    return '<tr>' +
+      '<td><div class="uc"><div class="av">' + (q.displayName || q.uid || '?')[0].toUpperCase() + '</div>' +
+        '<div><strong>' + htmlEsc(q.displayName || 'Unknown') + '</strong>' +
+        '<div class="uid-small">' + htmlEsc(q.email || q.uid || '') + '</div></div></div></td>' +
+      '<td style="font-family:var(--mono);font-size:11px">' +
+        '<span style="' + imgStyle + '">[img] ' + dImg + '/' + QUOTA_LIMITS.DAILY_IMAGE_COUNT + '</span> &nbsp; ' +
+        '<span style="' + vidStyle + '">[vid] ' + dVid + '/' + QUOTA_LIMITS.DAILY_VIDEO_COUNT + '</span></td>' +
+      '<td style="min-width:160px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">' +
+          '<span style="font-family:var(--mono);font-weight:700">' + mMB.toFixed(1) + ' MB</span>' +
+          '<span style="color:var(--g400)">/ ' + QUOTA_LIMITS.MONTHLY_TOTAL_MB + ' MB (' + mPct + '%)</span></div>' +
+        '<div class="pct-bar" style="height:8px"><div class="pct-fill ' + mCls + '" style="width:' + mPct + '%"></div></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--g400);margin-top:2px">' +
+          '<span>0</span><span>' + QUOTA_LIMITS.MONTHLY_TOTAL_MB + ' MB</span></div></td>' +
+      '<td style="font-family:var(--mono);font-size:12px">' + (q.totalImages || 0) + '</td>' +
+      '<td style="font-family:var(--mono);font-size:12px">' + (q.totalVideos || 0) + '</td>' +
+      '<td style="font-family:var(--mono);font-size:12px;font-weight:700">' + ((q.totalMB || 0).toFixed(2)) + ' MB</td>' +
+      '<td style="font-size:10px;color:var(--g400)">' + lastStr + '</td>' +
+      '<td><button class="del" onclick="resetUserDaily(\'' + q.id + '\')">Reset Daily</button></td>' +
+      '</tr>';
   }).join('');
 }
 
-function resetUserDaily(uid){
-  if(!confirm('Reset today\'s upload count for this user?')) return;
+function resetUserDaily(uid) {
+  if (!confirm('Reset today upload count for this user?')) return;
   db.collection('upload_quotas').doc(uid).update({
     dailyDate: '1970-01-01',
     dailyImages: 0,
-    dailyVideos: 0,
-  }).then(function(){
+    dailyVideos: 0
+  }).then(function() {
     loadQuota();
-  }).catch(function(e){ alert('Failed: '+e.message); });
+  }).catch(function(e) { alert('Failed: ' + e.message); });
 }
 </script>
 </body>
