@@ -57,6 +57,67 @@
             position: relative;
         }
 
+        /* ── HISTORY ── */
+        .history-section { margin-top:28px; }
+        .history-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+        .history-toggle-btn {
+            font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px;
+            border:1px solid var(--gray-200); background:var(--white); color:var(--gray-600);
+            padding:6px 12px; cursor:pointer; font-family:var(--font); transition:.15s;
+        }
+        .history-toggle-btn:hover { border-color:var(--black); color:var(--black); }
+        .history-toggle-btn.open { background:var(--black); color:var(--white); border-color:var(--black); }
+
+        .percentile-card {
+            background:var(--black); color:var(--white);
+            padding:20px; margin-bottom:16px;
+            display:flex; align-items:center; gap:16px;
+        }
+        .percentile-num {
+            font-size:42px; font-weight:700; font-family:var(--din); line-height:1; flex-shrink:0;
+        }
+        .percentile-info { flex:1; }
+        .percentile-label { font-size:10px; opacity:.5; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+        .percentile-desc { font-size:12px; line-height:1.5; opacity:.8; }
+        .percentile-bar-wrap { margin-top:10px; }
+        .percentile-bar-track { height:3px; background:rgba(255,255,255,.15); }
+        .percentile-bar-fill { height:100%; background:var(--white); transition:width .8s cubic-bezier(.4,0,.2,1); }
+
+        .avg-rate-row {
+            display:flex; gap:1px; background:var(--gray-200);
+            border:1px solid var(--gray-200); margin-bottom:16px;
+        }
+        .avg-rate-cell { flex:1; background:var(--white); padding:14px 12px; text-align:center; }
+        .avg-rate-val { font-size:22px; font-weight:700; font-family:var(--din); color:var(--black); }
+        .avg-rate-lbl { font-size:9px; color:var(--gray-400); text-transform:uppercase; letter-spacing:.8px; font-weight:600; margin-top:3px; }
+
+        .archived-habit-item {
+            border:1px solid var(--gray-200); padding:14px 16px;
+            margin-bottom:8px; transition:.15s;
+        }
+        .archived-habit-item:hover { border-color:var(--gray-400); }
+        .archived-habit-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
+        .archived-habit-name { font-size:13px; font-weight:600; color:var(--black); }
+        .archived-habit-range { font-size:10px; color:var(--gray-400); font-family:var(--din); margin-top:2px; }
+        .archived-rate-badge {
+            font-size:15px; font-weight:700; font-family:var(--din);
+            color:var(--black); flex-shrink:0;
+        }
+        .archived-rate-badge.high { color:#16a34a; }
+        .archived-rate-badge.mid  { color:#d97706; }
+        .archived-rate-badge.low  { color:#dc2626; }
+        .archived-prog-bar { height:3px; background:var(--gray-100); }
+        .archived-prog-fill { height:100%; background:var(--black); transition:width .4s; }
+        .archived-prog-fill.high { background:#16a34a; }
+        .archived-prog-fill.mid  { background:#d97706; }
+        .archived-prog-fill.low  { background:#dc2626; }
+        .archived-meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+        .archived-tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:2px 6px; background:var(--gray-100); color:var(--gray-500); }
+
+        .history-empty { text-align:center; padding:28px 0; }
+        .history-empty svg { width:32px; height:32px; margin:0 auto 10px; display:block; opacity:.18; }
+        .history-empty p { font-size:12px; color:var(--gray-400); }
+
         /* ── COMMENTS ── */
         .comments-section { border-top:1px solid var(--gray-100); padding:10px 14px; }
         .comment-item { display:flex; gap:9px; margin-bottom:10px; }
@@ -1660,7 +1721,10 @@ function MainApp({ user, onLogout }) {
     const [deletePassword, setDeletePassword] = useState('');
     const [deleteError, setDeleteError] = useState('');
     const [showModal, setShowModal] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
+    const [percentile, setPercentile] = useState(null); // 0-100
     const [habits, setHabits] = useState([]);
+    const [archivedHabits, setArchivedHabits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedHabit, setSelectedHabit] = useState(null);
     const [selectedGroup, setSelectedGroup] = useState(null);
@@ -1675,6 +1739,10 @@ function MainApp({ user, onLogout }) {
     useEffect(() => {
         if (!isFirebaseConfigured) {
             const saved = localStorage.getItem(`habits_${user.uid}`);
+            const savedArchived = localStorage.getItem(`archived_habits_${user.uid}`);
+            if (savedArchived) {
+                try { setArchivedHabits(JSON.parse(savedArchived)); } catch(e){}
+            }
             if (saved) {
                 // Migrate old key format → YYYY-MM-DD
                 const parsed = JSON.parse(saved);
@@ -1713,6 +1781,11 @@ function MainApp({ user, onLogout }) {
             console.error('Firestore error:', err);
             setLoading(false);
         });
+        // Also load archived habits
+        db.collection('archived_habits').where('userId','==',user.uid).get().then(snap=>{
+            const archived = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.archivedAt||'')>(a.archivedAt||'')?1:-1);
+            setArchivedHabits(archived);
+        }).catch(()=>{});
         // Safety timeout: wait max 8s
         const timeout = setTimeout(() => setLoading(false), 8000);
         return () => { unsub(); clearTimeout(timeout); };
@@ -1723,6 +1796,46 @@ function MainApp({ user, onLogout }) {
             localStorage.setItem(`habits_${user.uid}`, JSON.stringify(habits));
         }
     }, [habits, user]);
+
+    // Auto-archive expired habits (endDate < today) and sync completion rate to Firestore for percentile
+    useEffect(() => {
+        if (!isFirebaseConfigured) {
+            localStorage.setItem(`archived_habits_${user.uid}`, JSON.stringify(archivedHabits));
+        }
+    }, [archivedHabits, user]);
+
+    useEffect(() => {
+        if (loading) return;
+        const today = toISODay();
+        const toArchive = habits.filter(h => {
+            const { end: endStr } = parseTimeRange(h.timeRange);
+            return endStr && endStr < today;
+        });
+        if (toArchive.length === 0) return;
+        const archivedIds = new Set(archivedHabits.map(a => a.id));
+        const newArchived = toArchive
+            .filter(h => !archivedIds.has(h.id))
+            .map(h => ({ ...h, archivedAt: today, finalRate: calcCompletionRate(h) }));
+        if (newArchived.length === 0) return;
+        setArchivedHabits(prev => [...newArchived, ...prev]);
+        if (!isFirebaseConfigured) {
+            setHabits(prev => prev.filter(h => !toArchive.find(a => a.id === h.id)));
+        } else {
+            // Move expired habits to archived_habits collection
+            newArchived.forEach(async (h) => {
+                try {
+                    await db.collection('archived_habits').doc(h.id).set({ ...h, userId: user.uid });
+                    await db.collection('habits').doc(h.id).delete();
+                } catch(e) { console.warn('Archive failed', e); }
+            });
+            // Write user's average completion rate for percentile comparison
+            const activeRates = habits.filter(h2 => !toArchive.find(a=>a.id===h2.id)).map(h2=>calcCompletionRate(h2));
+            const expiredRates = [...archivedHabits, ...newArchived].map(h2=>h2.finalRate||0);
+            const allRates = [...activeRates, ...expiredRates];
+            const avgRate = allRates.length ? Math.round(allRates.reduce((s,r)=>s+r,0)/allRates.length) : 0;
+            db.collection('user_stats').doc(user.uid).set({ avgRate, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(()=>{});
+        }
+    }, [habits, loading]);
 
     // Auto-detect midnight rollover: schedule re-render at next 00:00
     const [currentDay, setCurrentDay] = useState(toISODay());
@@ -1741,6 +1854,10 @@ function MainApp({ user, onLogout }) {
     }, []);
 
     const addHabit = ({ name, category, timeRange, freqLabel, durLabel, dailyTarget, intervalDays }) => {
+        if (habits.length >= 30) {
+            alert('You can have at most 30 active habits.');
+            return;
+        }
         const habit = { name, category, timeRange, freqLabel: freqLabel||'', durLabel: durLabel||'', dailyTarget: dailyTarget||1, intervalDays: intervalDays||1, userId: user.uid, checkedDates:[], todayCounts:{}, streak:0, createdAt: new Date().toISOString() };
         if (!isFirebaseConfigured) {
             setHabits([{ ...habit, id: Date.now().toString() }, ...habits]);
@@ -1823,6 +1940,32 @@ function MainApp({ user, onLogout }) {
         }
     };
 
+    // Compute percentile: fetch all user_stats and compare
+    useEffect(() => {
+        if (loading) return;
+        const expiredRates = archivedHabits.map(h=>h.finalRate||0);
+        const activeRates  = habits.map(h=>calcCompletionRate(h));
+        const allRates     = [...expiredRates, ...activeRates];
+        const myAvg        = allRates.length ? Math.round(allRates.reduce((s,r)=>s+r,0)/allRates.length) : 0;
+
+        if (!isFirebaseConfigured) {
+            // Demo mode: compare against simulated distribution
+            const mockRates = [22,35,41,48,55,60,63,67,70,72,75,78,80,82,85,88,91,94];
+            const beaten = mockRates.filter(r=>r<myAvg).length;
+            setPercentile(Math.round((beaten/mockRates.length)*100));
+            return;
+        }
+        // Write own stat then read all
+        db.collection('user_stats').doc(user.uid).set({ avgRate: myAvg, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true })
+            .then(() => db.collection('user_stats').get())
+            .then(snap => {
+                const allAvgs = snap.docs.map(d=>d.data().avgRate||0);
+                const beaten  = allAvgs.filter(r=>r<myAvg).length;
+                setPercentile(Math.round((beaten/allAvgs.length)*100));
+            }).catch(()=>{});
+    }, [habits, archivedHabits, loading]);
+
+    
     const totalStreak = habits.reduce((s,h)=>s+(h.streak||0),0);
     const todayStr = currentDay;
     const todayCompleted = habits.filter(h=>{
@@ -1987,6 +2130,17 @@ function MainApp({ user, onLogout }) {
             habitsSnap.docs.forEach(d => batch1.delete(d.ref));
             if (habitsSnap.docs.length) await batch1.commit();
 
+            // 刪除 archived_habits
+            try {
+                const archivedSnap = await db.collection('archived_habits').where('userId','==',uid).get();
+                const batchA = db.batch();
+                archivedSnap.docs.forEach(d => batchA.delete(d.ref));
+                if (archivedSnap.docs.length) await batchA.commit();
+            } catch(e){}
+
+            // 刪除 user_stats
+            try { await db.collection('user_stats').doc(uid).delete(); } catch(e){}
+
             // 刪除 posts 與其 subcollection comments
             const postsSnap = await db.collection('posts').where('userId','==',uid).get();
             for (const postDoc of postsSnap.docs) {
@@ -2047,10 +2201,15 @@ function MainApp({ user, onLogout }) {
             <div>
                 {/* + button */}
                 <div className="home-top">
-                    <button className="center-add-btn-standalone" onClick={()=>setShowModal(true)}>
+                    <button className="center-add-btn-standalone" onClick={()=>{ if(habits.length>=30){alert('Max 30 active habits reached. Please wait for existing habits to expire or delete one.');return;} setShowModal(true);}}>
                         <PlusIcon/>
                     </button>
                 </div>
+                {habits.length > 0 && (
+                    <div style={{textAlign:'center',fontSize:10,color:'var(--gray-400)',marginBottom:16,fontWeight:600,letterSpacing:.5,textTransform:'uppercase'}}>
+                        {habits.length}/30 habits
+                    </div>
+                )}
 
                 {habits.length > 0 && <div className="section-title">My Habits</div>}
                 {habits.length === 0 ? (
@@ -2313,6 +2472,101 @@ function MainApp({ user, onLogout }) {
                         <p>Share your first post and start your habit journey</p>
                     </div>
                 )}
+            </div>
+
+            {/* ── 帳號管理區 ── */}
+            <div className="history-section">
+                <div className="history-header">
+                    <div className="section-title" style={{marginBottom:0}}>Habit History</div>
+                    <button
+                        className={`history-toggle-btn${showHistory?' open':''}`}
+                        onClick={()=>setShowHistory(h=>!h)}
+                    >{showHistory ? 'Hide' : 'View History'}</button>
+                </div>
+
+                {showHistory && (() => {
+                    const expiredRates = archivedHabits.map(h=>h.finalRate||0);
+                    const activeRates  = habits.map(h=>calcCompletionRate(h));
+                    const allRates     = [...expiredRates, ...activeRates];
+                    const myAvg        = allRates.length ? Math.round(allRates.reduce((s,r)=>s+r,0)/allRates.length) : 0;
+                    const expiredAvg   = expiredRates.length ? Math.round(expiredRates.reduce((s,r)=>s+r,0)/expiredRates.length) : null;
+
+                    return (
+                        <div>
+                            {/* Percentile card */}
+                            {percentile !== null && allRates.length > 0 && (
+                                <div className="percentile-card">
+                                    <div className="percentile-num">{percentile}<span style={{fontSize:20}}>%</span></div>
+                                    <div className="percentile-info">
+                                        <div className="percentile-label">Your Ranking</div>
+                                        <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>
+                                            Better than {percentile}% of users
+                                        </div>
+                                        <div className="percentile-desc">
+                                            {percentile >= 90 ? 'Top tier! Keep the streak going 🔥' :
+                                             percentile >= 70 ? 'Above average — great consistency 💪' :
+                                             percentile >= 50 ? 'Solid effort, keep pushing ↑' :
+                                             'Room to grow — every habit counts ✦'}
+                                        </div>
+                                        <div className="percentile-bar-wrap">
+                                            <div className="percentile-bar-track">
+                                                <div className="percentile-bar-fill" style={{width:`${percentile}%`}}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Summary stats */}
+                            <div className="avg-rate-row">
+                                <div className="avg-rate-cell">
+                                    <div className="avg-rate-val">{myAvg}%</div>
+                                    <div className="avg-rate-lbl">Overall Avg</div>
+                                </div>
+                                <div className="avg-rate-cell">
+                                    <div className="avg-rate-val">{expiredAvg !== null ? expiredAvg+'%' : '—'}</div>
+                                    <div className="avg-rate-lbl">Expired Avg</div>
+                                </div>
+                                <div className="avg-rate-cell">
+                                    <div className="avg-rate-val">{archivedHabits.length}</div>
+                                    <div className="avg-rate-lbl">Completed</div>
+                                </div>
+                            </div>
+
+                            {/* Archived habits list */}
+                            {archivedHabits.length === 0 ? (
+                                <div className="history-empty">
+                                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    <p>No expired habits yet.<br/>History appears here once habits pass their end date.</p>
+                                </div>
+                            ) : (
+                                archivedHabits.map(h => {
+                                    const r = h.finalRate || 0;
+                                    const cls = r>=70?'high':r>=40?'mid':'low';
+                                    return (
+                                        <div key={h.id} className="archived-habit-item">
+                                            <div className="archived-habit-top">
+                                                <div>
+                                                    <div className="archived-habit-name">{h.name}</div>
+                                                    <div className="archived-habit-range">{h.timeRange||'—'}</div>
+                                                </div>
+                                                <div className={`archived-rate-badge ${cls}`}>{r}%</div>
+                                            </div>
+                                            <div className="archived-prog-bar">
+                                                <div className={`archived-prog-fill ${cls}`} style={{width:`${r}%`}}></div>
+                                            </div>
+                                            <div className="archived-meta">
+                                                <span className="archived-tag">{h.category}</span>
+                                                {h.freqLabel && <span className="archived-tag">{h.freqLabel}</span>}
+                                                {h.archivedAt && <span className="archived-tag">Ended {h.archivedAt}</span>}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* ── 帳號管理區 ── */}
