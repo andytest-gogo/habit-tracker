@@ -1762,17 +1762,17 @@ function HistoryPage({ habits, archivedHabits, percentile, onBack }) {
 
     const expiredRates = archivedHabits.map(h => h.finalRate || 0);
     const activeRates  = habits.map(h => calcCompletionRate(h));
-    const allRates     = [...expiredRates, ...activeRates];
-    const overallAvg   = allRates.length ? Math.round(allRates.reduce((s,r)=>s+r,0)/allRates.length) : 0;
     const expiredAvg   = expiredRates.length ? Math.round(expiredRates.reduce((s,r)=>s+r,0)/expiredRates.length) : 0;
-    const activeAvg    = activeRates.length ? Math.round(activeRates.reduce((s,r)=>s+r,0)/activeRates.length) : 0;
+    const activeAvg    = activeRates.length  ? Math.round(activeRates.reduce((s,r)=>s+r,0)/activeRates.length)   : 0;
 
-    const highCount = archivedHabits.filter(h=>(h.finalRate||0)>=70).length;
-    const midCount  = archivedHabits.filter(h=>{const r=h.finalRate||0;return r>=40&&r<70;}).length;
-    const lowCount  = archivedHabits.filter(h=>(h.finalRate||0)<40).length;
+    // Meaningful stats
+    const totalCompleted = archivedHabits.length;
+    const bestHabit      = archivedHabits.reduce((best, h) => (!best || (h.finalRate||0) > (best.finalRate||0)) ? h : best, null);
+    const highCount      = archivedHabits.filter(h=>(h.finalRate||0)>=70).length;
+    const allRates       = [...expiredRates, ...activeRates];
 
     return (
-        <div className="app-container">
+        <div className="app-container" style={{paddingBottom:40}}>
             {/* Header nav */}
             <div className="history-nav">
                 <button className="history-nav-back" onClick={onBack}>
@@ -1784,43 +1784,56 @@ function HistoryPage({ habits, archivedHabits, percentile, onBack }) {
 
             {/* Chart section — dark background */}
             <div className="history-chart-section">
-                <div className="history-chart-title">Completion Overview</div>
+                <div className="history-chart-title">Expired Habits · Final Score</div>
                 <div className="history-charts-row">
-                    {/* Main donut: overall */}
-                    <DonutChart pct={overallAvg} size={100} stroke={11}
+
+                    {/* Main donut: EXPIRED avg — the real score */}
+                    <DonutChart
+                        pct={expiredAvg}
+                        size={108} stroke={12}
                         color="#ffffff" bg="rgba(255,255,255,0.1)"
-                        sublabel="OVERALL"/>
-                    {/* Legend with mini donuts */}
+                        sublabel="EXPIRED AVG"
+                    />
+
+                    {/* Right side: meaningful stats */}
                     <div className="history-legend">
-                        <div className="legend-item">
-                            <div className="legend-dot" style={{background:'#ffffff'}}></div>
-                            <div className="legend-label">All Habits</div>
-                            <div className="legend-val">{overallAvg}%</div>
-                        </div>
-                        <div className="legend-item">
-                            <div className="legend-dot" style={{background:'#94a3b8'}}></div>
-                            <div className="legend-label">Expired</div>
-                            <div className="legend-val">{expiredAvg}%</div>
-                        </div>
-                        <div className="legend-item">
-                            <div className="legend-dot" style={{background:'#64748b'}}></div>
-                            <div className="legend-label">Active</div>
-                            <div className="legend-val">{activeAvg}%</div>
-                        </div>
-                        <div style={{borderTop:'1px solid rgba(255,255,255,.1)',paddingTop:8,marginTop:2,display:'flex',gap:14}}>
-                            <div style={{textAlign:'center'}}>
-                                <div style={{fontSize:14,fontWeight:700,fontFamily:'var(--din)',color:'#4ade80'}}>{highCount}</div>
-                                <div style={{fontSize:9,opacity:.5,textTransform:'uppercase',letterSpacing:.6}}>High</div>
-                            </div>
-                            <div style={{textAlign:'center'}}>
-                                <div style={{fontSize:14,fontWeight:700,fontFamily:'var(--din)',color:'#fbbf24'}}>{midCount}</div>
-                                <div style={{fontSize:9,opacity:.5,textTransform:'uppercase',letterSpacing:.6}}>Mid</div>
-                            </div>
-                            <div style={{textAlign:'center'}}>
-                                <div style={{fontSize:14,fontWeight:700,fontFamily:'var(--din)',color:'#f87171'}}>{lowCount}</div>
-                                <div style={{fontSize:9,opacity:.5,textTransform:'uppercase',letterSpacing:.6}}>Low</div>
+
+                        {/* Active habits current avg */}
+                        <div style={{display:'flex',alignItems:'center',gap:10,paddingBottom:10,borderBottom:'1px solid rgba(255,255,255,.1)'}}>
+                            <DonutChart pct={activeAvg} size={52} stroke={6}
+                                color="#94a3b8" bg="rgba(255,255,255,0.08)"
+                                sublabel="NOW"/>
+                            <div>
+                                <div style={{fontSize:10,opacity:.5,textTransform:'uppercase',letterSpacing:.8,marginBottom:2}}>Active Now</div>
+                                <div style={{fontSize:12,opacity:.8,lineHeight:1.4}}>{habits.length} habit{habits.length!==1?'s':''} in progress</div>
                             </div>
                         </div>
+
+                        {/* Stats row */}
+                        <div style={{display:'flex',gap:0,marginTop:10}}>
+                            <div style={{flex:1,textAlign:'center'}}>
+                                <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--din)',color:'#fff'}}>{totalCompleted}</div>
+                                <div style={{fontSize:9,opacity:.45,textTransform:'uppercase',letterSpacing:.7,marginTop:2}}>Completed</div>
+                            </div>
+                            <div style={{width:1,background:'rgba(255,255,255,.1)',margin:'0 4px'}}/>
+                            <div style={{flex:1,textAlign:'center'}}>
+                                <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--din)',color:'#4ade80'}}>{highCount}</div>
+                                <div style={{fontSize:9,opacity:.45,textTransform:'uppercase',letterSpacing:.7,marginTop:2}}>≥70% rate</div>
+                            </div>
+                            <div style={{width:1,background:'rgba(255,255,255,.1)',margin:'0 4px'}}/>
+                            <div style={{flex:1,textAlign:'center'}}>
+                                <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--din)',color:'#fbbf24'}}>{bestHabit ? (bestHabit.finalRate||0)+'%' : '—'}</div>
+                                <div style={{fontSize:9,opacity:.45,textTransform:'uppercase',letterSpacing:.7,marginTop:2}}>Best rate</div>
+                            </div>
+                        </div>
+
+                        {/* Best habit name */}
+                        {bestHabit && (
+                            <div style={{marginTop:10,padding:'7px 10px',background:'rgba(255,255,255,.07)',borderLeft:'2px solid rgba(255,255,255,.3)'}}>
+                                <div style={{fontSize:9,opacity:.45,textTransform:'uppercase',letterSpacing:.7,marginBottom:2}}>Best habit</div>
+                                <div style={{fontSize:11,fontWeight:600,opacity:.9,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{bestHabit.name}</div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
