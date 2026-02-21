@@ -1217,7 +1217,7 @@ function FeedCard({ post, currentUser, onLike }) {
                 <div className="feed-action" onClick={()=>setShowComments(s=>!s)}>
                     <ChatIcon/><span>{post.comments}</span>
                 </div>
-                <div className="feed-action"><ShareIcon/><span>Share</span></div>
+
             </div>
             {showComments && (
                 <div className="comments-section">
@@ -2217,25 +2217,66 @@ function MainApp({ user, onLogout }) {
         ? Math.round(habits.reduce((sum, h) => sum + calcCompletionRate(h), 0) / habits.length)
         : 0;
 
-    // ── Load feed posts from Firebase in real-time ──
+    // ── Feed 分頁設定 ──
+    const FEED_PAGE_SIZE = 10;
+    const [feedLastDoc, setFeedLastDoc] = useState(null);
+    const [feedHasMore, setFeedHasMore] = useState(true);
+    const [feedLoadingMore, setFeedLoadingMore] = useState(false);
+
+    // 把 Firebase doc 轉成 post 物件
+    const docToPost = (d) => {
+        const data = d.data();
+        const createdAt = data.createdAt?.toDate?.();
+        const timeStr = createdAt ? formatTime(createdAt) : 'Just now';
+        return { id: d.id, ...data, time: timeStr };
+    };
+
+    // ── 初次載入前 FEED_PAGE_SIZE 篇 ──
     useEffect(() => {
         if (!isFirebaseConfigured) return;
         const unsub = db.collection('posts')
             .orderBy('createdAt', 'desc')
-            .limit(50)
+            .limit(FEED_PAGE_SIZE)
             .onSnapshot(snap => {
-                const posts = snap.docs.map(d => {
-                    const data = d.data();
-                    const createdAt = data.createdAt?.toDate?.();
-                    const timeStr = createdAt ? formatTime(createdAt) : 'Just now';
-                    return { id: d.id, ...data, time: timeStr };
-                });
+                const posts = snap.docs.map(docToPost);
                 setFeedPosts(posts);
-                // Update myPosts (own posts)
                 setMyPosts(posts.filter(p => p.userId === user.uid));
+                setFeedLastDoc(snap.docs[snap.docs.length - 1] || null);
+                setFeedHasMore(snap.docs.length === FEED_PAGE_SIZE);
             });
         return () => unsub();
     }, [user]);
+
+    // ── 載入更多 ──
+    const handleLoadMore = async () => {
+        if (!feedLastDoc || feedLoadingMore) return;
+        setFeedLoadingMore(true);
+        try {
+            const snap = await db.collection('posts')
+                .orderBy('createdAt', 'desc')
+                .startAfter(feedLastDoc)
+                .limit(FEED_PAGE_SIZE)
+                .get();
+            const morePosts = snap.docs.map(docToPost);
+            setFeedPosts(prev => {
+                // 避免重複
+                const existingIds = new Set(prev.map(p => p.id));
+                const newPosts = morePosts.filter(p => !existingIds.has(p.id));
+                return [...prev, ...newPosts];
+            });
+            setMyPosts(prev => {
+                const existingIds = new Set(prev.map(p => p.id));
+                const newOwn = morePosts.filter(p => p.userId === user.uid && !existingIds.has(p.id));
+                return [...prev, ...newOwn];
+            });
+            setFeedLastDoc(snap.docs[snap.docs.length - 1] || feedLastDoc);
+            setFeedHasMore(snap.docs.length === FEED_PAGE_SIZE);
+        } catch(e) {
+            console.error('Load more failed:', e);
+        } finally {
+            setFeedLoadingMore(false);
+        }
+    };
 
     function formatTime(date) {
         const now = new Date();
@@ -2636,6 +2677,35 @@ function MainApp({ user, onLogout }) {
                     />
                 );
             })}
+            {/* 載入更多按鈕 */}
+            {feedPosts.length > 0 && (
+                <div style={{textAlign:'center', padding:'16px 0 24px'}}>
+                    {feedHasMore ? (
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={feedLoadingMore}
+                            style={{
+                                padding:'10px 28px',
+                                background:'var(--white)',
+                                border:'1.5px solid var(--gray-300)',
+                                color:'var(--gray-700)',
+                                fontSize:13,
+                                fontWeight:600,
+                                fontFamily:'var(--font)',
+                                cursor: feedLoadingMore ? 'not-allowed' : 'pointer',
+                                letterSpacing:'.3px',
+                                transition:'all .2s',
+                            }}
+                        >
+                            {feedLoadingMore ? '載入中…' : '載入更多貼文'}
+                        </button>
+                    ) : (
+                        <div style={{fontSize:12, color:'var(--gray-400)', padding:'4px 0'}}>
+                            — 已顯示全部貼文 —
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 
