@@ -97,9 +97,27 @@ tr:hover td{background:var(--g50)}
 .pct-fill.warn{background:#e0a800}
 .pct-fill.danger{background:#c00}
 .uid-small{font-size:9px;color:var(--g400);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+
+/* ── MOBILE RWD ── */
+.hamburger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--black);border:none;padding:8px 10px;cursor:pointer;line-height:1;color:var(--white);font-size:18px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:98}
+@media(max-width:768px){
+  .hamburger{display:block}
+  .sidebar{transform:translateX(-100%);transition:transform .25s ease;z-index:99}
+  .sidebar.sb-open{transform:translateX(0)}
+  .sidebar-overlay.sb-open{display:block}
+  .main{margin-left:0;padding:16px;padding-top:54px}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .chart-row{grid-template-columns:1fr}
+  .quota-summary{grid-template-columns:repeat(2,1fr)}
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
 </style>
 </head>
 <body>
+<!-- Hamburger (mobile only) -->
+<button class="hamburger" id="hamburgerBtn" aria-label="Open menu">&#9776;</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <!-- LOGIN -->
 <div class="loading-screen" id="loadingScreen"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
@@ -275,6 +293,14 @@ firebase.initializeApp({
 var auth = firebase.auth();
 var db   = firebase.firestore();
 
+// ── Admin Whitelist ──────────────────────────────────────────────
+// 🔐 Add your admin email(s) here. Only these accounts can access the dashboard.
+var ALLOWED_ADMINS = [
+  // 'your-admin@gmail.com',
+  // 'another-admin@company.com',
+];
+// ────────────────────────────────────────────────────────────────
+
 var allUsers=[], allPosts=[], allHabits=[];
 var catChart=null, userChart=null;
 
@@ -282,6 +308,18 @@ var catChart=null, userChart=null;
 auth.onAuthStateChanged(function(user){
   document.getElementById('loadingScreen').style.display='none';
   if(user){
+    // ── Whitelist check ──
+    var email = (user.email||'').toLowerCase().trim();
+    var isAllowed = ALLOWED_ADMINS.length === 0 || ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
+    if(!isAllowed){
+      auth.signOut();
+      document.getElementById('loginWrap').style.display='flex';
+      document.getElementById('layout').style.display='none';
+      var b=document.getElementById('errBox');
+      b.style.display='block';
+      b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
+      return;
+    }
     document.getElementById('loginWrap').style.display='none';
     document.getElementById('layout').style.display='flex';
     document.getElementById('adminEmail').textContent = user.email||user.displayName||'';
@@ -658,6 +696,18 @@ function renderQuota(){
     '</tr>';
   }).join('');
 }
+
+// ── Mobile sidebar toggle ──
+document.getElementById('hamburgerBtn').onclick = function(){ toggleSidebar(true); };
+document.getElementById('sidebarOverlay').onclick = function(){ toggleSidebar(false); };
+function toggleSidebar(open){
+  document.querySelector('.sidebar').classList.toggle('sb-open', open);
+  document.getElementById('sidebarOverlay').classList.toggle('sb-open', open);
+}
+// Close sidebar on nav click (mobile)
+document.querySelectorAll('.nav-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){ if(window.innerWidth<=768) toggleSidebar(false); });
+});
 
 function resetUserDaily(uid){
   if(!confirm('Reset today\'s upload count for this user?')) return;

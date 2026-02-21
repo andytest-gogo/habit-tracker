@@ -1252,14 +1252,14 @@ function MemberProfileView({ member: initialMember, currentUser, onBack }) {
 
     return (
         <div>
-            <button className="back-nav" onClick={onBack}><BackIcon/>BackMembers</button>
+            <button className="back-nav" onClick={onBack}><BackIcon/>Back to Members</button>
             <div className="member-profile-header">
                 <div className="member-profile-avatar">{member.avatar}</div>
                 <div className="member-profile-name">{member.name}</div>
                 <div className="member-profile-handle">{member.handle}</div>
                 <div className="member-profile-actions">
                     <button className={`follow-btn${member.isFollowing?' following':''}`} onClick={handleFollow}>
-                        {member.isFollowing ? 'hasFollow' : 'Follow'}
+                        {member.isFollowing ? '✓ Following' : 'Follow'}
                     </button>
                     <button className="msg-btn">Message</button>
                 </div>
@@ -1301,7 +1301,7 @@ function MemberProfileView({ member: initialMember, currentUser, onBack }) {
                     <LockIcon/>
                     {member.isFollowing && !member.followApproved
                         ? <span style={{display:'block',marginTop:6}}>Follow request pending · Posts visible once approved</span>
-                        : <span style={{display:'block',marginTop:6}}>This account is private · Followonce approved toViewPost</span>
+                        : <span style={{display:'block',marginTop:6}}>This account is private · Follow to view posts once approved</span>
                     }
                 </div>
             ) : (
@@ -1366,7 +1366,7 @@ function GroupDetailView({ group, currentUser, onBack }) {
                     style={{width:'100%',marginTop:14,padding:'11px'}}
                     onClick={()=>setJoined(!joined)}
                 >
-                    {joined ? '✓ hasJoin Challenge' : 'Join Challenge'}
+                    {joined ? '✓ Joined Challenge' : 'Join Challenge'}
                 </button>
             </div>
 
@@ -1422,7 +1422,10 @@ function calcCompletionRate(habit) {
     const habitStart = startStr ? dateFromISO(startStr) : (habit.createdAt ? new Date(habit.createdAt) : new Date());
     const habitEnd   = endStr   ? dateFromISO(endStr)   : new Date();
     const msPerDay   = 1000 * 60 * 60 * 24;
-    const totalDays  = Math.max(1, Math.round((habitEnd - habitStart) / msPerDay) + 1);
+    const rawDays    = Math.round((habitEnd - habitStart) / msPerDay) + 1;
+    // If habit hasn't started yet (future start date), return 0
+    if (rawDays <= 0) return 0;
+    const totalDays  = Math.max(1, rawDays);
     // Total expected completions (denominator)
     const totalExpected = Math.ceil(totalDays / intervalDays) * timesPerCycle;
     // Actual completions (numerator, capped per day = timesPerCycle)
@@ -1612,6 +1615,16 @@ function AddHabitModal({ onClose, onAdd }) {
 
     const handleAdd = () => {
         if (!name.trim()) return;
+        // Validate custom duration input
+        if (durPreset?.value === null && !durCustom.toString().trim()) {
+            alert('Please enter a custom duration value.');
+            return;
+        }
+        // Validate date range
+        if (startDate > endDate) {
+            alert('End date must be on or after start date.');
+            return;
+        }
         const timeRange = `${startDate} ～ ${endDate}`;
         const freqLabel = getFreqLabel();
         const durLabel  = getDurLabel();
@@ -1927,7 +1940,16 @@ function MainApp({ user, onLogout }) {
     const [loading, setLoading] = useState(true);
     const [selectedHabit, setSelectedHabit] = useState(null);
     const [selectedGroup, setSelectedGroup] = useState(null);
-    const [groups, setGroups] = useState(mockGroups);
+    const [groups, setGroups] = useState(() => {
+        try {
+            const saved = localStorage.getItem('groups_joined_' + (user?.uid || 'demo'));
+            if (saved) {
+                const joinedIds = JSON.parse(saved);
+                return mockGroups.map(g => ({ ...g, joined: joinedIds.includes(g.id) }));
+            }
+        } catch(e) {}
+        return mockGroups;
+    });
     const [feedPosts, setFeedPosts] = useState(mockFeedGlobal);
     const [myPosts, setMyPosts] = useState([]);
     const [postText, setPostText] = useState('');
@@ -2315,6 +2337,12 @@ function MainApp({ user, onLogout }) {
     };
 
 
+    /* ── 判斷登入方式 ── */
+    const isGoogleUser = () => {
+        if (!auth.currentUser) return false;
+        return auth.currentUser.providerData.some(p => p.providerId === 'google.com');
+    };
+
     /* ── 刪除帳號 — 清除所有用戶資料後刪除 Firebase Auth 帳號 ── */
     const handleDeleteAccount = async () => {
         if (!isFirebaseConfigured) {
@@ -2327,8 +2355,15 @@ function MainApp({ user, onLogout }) {
         try {
             const uid = user.uid;
             // Step 1: 重新驗證（Firebase 刪帳需要近期登入）
-            const credential = firebase.auth.EmailAuthProvider.credential(user.email, deletePassword);
-            await auth.currentUser.reauthenticateWithCredential(credential);
+            if (isGoogleUser()) {
+                // Google OAuth 用戶：使用 Google popup 重新驗證
+                const provider = new firebase.auth.GoogleAuthProvider();
+                await auth.currentUser.reauthenticateWithPopup(provider);
+            } else {
+                // Email/Password 用戶：使用密碼重新驗證
+                const credential = firebase.auth.EmailAuthProvider.credential(user.email, deletePassword);
+                await auth.currentUser.reauthenticateWithCredential(credential);
+            }
 
             // Step 2: 刪除 Firestore 資料（所有 collection）
             // 刪除 habits
@@ -2523,10 +2558,17 @@ function MainApp({ user, onLogout }) {
                                     className={`join-btn${group.joined?' joined':''}`}
                                     onClick={e=>{
                                         e.stopPropagation();
-                                        setGroups(prev=>prev.map(g=>g.id===group.id?{...g,joined:!g.joined}:g));
+                                        setGroups(prev=>{
+                                            const updated = prev.map(g=>g.id===group.id?{...g,joined:!g.joined}:g);
+                                            try {
+                                                const joinedIds = updated.filter(g=>g.joined).map(g=>g.id);
+                                                localStorage.setItem('groups_joined_' + (user?.uid || 'demo'), JSON.stringify(joinedIds));
+                                            } catch(e) {}
+                                            return updated;
+                                        });
                                     }}
                                 >
-                                    {group.joined ? '✓ hasJoin' : 'Join'}
+                                    {group.joined ? '✓ Joined' : 'Join'}
                                 </button>
                                 <button
                                     className="join-btn"
@@ -2749,21 +2791,34 @@ function MainApp({ user, onLogout }) {
                             </>
                         ) : (
                             <>
-                                <div className="danger-modal-title">Confirm with Password</div>
+                                <div className="danger-modal-title">
+                                    {isGoogleUser() ? 'Confirm with Google' : 'Confirm with Password'}
+                                </div>
                                 <div className="danger-step">Step 2 of 2 — Final Confirmation</div>
                                 <div className="danger-modal-body">
-                                    Enter your password to confirm deletion of<br/>
-                                    <strong>{user.email}</strong>
+                                    {isGoogleUser() ? (
+                                        <>
+                                            Click below to re-authenticate with Google and confirm deletion of<br/>
+                                            <strong>{user.email}</strong>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Enter your password to confirm deletion of<br/>
+                                            <strong>{user.email}</strong>
+                                        </>
+                                    )}
                                 </div>
-                                <input
-                                    type="password"
-                                    className="danger-confirm-input"
-                                    placeholder="Enter your password"
-                                    value={deletePassword}
-                                    onChange={e=>setDeletePassword(e.target.value)}
-                                    onKeyDown={e=>e.key==='Enter'&&deletePassword&&handleDeleteAccount()}
-                                    autoFocus
-                                />
+                                {!isGoogleUser() && (
+                                    <input
+                                        type="password"
+                                        className="danger-confirm-input"
+                                        placeholder="Enter your password"
+                                        value={deletePassword}
+                                        onChange={e=>setDeletePassword(e.target.value)}
+                                        onKeyDown={e=>e.key==='Enter'&&deletePassword&&handleDeleteAccount()}
+                                        autoFocus
+                                    />
+                                )}
                                 {deleteError && (
                                     <div style={{color:'#dc2626',fontSize:11,marginBottom:12,padding:'8px 10px',background:'#fef2f2',border:'1px solid #fca5a5'}}>
                                         {deleteError}
@@ -2771,7 +2826,7 @@ function MainApp({ user, onLogout }) {
                                 )}
                                 <button
                                     className="danger-confirm-btn"
-                                    disabled={!deletePassword}
+                                    disabled={!isGoogleUser() && !deletePassword}
                                     onClick={handleDeleteAccount}
                                 >
                                     🗑 Permanently Delete Everything
