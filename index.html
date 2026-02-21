@@ -914,7 +914,7 @@ function AuthPage({ onAuthSuccess }) {
 
     /* Firebase error code → message */
     const firebaseErrMsg = (code) => ({
-        'auth/email-already-in-use': 'This email is already registered. Please sign in or use a different email',
+        'auth/email-already-in-use': 'This email is already registered. Please sign in instead. (If you previously deleted your account but this error persists, the account may still exist in Firebase — please contact the administrator.)',
         'auth/invalid-email':        'Invalid email format',
         'auth/weak-password':        'Password is too weak. Please use a stronger password',
         'auth/user-not-found':       'Account not found. Please check your email address',
@@ -941,7 +941,11 @@ function AuthPage({ onAuthSuccess }) {
         try {
             const r = await auth.signInWithEmailAndPassword(email, password);
             if (!r.user.emailVerified) {
-                await r.user.sendEmailVerification();
+                const actionCodeSettings = {
+                    url: window.location.origin + window.location.pathname,
+                    handleCodeInApp: false,
+                };
+                await r.user.sendEmailVerification(actionCodeSettings);
                 startCooldown();
                 setError('');
             }
@@ -985,7 +989,12 @@ function AuthPage({ onAuthSuccess }) {
                 const r = await auth.createUserWithEmailAndPassword(email, password);
                 await r.user.updateProfile({ displayName });
                 // ✅ 只寄驗證信，不寫入 Firestore（等登入且驗證通過後才寫）
-                await r.user.sendEmailVerification();
+                // actionCodeSettings 提升信件送達率，並設定驗證後回跳網址
+                const actionCodeSettings = {
+                    url: window.location.origin + window.location.pathname,
+                    handleCodeInApp: false,
+                };
+                await r.user.sendEmailVerification(actionCodeSettings);
                 await auth.signOut();
                 setSentEmail(email);
                 setVerificationSent(true);
@@ -1044,8 +1053,10 @@ function AuthPage({ onAuthSuccess }) {
                         fontSize:11, color:'var(--gray-500)', lineHeight:1.7
                     }}>
                         <strong style={{color:'var(--gray-700)'}}>Didn't receive the email?</strong><br/>
-                        Please check your spam folder, or make sure the email address is correct.
-                        The verification link expires in 24 hours.
+                        ① Check your <strong style={{color:'var(--gray-700)'}}>spam / junk folder</strong> — Firebase verification emails sometimes land there.<br/>
+                        ② Make sure the email address is correct.<br/>
+                        ③ The verification link expires in 24 hours.<br/>
+                        ④ Gmail users: check the <strong style={{color:'var(--gray-700)'}}>Promotions</strong> or <strong style={{color:'var(--gray-700)'}}>Updates</strong> tab as well.
                     </div>
                 </div>
             </div>
@@ -1146,7 +1157,13 @@ function FeedCard({ post, currentUser, onLike }) {
                 }]);
             }
             setCommentText('');
-        } catch(e) { alert('Comment failed: ' + e.message); }
+        } catch(e) {
+            if (e.code === 'permission-denied' || (e.message && e.message.toLowerCase().includes('permission'))) {
+                alert('留言失敗：Firestore 安全規則尚未設定留言寫入權限。\n請到 Firebase Console → Firestore → Rules，加入 comments subcollection 的寫入規則。\n\n詳細規則範本請見 README 或聯絡管理員。');
+            } else {
+                alert('Comment failed: ' + e.message);
+            }
+        }
         finally { setSendingComment(false); }
     };
 
