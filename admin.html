@@ -295,7 +295,7 @@ tr:hover td{background:var(--g50)}
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 <script>
 firebase.initializeApp({
   apiKey:"AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
@@ -318,11 +318,25 @@ var ALLOWED_ADMINS = [
 var allUsers=[], allPosts=[], allHabits=[];
 var catChart=null, userChart=null;
 
-// Auth state
+// ── Auth state ──────────────────────────────────────────────────
+// Safety net: if Firebase never fires onAuthStateChanged (e.g. network error),
+// hide the loading screen after 5 s and show login.
+var authResolved = false;
+var authSafetyTimer = setTimeout(function(){
+  if(!authResolved){
+    authResolved = true;
+    document.getElementById('loadingScreen').style.display='none';
+    document.getElementById('loginWrap').style.display='flex';
+  }
+}, 5000);
+
 auth.onAuthStateChanged(function(user){
+  if(authResolved && document.getElementById('loadingScreen').style.display==='none') return;
+  clearTimeout(authSafetyTimer);
+  authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
+
   if(user){
-    // ── Whitelist check ──
     var email = (user.email||'').toLowerCase().trim();
     var isAllowed = ALLOWED_ADMINS.length === 0 || ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
     if(!isAllowed){
@@ -344,16 +358,19 @@ auth.onAuthStateChanged(function(user){
   }
 });
 
-// Handle redirect sign-in result
-auth.getRedirectResult().then(function(result){
-  // Successful login handled by onAuthStateChanged
-}).catch(function(e){
-  if(e.code && e.code !== 'auth/no-current-user'){
-    var b=document.getElementById('errBox');
-    b.style.display='block';
-    b.textContent='Sign in failed: '+e.message;
-  }
-});
+// Handle redirect sign-in result (only check if URL has auth params to avoid extra round-trip)
+var _hasAuthParams = window.location.href.indexOf('__/auth/handler') > -1
+  || window.location.search.indexOf('code=') > -1
+  || document.cookie.indexOf('firebase') > -1;
+if(_hasAuthParams){
+  auth.getRedirectResult().catch(function(e){
+    if(e.code && e.code !== 'auth/no-current-user'){
+      var b=document.getElementById('errBox');
+      b.style.display='block';
+      b.textContent='Sign in failed: '+e.message;
+    }
+  });
+}
 
 // Login - try popup first, fall back to redirect if blocked
 document.getElementById('loginBtn').onclick = function(){
