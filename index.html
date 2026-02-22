@@ -5842,8 +5842,7 @@ function App() {
     var unsub = auth.onAuthStateChanged(function (u) {
       clearTimeout(authTimeout);
       if (u && isFirebaseConfigured) {
-        if (u.emailVerified) {
-          // Fire-and-forget: don't block auth state with Firestore write
+        // Fire-and-forget: don't block auth state with Firestore write
           db.collection('users').doc(u.uid).set({
             uid: u.uid,
             email: u.email || '',
@@ -5854,10 +5853,6 @@ function App() {
             merge: true
           }).catch(function () {});
           setUser(u);
-        } else {
-          auth.signOut();
-          setUser(null);
-        }
       } else {
         setUser(u || null);
       }

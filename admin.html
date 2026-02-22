@@ -295,7 +295,7 @@ tr:hover td{background:var(--g50)}
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 // Immediate safety: if Firebase CDN failed to load, show login immediately
 if(typeof firebase === 'undefined'){
@@ -340,7 +340,7 @@ var authSafetyTimer = setTimeout(function(){
 }, 5000);
 
 auth.onAuthStateChanged(function(user){
-  if(authResolved && document.getElementById('loadingScreen').style.display==='none') return;
+  if(authResolved) return;
   clearTimeout(authSafetyTimer);
   authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
