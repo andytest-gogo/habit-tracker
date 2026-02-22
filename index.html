@@ -602,30 +602,7 @@
     </style>
 </head>
 <body>
-<!-- 骨架 loading screen — 在 Babel/React 初始化前顯示，React mount 後自動隱藏 -->
-<div id="pre-loader" style="
-  position:fixed;inset:0;background:#fff;z-index:9999;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-family:'DM Sans',system-ui,sans-serif;
-">
-  <span style="font-size:13px;color:#737373;font-weight:600;letter-spacing:1px;text-transform:uppercase">Loading...</span>
-</div>
 <div id="root"></div>
-<script>
-  // Expose __hidePL so React can call it directly (when authLoading returns null)
-  window.__hidePL = function(){
-    var pl = document.getElementById('pre-loader');
-    if(pl){ pl.style.transition='opacity .25s'; pl.style.opacity='0'; setTimeout(function(){ pl.remove(); },260); }
-    if(window._plObserver){ window._plObserver.disconnect(); }
-  };
-  // Also hide once React mounts anything into #root
-  window._plObserver = new MutationObserver(function(){
-    if(document.getElementById('root').childElementCount > 0){ window.__hidePL(); }
-  });
-  window._plObserver.observe(document.getElementById('root'),{childList:true});
-  // Safety fallback: hide after 6s no matter what
-  setTimeout(function(){ window.__hidePL && window.__hidePL(); }, 6000);
-</script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -5661,52 +5638,31 @@ function MainApp(_ref16) {
 
 /* ── ROOT APP ── */
 function App() {
-  // authLoading: true while we wait for Firebase to tell us if user is logged in
-  // This prevents the flash of AuthPage before onAuthStateChanged fires
   var _useState109 = useState(null),
     _useState110 = _slicedToArray(_useState109, 2),
     user = _useState110[0],
     setUser = _useState110[1];
-  var _useState111 = useState(isFirebaseConfigured),
-    _useState112 = _slicedToArray(_useState111, 2),
-    authLoading = _useState112[0],
-    setAuthLoading = _useState112[1];
   useEffect(function () {
     if (!isFirebaseConfigured) {
       var u = localStorage.getItem('demoUser');
       if (u) setUser(JSON.parse(u));
-      setAuthLoading(false);
       return;
     }
-    // Safety: if Firebase never calls back, stop waiting after 4s
-    var authTimeout = setTimeout(function () {
-      setAuthLoading(false);
-      window.__hidePL && window.__hidePL();
-    }, 4000);
     var unsub = auth.onAuthStateChanged(function (u) {
-      clearTimeout(authTimeout);
       if (u && isFirebaseConfigured) {
-        // Fire-and-forget: don't block auth state with Firestore write
-          db.collection('users').doc(u.uid).set({
-            uid: u.uid,
-            email: u.email || '',
-            displayName: u.displayName || '',
-            photoURL: u.photoURL || '',
-            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-          }, {
-            merge: true
-          }).catch(function () {});
-          setUser(u);
+        db.collection('users').doc(u.uid).set({
+          uid: u.uid,
+          email: u.email || '',
+          displayName: u.displayName || '',
+          photoURL: u.photoURL || '',
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(function () {});
+        setUser(u);
       } else {
         setUser(u || null);
       }
-      setAuthLoading(false);
-      window.__hidePL && window.__hidePL();
     });
-    return function () {
-      unsub();
-      clearTimeout(authTimeout);
-    };
+    return function () { unsub(); };
   }, []);
   var handleLogout = function handleLogout() {
     if (!isFirebaseConfigured) {
@@ -5714,9 +5670,6 @@ function App() {
       setUser(null);
     } else auth.signOut();
   };
-
-  // While waiting for Firebase auth — show nothing (pre-loader is still visible)
-  if (authLoading) return null;
   return user ? /*#__PURE__*/React.createElement(MainApp, {
     user: user,
     onLogout: handleLogout
