@@ -159,6 +159,10 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
         Upload Quota
       </button>
+      <button class="nav-btn" data-page="reports" id="reportsNavBtn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H13l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+        檢舉管理 <span id="reportBadge" style="display:none;background:#e53e3e;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;margin-left:4px;vertical-align:middle;">0</span>
+      </button>
     </nav>
     <div class="sb-foot">
       <div class="sb-email" id="adminEmail"></div>
@@ -195,8 +199,8 @@ tr:hover td{background:var(--g50)}
       <input class="search" id="userSearch" placeholder="Search by name / UID...">
       <div class="tbl-card">
         <div class="tbl-hd"><div class="tbl-ttl">Users</div><div class="tbl-cnt" id="userCnt">—</div></div>
-        <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th></tr></thead>
-        <tbody id="userTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody></table>
+        <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th><th>Action</th></tr></thead>
+        <tbody id="userTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
@@ -209,6 +213,17 @@ tr:hover td{background:var(--g50)}
         <div class="tbl-hd"><div class="tbl-ttl">All Posts</div><div class="tbl-cnt" id="postCnt">—</div></div>
         <table><thead><tr><th>User</th><th>Content</th><th>Media</th><th>Likes</th><th>Comments</th><th>Time</th><th>Action</th></tr></thead>
         <tbody id="postTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- Reports -->
+    <div class="pg" id="pg-reports">
+      <div class="pg-title">檢舉管理</div>
+      <div class="pg-sub">用戶檢舉的貼文，請審查後決定是否封鎖用戶或刪除貼文</div>
+      <div class="tbl-card">
+        <div class="tbl-hd"><div class="tbl-ttl">待處理檢舉</div><div class="tbl-cnt" id="reportCnt">—</div></div>
+        <table><thead><tr><th>被檢舉用戶</th><th>貼文內容</th><th>檢舉人</th><th>時間</th><th>狀態</th><th>Action</th></tr></thead>
+        <tbody id="reportTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody></table>
       </div>
     </div>
 
@@ -369,6 +384,8 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
     btn.classList.add('on');
     document.getElementById('pg-'+btn.dataset.page).classList.add('on');
+    // 切換到檢舉頁面時重新載入
+    if(btn.dataset.page === 'reports') loadReports();
   };
 });
 
@@ -382,6 +399,8 @@ function loadAll(){
   document.getElementById('lastUpdated').textContent='Loading...';
   Promise.all([loadHabits(), loadPosts(), loadUsers()]).then(function(){
     buildUsers();
+    loadBannedUsers(function(){ renderUsers(''); });
+    loadReports();
     renderStats();
     renderCharts();
     renderRecent();
@@ -491,17 +510,137 @@ function renderRecent(){
   }).join('');
 }
 
+var allBannedUids = new Set();
+
+function loadBannedUsers(cb){
+  db.collection('banned_users').get().then(function(snap){
+    allBannedUids = new Set(snap.docs.map(function(d){ return d.id; }));
+    if(cb) cb();
+  }).catch(function(){ if(cb) cb(); });
+}
+
+function banUser(uid, name){
+  if(!confirm('確定要封鎖 '+name+' 的發文權限嗎？')) return;
+  db.collection('banned_users').doc(uid).set({
+    bannedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    bannedBy: auth.currentUser.email,
+    displayName: name,
+  }).then(function(){
+    allBannedUids.add(uid);
+    renderUsers(document.getElementById('userSearch').value);
+    alert('已封鎖 '+name+'。');
+  }).catch(function(e){ alert('封鎖失敗：'+e.message); });
+}
+
+function unbanUser(uid, name){
+  if(!confirm('確定要解除封鎖 '+name+' 嗎？')) return;
+  db.collection('banned_users').doc(uid).delete().then(function(){
+    allBannedUids.delete(uid);
+    renderUsers(document.getElementById('userSearch').value);
+    alert('已解除封鎖 '+name+'。');
+  }).catch(function(e){ alert('解除失敗：'+e.message); });
+}
+
+var allReports = [];
+
+function loadReports(){
+  db.collection('reports').orderBy('createdAt','desc').limit(100).get().then(function(snap){
+    allReports = snap.docs.map(function(d){
+      var data = d.data();
+      var t = data.createdAt ? data.createdAt.toDate() : null;
+      return Object.assign({ id: d.id, timeStr: t ? t.toLocaleDateString('zh-TW') : '—' }, data);
+    });
+    var pending = allReports.filter(function(r){ return r.status === 'pending'; });
+    document.getElementById('reportCnt').textContent = allReports.length + ' 件';
+    var badge = document.getElementById('reportBadge');
+    if(pending.length > 0){
+      badge.textContent = pending.length;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+    renderReports();
+  }).catch(function(e){ console.error('loadReports:', e); });
+}
+
+function renderReports(){
+  var tb = document.getElementById('reportTbody');
+  if(!allReports.length){
+    tb.innerHTML = '<tr class="loading-row"><td colspan="6">目前沒有檢舉記錄</td></tr>';
+    return;
+  }
+  tb.innerHTML = allReports.map(function(r){
+    var statusBadge = r.status === 'pending'
+      ? '<span style="color:#e53e3e;font-weight:700">待處理</span>'
+      : '<span style="color:#38a169;font-weight:700">已處理</span>';
+    var actions = r.status === 'pending'
+      ? '<button class="del" style="margin-right:4px" onclick="resolveReport(''+r.id+'',''+r.postId+'',''+r.postUserId+'',''+htmlEsc(r.postUserName||'')+'',true)">封鎖+刪文</button>'+
+        '<button class="del" style="background:var(--g300);color:var(--black)" onclick="resolveReport(''+r.id+'',''+r.postId+'',''+r.postUserId+'',''+htmlEsc(r.postUserName||'')+'',false)">忽略</button>'
+      : '—';
+    return '<tr>'+
+      '<td>'+htmlEsc(r.postUserName||r.postUserId||'—')+'</td>'+
+      '<td><div class="ptxt">Post ID: '+htmlEsc(r.postId||'—')+'</div></td>'+
+      '<td>'+htmlEsc(r.reporterName||'—')+'</td>'+
+      '<td style="font-size:10px;color:var(--g400)">'+r.timeStr+'</td>'+
+      '<td>'+statusBadge+'</td>'+
+      '<td>'+actions+'</td></tr>';
+  }).join('');
+}
+
+function resolveReport(reportId, postId, postUserId, postUserName, shouldBan){
+  var msg = shouldBan
+    ? '確定要封鎖 '+postUserName+' 並刪除該貼文嗎？'
+    : '確定要忽略這份檢舉嗎？';
+  if(!confirm(msg)) return;
+  var batch = db.batch();
+  // 標記檢舉為已處理
+  batch.update(db.collection('reports').doc(reportId), { status: 'resolved' });
+  if(shouldBan){
+    // 封鎖用戶
+    batch.set(db.collection('banned_users').doc(postUserId), {
+      bannedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      bannedBy: auth.currentUser.email,
+      displayName: postUserName,
+    });
+    // 刪除貼文
+    batch.delete(db.collection('posts').doc(postId));
+  }
+  batch.commit().then(function(){
+    if(shouldBan) allBannedUids.add(postUserId);
+    allReports = allReports.map(function(r){ return r.id === reportId ? Object.assign({},r,{status:'resolved'}) : r; });
+    var pending = allReports.filter(function(r){ return r.status === 'pending'; });
+    var badge = document.getElementById('reportBadge');
+    if(pending.length > 0){ badge.textContent = pending.length; badge.style.display='inline'; }
+    else { badge.style.display = 'none'; }
+    renderReports();
+    if(shouldBan){
+      allPosts = allPosts.filter(function(p){ return p.id !== postId; });
+      renderPosts(document.getElementById('postSearch').value);
+    }
+    alert(shouldBan ? '已封鎖用戶並刪除貼文。' : '已忽略此檢舉。');
+  }).catch(function(e){ alert('操作失敗：'+e.message); });
+}
+
 function renderUsers(f){
   var tb=document.getElementById('userTbody');
   var list=allUsers.filter(function(u){ return !f||u.name.includes(f)||u.uid.includes(f)||(u.email||'').includes(f); });
   document.getElementById('userCnt').textContent=list.length+' user(s)';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No matching users</td></tr>';return;}
+  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="6">No matching users</td></tr>';return;}
   tb.innerHTML=list.map(function(u){
     var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
-    return '<tr><td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong><div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
+    var isBanned = allBannedUids.has(u.uid);
+    var banBtn = u.uid === auth.currentUser.uid ? '—' :
+      isBanned
+        ? '<button class="del" style="background:var(--g300);color:var(--black)" onclick="unbanUser(''+u.uid+'',''+htmlEsc(u.name)+'')">解除封鎖</button>'
+        : '<button class="del" onclick="banUser(''+u.uid+'',''+htmlEsc(u.name)+'')">封鎖發文</button>';
+    return '<tr style="'+(isBanned?'opacity:.5':'')+'">' +
+      '<td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong>'+
+      (isBanned?'<span style="color:#e53e3e;font-size:10px;margin-left:4px;">🚫 封鎖中</span>':'')+
+      '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
       '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
+      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
+      '<td>'+banBtn+'</td></tr>';
   }).join('');
 }
 

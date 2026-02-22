@@ -1217,7 +1217,15 @@ function FeedCard({ post, currentUser, onLike }) {
                 <div className="feed-action" onClick={()=>setShowComments(s=>!s)}>
                     <ChatIcon/><span>{post.comments}</span>
                 </div>
-
+                {!post.isOwn && currentUser && post.userId !== currentUser.uid && (
+                    <div className="feed-action" style={{marginLeft:'auto',color:'var(--gray-300)'}}
+                        onClick={()=>onReport && onReport(post.id, post.userId, post.user)}>
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H13l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/>
+                        </svg>
+                        <span style={{fontSize:10}}>檢舉</span>
+                    </div>
+                )}
             </div>
             {showComments && (
                 <div className="comments-section">
@@ -2370,9 +2378,58 @@ function MainApp({ user, onLogout }) {
         }
     };
 
+    const POST_DAILY_LIMIT = 5;        // 每日最多發文數
+    const POST_COOLDOWN_SEC = 180;     // 兩篇之間最少間隔秒數（3 分鐘）
+
     const handlePostSubmit = async () => {
         if (!postText.trim() && !postMedia) return;
         if (postMedia?.uploading) return;
+
+        if (isFirebaseConfigured) {
+            // ── 檢查用戶是否被封鎖 ──
+            try {
+                const banDoc = await db.collection('banned_users').doc(user.uid).get();
+                if (banDoc.exists) {
+                    alert('您的帳號已被管理員停止發文權限。如有疑問請聯絡管理員。');
+                    return;
+                }
+            } catch(e) {}
+
+            // ── 每日發文上限 & 冷卻時間 ──
+            try {
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const snap = await db.collection('posts')
+                    .where('userId','==',user.uid)
+                    .where('createdAt','>=',firebase.firestore.Timestamp.fromDate(today))
+                    .get();
+                if (snap.size >= POST_DAILY_LIMIT) {
+                    alert(`每日最多發 ${POST_DAILY_LIMIT} 篇貼文，明天再來吧！`);
+                    return;
+                }
+                // 冷卻時間：找最近一篇貼文
+                const recentSnap = await db.collection('posts')
+                    .where('userId','==',user.uid)
+                    .orderBy('createdAt','desc')
+                    .limit(1)
+                    .get();
+                if (!recentSnap.empty) {
+                    const lastPost = recentSnap.docs[0].data();
+                    const lastTime = lastPost.createdAt?.toDate?.();
+                    if (lastTime) {
+                        const diffSec = Math.floor((new Date() - lastTime) / 1000);
+                        if (diffSec < POST_COOLDOWN_SEC) {
+                            const remaining = POST_COOLDOWN_SEC - diffSec;
+                            const mins = Math.floor(remaining / 60);
+                            const secs = remaining % 60;
+                            alert(`發文太頻繁！請等 ${mins > 0 ? mins+'分' : ''}${secs}秒 後再發。`);
+                            return;
+                        }
+                    }
+                }
+            } catch(e) { console.warn('Post limit check failed:', e); }
+        }
+
         const avatar = (user.displayName || user.email)?.[0]?.toUpperCase() || 'U';
         const newPost = {
             userId: user.uid,
@@ -2404,6 +2461,35 @@ function MainApp({ user, onLogout }) {
         setPostMedia(null);
     };
 
+
+    /* ── 檢舉貼文 ── */
+    const handleReport = async (postId, postUserId, postUserName) => {
+        if (!isFirebaseConfigured) { alert('檢舉功能需要登入才能使用。'); return; }
+        if (!window.confirm(`確定要檢舉 ${postUserName || '此用戶'} 的貼文嗎？\n管理員會收到通知並進行審查。`)) return;
+        try {
+            // 防止重複檢舉
+            const existing = await db.collection('reports')
+                .where('postId','==',postId)
+                .where('reporterId','==',user.uid)
+                .limit(1).get();
+            if (!existing.empty) {
+                alert('你已經檢舉過這篇貼文了。');
+                return;
+            }
+            await db.collection('reports').add({
+                postId,
+                postUserId,
+                postUserName: postUserName || '',
+                reporterId: user.uid,
+                reporterName: user.displayName || user.email || '',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                status: 'pending',
+            });
+            alert('已送出檢舉，感謝你的回報！管理員會盡快處理。');
+        } catch(e) {
+            alert('檢舉失敗：' + e.message);
+        }
+    };
 
     /* ── 判斷登入方式 ── */
     const isGoogleUser = () => {
@@ -2674,6 +2760,7 @@ function MainApp({ user, onLogout }) {
                         post={{...post, liked, likes: post.likes || 0}}
                         currentUser={user}
                         onLike={handleLikeFeed}
+                        onReport={handleReport}
                     />
                 );
             })}
