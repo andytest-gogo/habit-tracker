@@ -295,8 +295,17 @@ tr:hover td{background:var(--g50)}
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 <script>
+// Immediate safety: if Firebase CDN failed to load, show login immediately
+if(typeof firebase === 'undefined'){
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('loginWrap').style.display='flex';
+  document.getElementById('errBox').style.display='block';
+  document.getElementById('errBox').textContent='Failed to load Firebase. Please check your internet connection and reload.';
+  throw new Error('Firebase not loaded');
+}
+
 firebase.initializeApp({
   apiKey:"AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
   authDomain:"health-habit-tracker-e6b50.firebaseapp.com",
@@ -319,49 +328,58 @@ var allUsers=[], allPosts=[], allHabits=[];
 var catChart=null, userChart=null;
 
 // ── Auth state ──────────────────────────────────────────────────
-// Safety net: show login if Firebase never fires within 6s
+// Safety net: if Firebase never fires onAuthStateChanged (e.g. network error),
+// hide the loading screen after 5 s and show login.
 var authResolved = false;
 var authSafetyTimer = setTimeout(function(){
-  if(authResolved) return;
-  authResolved = true;
-  document.getElementById('loadingScreen').style.display='none';
-  document.getElementById('loginWrap').style.display='flex';
-}, 6000);
+  if(!authResolved){
+    authResolved = true;
+    document.getElementById('loadingScreen').style.display='none';
+    document.getElementById('loginWrap').style.display='flex';
+  }
+}, 5000);
 
 auth.onAuthStateChanged(function(user){
-  if(authResolved) return; // already handled
+  if(authResolved && document.getElementById('loadingScreen').style.display==='none') return;
   clearTimeout(authSafetyTimer);
   authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
 
   if(user){
     var email = (user.email||'').toLowerCase().trim();
-    var isAllowed = ALLOWED_ADMINS.length === 0 ||
-      ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
+    var isAllowed = ALLOWED_ADMINS.length === 0 || ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
     if(!isAllowed){
       auth.signOut();
       document.getElementById('loginWrap').style.display='flex';
+      document.getElementById('layout').style.display='none';
       var b=document.getElementById('errBox');
       b.style.display='block';
-      b.textContent='Access denied: '+email+' is not authorized.';
+      b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
       return;
     }
+    document.getElementById('loginWrap').style.display='none';
     document.getElementById('layout').style.display='flex';
     document.getElementById('adminEmail').textContent = user.email||user.displayName||'';
     loadAll();
   } else {
     document.getElementById('loginWrap').style.display='flex';
+    document.getElementById('layout').style.display='none';
   }
 });
 
-// Only call getRedirectResult when we came back from a redirect flow
-auth.getRedirectResult().catch(function(e){
-  if(e.code && e.code !== 'auth/no-current-user' && e.code !== 'auth/null-user'){
-    var b=document.getElementById('errBox');
-    b.style.display='block';
-    b.textContent='Sign in failed: '+e.message;
-  }
-});
+// Handle redirect sign-in result (only check if URL has auth params to avoid extra round-trip)
+var _hasAuthParams = window.location.href.indexOf('__/auth/handler') > -1
+  || window.location.search.indexOf('code=') > -1
+  || document.cookie.indexOf('firebase') > -1;
+if(_hasAuthParams){
+  auth.getRedirectResult().catch(function(e){
+    if(e.code && e.code !== 'auth/no-current-user'){
+      var b=document.getElementById('errBox');
+      b.style.display='block';
+      b.textContent='Sign in failed: '+e.message;
+    }
+  });
+}
 
 // Login - try popup first, fall back to redirect if blocked
 document.getElementById('loginBtn').onclick = function(){
@@ -577,13 +595,13 @@ function renderReports(){
     tb.innerHTML = '<tr class="loading-row"><td colspan="6">目前沒有檢舉記錄</td></tr>';
     return;
   }
-  tb.innerHTML = allReports.map(function(r){
+  tb.innerHTML = allReports.map(function(r, idx){
     var statusBadge = r.status === 'pending'
       ? '<span style="color:#e53e3e;font-weight:700">待處理</span>'
       : '<span style="color:#38a169;font-weight:700">已處理</span>';
     var actions = r.status === 'pending'
-      ? '<button class="del" style="margin-right:4px" onclick="resolveReport(''+r.id+'',''+r.postId+'',''+r.postUserId+'',''+htmlEsc(r.postUserName||'')+'',true)">封鎖+刪文</button>'+
-        '<button class="del" style="background:var(--g300);color:var(--black)" onclick="resolveReport(''+r.id+'',''+r.postId+'',''+r.postUserId+'',''+htmlEsc(r.postUserName||'')+'',false)">忽略</button>'
+      ? '<button class="del rpt-ban" style="margin-right:4px" data-idx="'+idx+'">封鎖+刪文</button>'+
+        '<button class="del rpt-ignore" data-idx="'+idx+'">忽略</button>'
       : '—';
     return '<tr>'+
       '<td>'+htmlEsc(r.postUserName||r.postUserId||'—')+'</td>'+
@@ -593,6 +611,15 @@ function renderReports(){
       '<td>'+statusBadge+'</td>'+
       '<td>'+actions+'</td></tr>';
   }).join('');
+  // Bind events via delegation (avoids inline onclick quote issues)
+  tb.querySelectorAll('.rpt-ban').forEach(function(btn){
+    var r = allReports[+btn.dataset.idx];
+    btn.onclick = function(){ resolveReport(r.id, r.postId, r.postUserId, r.postUserName||'', true); };
+  });
+  tb.querySelectorAll('.rpt-ignore').forEach(function(btn){
+    var r = allReports[+btn.dataset.idx];
+    btn.onclick = function(){ resolveReport(r.id, r.postId, r.postUserId, r.postUserName||'', false); };
+  });
 }
 
 function resolveReport(reportId, postId, postUserId, postUserName, shouldBan){
@@ -639,8 +666,8 @@ function renderUsers(f){
     var isBanned = allBannedUids.has(u.uid);
     var banBtn = u.uid === auth.currentUser.uid ? '—' :
       isBanned
-        ? '<button class="del" style="background:var(--g300);color:var(--black)" onclick="unbanUser(''+u.uid+'',''+htmlEsc(u.name)+'')">解除封鎖</button>'
-        : '<button class="del" onclick="banUser(''+u.uid+'',''+htmlEsc(u.name)+'')">封鎖發文</button>';
+        ? '<button class="del rpt-unban" data-uid="'+u.uid+'" data-name="'+htmlEsc(u.name)+'">解除封鎖</button>'
+        : '<button class="del rpt-doban" data-uid="'+u.uid+'" data-name="'+htmlEsc(u.name)+'">封鎖發文</button>';
     return '<tr style="'+(isBanned?'opacity:.5':'')+'">' +
       '<td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong>'+
       (isBanned?'<span style="color:#e53e3e;font-size:10px;margin-left:4px;">🚫 封鎖中</span>':'')+
@@ -650,6 +677,12 @@ function renderUsers(f){
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
       '<td>'+banBtn+'</td></tr>';
   }).join('');
+  tb.querySelectorAll('.rpt-unban').forEach(function(btn){
+    btn.onclick=function(){ unbanUser(btn.dataset.uid, btn.dataset.name); };
+  });
+  tb.querySelectorAll('.rpt-doban').forEach(function(btn){
+    btn.onclick=function(){ banUser(btn.dataset.uid, btn.dataset.name); };
+  });
 }
 
 function renderPosts(f){
