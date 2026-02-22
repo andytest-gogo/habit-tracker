@@ -2070,7 +2070,7 @@ function AuthPage(_ref2) {
         color: '#E65100',
         fontSize: 13
       }
-    }, "\u26A0\uFE0F \u8ACB\u5148\u53BB\u5783\u573E\u4FE1\u5323\u627E\uFF01"), /*#__PURE__*/React.createElement("br", null), "\u9A57\u8B49\u4FE1\u5F88\u53EF\u80FD\u5728 ", /*#__PURE__*/React.createElement("strong", null, "\u5783\u573E\u90F5\u4EF6 / Spam"), " \u8CC7\u6599\u593E\u3002", /*#__PURE__*/React.createElement("br", null), "\u627E\u5230\u5F8C\u8ACB\u9EDE ", /*#__PURE__*/React.createElement("strong", null, "\u300CReport not spam\u300D"), " \u518D\u9EDE\u64CA\u9A57\u8B49\u9023\u7D50\u3002"), error && /*#__PURE__*/React.createElement("div", {
+    }, "\u26A0\uFE0F Check your spam / junk folder first!"), /*#__PURE__*/React.createElement("br", null), "The verification email may be in your ", /*#__PURE__*/React.createElement("strong", null, "Spam or Junk"), " folder.", /*#__PURE__*/React.createElement("br", null), "If found, mark it as Not spam, then click the ", /*#__PURE__*/React.createElement("strong", null, "verification link"), "."), error && /*#__PURE__*/React.createElement("div", {
       className: "error-message",
       style: {
         maxWidth: 360,
@@ -2110,19 +2110,19 @@ function AuthPage(_ref2) {
       style: {
         color: 'var(--gray-700)'
       }
-    }, "\u6C92\u6709\u6536\u5230\u4FE1\uFF1F\u8ACB\u4F9D\u5E8F\u6AA2\u67E5\uFF1A"), /*#__PURE__*/React.createElement("br", null), "\u2460 ", /*#__PURE__*/React.createElement("strong", {
+    }, "Didn't receive it? Check in order:"), /*#__PURE__*/React.createElement("br", null), "\u2460 ", /*#__PURE__*/React.createElement("strong", {
       style: {
         color: 'var(--gray-800)'
       }
-    }, "\u5783\u573E\u90F5\u4EF6 / Spam"), " \u8CC7\u6599\u593E\uFF08\u6700\u5E38\u898B\uFF09", /*#__PURE__*/React.createElement("br", null), "\u2461 Gmail \u7684 ", /*#__PURE__*/React.createElement("strong", {
+    }, "Spam or Junk"), " (most common)", /*#__PURE__*/React.createElement("br", null), "\u2461 Gmail's ", /*#__PURE__*/React.createElement("strong", {
       style: {
         color: 'var(--gray-800)'
       }
-    }, "\u4FC3\u92B7 Promotions"), " \u5206\u9801", /*#__PURE__*/React.createElement("br", null), "\u2462 Gmail \u7684 ", /*#__PURE__*/React.createElement("strong", {
+    }, "Promotions tab"), "", /*#__PURE__*/React.createElement("br", null), "\u2462 Gmail's ", /*#__PURE__*/React.createElement("strong", {
       style: {
         color: 'var(--gray-800)'
       }
-    }, "\u66F4\u65B0 Updates"), " \u5206\u9801", /*#__PURE__*/React.createElement("br", null), "\u2463 \u78BA\u8A8D email \u5730\u5740\u662F\u5426\u6B63\u78BA", /*#__PURE__*/React.createElement("br", null), "\u2464 \u9A57\u8B49\u9023\u7D50 24 \u5C0F\u6642\u5F8C\u904E\u671F\uFF0C\u8ACB\u76E1\u5FEB\u9EDE\u64CA")));
+    }, "Updates tab"), "", /*#__PURE__*/React.createElement("br", null), "\u2463 Double-check your email address is correct", /*#__PURE__*/React.createElement("br", null), "\u2464 Verification link expires after 24 hours")));
   }
 
   /* ── Login / Sign Up screen ── */
@@ -4273,7 +4273,7 @@ function MainApp(_ref16) {
     return sum + calcCompletionRate(h);
   }, 0) / habits.length) : 0;
 
-  // ── Feed 分頁設定 ──
+  // ── Feed tab設定 ──
   var FEED_PAGE_SIZE = 10;
   var _useState95 = useState(null),
     _useState96 = _slicedToArray(_useState95, 2),
@@ -5711,12 +5711,6 @@ function App() {
     }
     var unsub = auth.onAuthStateChanged(function (u) {
       if (u && isFirebaseConfigured) {
-        // Only allow verified email/password accounts or Google accounts (already verified)
-        var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
-        if (!u.emailVerified && !isGoogle) {
-          // Unverified email account — don't set user, let AuthPage handle it
-          return;
-        }
         db.collection('users').doc(u.uid).set({
           uid: u.uid,
           email: u.email || '',
