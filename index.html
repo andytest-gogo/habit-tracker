@@ -5732,34 +5732,17 @@ function App() {
       return;
     }
     var unsub = auth.onAuthStateChanged(function (u) {
+      // onAuthStateChanged 只負責同步登入狀態，不做驗證攔截
+      // 驗證邏輯由 handleSubmit 負責，避免非同步造成的競態問題
       if (u && isFirebaseConfigured) {
-        var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
-        // 強制 reload 取得最新 emailVerified 狀態，避免快取造成誤判
-        u.reload().then(function() {
-          var freshUser = auth.currentUser;
-          if (!freshUser) return;
-          var freshIsGoogle = freshUser.providerData && freshUser.providerData.some(function(p){ return p.providerId === 'google.com'; });
-          if (!freshUser.emailVerified && !freshIsGoogle) {
-            // 確實尚未驗證，登出
-            auth.signOut();
-            return;
-          }
-          db.collection('users').doc(freshUser.uid).set({
-            uid: freshUser.uid,
-            email: freshUser.email || '',
-            displayName: freshUser.displayName || '',
-            photoURL: freshUser.photoURL || '',
-            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true }).catch(function () {});
-          setUser(freshUser);
-        }).catch(function() {
-          // reload 失敗時（如網路問題），改用原本的 u 物件判斷
-          if (!u.emailVerified && !isGoogle) {
-            auth.signOut();
-            return;
-          }
-          setUser(u);
-        });
+        db.collection('users').doc(u.uid).set({
+          uid: u.uid,
+          email: u.email || '',
+          displayName: u.displayName || '',
+          photoURL: u.photoURL || '',
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(function () {});
+        setUser(u);
       } else {
         setUser(u || null);
       }

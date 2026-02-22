@@ -334,6 +334,7 @@ auth.onAuthStateChanged(function(user){
     var email = (user.email||'').toLowerCase().trim();
     var isAllowed = ALLOWED_ADMINS.length === 0 || ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
     if(!isAllowed){
+      // 只登出 admin 本身的 session，不影響 index.html 的使用者 session
       auth.signOut();
       document.getElementById('loginWrap').style.display='flex';
       document.getElementById('layout').style.display='none';
