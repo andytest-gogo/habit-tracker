@@ -1938,7 +1938,7 @@ function AuthPage(_ref2) {
           case 2:
             _context2.p = 2;
             if (!isLogin) {
-              _context2.n = 7;
+              _context2.n = 8;
               break;
             }
             _context2.n = 3;
@@ -1959,7 +1959,11 @@ function AuthPage(_ref2) {
             startCooldown();
             return _context2.a(2);
           case 5:
+            // 強制刷新 ID token，確保 onAuthStateChanged 拿到最新的 emailVerified=true
             _context2.n = 6;
+            return r.user.getIdToken(true);
+          case 6:
+            _context2.n = 7;
             return db.collection('users').doc(r.user.uid).set({
               displayName: r.user.displayName || displayName || '',
               email: r.user.email || '',
@@ -1967,50 +1971,50 @@ function AuthPage(_ref2) {
             }, {
               merge: true
             });
-          case 6:
-            onAuthSuccess(r.user);
-            _context2.n = 12;
-            break;
           case 7:
-            _context2.n = 8;
-            return auth.createUserWithEmailAndPassword(email, password);
+            onAuthSuccess(r.user);
+            _context2.n = 13;
+            break;
           case 8:
-            _r = _context2.v;
             _context2.n = 9;
+            return auth.createUserWithEmailAndPassword(email, password);
+          case 9:
+            _r = _context2.v;
+            _context2.n = 10;
             return _r.user.updateProfile({
               displayName: displayName
             });
-          case 9:
+          case 10:
             // ✅ 只寄驗證信，不寫入 Firestore（等登入且驗證通過後才寫）
             // actionCodeSettings 提升信件送達率，並設定驗證後回跳網址
             actionCodeSettings = {
               url: window.location.origin + window.location.pathname,
               handleCodeInApp: false
             };
-            _context2.n = 10;
-            return _r.user.sendEmailVerification(actionCodeSettings);
-          case 10:
             _context2.n = 11;
-            return auth.signOut();
+            return _r.user.sendEmailVerification(actionCodeSettings);
           case 11:
+            _context2.n = 12;
+            return auth.signOut();
+          case 12:
             setSentEmail(email);
             setVerificationSent(true);
             startCooldown();
-          case 12:
-            _context2.n = 14;
-            break;
           case 13:
-            _context2.p = 13;
-            _t2 = _context2.v;
-            setError(firebaseErrMsg(_t2.code) || _t2.message);
+            _context2.n = 15;
+            break;
           case 14:
             _context2.p = 14;
-            setLoading(false);
-            return _context2.f(14);
+            _t2 = _context2.v;
+            setError(firebaseErrMsg(_t2.code) || _t2.message);
           case 15:
+            _context2.p = 15;
+            setLoading(false);
+            return _context2.f(15);
+          case 16:
             return _context2.a(2);
         }
-      }, _callee2, null, [[2, 13, 14, 15]]);
+      }, _callee2, null, [[2, 14, 15, 16]]);
     }));
     return function handleSubmit(_x10) {
       return _ref4.apply(this, arguments);
@@ -5732,9 +5736,15 @@ function App() {
       return;
     }
     var unsub = auth.onAuthStateChanged(function (u) {
-      // onAuthStateChanged 只負責同步登入狀態，不做驗證攔截
-      // 驗證邏輯由 handleSubmit 負責，避免非同步造成的競態問題
       if (u && isFirebaseConfigured) {
+        var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
+        // 若 email/password 帳號尚未驗證，直接 signOut 不進入 app
+        // 注意：這裡不使用 reload()，直接信任 Firebase SDK 回傳的 emailVerified
+        // handleSubmit 在登入成功後會呼叫 getIdToken(true) 強制刷新，確保這裡拿到的是最新值
+        if (!isGoogle && !u.emailVerified) {
+          auth.signOut();
+          return;
+        }
         db.collection('users').doc(u.uid).set({
           uid: u.uid,
           email: u.email || '',
