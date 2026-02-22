@@ -5711,6 +5711,12 @@ function App() {
     }
     var unsub = auth.onAuthStateChanged(function (u) {
       if (u && isFirebaseConfigured) {
+        // Only allow verified email/password accounts or Google accounts (already verified)
+        var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
+        if (!u.emailVerified && !isGoogle) {
+          // Unverified email account — don't set user, let AuthPage handle it
+          return;
+        }
         db.collection('users').doc(u.uid).set({
           uid: u.uid,
           email: u.email || '',
