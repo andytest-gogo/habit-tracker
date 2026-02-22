@@ -3057,20 +3057,15 @@ function MainApp({ user, onLogout }) {
 /* ── ROOT APP ── */
 function App() {
     const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!isFirebaseConfigured) {
             const u = localStorage.getItem('demoUser');
             if (u) setUser(JSON.parse(u));
-            setLoading(false); return;
+            return;
         }
-        // Safety timeout: 若 Firebase 5秒未回應，強制結束 loading
-        const appLoadTimeout = setTimeout(() => setLoading(false), 5000);
         const unsub = auth.onAuthStateChanged(u=>{
-            clearTimeout(appLoadTimeout);
             if (u && isFirebaseConfigured) {
-                // ✅ 只有 email 已驗證的用戶才寫入 Firestore
                 if (u.emailVerified) {
                     db.collection('users').doc(u.uid).set({
                         uid: u.uid,
@@ -3081,16 +3076,14 @@ function App() {
                     }, { merge: true }).catch(()=>{});
                     setUser(u);
                 } else {
-                    // 未驗證的帳號：不寫入 Firestore，不讓進 App
                     auth.signOut();
                     setUser(null);
                 }
             } else {
-                setUser(u);
+                setUser(u || null);
             }
-            setLoading(false);
         });
-        return ()=>{ unsub(); clearTimeout(appLoadTimeout); };
+        return ()=> unsub();
     }, []);
 
     const handleLogout = () => {
@@ -3098,7 +3091,6 @@ function App() {
         else auth.signOut();
     };
 
-    if (loading) return <div className="app-container"><div className="loading">Loading...</div></div>;
     return user ? <MainApp user={user} onLogout={handleLogout}/> : <AuthPage onAuthSuccess={setUser}/>;
 }
 
