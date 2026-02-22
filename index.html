@@ -603,7 +603,7 @@
 <!-- React -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
 
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
@@ -1120,7 +1120,7 @@ function AuthPage({ onAuthSuccess }) {
 }
 
 /* ── FEED CARD COMPONENT (Firebase real likes + comments) ── */
-function FeedCard({ post, currentUser, onLike }) {
+function FeedCard({ post, currentUser, onLike, onReport }) {
     const [showComments, setShowComments] = useState(false);
     const [comments, setComments] = useState([]);
     const [commentText, setCommentText] = useState('');
@@ -2043,7 +2043,7 @@ function MainApp({ user, onLogout }) {
                 setArchivedHabits(list);
             }).catch(()=>{});
         // Safety timeout: wait max 8s
-        const timeout = setTimeout(() => setLoading(false), 8000);
+        const timeout = setTimeout(() => setLoading(false), 3000);
         return () => { unsub(); clearTimeout(timeout); };
     }, [user]);
 
@@ -3065,7 +3065,10 @@ function App() {
             if (u) setUser(JSON.parse(u));
             setLoading(false); return;
         }
+        // Safety timeout: 若 Firebase 5秒未回應，強制結束 loading
+        const appLoadTimeout = setTimeout(() => setLoading(false), 5000);
         const unsub = auth.onAuthStateChanged(u=>{
+            clearTimeout(appLoadTimeout);
             if (u && isFirebaseConfigured) {
                 // ✅ 只有 email 已驗證的用戶才寫入 Firestore
                 if (u.emailVerified) {
@@ -3087,7 +3090,7 @@ function App() {
             }
             setLoading(false);
         });
-        return ()=>unsub();
+        return ()=>{ unsub(); clearTimeout(appLoadTimeout); };
     }, []);
 
     const handleLogout = () => {
@@ -3099,7 +3102,7 @@ function App() {
     return user ? <MainApp user={user} onLogout={handleLogout}/> : <AuthPage onAuthSuccess={setUser}/>;
 }
 
-ReactDOM.render(<App/>, document.getElementById('root'));
+const _root = ReactDOM.createRoot(document.getElementById('root')); _root.render(<App/>);
 </script>
 <!-- ── PWA: Service Worker + Install Prompt + Push Notifications ── -->
 <script>
