@@ -616,15 +616,18 @@
 </div>
 <div id="root"></div>
 <script>
-  // Hide pre-loader once React has mounted anything into #root
-  var _plObserver = new MutationObserver(function(mutations){
-    if(document.getElementById('root').childElementCount > 0){
-      var pl = document.getElementById('pre-loader');
-      if(pl){ pl.style.transition='opacity .25s'; pl.style.opacity='0'; setTimeout(function(){ pl.remove(); },260); }
-      _plObserver.disconnect();
-    }
-  });
-  _plObserver.observe(document.getElementById('root'),{childList:true});
+  // Hide pre-loader once React renders real content (not null/empty)
+  // We expose a global function so React can call it directly
+  window.__hidePL = function() {
+    var pl = document.getElementById('pre-loader');
+    if(!pl || pl._hidden) return;
+    pl._hidden = true;
+    pl.style.transition = 'opacity .2s';
+    pl.style.opacity = '0';
+    setTimeout(function(){ if(pl.parentNode) pl.parentNode.removeChild(pl); }, 220);
+  };
+  // Fallback: hide after 8s no matter what
+  setTimeout(window.__hidePL, 8000);
 </script>
 
 <!-- Firebase SDK -->
@@ -2002,7 +2005,13 @@ function MainApp({ user, onLogout }) {
     const [deleteError, setDeleteError] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
-    const [habits, setHabits] = useState([]);
+    const [habits, setHabits] = useState(() => {
+        // Pre-load from cache so user sees content instantly while Firestore syncs
+        try {
+            const cached = localStorage.getItem(`habits_${user?.uid}`);
+            return cached ? JSON.parse(cached) : [];
+        } catch(e) { return []; }
+    });
     const [archivedHabits, setArchivedHabits] = useState([]);
     const [percentile, setPercentile] = useState(null);
     const [loading, setLoading] = useState(() => {
@@ -3098,15 +3107,22 @@ function MainApp({ user, onLogout }) {
 
 /* ── ROOT APP ── */
 function App() {
+    // authLoading: true while we wait for Firebase to tell us if user is logged in
+    // This prevents the flash of AuthPage before onAuthStateChanged fires
     const [user, setUser] = useState(null);
+    const [authLoading, setAuthLoading] = useState(isFirebaseConfigured);
 
     useEffect(() => {
         if (!isFirebaseConfigured) {
             const u = localStorage.getItem('demoUser');
             if (u) setUser(JSON.parse(u));
+            setAuthLoading(false);
             return;
         }
+        // Safety: if Firebase never calls back, stop waiting after 4s
+        const authTimeout = setTimeout(() => { setAuthLoading(false); window.__hidePL && window.__hidePL(); }, 4000);
         const unsub = auth.onAuthStateChanged(u=>{
+            clearTimeout(authTimeout);
             if (u && isFirebaseConfigured) {
                 if (u.emailVerified) {
                     // Fire-and-forget: don't block auth state with Firestore write
@@ -3125,14 +3141,19 @@ function App() {
             } else {
                 setUser(u || null);
             }
+            setAuthLoading(false);
+            window.__hidePL && window.__hidePL();
         });
-        return ()=> unsub();
+        return ()=> { unsub(); clearTimeout(authTimeout); };
     }, []);
 
     const handleLogout = () => {
         if (!isFirebaseConfigured) { localStorage.removeItem('demoUser'); setUser(null); }
         else auth.signOut();
     };
+
+    // While waiting for Firebase auth — show nothing (pre-loader is still visible)
+    if (authLoading) return null;
 
     return user ? <MainApp user={user} onLogout={handleLogout}/> : <AuthPage onAuthSuccess={setUser}/>;
 }
