@@ -5711,6 +5711,13 @@ function App() {
     }
     var unsub = auth.onAuthStateChanged(function (u) {
       if (u && isFirebaseConfigured) {
+        // Block unverified email/password accounts from entering the app
+        var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
+        if (!u.emailVerified && !isGoogle) {
+          // Not verified yet — sign them out silently, let AuthPage handle display
+          auth.signOut();
+          return;
+        }
         db.collection('users').doc(u.uid).set({
           uid: u.uid,
           email: u.email || '',
