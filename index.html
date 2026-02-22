@@ -1764,6 +1764,33 @@ function AuthPage(_ref2) {
     _useState16 = _slicedToArray(_useState15, 2),
     resendCooldown = _useState16[0],
     setResendCooldown = _useState16[1];
+  var _useStateFP1 = useState(false),
+    _useStateFP2 = _slicedToArray(_useStateFP1, 2),
+    forgotMode = _useStateFP2[0],
+    setForgotMode = _useStateFP2[1];
+  var _useStateFP3 = useState(false),
+    _useStateFP4 = _slicedToArray(_useStateFP3, 2),
+    resetSent = _useStateFP4[0],
+    setResetSent = _useStateFP4[1];
+  var handleForgotPassword = function handleForgotPassword() {
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address first');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    auth.sendPasswordResetEmail(email.trim(), {
+      url: window.location.origin + window.location.pathname,
+      handleCodeInApp: false
+    }).then(function () {
+      setResetSent(true);
+      setLoading(false);
+    }).catch(function (e) {
+      setError(e.code === 'auth/user-not-found' ? 'No account found with this email address.' : e.message);
+      setLoading(false);
+    });
+  };
   var handleDemoLogin = function handleDemoLogin() {
     var u = {
       uid: 'demo-user',
@@ -1902,9 +1929,20 @@ function AuthPage(_ref2) {
             return auth.signInWithEmailAndPassword(email, password);
           case 3:
             r = _context2.v;
-            _context2.n = 5;
-            break;
+            // Only enforce email verification for email/password accounts
+            // Google accounts (providerData has google.com) are already verified
+            if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
+              _context2.n = 5;
+              break;
+            }
+            _context2.n = 4;
+            return auth.signOut();
           case 4:
+            setSentEmail(email);
+            setVerificationSent(true);
+            startCooldown();
+            return _context2.a(2);
+          case 5:
             _context2.n = 6;
             return db.collection('users').doc(r.user.uid).set({
               displayName: r.user.displayName || displayName || '',
@@ -2133,7 +2171,23 @@ function AuthPage(_ref2) {
     type: "submit",
     className: "button button-primary",
     disabled: loading
-  }, loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up')), /*#__PURE__*/React.createElement("div", {
+  }, loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up')), isLogin && /*#__PURE__*/React.createElement("div", {
+    style: { textAlign: 'center', marginTop: 12 }
+  }, /*#__PURE__*/React.createElement("a", {
+    style: { fontSize: 12, color: 'var(--gray-500)', cursor: 'pointer', textDecoration: 'underline' },
+    onClick: function onClick() {
+      setError('');
+      setForgotMode(true);
+      setResetSent(false);
+    }
+  }, "Forgot password?")), resetSent && forgotMode && /*#__PURE__*/React.createElement("div", {
+    style: { marginTop: 12, padding: '12px 16px', background: '#E8F5E9', border: '1px solid #A5D6A7', fontSize: 12, color: '#2E7D32', lineHeight: 1.7 }
+  }, "\u2705 Password reset email sent to ", /*#__PURE__*/React.createElement("strong", null, email), ". Check your inbox (and spam folder)."), forgotMode && !resetSent && /*#__PURE__*/React.createElement("div", {
+    style: { marginTop: 12, padding: '12px 16px', background: 'var(--gray-50)', border: '1px solid var(--gray-200)', fontSize: 12, color: 'var(--gray-600)', lineHeight: 1.7 }
+  }, "Enter your email above and click ", /*#__PURE__*/React.createElement("a", {
+    style: { color: 'var(--black)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' },
+    onClick: handleForgotPassword
+  }, "Send Reset Email")), /*#__PURE__*/React.createElement("div", {
     className: "auth-switch"
   }, isLogin ? "Don't have an account?" : "Already have an account?", /*#__PURE__*/React.createElement("a", {
     onClick: function onClick() {
