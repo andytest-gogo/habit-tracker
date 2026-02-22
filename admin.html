@@ -326,7 +326,6 @@ var authSafetyTimer = setTimeout(function(){
 }, 5000);
 
 auth.onAuthStateChanged(function(user){
-  if(authResolved) return;
   clearTimeout(authSafetyTimer);
   authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
