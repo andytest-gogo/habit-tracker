@@ -1780,14 +1780,30 @@ function AuthPage(_ref2) {
     }
     setError('');
     setLoading(true);
-    auth.sendPasswordResetEmail(email.trim(), {
-      url: window.location.origin + window.location.pathname,
-      handleCodeInApp: false
-    }).then(function () {
-      setResetSent(true);
-      setLoading(false);
-    }).catch(function (e) {
-      setError(e.code === 'auth/user-not-found' ? 'No account found with this email address.' : e.message);
+    // First check if account exists AND is registered with email/password
+    auth.fetchSignInMethodsForEmail(email.trim()).then(function(methods) {
+      if (!methods || methods.length === 0) {
+        // Account does not exist — don't reveal this for security, but block reset
+        setError('No account found with this email. Please sign up first.');
+        setLoading(false);
+        return;
+      }
+      if (!methods.includes('password')) {
+        // Account exists but uses Google login — no password to reset
+        setError('This account uses Google sign-in and does not have a password.');
+        setLoading(false);
+        return;
+      }
+      // Account exists with email/password — safe to send reset email
+      return auth.sendPasswordResetEmail(email.trim(), {
+        url: window.location.origin + window.location.pathname,
+        handleCodeInApp: false
+      }).then(function() {
+        setResetSent(true);
+        setLoading(false);
+      });
+    }).catch(function(e) {
+      setError(e.message);
       setLoading(false);
     });
   };
