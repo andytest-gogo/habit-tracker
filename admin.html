@@ -381,11 +381,21 @@ document.getElementById('loginBtn').onclick = function(){
   var b=document.getElementById('errBox');
   b.style.display='none';
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(function(e){
-    // Popup blocked, fall back to redirect
+  auth.signInWithPopup(provider).then(function(result){
+    var user = result.user;
+    var email = (user.email||'').toLowerCase().trim();
+    var isAllowed = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
+    if(!isAllowed){
+      user.delete().catch(function(){}).finally(function(){
+        auth.signOut();
+        b.style.display='block';
+        b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
+      });
+    }
+  }).catch(function(e){
     if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
       auth.signInWithRedirect(provider);
-    } else {
+    } else if(e.code !== 'auth/popup-closed-by-user'){
       b.style.display='block';
       b.textContent='Sign in failed: '+e.message;
     }
