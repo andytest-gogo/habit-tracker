@@ -1941,19 +1941,19 @@ function AuthPage(_ref2) {
               _context2.n = 8;
               break;
             }
-            _loginInProgress = true;
+            console.log('[AUTH] handleSubmit: calling signInWithEmailAndPassword');
             _context2.n = 3;
             return auth.signInWithEmailAndPassword(email, password);
           case 3:
             r = _context2.v;
+            console.log('[AUTH] handleSubmit: signIn success. emailVerified:', r.user.emailVerified);
             // Only enforce email verification for email/password accounts
             // Google accounts (providerData has google.com) are already verified
             if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
               _context2.n = 5;
               break;
             }
-            // 未驗證：登出並顯示驗證畫面
-            _loginInProgress = false;
+            console.log('[AUTH] handleSubmit: not verified → signOut + show verification screen');
             _context2.n = 4;
             return auth.signOut();
           case 4:
@@ -1962,7 +1962,11 @@ function AuthPage(_ref2) {
             startCooldown();
             return _context2.a(2);
           case 5:
+            // 強制刷新 ID token，確保 onAuthStateChanged 拿到最新的 emailVerified=true
             _context2.n = 6;
+            return r.user.getIdToken(true);
+          case 6:
+            _context2.n = 7;
             return db.collection('users').doc(r.user.uid).set({
               displayName: r.user.displayName || displayName || '',
               email: r.user.email || '',
@@ -1970,9 +1974,8 @@ function AuthPage(_ref2) {
             }, {
               merge: true
             });
-          case 6:
-            // 驗證通過，關閉 flag 並進入主畫面
-            _loginInProgress = false;
+          case 7:
+            console.log('[AUTH] handleSubmit: calling onAuthSuccess ✅');
             onAuthSuccess(r.user);
             _context2.n = 13;
             break;
@@ -5736,20 +5739,17 @@ function App() {
       if (u) setUser(JSON.parse(u));
       return;
     }
-    // 用來標記「目前正在執行 handleSubmit 登入流程中」
-    // 這段期間 onAuthStateChanged 不應該攔截，因為 token 尚未刷新完畢
-    var _loginInProgress = false;
-
     var unsub = auth.onAuthStateChanged(function (u) {
+      console.log('[AUTH] onAuthStateChanged fired. user:', u ? u.email : 'null', '| emailVerified:', u ? u.emailVerified : 'N/A');
       if (u && isFirebaseConfigured) {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
-        // 如果是 handleSubmit 正在登入中，跳過此次 callback，等 handleSubmit 自己呼叫 onAuthSuccess
-        if (_loginInProgress) return;
-        // 頁面重整後自動恢復 session：若是未驗證的 email/password 帳號則攔截
+        console.log('[AUTH] isGoogle:', isGoogle, '| emailVerified:', u.emailVerified);
         if (!isGoogle && !u.emailVerified) {
+          console.log('[AUTH] ❌ emailVerified=false → calling signOut');
           auth.signOut();
           return;
         }
+        console.log('[AUTH] ✅ verified → calling setUser');
         db.collection('users').doc(u.uid).set({
           uid: u.uid,
           email: u.email || '',
@@ -5759,7 +5759,8 @@ function App() {
         }, { merge: true }).catch(function () {});
         setUser(u);
       } else {
-        if (!_loginInProgress) setUser(null);
+        console.log('[AUTH] user is null → setUser(null)');
+        setUser(u || null);
       }
     });
     return function () { unsub(); };
