@@ -334,7 +334,7 @@ auth.onAuthStateChanged(function(user){
     var email = (user.email||'').toLowerCase().trim();
     var isAllowed = ALLOWED_ADMINS.length === 0 || ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
     if(!isAllowed){
-      auth.signOut();
+      // 不呼叫 auth.signOut()，避免登出其他分頁（如 index.html）的使用者 session
       document.getElementById('loginWrap').style.display='flex';
       document.getElementById('layout').style.display='none';
       var b=document.getElementById('errBox');
@@ -361,7 +361,7 @@ if(_hasAuthParams){
       var email = (result.user.email||'').toLowerCase().trim();
       var isAllowed = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
       if(!isAllowed){
-        auth.signOut();
+        // 不呼叫 auth.signOut()，避免登出其他分頁的使用者 session
         var b=document.getElementById('errBox');
         b.style.display='block';
         b.textContent='Access denied: '+email+' is not authorized.';
@@ -386,11 +386,9 @@ document.getElementById('loginBtn').onclick = function(){
     var email = (user.email||'').toLowerCase().trim();
     var isAllowed = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
     if(!isAllowed){
-      user.delete().catch(function(){}).finally(function(){
-        auth.signOut();
-        b.style.display='block';
-        b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
-      });
+      // 不呼叫 auth.signOut()，避免登出其他分頁的使用者 session
+      b.style.display='block';
+      b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
     }
   }).catch(function(e){
     if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
