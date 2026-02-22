@@ -352,12 +352,22 @@ auth.onAuthStateChanged(function(user){
   }
 });
 
-// Handle redirect sign-in result (only check if URL has auth params to avoid extra round-trip)
+// Handle redirect sign-in result (only when URL has actual auth redirect params)
 var _hasAuthParams = window.location.href.indexOf('__/auth/handler') > -1
-  || window.location.search.indexOf('code=') > -1
-  || document.cookie.indexOf('firebase') > -1;
+  || window.location.search.indexOf('code=') > -1;
 if(_hasAuthParams){
-  auth.getRedirectResult().catch(function(e){
+  auth.getRedirectResult().then(function(result){
+    if(result && result.user){
+      var email = (result.user.email||'').toLowerCase().trim();
+      var isAllowed = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
+      if(!isAllowed){
+        auth.signOut();
+        var b=document.getElementById('errBox');
+        b.style.display='block';
+        b.textContent='Access denied: '+email+' is not authorized.';
+      }
+    }
+  }).catch(function(e){
     if(e.code && e.code !== 'auth/no-current-user'){
       var b=document.getElementById('errBox');
       b.style.display='block';
