@@ -2398,11 +2398,7 @@ function FeedCard(_ref5) {
         return !s;
       });
     }
-  }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, post.commentCount || post.comments || 0), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10
-    }
-  }, "\u6AA2\u8209"))), showComments && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, post.commentCount || post.comments || 0))), showComments && /*#__PURE__*/React.createElement("div", {
     className: "comments-section"
   }, loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4604,6 +4600,26 @@ function MainApp(_ref16) {
             }
             return _context1.a(2);
           case 2:
+            // ── 每日發文限制：最多 5 篇 ──
+            var _today = new Date().toISOString().slice(0, 10);
+            var _postLimitKey = 'postLimit_' + user.uid + '_' + _today;
+            var _dailyCount = parseInt(localStorage.getItem(_postLimitKey) || '0', 10);
+            if (_dailyCount >= 5) {
+              alert('您今日已達發文上限（每日最多 5 篇），請明天再試。');
+              return _context1.a(2);
+            }
+            // ── 發文冷卻時間：至少間隔 3 分鐘 ──
+            var _cooldownKey = 'postCooldown_' + user.uid;
+            var _lastPostTime = parseInt(localStorage.getItem(_cooldownKey) || '0', 10);
+            var _now = Date.now();
+            var _elapsed = Math.floor((_now - _lastPostTime) / 1000);
+            if (_lastPostTime && _elapsed < 180) {
+              var _remaining = 180 - _elapsed;
+              var _mins = Math.floor(_remaining / 60);
+              var _secs = _remaining % 60;
+              alert('\u767C\u6587\u9593\u9694\u592A\u77ED\uFF01\u8ACB\u518D\u7B49 ' + (_mins > 0 ? _mins + ' \u5206 ' : '') + _secs + ' \u79D2\u5F8C\u518D\u767C\u6587\u3002');
+              return _context1.a(2);
+            }
           case 13:
             avatar = ((_ref28 = user.displayName || user.email) === null || _ref28 === void 0 || (_ref28 = _ref28[0]) === null || _ref28 === void 0 ? void 0 : _ref28.toUpperCase()) || 'U';
             newPost = {
@@ -4654,6 +4670,12 @@ function MainApp(_ref16) {
               return [localPost].concat(_toConsumableArray(prev));
             });
           case 19:
+            // 更新每日發文計數與冷卻時間戳
+            var _todaySave = new Date().toISOString().slice(0, 10);
+            var _limitKeySave = 'postLimit_' + user.uid + '_' + _todaySave;
+            var _curCount = parseInt(localStorage.getItem(_limitKeySave) || '0', 10);
+            localStorage.setItem(_limitKeySave, String(_curCount + 1));
+            localStorage.setItem('postCooldown_' + user.uid, String(Date.now()));
             setPostText('');
             setPostMedia(null);
           case 20:
