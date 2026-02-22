@@ -612,15 +612,19 @@
 </div>
 <div id="root"></div>
 <script>
-  // Hide pre-loader once React has mounted anything into #root
-  var _plObserver = new MutationObserver(function(mutations){
-    if(document.getElementById('root').childElementCount > 0){
-      var pl = document.getElementById('pre-loader');
-      if(pl){ pl.style.transition='opacity .25s'; pl.style.opacity='0'; setTimeout(function(){ pl.remove(); },260); }
-      _plObserver.disconnect();
-    }
+  // Expose __hidePL so React can call it directly (when authLoading returns null)
+  window.__hidePL = function(){
+    var pl = document.getElementById('pre-loader');
+    if(pl){ pl.style.transition='opacity .25s'; pl.style.opacity='0'; setTimeout(function(){ pl.remove(); },260); }
+    if(window._plObserver){ window._plObserver.disconnect(); }
+  };
+  // Also hide once React mounts anything into #root
+  window._plObserver = new MutationObserver(function(){
+    if(document.getElementById('root').childElementCount > 0){ window.__hidePL(); }
   });
-  _plObserver.observe(document.getElementById('root'),{childList:true});
+  window._plObserver.observe(document.getElementById('root'),{childList:true});
+  // Safety fallback: hide after 6s no matter what
+  setTimeout(function(){ window.__hidePL && window.__hidePL(); }, 6000);
 </script>
 
 <!-- Firebase SDK -->
