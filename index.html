@@ -5733,21 +5733,33 @@ function App() {
     }
     var unsub = auth.onAuthStateChanged(function (u) {
       if (u && isFirebaseConfigured) {
-        // Block unverified email/password accounts from entering the app
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
-        if (!u.emailVerified && !isGoogle) {
-          // Not verified yet — sign them out silently, let AuthPage handle display
-          auth.signOut();
-          return;
-        }
-        db.collection('users').doc(u.uid).set({
-          uid: u.uid,
-          email: u.email || '',
-          displayName: u.displayName || '',
-          photoURL: u.photoURL || '',
-          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(function () {});
-        setUser(u);
+        // 強制 reload 取得最新 emailVerified 狀態，避免快取造成誤判
+        u.reload().then(function() {
+          var freshUser = auth.currentUser;
+          if (!freshUser) return;
+          var freshIsGoogle = freshUser.providerData && freshUser.providerData.some(function(p){ return p.providerId === 'google.com'; });
+          if (!freshUser.emailVerified && !freshIsGoogle) {
+            // 確實尚未驗證，登出
+            auth.signOut();
+            return;
+          }
+          db.collection('users').doc(freshUser.uid).set({
+            uid: freshUser.uid,
+            email: freshUser.email || '',
+            displayName: freshUser.displayName || '',
+            photoURL: freshUser.photoURL || '',
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(function () {});
+          setUser(freshUser);
+        }).catch(function() {
+          // reload 失敗時（如網路問題），改用原本的 u 物件判斷
+          if (!u.emailVerified && !isGoogle) {
+            auth.signOut();
+            return;
+          }
+          setUser(u);
+        });
       } else {
         setUser(u || null);
       }
