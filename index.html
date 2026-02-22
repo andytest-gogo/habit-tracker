@@ -1902,18 +1902,9 @@ function AuthPage(_ref2) {
             return auth.signInWithEmailAndPassword(email, password);
           case 3:
             r = _context2.v;
-            if (r.user.emailVerified) {
-              _context2.n = 5;
-              break;
-            }
-            _context2.n = 4;
-            return auth.signOut();
+            _context2.n = 5;
+            break;
           case 4:
-            setSentEmail(email);
-            setVerificationSent(true);
-            startCooldown();
-            return _context2.a(2);
-          case 5:
             _context2.n = 6;
             return db.collection('users').doc(r.user.uid).set({
               displayName: r.user.displayName || displayName || '',
