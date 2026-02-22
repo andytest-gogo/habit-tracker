@@ -196,7 +196,7 @@ tr:hover td{background:var(--g50)}
       <input class="search" id="userSearch" placeholder="Search by name / UID...">
       <div class="tbl-card">
         <div class="tbl-hd"><div class="tbl-ttl">Users</div><div class="tbl-cnt" id="userCnt">—</div></div>
-        <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th></tr></thead>
+        <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th><th>Action</th></tr></thead>
         <tbody id="userTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody></table>
       </div>
     </div>
@@ -550,8 +550,42 @@ function renderUsers(f){
       '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
       '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
+      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
+      '<td><button class="del" onclick="deleteUserData(\''+u.uid+'\',\''+htmlEsc(u.name)+'\')" title="Delete all Firestore data for this user">Delete Data</button></td></tr>';
   }).join('');
+}
+
+function deleteUserData(uid, name){
+  if(!confirm('Delete ALL Firestore data for "'+name+'"?\n\nThis will remove:\n• All habits\n• All posts (and their comments)\n• Upload quota record\n• User profile\n\nNote: You still need to delete the Auth account in Firebase Console.\n\nThis cannot be undone!')) return;
+  var tasks=[];
+  // Delete habits
+  tasks.push(db.collection('habits').where('userId','==',uid).get().then(function(snap){
+    var b=db.batch();
+    snap.docs.forEach(function(d){b.delete(d.ref);});
+    return snap.docs.length?b.commit():Promise.resolve();
+  }));
+  // Delete posts + their comments
+  tasks.push(db.collection('posts').where('userId','==',uid).get().then(function(snap){
+    return Promise.all(snap.docs.map(function(d){
+      return d.ref.collection('comments').get().then(function(cs){
+        var b=db.batch();
+        cs.docs.forEach(function(c){b.delete(c.ref);});
+        b.delete(d.ref);
+        return b.commit();
+      });
+    }));
+  }));
+  // Delete upload quota
+  tasks.push(db.collection('upload_quotas').doc(uid).delete().catch(function(){}));
+  // Delete user profile
+  tasks.push(db.collection('users').doc(uid).delete().catch(function(){}));
+
+  Promise.all(tasks).then(function(){
+    alert('Done! All Firestore data for "'+name+'" has been deleted.\nRemember to also delete the Auth account in Firebase Console.');
+    loadAll();
+  }).catch(function(e){
+    alert('Error: '+e.message);
+  });
 }
 
 function renderPosts(f){
@@ -595,7 +629,8 @@ function renderHabits(f){
       '<td><span class="badge">'+htmlEsc(h.category||'—')+'</span></td>'+
       '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
       '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
+      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
+      '<td><button class="del" onclick="deleteUserData(\''+u.uid+'\',\''+htmlEsc(u.name)+'\')" title="Delete all Firestore data for this user">Delete Data</button></td></tr>';
   }).join('');
 }
 
