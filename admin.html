@@ -292,16 +292,17 @@ if(typeof firebase === 'undefined'){
   throw new Error('Firebase not loaded');
 }
 
-firebase.initializeApp({
+// 使用獨立命名的 app，避免與 index.html 的 auth session 互相干擾
+var adminApp = firebase.initializeApp({
   apiKey:"AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
   authDomain:"health-habit-tracker-e6b50.firebaseapp.com",
   projectId:"health-habit-tracker-e6b50",
   storageBucket:"health-habit-tracker-e6b50.firebasestorage.app",
   messagingSenderId:"890093173627",
   appId:"1:890093173627:web:54032fce30ae7ef3f41bde"
-});
-var auth = firebase.auth();
-var db   = firebase.firestore();
+}, "admin");
+var auth = firebase.auth(adminApp);
+var db   = firebase.firestore(adminApp);
 
 // ── Admin Whitelist ──────────────────────────────────────────────
 // 🔐 Add your admin email(s) here. Only these accounts can access the dashboard.
