@@ -4073,6 +4073,14 @@ function MainApp(_ref16) {
           return _ref20.apply(this, arguments);
         };
       }());
+      // Fix: also update React state so expired habits are removed from My Habits immediately
+      setHabits(function (prev) {
+        return prev.filter(function (h) {
+          return !expired.find(function (e) {
+            return e.id === h.id;
+          });
+        });
+      });
     }
   }, [habits, loading]);
 
