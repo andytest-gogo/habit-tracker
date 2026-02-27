@@ -598,14 +598,14 @@
         /* scrollbar */
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--gray-200); }
 
         /* ── GDPR CONSENT BANNER ── */
         .gdpr-banner {
             position:fixed; bottom:0; left:0; right:0; z-index:9999;
             background:var(--black); color:var(--white);
             padding:18px 20px; display:flex; align-items:flex-start;
-            gap:16px; flex-wrap:wrap;
-            box-shadow:0 -4px 32px rgba(0,0,0,.3);
+            gap:16px; flex-wrap:wrap; box-shadow:0 -4px 32px rgba(0,0,0,.3);
             animation:gdprSlideUp .4s cubic-bezier(.4,0,.2,1);
         }
         @keyframes gdprSlideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
@@ -615,110 +615,103 @@
         .gdpr-eyebrow { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; opacity:.45; margin-bottom:5px; }
         .gdpr-title { font-family:var(--din); font-size:15px; font-weight:700; margin-bottom:7px; }
         .gdpr-desc { font-size:11px; line-height:1.65; opacity:.7; }
-        .gdpr-desc a { color:var(--white); font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+        .gdpr-desc a { color:var(--white); font-weight:600; text-decoration:underline; opacity:1; cursor:pointer; }
         .gdpr-actions { display:flex; flex-direction:column; gap:7px; flex-shrink:0; min-width:130px; }
-        .gdpr-accept {
-            padding:10px 18px; background:var(--white); color:var(--black);
-            border:none; font-size:11px; font-weight:700; text-transform:uppercase;
-            letter-spacing:1px; cursor:pointer; font-family:var(--font); transition:opacity .15s;
-        }
-        .gdpr-accept:hover { opacity:.85; }
-        .gdpr-decline {
-            padding:8px 18px; background:transparent; color:rgba(255,255,255,.5);
-            border:1px solid rgba(255,255,255,.2); font-size:10px; font-weight:700;
-            text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); transition:.15s;
-        }
-        .gdpr-decline:hover { color:var(--white); border-color:rgba(255,255,255,.5); }
-        .gdpr-policy-link { font-size:10px; color:rgba(255,255,255,.4); text-align:center; cursor:pointer; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
-        .gdpr-policy-link:hover { color:rgba(255,255,255,.7); }
-
-        /* ── AGE GATE MODAL ── */
-        .age-gate-overlay {
-            position:fixed; inset:0; background:rgba(10,10,10,.88);
-            z-index:10000; display:flex; align-items:center; justify-content:center;
-            padding:20px; backdrop-filter:blur(4px);
-        }
-        .age-gate-box {
-            background:var(--white); max-width:360px; width:100%;
-            border-top:4px solid var(--black); padding:30px 26px; text-align:center;
-            animation:ageGateIn .35s cubic-bezier(.4,0,.2,1);
-        }
-        @keyframes ageGateIn { from{transform:scale(.95) translateY(10px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
+        .gdpr-accept { padding:10px 18px; background:var(--white); color:var(--black); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); }
+        .gdpr-decline { padding:8px 18px; background:transparent; color:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.2); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); }
+        .gdpr-decline:hover { color:var(--white); }
+        .gdpr-policy-link { font-size:10px; color:rgba(255,255,255,.4); text-align:center; cursor:pointer; font-weight:600; text-decoration:underline; }
+        /* ── AGE GATE ── */
+        .age-gate-overlay { position:fixed; inset:0; background:rgba(10,10,10,.88); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; }
+        .age-gate-box { background:var(--white); max-width:360px; width:100%; border-top:4px solid var(--black); padding:30px 26px; text-align:center; }
         .age-gate-icon { font-size:34px; margin-bottom:14px; }
         .age-gate-title { font-family:var(--din); font-size:22px; font-weight:800; margin-bottom:12px; }
         .age-gate-desc { font-size:12px; line-height:1.7; color:var(--gray-600); margin-bottom:26px; }
-        .age-gate-desc a { color:var(--black); font-weight:700; }
-        .age-gate-btn-yes {
-            display:block; width:100%; padding:13px; background:var(--black); color:var(--white);
-            border:none; font-size:11px; font-weight:700; text-transform:uppercase;
-            letter-spacing:1px; cursor:pointer; font-family:var(--font); margin-bottom:9px; transition:opacity .15s;
-        }
-        .age-gate-btn-yes:hover { opacity:.85; }
-        .age-gate-btn-no {
-            display:block; width:100%; padding:11px; background:transparent; color:var(--gray-500);
-            border:1px solid var(--gray-200); font-size:11px; font-weight:600;
-            text-transform:uppercase; letter-spacing:.8px; cursor:pointer; font-family:var(--font); transition:.15s;
-        }
+        .age-gate-desc a { color:var(--black); font-weight:700; cursor:pointer; text-decoration:underline; }
+        .age-gate-btn-yes { display:block; width:100%; padding:13px; background:var(--black); color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); margin-bottom:9px; }
+        .age-gate-btn-no { display:block; width:100%; padding:11px; background:transparent; color:var(--gray-500); border:1px solid var(--gray-200); font-size:11px; font-weight:600; text-transform:uppercase; cursor:pointer; font-family:var(--font); }
         .age-gate-btn-no:hover { border-color:var(--gray-500); color:var(--black); }
-        .age-gate-denied { margin-top:16px; padding:12px 14px; background:var(--gray-50); border:1px solid var(--gray-200); font-size:11px; line-height:1.6; color:var(--gray-600); display:none; }
-
+        .age-gate-denied { margin-top:16px; padding:12px; background:var(--gray-50); border:1px solid var(--gray-200); font-size:11px; color:var(--gray-600); display:none; }
         /* ── SIGNUP LEGAL CHECKBOXES ── */
         .legal-checks-wrap { margin:14px 0 4px; display:flex; flex-direction:column; gap:10px; }
         .legal-check-row { display:flex; align-items:flex-start; gap:9px; cursor:pointer; }
         .legal-check-row input[type="checkbox"] { width:15px; height:15px; accent-color:var(--black); cursor:pointer; flex-shrink:0; margin-top:3px; }
         .legal-check-label { font-size:11px; line-height:1.6; color:var(--gray-600); text-align:left; }
-        .legal-check-label a { color:var(--black); font-weight:700; text-decoration:underline; text-underline-offset:2px; }
-        .legal-check-label a:hover { opacity:.7; }
+        .legal-check-label a { color:var(--black); font-weight:700; text-decoration:underline; cursor:pointer; }
         .legal-error-msg { font-size:11px; color:#dc2626; margin-top:4px; display:none; }
         .legal-error-msg.visible { display:block; }
-        ::-webkit-scrollbar-thumb { background:var(--gray-200); }
+        /* ── LEGAL MODAL (Terms / Privacy inline — no 404) ── */
+        .legal-modal-overlay { position:fixed; inset:0; background:rgba(10,10,10,.7); z-index:10001; display:flex; align-items:flex-end; justify-content:center; }
+        .legal-modal-box { background:var(--white); width:100%; max-width:480px; max-height:88vh; display:flex; flex-direction:column; border-top:3px solid var(--black); animation:lmSlideUp .3s cubic-bezier(.4,0,.2,1); }
+        @keyframes lmSlideUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
+        .legal-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--gray-100); flex-shrink:0; }
+        .legal-modal-title { font-family:var(--din); font-size:17px; font-weight:800; }
+        .legal-modal-close { background:none; border:none; cursor:pointer; font-size:22px; color:var(--gray-400); line-height:1; padding:2px 6px; }
+        .legal-modal-close:hover { color:var(--black); }
+        .legal-modal-body { overflow-y:auto; padding:20px 20px 32px; flex:1; -webkit-overflow-scrolling:touch; }
+        .legal-modal-body h3 { font-family:var(--din); font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin:22px 0 8px; color:var(--black); border-top:1px solid var(--gray-100); padding-top:16px; }
+        .legal-modal-body h3:first-child { margin-top:0; border-top:none; padding-top:0; }
+        .legal-modal-body p { font-size:12px; line-height:1.75; color:var(--gray-700); margin-bottom:10px; }
+        .legal-modal-body ul { margin:6px 0 10px 18px; font-size:12px; line-height:1.75; color:var(--gray-700); }
+        .legal-modal-body li { margin-bottom:4px; }
+        .legal-modal-body strong { color:var(--black); font-weight:600; }
+        .legal-modal-meta { font-size:10px; color:var(--gray-400); font-family:var(--mono); margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--gray-100); }
+        .legal-modal-highlight { background:var(--black); color:var(--white); padding:14px 16px; margin:14px 0; }
+        .legal-modal-highlight p { color:rgba(255,255,255,.8); margin-bottom:6px; font-size:12px; }
+        .legal-modal-highlight p:last-child { margin-bottom:0; }
+        .legal-modal-highlight strong { color:var(--white); }
     </style>
 </head>
 <body>
-<!-- ── AGE GATE (shown on first visit) ── -->
+<div id="root"></div>
+
+<!-- ── AGE GATE ── -->
 <div id="ageGateOverlay" class="age-gate-overlay" style="display:none;">
     <div class="age-gate-box">
         <div class="age-gate-icon">🔒</div>
         <div class="age-gate-title">Age Verification</div>
         <div class="age-gate-desc">
-            Habit Tracker Pro is for users aged <strong>16 and above</strong>
-            (or 13 and above for US residents).<br><br>
-            By continuing you confirm you meet this requirement and agree to our
-            <a href="./privacy.html" target="_blank">Privacy Policy</a> and
-            <a href="./terms.html" target="_blank">Terms of Service</a>.
+            Habit Tracker Pro is for users aged <strong>16+</strong> (or 13+ in the US).<br><br>
+            By continuing you agree to our
+            <a onclick="openLegalModal('privacy')">Privacy Policy</a> and
+            <a onclick="openLegalModal('terms')">Terms of Service</a>.
         </div>
-        <button class="age-gate-btn-yes" onclick="ageGateConfirm()">
-            I confirm — I meet the age requirement
-        </button>
-        <button class="age-gate-btn-no" onclick="ageGateDeny()">
-            I do not meet the age requirement
-        </button>
+        <button class="age-gate-btn-yes" onclick="ageGateConfirm()">I confirm — I meet the age requirement</button>
+        <button class="age-gate-btn-no" onclick="ageGateDeny()">I do not meet the age requirement</button>
         <div class="age-gate-denied" id="ageGateDenied">
-            We're sorry — Habit Tracker Pro is not available for users under 16 (or 13 in the US). Please close this page.
+            Sorry — Habit Tracker Pro is not available for users under 16 (or 13 in the US). Please close this page.
         </div>
     </div>
 </div>
 
-<!-- ── GDPR COOKIE CONSENT BANNER (shown after age gate) ── -->
+<!-- ── GDPR BANNER ── -->
 <div id="gdprBanner" class="gdpr-banner" style="display:none;">
     <div class="gdpr-text">
         <div class="gdpr-eyebrow">Privacy Notice</div>
         <div class="gdpr-title">We respect your privacy</div>
         <div class="gdpr-desc">
-            We use <strong>essential cookies only</strong> to keep you signed in, plus
-            <strong>Umami</strong> — a cookieless, privacy-first analytics tool that collects
-            no personal data and sets no tracking cookies.<br>
-            <a href="./privacy.html" target="_blank" style="margin-top:4px;display:inline-block;">Read our Privacy Policy →</a>
+            Essential cookies only to keep you signed in, plus <strong>Umami</strong> — a cookieless,
+            privacy-first analytics tool. No personal data collected, no tracking cookies.
+            <br><a onclick="openLegalModal('privacy')" style="margin-top:4px;display:inline-block;">Read our Privacy Policy →</a>
         </div>
     </div>
     <div class="gdpr-actions">
         <button class="gdpr-accept" onclick="gdprAccept()">Got It</button>
         <button class="gdpr-decline" onclick="gdprDecline()">Decline Analytics</button>
-        <div class="gdpr-policy-link" onclick="window.open('./privacy.html#cookies','_blank')">Manage Preferences</div>
+        <div class="gdpr-policy-link" onclick="openLegalModal('privacy')">Privacy Policy</div>
     </div>
 </div>
 
-<div id="root"></div>
+<!-- ── LEGAL MODAL (Terms & Privacy — inline, no 404) ── -->
+<div id="legalModalOverlay" class="legal-modal-overlay" style="display:none;" onclick="if(event.target===this)closeLegalModal()">
+    <div class="legal-modal-box">
+        <div class="legal-modal-header">
+            <div class="legal-modal-title" id="legalModalTitle">Privacy Policy</div>
+            <button class="legal-modal-close" onclick="closeLegalModal()">✕</button>
+        </div>
+        <div class="legal-modal-body" id="legalModalBody"></div>
+    </div>
+</div>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -2044,23 +2037,16 @@ function AuthPage(_ref2) {
             setError(validErr);
             return _context2.a(2);
           case 1:
-            // ── Legal consent check (signup only) ──
-            if (isLogin) {
-              _context2.n = 2;
-              break;
+            if (isLogin) { _context2.n = 2; break; }
+            var _ct = document.getElementById('checkTerms');
+            var _ca = document.getElementById('checkAge');
+            var _cd = document.getElementById('checkData');
+            var _le = document.getElementById('legalErrorMsg');
+            if (_ct && _ca && _cd && _ct.checked && _ca.checked && _cd.checked) {
+              if (_le) _le.classList.remove('visible');
+              _context2.n = 2; break;
             }
-            var _checkTerms = document.getElementById('checkTerms');
-            var _checkAge   = document.getElementById('checkAge');
-            var _checkData  = document.getElementById('checkData');
-            var _legalErr   = document.getElementById('legalErrorMsg');
-            if (_checkTerms && _checkAge && _checkData &&
-                _checkTerms.checked && _checkAge.checked && _checkData.checked) {
-              if (_legalErr) _legalErr.classList.remove('visible');
-              _context2.n = 2;
-              break;
-            }
-            if (_legalErr) _legalErr.classList.add('visible');
-            setLoading(false);
+            if (_le) _le.classList.add('visible');
             return _context2.a(2);
           case 2:
             setLoading(true);
@@ -2320,51 +2306,38 @@ function AuthPage(_ref2) {
     placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
     minLength: "8"
   }), !isLogin && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--gray-400)',
-      marginTop: 6,
-      lineHeight: 1.6
-    }
-  }, "Password must be at least 8 chars, with uppercase, lowercase, and a number")), !isLogin && /*#__PURE__*/React.createElement("div", {
-    className: "legal-checks-wrap"
-  }, /*#__PURE__*/React.createElement("label", {
-    className: "legal-check-row"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    id: "checkTerms"
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "legal-check-label"
-  }, "I agree to the ", /*#__PURE__*/React.createElement("a", {
-    href: "./terms.html",
-    target: "_blank",
-    onClick: function(e){ e.stopPropagation(); }
-  }, "Terms of Service"), " and ", /*#__PURE__*/React.createElement("a", {
-    href: "./privacy.html",
-    target: "_blank",
-    onClick: function(e){ e.stopPropagation(); }
-  }, "Privacy Policy"), ".")), /*#__PURE__*/React.createElement("label", {
-    className: "legal-check-row"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    id: "checkAge"
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "legal-check-label"
-  }, "I confirm I am at least ", /*#__PURE__*/React.createElement("strong", null, "16 years old"), " (or 13 if I am a US resident).")), /*#__PURE__*/React.createElement("label", {
-    className: "legal-check-row"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    id: "checkData"
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "legal-check-label"
-  }, "I understand my data is stored on Google Firebase servers in the United States, as described in the ", /*#__PURE__*/React.createElement("a", {
-    href: "./privacy.html#data-sharing",
-    target: "_blank",
-    onClick: function(e){ e.stopPropagation(); }
-  }, "Privacy Policy"), ".")), /*#__PURE__*/React.createElement("div", {
-    className: "legal-error-msg",
-    id: "legalErrorMsg"
-  }, "Please accept all required terms to create an account.")), /*#__PURE__*/React.createElement("button", {
+    style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 6, lineHeight: 1.6 }
+  }, "Password must be at least 8 chars, with uppercase, lowercase, and a number")),
+  !isLogin && /*#__PURE__*/React.createElement("div", { className: "legal-checks-wrap" },
+    /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
+      /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkTerms" }),
+      /*#__PURE__*/React.createElement("span", { className: "legal-check-label" },
+        "I agree to the ",
+        /*#__PURE__*/React.createElement("a", { onClick: function(e){ e.preventDefault(); e.stopPropagation(); window.openLegalModal('terms'); } }, "Terms of Service"),
+        " and ",
+        /*#__PURE__*/React.createElement("a", { onClick: function(e){ e.preventDefault(); e.stopPropagation(); window.openLegalModal('privacy'); } }, "Privacy Policy"),
+        "."
+      )
+    ),
+    /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
+      /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkAge" }),
+      /*#__PURE__*/React.createElement("span", { className: "legal-check-label" },
+        "I confirm I am at least ", /*#__PURE__*/React.createElement("strong", null, "16 years old"), " (or 13 if I am a US resident)."
+      )
+    ),
+    /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
+      /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkData" }),
+      /*#__PURE__*/React.createElement("span", { className: "legal-check-label" },
+        "I understand my data is stored on Google Firebase servers in the United States, as described in the ",
+        /*#__PURE__*/React.createElement("a", { onClick: function(e){ e.preventDefault(); e.stopPropagation(); window.openLegalModal('privacy'); } }, "Privacy Policy"),
+        "."
+      )
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "legal-error-msg", id: "legalErrorMsg" },
+      "Please accept all required terms to create an account."
+    )
+  ),
+  /*#__PURE__*/React.createElement("button", {
     type: "submit",
     className: "button button-primary",
     disabled: loading
@@ -6107,14 +6080,120 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 })();
 </script>
 
-<!-- ── GDPR + AGE GATE CONSENT LOGIC ── -->
+<!-- ── CONSENT & LEGAL MODAL LOGIC ── -->
 <script>
 (function () {
 
-    /* ── Age Gate ─────────────────────────────────────────── */
+    /* ─────────────────────────────────────────
+       LEGAL MODAL CONTENT
+    ───────────────────────────────────────── */
+    var LEGAL_CONTENT = {
+
+        privacy: {
+            title: 'Privacy Policy',
+            html: `
+<p class="legal-modal-meta">Effective: January 1, 2025 &nbsp;·&nbsp; Version 1.0</p>
+<div class="legal-modal-highlight">
+  <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab.</p>
+</div>
+<h3>1. What Data We Collect</h3>
+<p><strong>Account data:</strong> Email address and display name (required for login).</p>
+<p><strong>Habit data:</strong> Habit names, schedules, time ranges, and completion logs — the core of what the app stores.</p>
+<p><strong>Community data:</strong> Posts, comments, and follow relationships — only if you choose to participate.</p>
+<p><strong>Uploaded media:</strong> Photos and videos you voluntarily upload to posts.</p>
+<p><strong>Anonymous analytics:</strong> Page view counts only, via Umami — no personal data, no cookies, no cross-site tracking.</p>
+<p>We do <strong>not</strong> collect location data, financial information, or health/biometric data.</p>
+<h3>2. How We Use Your Data</h3>
+<p>To provide and operate the app, authenticate your account, display your habits and progress, and enable optional community features. We never use your data to serve you ads or sell it to third parties.</p>
+<h3>3. Data Sharing & Third Parties</h3>
+<p><strong>Google Firebase</strong> — stores your account and habit data on servers in the United States.</p>
+<p><strong>Cloudinary</strong> — stores uploaded photos and videos.</p>
+<p><strong>Umami (self-hosted)</strong> — anonymous, cookieless analytics. No personal data shared.</p>
+<p>We do <strong>not</strong> sell, rent, or trade your personal information. Ever.</p>
+<p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase processes data under Standard Contractual Clauses (SCCs).</p>
+<h3>4. Your Rights</h3>
+<p><strong>Access:</strong> Request a copy of your data. <strong>Correction:</strong> Fix inaccurate data in your profile. <strong>Deletion:</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability:</strong> Request a JSON export of your habit data. <strong>Object:</strong> Opt out of analytics by declining in the consent banner.</p>
+<p><strong>EU/GDPR users:</strong> You may lodge a complaint with your local data protection authority.</p>
+<p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in).</p>
+<h3>5. Cookies & Analytics</h3>
+<p>We use Firebase Auth cookies (essential — keeps you signed in) and localStorage for app preferences. Umami analytics is cookieless and does not fingerprint users. If you decline analytics in the consent banner, Umami is disabled for your session.</p>
+<h3>6. Data Retention</h3>
+<p>Your data is retained while your account is active. When you delete your account, all data is permanently erased from Firebase within 30 days and from Cloudinary within 7 days.</p>
+<h3>7. Children</h3>
+<p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We do not knowingly collect data from children.</p>
+<h3>8. Contact</h3>
+<p>For privacy requests: <strong>privacy@habittrackerpro.app</strong><br>We aim to respond within 30 days.</p>`
+        },
+
+        terms: {
+            title: 'Terms of Service',
+            html: `
+<p class="legal-modal-meta">Effective: January 1, 2025 &nbsp;·&nbsp; Version 1.0</p>
+<div class="legal-modal-highlight">
+  <p><strong>By creating an account or using Habit Tracker Pro, you agree to these Terms.</strong> If you do not agree, please do not use the app.</p>
+</div>
+<h3>1. Eligibility</h3>
+<p>You must be at least <strong>16 years old</strong> (or 13 if you are a US resident) and have the legal capacity to enter a binding agreement. By using the app, you confirm you meet these requirements.</p>
+<h3>2. Your Account</h3>
+<p>You are responsible for keeping your password secure and for all activity under your account. Provide accurate information and notify us immediately of any unauthorized access. You may only maintain one account.</p>
+<h3>3. Acceptable Use</h3>
+<p>You agree not to:</p>
+<ul>
+  <li>Post illegal, harmful, abusive, or harassing content</li>
+  <li>Impersonate any person or entity</li>
+  <li>Upload content that infringes copyright or other intellectual property rights</li>
+  <li>Attempt unauthorized access to other accounts or systems</li>
+  <li>Use bots, scrapers, or automated tools to access the app</li>
+  <li>Post spam, explicit content, or commercial solicitations</li>
+</ul>
+<h3>4. User Content</h3>
+<p>You retain ownership of content you create. By submitting content, you grant us a limited license to store and display it solely to operate the app. You are responsible for ensuring your content doesn't violate any laws or third-party rights.</p>
+<h3>5. Community Features</h3>
+<p>Community participation is entirely optional. Your habits are never shared publicly without your action. Be respectful to other users. We may remove content or suspend accounts that violate these Terms.</p>
+<h3>6. Free Service</h3>
+<p>Habit Tracker Pro is currently free. We reserve the right to introduce paid features with at least 30 days' notice. We may modify or discontinue features at any time with reasonable notice.</p>
+<h3>7. Intellectual Property</h3>
+<p>All app code, design, and content we create is owned by Habit Tracker Pro. You may not copy, modify, or reverse engineer any part of the app.</p>
+<h3>8. Disclaimer</h3>
+<p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
+<h3>9. Termination</h3>
+<p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
+<h3>10. Governing Law</h3>
+<p>EU users retain all rights under applicable consumer protection laws. For disputes, contact us first at <strong>legal@habittrackerpro.app</strong> — most issues can be resolved quickly. EU users may also use the EU Online Dispute Resolution platform.</p>
+<h3>11. Contact</h3>
+<p>Questions about these Terms: <strong>legal@habittrackerpro.app</strong></p>`
+        }
+    };
+
+    /* ─────────────────────────────────────────
+       MODAL OPEN / CLOSE
+    ───────────────────────────────────────── */
+    window.openLegalModal = function (type) {
+        var content = LEGAL_CONTENT[type];
+        if (!content) return;
+        document.getElementById('legalModalTitle').textContent = content.title;
+        document.getElementById('legalModalBody').innerHTML = content.html;
+        document.getElementById('legalModalBody').scrollTop = 0;
+        document.getElementById('legalModalOverlay').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.closeLegalModal = function () {
+        document.getElementById('legalModalOverlay').style.display = 'none';
+        document.body.style.overflow = '';
+    };
+
+    /* ESC key closes modal */
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') window.closeLegalModal();
+    });
+
+    /* ─────────────────────────────────────────
+       AGE GATE
+    ───────────────────────────────────────── */
     function initAgeGate() {
         if (localStorage.getItem('ht-age-confirmed')) {
-            initGdprBanner(); // age already confirmed, go straight to GDPR check
+            initGdprBanner();
             return;
         }
         var overlay = document.getElementById('ageGateOverlay');
@@ -6129,17 +6208,16 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
     };
 
     window.ageGateDeny = function () {
-        var denied = document.getElementById('ageGateDenied');
-        var yes = document.querySelector('.age-gate-btn-yes');
-        var no  = document.querySelector('.age-gate-btn-no');
-        if (denied) denied.style.display = 'block';
-        if (yes) yes.style.display = 'none';
-        if (no)  no.style.display  = 'none';
+        document.getElementById('ageGateDenied').style.display = 'block';
+        document.querySelector('.age-gate-btn-yes').style.display = 'none';
+        document.querySelector('.age-gate-btn-no').style.display = 'none';
     };
 
-    /* ── GDPR Banner ──────────────────────────────────────── */
+    /* ─────────────────────────────────────────
+       GDPR BANNER
+    ───────────────────────────────────────── */
     function initGdprBanner() {
-        if (localStorage.getItem('ht-gdpr-choice')) return; // already decided
+        if (localStorage.getItem('ht-gdpr-choice')) return;
         var banner = document.getElementById('gdprBanner');
         if (banner) banner.style.display = 'flex';
     }
@@ -6154,8 +6232,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         localStorage.setItem('ht-gdpr-choice', 'declined');
         localStorage.setItem('ht-gdpr-date', new Date().toISOString());
         closeBanner();
-        // Disable Umami analytics (no-op override)
-        window['umami'] = { track: function () {} };
+        window['umami'] = { track: function () {} }; // disable Umami
     };
 
     function closeBanner() {
@@ -6165,12 +6242,14 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         setTimeout(function () { banner.style.display = 'none'; }, 350);
     }
 
-    /* ── Auto-init after React renders ───────────────────── */
-    // Wait for React to mount, then run consent flow
+    /* ─────────────────────────────────────────
+       AUTO INIT
+    ───────────────────────────────────────── */
     window.addEventListener('load', function () {
-        setTimeout(initAgeGate, 300);
+        setTimeout(initAgeGate, 400);
     });
 
 }());
+</script>
 </body>
 </html>
