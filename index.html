@@ -18,8 +18,7 @@
     <link rel="apple-touch-icon" sizes="144x144" href="./icons/icon-144x144.png">
     <!-- Splash screens for iOS -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <!-- ── Umami Analytics ── -->
-    <script defer src="https://umami-psi-opal.vercel.app/script.js" data-website-id="6dd260f7-7f10-4321-b579-dada371b2b34"></script>
+    <!-- ── Umami Analytics: loaded ONLY after user consent (see GDPR logic below) ── -->
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -660,54 +659,197 @@
         .legal-modal-highlight p { color:rgba(255,255,255,.8); margin-bottom:6px; font-size:12px; }
         .legal-modal-highlight p:last-child { margin-bottom:0; }
         .legal-modal-highlight strong { color:var(--white); }
+
+        /* ── AGE GATE ENHANCED ── */
+        .age-gate-input-group { margin-bottom:20px; text-align:left; }
+        .age-gate-input-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--gray-600); margin-bottom:8px; }
+        .age-gate-year-input { width:100%; padding:13px 14px; border:1px solid var(--gray-200); font-size:16px; font-family:var(--mono); text-align:center; letter-spacing:4px; outline:none; border-radius:0; transition:border-color .2s; -moz-appearance:textfield; }
+        .age-gate-year-input::-webkit-outer-spin-button,
+        .age-gate-year-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+        .age-gate-year-input:focus { border-color:var(--black); }
+        .age-gate-hint { font-size:10px; color:var(--gray-400); margin-top:6px; text-align:center; }
+        .age-gate-error { font-size:11px; color:#dc2626; margin-top:8px; padding:8px 10px; background:#fef2f2; border:1px solid #fca5a5; text-align:left; }
+        .age-gate-btn-yes:disabled { background:var(--gray-300); cursor:not-allowed; }
+
+        /* ── PRIVACY SETTINGS PANEL ── */
+        .privacy-settings-panel { position:fixed; inset:0; background:rgba(10,10,10,.7); z-index:10002; display:flex; align-items:flex-end; justify-content:center; }
+        .privacy-settings-box { background:var(--white); width:100%; max-width:480px; max-height:90vh; display:flex; flex-direction:column; border-top:3px solid var(--black); animation:lmSlideUp .3s cubic-bezier(.4,0,.2,1); }
+        .privacy-settings-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--gray-100); flex-shrink:0; }
+        .privacy-settings-title { font-family:var(--din); font-size:16px; font-weight:800; }
+        .privacy-settings-close { background:none; border:none; cursor:pointer; font-size:22px; color:var(--gray-400); line-height:1; padding:2px 6px; }
+        .privacy-settings-close:hover { color:var(--black); }
+        .privacy-settings-body { overflow-y:auto; padding:16px 20px; flex:1; -webkit-overflow-scrolling:touch; }
+        .privacy-settings-intro { font-size:12px; color:var(--gray-600); line-height:1.6; margin-bottom:16px; }
+        .priv-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 0; border-bottom:1px solid var(--gray-100); }
+        .priv-row-info { flex:1; }
+        .priv-row-info strong { display:block; font-size:13px; font-weight:700; color:var(--black); margin-bottom:3px; }
+        .priv-row-info span { font-size:11px; color:var(--gray-500); line-height:1.5; }
+        .priv-toggle-wrap { flex-shrink:0; }
+        .priv-always-on { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--gray-400); border:1px solid var(--gray-200); padding:4px 9px; }
+        .priv-dpa-section { margin-top:18px; padding:14px; background:var(--gray-50); border:1px solid var(--gray-200); }
+        .priv-dpa-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-500); margin-bottom:10px; }
+        .priv-dpa-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
+        .priv-dpa-list li { font-size:11px; color:var(--gray-700); line-height:1.6; }
+        .priv-dpa-list a { color:var(--black); font-weight:700; text-decoration:underline; }
+        .priv-rights-section { margin-top:14px; padding:14px; background:var(--gray-50); border:1px solid var(--gray-200); }
+        .priv-rights-section p { font-size:11px; color:var(--gray-700); line-height:1.6; margin-bottom:0; }
+        .privacy-settings-footer { padding:14px 20px; border-top:1px solid var(--gray-100); flex-shrink:0; }
+        .priv-save-btn { width:100%; padding:13px; background:var(--black); color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); }
+        .priv-save-btn:hover { background:var(--gray-800); }
+
+        /* ── PRIVACY SETTINGS BUTTON (in profile) ── */
+        .privacy-settings-entry { width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border:1px solid var(--gray-200); background:var(--white); cursor:pointer; transition:.15s; font-family:var(--font); margin-top:4px; }
+        .privacy-settings-entry:hover { border-color:var(--black); background:var(--gray-50); }
+        .privacy-settings-entry-left { display:flex; align-items:center; gap:12px; }
+        .privacy-settings-entry-icon { width:36px; height:36px; background:var(--gray-100); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px; }
+        .privacy-settings-entry-text strong { display:block; font-size:13px; font-weight:700; color:var(--black); }
+        .privacy-settings-entry-text span { font-size:11px; color:var(--gray-400); }
+
+        /* ── EU ACCESSIBILITY ACT: Focus visible, skip link, high-contrast ── */
+        :focus-visible { outline:3px solid #0066cc; outline-offset:2px; }
+        .skip-link { position:absolute; top:-40px; left:0; background:var(--black); color:var(--white); padding:8px 14px; font-size:12px; font-weight:700; text-decoration:none; z-index:99999; transition:top .15s; }
+        .skip-link:focus { top:0; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; scroll-behavior:auto !important; }
+        }
+        @media (forced-colors: active) {
+            .gdpr-accept, .priv-save-btn { border:2px solid ButtonText; }
+        }
+        /* Minimum touch target size (WCAG 2.5.5) */
+        button, [role="button"], input[type="checkbox"], label { min-height:44px; }
+        .gdpr-decline { min-height:44px; }
+        .toggle-switch { min-height:24px; } /* exception: toggle within larger row */
     </style>
 </head>
 <body>
-<div id="root"></div>
+<!-- ── EU Accessibility Act: Skip Navigation Link ── -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div id="root" role="main" id="main-content"></div>
 
-<!-- ── AGE GATE ── -->
-<div id="ageGateOverlay" class="age-gate-overlay" style="display:none;">
+<!-- ── AGE GATE (Enhanced: birth year verification + accessibility) ── -->
+<div id="ageGateOverlay" class="age-gate-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ageGateTitle" aria-describedby="ageGateDesc">
     <div class="age-gate-box">
-        <div class="age-gate-icon">🔒</div>
-        <div class="age-gate-title">Age Verification</div>
-        <div class="age-gate-desc">
-            Habit Tracker Pro is for users aged <strong>16+</strong> (or 13+ in the US).<br><br>
-            By continuing you agree to our
-            <a onclick="openLegalModal('privacy')">Privacy Policy</a> and
-            <a onclick="openLegalModal('terms')">Terms of Service</a>.
+        <div class="age-gate-icon" aria-hidden="true">🔒</div>
+        <div class="age-gate-title" id="ageGateTitle">Age Verification Required</div>
+        <div class="age-gate-desc" id="ageGateDesc">
+            Habit Tracker Pro requires users to be <strong>16+</strong> (or 13+ in the US).<br><br>
+            Please enter your birth year to continue. By continuing you agree to our
+            <a onclick="openLegalModal('privacy')" role="button" tabindex="0">Privacy Policy</a> and
+            <a onclick="openLegalModal('terms')" role="button" tabindex="0">Terms of Service</a>.
         </div>
-        <button class="age-gate-btn-yes" onclick="ageGateConfirm()">I confirm — I meet the age requirement</button>
-        <button class="age-gate-btn-no" onclick="ageGateDeny()">I do not meet the age requirement</button>
-        <div class="age-gate-denied" id="ageGateDenied">
-            Sorry — Habit Tracker Pro is not available for users under 16 (or 13 in the US). Please close this page.
+        <div class="age-gate-input-group" id="ageGateInputGroup">
+            <label for="birthYearInput" class="age-gate-input-label">Enter your birth year</label>
+            <input
+                type="number"
+                id="birthYearInput"
+                class="age-gate-year-input"
+                placeholder="e.g. 1995"
+                min="1900"
+                max="2025"
+                inputmode="numeric"
+                aria-required="true"
+                aria-describedby="ageGateYearHint"
+                autocomplete="bday-year"
+            />
+            <div id="ageGateYearHint" class="age-gate-hint">Enter a 4-digit year (e.g. 1990)</div>
+            <div id="ageGateError" class="age-gate-error" role="alert" aria-live="assertive" style="display:none;"></div>
+        </div>
+        <button class="age-gate-btn-yes" id="ageGateConfirmBtn" onclick="ageGateConfirm()" disabled aria-disabled="true">
+            Confirm Age &amp; Continue
+        </button>
+        <div class="age-gate-denied" id="ageGateDenied" role="alert">
+            Sorry — Habit Tracker Pro is not available for users under the required age. Please close this page.
         </div>
     </div>
 </div>
 
-<!-- ── GDPR BANNER ── -->
-<div id="gdprBanner" class="gdpr-banner" style="display:none;">
+<!-- ── GDPR BANNER (Accessible, with granular consent) ── -->
+<div id="gdprBanner" class="gdpr-banner" style="display:none;" role="dialog" aria-modal="false" aria-labelledby="gdprTitle" aria-describedby="gdprDesc">
     <div class="gdpr-text">
-        <div class="gdpr-eyebrow">Privacy Notice</div>
-        <div class="gdpr-title">We respect your privacy</div>
-        <div class="gdpr-desc">
-            Essential cookies only to keep you signed in, plus <strong>Umami</strong> — a cookieless,
-            privacy-first analytics tool. No personal data collected, no tracking cookies.
-            <br><a onclick="openLegalModal('privacy')" style="margin-top:4px;display:inline-block;">Read our Privacy Policy →</a>
+        <div class="gdpr-eyebrow" aria-hidden="true">Privacy Notice</div>
+        <div class="gdpr-title" id="gdprTitle">We respect your privacy</div>
+        <div class="gdpr-desc" id="gdprDesc">
+            We use essential cookies to keep you signed in. We'd also like to use <strong>Umami</strong> — a cookieless,
+            privacy-first analytics tool — to understand how the app is used. No personal data is collected, no cross-site tracking.
+            <br><a onclick="openLegalModal('privacy')" role="button" tabindex="0" style="margin-top:4px;display:inline-block;">Read our Privacy Policy →</a>
         </div>
     </div>
     <div class="gdpr-actions">
-        <button class="gdpr-accept" onclick="gdprAccept()">Got It</button>
-        <button class="gdpr-decline" onclick="gdprDecline()">Decline Analytics</button>
-        <div class="gdpr-policy-link" onclick="openLegalModal('privacy')">Privacy Policy</div>
+        <button class="gdpr-accept" onclick="gdprAccept()" aria-label="Accept analytics and continue">Accept Analytics</button>
+        <button class="gdpr-decline" onclick="gdprDecline()" aria-label="Decline optional analytics">Essential Only</button>
+        <div class="gdpr-policy-link" onclick="openLegalModal('privacy')" role="button" tabindex="0">Privacy Policy</div>
+    </div>
+</div>
+
+<!-- ── PRIVACY SETTINGS PANEL (consent withdrawal mechanism) ── -->
+<div id="privacySettingsPanel" class="privacy-settings-panel" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="privacySettingsTitle">
+    <div class="privacy-settings-box">
+        <div class="privacy-settings-header">
+            <span class="privacy-settings-title" id="privacySettingsTitle">Privacy Settings</span>
+            <button class="privacy-settings-close" onclick="closePrivacySettings()" aria-label="Close privacy settings">✕</button>
+        </div>
+        <div class="privacy-settings-body">
+            <p class="privacy-settings-intro">You can change your privacy preferences at any time. Changes take effect immediately.</p>
+
+            <div class="priv-row">
+                <div class="priv-row-info">
+                    <strong>Essential Cookies</strong>
+                    <span>Firebase Auth session — required for login. Cannot be disabled.</span>
+                </div>
+                <div class="priv-toggle-wrap">
+                    <span class="priv-always-on" aria-label="Always on">Always On</span>
+                </div>
+            </div>
+
+            <div class="priv-row">
+                <div class="priv-row-info">
+                    <strong>Analytics (Umami)</strong>
+                    <span>Cookieless, anonymous page view counts. No personal data collected.</span>
+                </div>
+                <label class="toggle-switch" aria-label="Toggle analytics">
+                    <input type="checkbox" id="analyticsToggle" onchange="updateAnalyticsConsent(this.checked)">
+                    <span class="toggle-slider" role="switch"></span>
+                </label>
+            </div>
+
+            <div class="priv-dpa-section">
+                <p class="priv-dpa-title">Third-Party Data Processors &amp; DPA References</p>
+                <ul class="priv-dpa-list">
+                    <li>
+                        <strong>Google Firebase</strong> (Auth + Firestore) —
+                        <a href="https://firebase.google.com/terms/data-processing-terms" target="_blank" rel="noopener noreferrer">Data Processing Agreement ↗</a>
+                        · Transfers under Standard Contractual Clauses (SCCs)
+                    </li>
+                    <li>
+                        <strong>Cloudinary</strong> (Media storage) —
+                        <a href="https://cloudinary.com/privacy/gdpr" target="_blank" rel="noopener noreferrer">GDPR Compliance &amp; DPA ↗</a>
+                        · EU data residency available
+                    </li>
+                    <li>
+                        <strong>Umami Analytics</strong> (Self-hosted on Vercel) —
+                        Cookieless, no personal data transmitted.
+                        <a href="https://umami.is/privacy" target="_blank" rel="noopener noreferrer">Privacy Info ↗</a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="priv-rights-section">
+                <p class="priv-dpa-title">Your Rights</p>
+                <p>Under GDPR / CCPA you have the right to access, correct, delete, or export your data. To exercise these rights, delete your account from Profile → Delete Account, or contact us at <strong>privacy@habittrackerpro.app</strong>.</p>
+            </div>
+        </div>
+        <div class="privacy-settings-footer">
+            <button class="priv-save-btn" onclick="savePrivacySettings()">Save Preferences</button>
+        </div>
     </div>
 </div>
 
 <!-- ── LEGAL MODAL (Terms & Privacy — inline, no 404) ── -->
-<div id="legalModalOverlay" class="legal-modal-overlay" style="display:none;" onclick="if(event.target===this)closeLegalModal()">
+<div id="legalModalOverlay" class="legal-modal-overlay" style="display:none;" onclick="if(event.target===this)closeLegalModal()" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle">
     <div class="legal-modal-box">
         <div class="legal-modal-header">
             <div class="legal-modal-title" id="legalModalTitle">Privacy Policy</div>
-            <button class="legal-modal-close" onclick="closeLegalModal()">✕</button>
+            <button class="legal-modal-close" onclick="closeLegalModal()" aria-label="Close">✕</button>
         </div>
         <div class="legal-modal-body" id="legalModalBody"></div>
     </div>
@@ -5878,8 +6020,11 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             navigator.serviceWorker.register('./sw.js')
                 .then(reg => {
                     console.log('[PWA] SW registered:', reg.scope);
-                    // Ask for push notification permission (delayed 5s, let user explore first)
-                    setTimeout(() => askNotifPermission(reg), 5000);
+                    _swReg = reg; // Store for contextual notification use
+                    // Also schedule reminders if already granted
+                    if (Notification.permission === 'granted') {
+                        scheduleDailyReminder(reg);
+                    }
                 })
                 .catch(err => console.warn('[PWA] SW failed:', err));
         });
@@ -5942,7 +6087,9 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         }, 3000);
     }
 
-    /* 5. Push notification request */
+    /* 5. Push notification request — CONTEXTUAL: triggered after user completes first habit,
+          not immediately on page load. Call window.askNotifPermissionContextual() from React
+          when a habit is first marked complete. */
     async function askNotifPermission(reg) {
         if (!('Notification' in window)) return;
         if (Notification.permission !== 'default') return;
@@ -5951,13 +6098,16 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         const prompt = document.createElement('div');
         prompt.id = 'notif-prompt';
         prompt.className = 'notif-prompt';
+        prompt.setAttribute('role', 'dialog');
+        prompt.setAttribute('aria-modal', 'false');
+        prompt.setAttribute('aria-label', 'Enable daily habit reminders');
         prompt.innerHTML = `
             <div class="notif-prompt-text">
-                <strong>🔔 Enable Daily Reminders</strong>
-                We'll remind you when it's time to complete your habits, every day
+                <strong>🎉 Great habit logged!</strong>
+                Want daily reminders to keep your streak going?
             </div>
-            <button class="notif-yes" id="notif-yes">Enable</button>
-            <button class="notif-no"  id="notif-no">No thanks</button>
+            <button class="notif-yes" id="notif-yes" aria-label="Enable daily reminders">Enable</button>
+            <button class="notif-no"  id="notif-no"  aria-label="No thanks, skip reminders">No thanks</button>
         `;
         document.body.appendChild(prompt);
 
@@ -5967,7 +6117,6 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
                 scheduleDailyReminder(reg);
-                // Welcome notification
                 reg.showNotification('🎉 Reminders Enabled!', {
                     body: 'We will remind you to complete your habits every day at 8 PM',
                     icon: './icons/icon-192x192.png',
@@ -5980,6 +6129,13 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             localStorage.setItem('notif-asked', '1');
         };
     }
+
+    // Expose globally so React components can trigger it contextually
+    // (e.g. after first habit is checked off)
+    let _swReg = null;
+    window.askNotifPermissionContextual = function() {
+        if (_swReg) askNotifPermission(_swReg);
+    };
 
     /* 6. Daily reminder (local, simulated with setTimeout, no backend needed) */
     function scheduleDailyReminder(reg) {
@@ -6025,36 +6181,40 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         privacy: {
             title: 'Privacy Policy',
             html: `
-<p class="legal-modal-meta">Effective: January 1, 2025 &nbsp;·&nbsp; Version 1.0</p>
+<p class="legal-modal-meta">Effective: January 1, 2025 &nbsp;·&nbsp; Version 1.1 — Updated for GDPR compliance</p>
 <div class="legal-modal-highlight">
-  <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab.</p>
+  <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
+<h3>0. Data Controller</h3>
+<p>This service is operated by an <strong>individual independent developer</strong>, not a registered company. For all privacy-related matters, contact: <strong>privacy@habittrackerpro.app</strong>. We aim to respond within 30 days.</p>
 <h3>1. What Data We Collect</h3>
 <p><strong>Account data:</strong> Email address and display name (required for login).</p>
 <p><strong>Habit data:</strong> Habit names, schedules, time ranges, and completion logs — the core of what the app stores.</p>
 <p><strong>Community data:</strong> Posts, comments, and follow relationships — only if you choose to participate.</p>
 <p><strong>Uploaded media:</strong> Photos and videos you voluntarily upload to posts.</p>
-<p><strong>Anonymous analytics:</strong> Page view counts only, via Umami — no personal data, no cookies, no cross-site tracking.</p>
+<p><strong>Anonymous analytics:</strong> Page view counts only, via Umami — no personal data, no cookies, no cross-site tracking. Only loaded after you give consent.</p>
 <p>We do <strong>not</strong> collect location data, financial information, or health/biometric data.</p>
 <h3>2. How We Use Your Data</h3>
 <p>To provide and operate the app, authenticate your account, display your habits and progress, and enable optional community features. We never use your data to serve you ads or sell it to third parties.</p>
 <h3>3. Data Sharing & Third Parties</h3>
-<p><strong>Google Firebase</strong> — stores your account and habit data on servers in the United States.</p>
-<p><strong>Cloudinary</strong> — stores uploaded photos and videos.</p>
-<p><strong>Umami (self-hosted)</strong> — anonymous, cookieless analytics. No personal data shared.</p>
+<p><strong>Google Firebase</strong> — stores your account and habit data on servers in the United States. Firebase processes data under a <a href="https://firebase.google.com/terms/data-processing-terms" target="_blank" rel="noopener noreferrer">Data Processing Agreement (DPA)</a> and Standard Contractual Clauses (SCCs) for EU/EEA transfers.</p>
+<p><strong>Cloudinary</strong> — stores uploaded photos and videos. Cloudinary provides a <a href="https://cloudinary.com/privacy/gdpr" target="_blank" rel="noopener noreferrer">GDPR-compliant DPA</a> and supports EU data residency.</p>
+<p><strong>Umami (self-hosted)</strong> — anonymous, cookieless analytics. No personal data shared. Only activated after your explicit consent.</p>
 <p>We do <strong>not</strong> sell, rent, or trade your personal information. Ever.</p>
-<p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase processes data under Standard Contractual Clauses (SCCs).</p>
+<p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase and Cloudinary process data under Standard Contractual Clauses (SCCs) as required by GDPR Chapter 5.</p>
 <h3>4. Your Rights</h3>
-<p><strong>Access:</strong> Request a copy of your data. <strong>Correction:</strong> Fix inaccurate data in your profile. <strong>Deletion:</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability:</strong> Request a JSON export of your habit data. <strong>Object:</strong> Opt out of analytics by declining in the consent banner.</p>
+<p><strong>Access:</strong> Request a copy of your data. <strong>Correction:</strong> Fix inaccurate data in your profile. <strong>Deletion:</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability:</strong> Request a JSON export of your habit data. <strong>Object / Withdraw Consent:</strong> Change or withdraw analytics consent anytime via Profile → Privacy Settings.</p>
 <p><strong>EU/GDPR users:</strong> You may lodge a complaint with your local data protection authority.</p>
 <p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in).</p>
-<h3>5. Cookies & Analytics</h3>
-<p>We use Firebase Auth cookies (essential — keeps you signed in) and localStorage for app preferences. Umami analytics is cookieless and does not fingerprint users. If you decline analytics in the consent banner, Umami is disabled for your session.</p>
-<h3>6. Data Retention</h3>
+<h3>5. Consent & Withdrawal</h3>
+<p>You can accept or decline optional analytics at any time. Your choice is respected immediately. To change your preference, go to <strong>Profile → Privacy Settings</strong>. Withdrawing consent does not affect the lawfulness of processing before withdrawal.</p>
+<h3>6. Cookies & Analytics</h3>
+<p>We use Firebase Auth cookies (essential — keeps you signed in) and localStorage for app preferences. Umami analytics is cookieless and does not fingerprint users. Umami is only loaded after you consent — if you decline or later withdraw consent, no analytics script is executed.</p>
+<h3>7. Data Retention</h3>
 <p>Your data is retained while your account is active. When you delete your account, all data is permanently erased from Firebase within 30 days and from Cloudinary within 7 days.</p>
-<h3>7. Children</h3>
-<p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We do not knowingly collect data from children.</p>
-<h3>8. Contact</h3>
+<h3>8. Children</h3>
+<p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
+<h3>9. Contact</h3>
 <p>For privacy requests: <strong>privacy@habittrackerpro.app</strong><br>We aim to respond within 30 days.</p>`
         },
 
@@ -6099,6 +6259,26 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
     };
 
     /* ─────────────────────────────────────────
+       ANALYTICS LOADER (conditional — only after consent)
+    ───────────────────────────────────────── */
+    function loadUmamiAnalytics() {
+        if (document.getElementById('umami-script')) return; // already loaded
+        var s = document.createElement('script');
+        s.id = 'umami-script';
+        s.defer = true;
+        s.src = 'https://umami-psi-opal.vercel.app/script.js';
+        s.setAttribute('data-website-id', '6dd260f7-7f10-4321-b579-dada371b2b34');
+        document.head.appendChild(s);
+    }
+
+    function disableUmamiAnalytics() {
+        // Neutralize umami object so no tracking calls fire
+        window['umami'] = { track: function () {} };
+        var existing = document.getElementById('umami-script');
+        if (existing) existing.remove();
+    }
+
+    /* ─────────────────────────────────────────
        MODAL OPEN / CLOSE
     ───────────────────────────────────────── */
     window.openLegalModal = function (type) {
@@ -6107,8 +6287,14 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         document.getElementById('legalModalTitle').textContent = content.title;
         document.getElementById('legalModalBody').innerHTML = content.html;
         document.getElementById('legalModalBody').scrollTop = 0;
-        document.getElementById('legalModalOverlay').style.display = 'flex';
+        var overlay = document.getElementById('legalModalOverlay');
+        overlay.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+        // Focus trap: move focus inside modal
+        setTimeout(function() {
+            var closeBtn = overlay.querySelector('.legal-modal-close');
+            if (closeBtn) closeBtn.focus();
+        }, 50);
     };
 
     window.closeLegalModal = function () {
@@ -6116,56 +6302,127 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         document.body.style.overflow = '';
     };
 
-    /* ESC key closes modal */
+    /* ESC key closes modals */
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') window.closeLegalModal();
+        if (e.key === 'Escape') {
+            closeLegalModal();
+            closePrivacySettings();
+        }
     });
 
     /* ─────────────────────────────────────────
-       AGE GATE
+       AGE GATE (Enhanced: birth year verification)
     ───────────────────────────────────────── */
+    var CURRENT_YEAR = new Date().getFullYear();
+    var EU_MIN_AGE = 16;
+    var US_MIN_AGE = 13;
+
     function initAgeGate() {
         if (localStorage.getItem('ht-age-confirmed')) {
             initGdprBanner();
             return;
         }
         var overlay = document.getElementById('ageGateOverlay');
-        if (overlay) overlay.style.display = 'flex';
+        if (overlay) {
+            overlay.style.display = 'flex';
+            // Focus the year input for accessibility
+            setTimeout(function() {
+                var input = document.getElementById('birthYearInput');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        // Birth year input listener
+        var input = document.getElementById('birthYearInput');
+        var confirmBtn = document.getElementById('ageGateConfirmBtn');
+        if (input && confirmBtn) {
+            input.addEventListener('input', function () {
+                var val = parseInt(this.value, 10);
+                var isValidYear = !isNaN(val) && this.value.length === 4 && val >= 1900 && val <= CURRENT_YEAR;
+                confirmBtn.disabled = !isValidYear;
+                confirmBtn.setAttribute('aria-disabled', isValidYear ? 'false' : 'true');
+                // Clear error while typing
+                var errEl = document.getElementById('ageGateError');
+                if (errEl) errEl.style.display = 'none';
+            });
+            // Allow Enter key to confirm
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !confirmBtn.disabled) ageGateConfirm();
+            });
+        }
     }
 
     window.ageGateConfirm = function () {
+        var input = document.getElementById('birthYearInput');
+        var errEl = document.getElementById('ageGateError');
+        if (!input) return;
+
+        var birthYear = parseInt(input.value, 10);
+        var age = CURRENT_YEAR - birthYear;
+
+        // Validate year format
+        if (isNaN(birthYear) || input.value.length !== 4 || birthYear < 1900 || birthYear > CURRENT_YEAR) {
+            if (errEl) { errEl.textContent = 'Please enter a valid birth year (e.g. 1995).'; errEl.style.display = 'block'; }
+            input.focus();
+            return;
+        }
+
+        // Check minimum age (use EU standard of 16 as default; US is 13)
+        var minAge = EU_MIN_AGE; // conservative: apply stricter EU standard globally
+        if (age < minAge) {
+            // Show denial
+            var inputGroup = document.getElementById('ageGateInputGroup');
+            var confirmBtn = document.getElementById('ageGateConfirmBtn');
+            if (inputGroup) inputGroup.style.display = 'none';
+            if (confirmBtn) confirmBtn.style.display = 'none';
+            var deniedEl = document.getElementById('ageGateDenied');
+            if (deniedEl) deniedEl.style.display = 'block';
+            return;
+        }
+
+        // Age confirmed
         localStorage.setItem('ht-age-confirmed', '1');
+        localStorage.setItem('ht-age-confirmed-year', String(birthYear));
         var overlay = document.getElementById('ageGateOverlay');
         if (overlay) overlay.style.display = 'none';
+        document.body.style.overflow = '';
         initGdprBanner();
-    };
-
-    window.ageGateDeny = function () {
-        document.getElementById('ageGateDenied').style.display = 'block';
-        document.querySelector('.age-gate-btn-yes').style.display = 'none';
-        document.querySelector('.age-gate-btn-no').style.display = 'none';
     };
 
     /* ─────────────────────────────────────────
        GDPR BANNER
     ───────────────────────────────────────── */
     function initGdprBanner() {
-        if (localStorage.getItem('ht-gdpr-choice')) return;
+        var existingChoice = localStorage.getItem('ht-gdpr-choice');
+        if (existingChoice) {
+            // Restore analytics state based on previous choice
+            if (existingChoice === 'accepted') loadUmamiAnalytics();
+            else disableUmamiAnalytics();
+            return;
+        }
         var banner = document.getElementById('gdprBanner');
-        if (banner) banner.style.display = 'flex';
+        if (banner) {
+            banner.style.display = 'flex';
+            // Set focus on first action button for accessibility
+            setTimeout(function() {
+                var btn = banner.querySelector('.gdpr-accept');
+                if (btn) btn.focus();
+            }, 200);
+        }
     }
 
     window.gdprAccept = function () {
         localStorage.setItem('ht-gdpr-choice', 'accepted');
         localStorage.setItem('ht-gdpr-date', new Date().toISOString());
+        loadUmamiAnalytics();
         closeBanner();
     };
 
     window.gdprDecline = function () {
         localStorage.setItem('ht-gdpr-choice', 'declined');
         localStorage.setItem('ht-gdpr-date', new Date().toISOString());
+        disableUmamiAnalytics();
         closeBanner();
-        window['umami'] = { track: function () {} }; // disable Umami
     };
 
     function closeBanner() {
@@ -6173,6 +6430,65 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         if (!banner) return;
         banner.classList.add('gdpr-hide');
         setTimeout(function () { banner.style.display = 'none'; }, 350);
+    }
+
+    /* ─────────────────────────────────────────
+       PRIVACY SETTINGS PANEL (Consent Withdrawal)
+    ───────────────────────────────────────── */
+    window.openPrivacySettings = function () {
+        var panel = document.getElementById('privacySettingsPanel');
+        if (!panel) return;
+        // Sync toggle state with current preference
+        var toggle = document.getElementById('analyticsToggle');
+        if (toggle) toggle.checked = (localStorage.getItem('ht-gdpr-choice') === 'accepted');
+        panel.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        setTimeout(function() {
+            var closeBtn = panel.querySelector('.privacy-settings-close');
+            if (closeBtn) closeBtn.focus();
+        }, 50);
+    };
+
+    window.closePrivacySettings = function () {
+        var panel = document.getElementById('privacySettingsPanel');
+        if (panel) {
+            panel.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    };
+
+    window.updateAnalyticsConsent = function (enabled) {
+        // Live preview — actual save happens on "Save Preferences"
+    };
+
+    window.savePrivacySettings = function () {
+        var toggle = document.getElementById('analyticsToggle');
+        var enabled = toggle ? toggle.checked : false;
+        if (enabled) {
+            localStorage.setItem('ht-gdpr-choice', 'accepted');
+            localStorage.setItem('ht-gdpr-date', new Date().toISOString());
+            loadUmamiAnalytics();
+        } else {
+            localStorage.setItem('ht-gdpr-choice', 'declined');
+            localStorage.setItem('ht-gdpr-date', new Date().toISOString());
+            disableUmamiAnalytics();
+        }
+        closePrivacySettings();
+        // Show brief confirmation toast
+        showToast(enabled ? 'Analytics enabled. Thank you!' : 'Analytics disabled. Your preference is saved.');
+    };
+
+    function showToast(msg) {
+        var existing = document.getElementById('ht-toast');
+        if (existing) existing.remove();
+        var toast = document.createElement('div');
+        toast.id = 'ht-toast';
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        toast.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#0a0a0a;color:#fff;padding:10px 18px;font-size:12px;font-weight:600;z-index:20000;max-width:calc(100% - 40px);text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.25);';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3000);
     }
 
     /* ─────────────────────────────────────────

@@ -1,8 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ── Security Headers (supplement server-side CSP) ── -->
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- Prevent indexing of admin panel -->
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <title>Habit Tracker — Admin Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;600;700&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
@@ -168,6 +174,8 @@ tr:hover td{background:var(--g50)}
   </div>
 
   <div class="main">
+    <!-- Security Warning Bar (hidden by default) -->
+    <div id="adminSecurityWarn" style="display:none;background:#fffbe6;border:1px solid #e0c060;padding:10px 18px;font-size:11px;color:#7a6000;margin-bottom:16px;border-radius:2px;"></div>
     <!-- Overview -->
     <div class="pg on" id="pg-dashboard">
       <div class="pg-title">Overview</div>
@@ -304,19 +312,80 @@ var adminApp = firebase.initializeApp({
 var auth = firebase.auth(adminApp);
 var db   = firebase.firestore(adminApp);
 
-// ── Admin Whitelist ──────────────────────────────────────────────
-// 🔐 Add your admin email(s) here. Only these accounts can access the dashboard.
+// ── Admin Security Configuration ────────────────────────────────────
+// Layer 1: Client-side email whitelist (fast UI feedback)
 var ALLOWED_ADMINS = [
   'andy19920818@gmail.com',
 ];
-// ────────────────────────────────────────────────────────────────
+// Layer 2: Firebase Custom Claim key to check (set via Firebase Admin SDK / Functions)
+// Set custom claim: { admin: true } on your user account via Firebase Admin SDK
+// See: https://firebase.google.com/docs/auth/admin/custom-claims
+var ADMIN_CUSTOM_CLAIM = 'admin'; // claim key expected to be true
+// Layer 3: Session timeout (auto sign-out after inactivity)
+var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+// ────────────────────────────────────────────────────────────────────
 
 var allUsers=[], allPosts=[], allHabits=[];
 var catChart=null, userChart=null;
+var _sessionTimer = null;
+var _lastActivity = Date.now();
+
+/* ── Activity tracking for session timeout ── */
+['mousemove','keydown','click','touchstart','scroll'].forEach(function(evt){
+  document.addEventListener(evt, function(){ _lastActivity = Date.now(); }, { passive:true });
+});
+function resetSessionTimer() {
+  if (_sessionTimer) clearTimeout(_sessionTimer);
+  _sessionTimer = setTimeout(function(){
+    if (Date.now() - _lastActivity >= SESSION_TIMEOUT_MS) {
+      showAdminError('Session expired due to inactivity. Please sign in again.');
+      auth.signOut();
+    }
+  }, SESSION_TIMEOUT_MS + 5000);
+}
+
+function showAdminError(msg) {
+  var b = document.getElementById('errBox');
+  b.style.display = 'block';
+  b.textContent = msg;
+}
+
+/* ── Multi-layer admin verification ── */
+async function verifyAdminAccess(user) {
+  var email = (user.email || '').toLowerCase().trim();
+
+  // Layer 1: Email whitelist check
+  var emailAllowed = ALLOWED_ADMINS.length === 0 ||
+    ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
+
+  if (!emailAllowed) {
+    return { allowed: false, reason: 'Access denied: ' + email + ' is not in the admin whitelist.' };
+  }
+
+  // Layer 2: Firebase ID Token Custom Claims check
+  try {
+    var idTokenResult = await user.getIdTokenResult(true); // force refresh
+    var hasClaim = idTokenResult.claims && idTokenResult.claims[ADMIN_CUSTOM_CLAIM] === true;
+
+    if (!hasClaim) {
+      // Custom claim not set — show guidance (non-blocking for initial setup)
+      console.warn('[Admin] Custom claim "' + ADMIN_CUSTOM_CLAIM + '" not found. ' +
+        'For enhanced security, set this via Firebase Admin SDK: ' +
+        'admin.auth().setCustomUserClaims(uid, { admin: true })');
+      // For testing phase, allow email-whitelisted users even without claim
+      // Remove this allowance in production by returning { allowed: false } here
+      return { allowed: true, warning: 'Custom claim not set — email whitelist only. Set Firebase custom claim for production.' };
+    }
+
+    return { allowed: true };
+  } catch (e) {
+    console.error('[Admin] Token verification failed:', e);
+    // Fall back to email whitelist only if token check fails
+    return { allowed: emailAllowed, warning: 'Could not verify custom claims: ' + e.message };
+  }
+}
 
 // ── Auth state ──────────────────────────────────────────────────
-// Safety net: if Firebase never fires onAuthStateChanged (e.g. network error),
-// hide the loading screen after 5 s and show login.
 var authResolved = false;
 var authSafetyTimer = setTimeout(function(){
   if(!authResolved){
@@ -326,83 +395,90 @@ var authSafetyTimer = setTimeout(function(){
   }
 }, 5000);
 
-auth.onAuthStateChanged(function(user){
+auth.onAuthStateChanged(async function(user){
   clearTimeout(authSafetyTimer);
   authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
 
   if(user){
-    var email = (user.email||'').toLowerCase().trim();
-    var isAllowed = ALLOWED_ADMINS.length === 0 || ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
-    if(!isAllowed){
-      // 不呼叫 auth.signOut()，避免登出其他分頁（如 index.html）的使用者 session
+    var result = await verifyAdminAccess(user);
+
+    if(!result.allowed){
       document.getElementById('loginWrap').style.display='flex';
       document.getElementById('layout').style.display='none';
-      var b=document.getElementById('errBox');
-      b.style.display='block';
-      b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
+      showAdminError(result.reason || 'Access denied.');
       return;
     }
+
+    if(result.warning){
+      console.warn('[Admin Security]', result.warning);
+      // Show a subtle warning in the dashboard
+      var warnBar = document.getElementById('adminSecurityWarn');
+      if(warnBar){ warnBar.style.display='block'; warnBar.textContent = '⚠️ Security notice: ' + result.warning; }
+    }
+
     document.getElementById('loginWrap').style.display='none';
     document.getElementById('layout').style.display='flex';
     document.getElementById('adminEmail').textContent = user.email||user.displayName||'';
+
+    // Start session timeout
+    resetSessionTimer();
+    // Log admin access (audit trail)
+    console.info('[Admin] Access granted to:', user.email, 'at', new Date().toISOString());
+
     loadAll();
   } else {
+    clearTimeout(_sessionTimer);
     document.getElementById('loginWrap').style.display='flex';
     document.getElementById('layout').style.display='none';
   }
 });
 
-// Handle redirect sign-in result (only when URL has actual auth redirect params)
+// Handle redirect sign-in result
 var _hasAuthParams = window.location.href.indexOf('__/auth/handler') > -1
   || window.location.search.indexOf('code=') > -1;
 if(_hasAuthParams){
-  auth.getRedirectResult().then(function(result){
+  auth.getRedirectResult().then(async function(result){
     if(result && result.user){
-      var email = (result.user.email||'').toLowerCase().trim();
-      var isAllowed = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
-      if(!isAllowed){
-        // 不呼叫 auth.signOut()，避免登出其他分頁的使用者 session
-        var b=document.getElementById('errBox');
-        b.style.display='block';
-        b.textContent='Access denied: '+email+' is not authorized.';
+      var check = await verifyAdminAccess(result.user);
+      if(!check.allowed){
+        showAdminError(check.reason || 'Access denied.');
       }
     }
   }).catch(function(e){
     if(e.code && e.code !== 'auth/no-current-user'){
-      var b=document.getElementById('errBox');
-      b.style.display='block';
-      b.textContent='Sign in failed: '+e.message;
+      showAdminError('Sign in failed: ' + e.message);
     }
   });
 }
 
-// Login - try popup first, fall back to redirect if blocked
+// Login
 document.getElementById('loginBtn').onclick = function(){
   var b=document.getElementById('errBox');
   b.style.display='none';
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).then(function(result){
-    var user = result.user;
-    var email = (user.email||'').toLowerCase().trim();
-    var isAllowed = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
-    if(!isAllowed){
-      // 不呼叫 auth.signOut()，避免登出其他分頁的使用者 session
+  // Force account selection to prevent silent re-use of wrong account
+  provider.setCustomParameters({ prompt: 'select_account' });
+  auth.signInWithPopup(provider).then(async function(result){
+    var check = await verifyAdminAccess(result.user);
+    if(!check.allowed){
       b.style.display='block';
-      b.textContent='Access denied: '+email+' is not authorized to access the admin dashboard.';
+      b.textContent = check.reason || 'Access denied.';
     }
   }).catch(function(e){
     if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
       auth.signInWithRedirect(provider);
     } else if(e.code !== 'auth/popup-closed-by-user'){
-      b.style.display='block';
-      b.textContent='Sign in failed: '+e.message;
+      showAdminError('Sign in failed: ' + e.message);
     }
   });
 };
 
 // Logout
-document.getElementById('logoutBtn').onclick = function(){ auth.signOut(); };
+document.getElementById('logoutBtn').onclick = function(){
+  clearTimeout(_sessionTimer);
+  auth.signOut();
+};
 
 // Refresh
 document.getElementById('refreshBtn').onclick = loadAll;
