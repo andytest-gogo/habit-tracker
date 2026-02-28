@@ -4138,7 +4138,7 @@ function MainApp(_ref16) {
     var expired = habits.filter(function (h) {
       var _parseTimeRange3 = parseTimeRange(h.timeRange),
         end = _parseTimeRange3.end;
-      return end && end < today;
+      return end && end <= today;
     });
     if (expired.length === 0) return;
     var existingIds = new Set(archivedHabits.map(function (a) {
