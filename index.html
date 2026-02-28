@@ -724,7 +724,7 @@
 <body>
 <!-- ── EU Accessibility Act: Skip Navigation Link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-<div id="root" role="main" id="main-content"></div>
+<div id="main-content" role="main"></div>
 
 <!-- ── AGE GATE (Enhanced: birth year verification + accessibility) ── -->
 <div id="ageGateOverlay" class="age-gate-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ageGateTitle" aria-describedby="ageGateDesc">
@@ -835,7 +835,7 @@
 
             <div class="priv-rights-section">
                 <p class="priv-dpa-title">Your Rights</p>
-                <p>Under GDPR / CCPA you have the right to access, correct, delete, or export your data. To exercise these rights, delete your account from Profile → Delete Account, or contact us at <strong>privacy@habittrackerpro.app</strong>.</p>
+                <p>Under GDPR / CCPA you have the right to access, correct, delete, or export your data. To exercise these rights, delete your account from Profile → Delete Account, or contact us at <strong>privacy&#64;habittrackerpro&#46;app</strong>.</p>
             </div>
         </div>
         <div class="privacy-settings-footer">
@@ -4476,6 +4476,15 @@ function MainApp(_ref16) {
               streak: streak
             });
           case 3:
+            // Contextual notification: ask after user checks off their very first habit ever
+            if (!isChecked) {
+              var _totalChecked = habits.reduce(function(sum, h) {
+                return sum + ((h.checkedDates || []).length);
+              }, 0);
+              if (_totalChecked === 0 && window.askNotifPermissionContextual) {
+                setTimeout(window.askNotifPermissionContextual, 1500);
+              }
+            }
             return _context6.a(2);
         }
       }, _callee6);
@@ -5830,6 +5839,33 @@ function MainApp(_ref16) {
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "section-title",
+      style: { marginBottom: 12 }
+    }, "Privacy"), /*#__PURE__*/React.createElement("button", {
+      className: "privacy-settings-entry",
+      onClick: function onClick() { if (window.openPrivacySettings) window.openPrivacySettings(); },
+      "aria-label": "Open privacy settings to manage analytics consent and data rights"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "privacy-settings-entry-left"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "privacy-settings-entry-icon",
+      "aria-hidden": "true"
+    }, "\uD83D\uDD12"), /*#__PURE__*/React.createElement("div", {
+      className: "privacy-settings-entry-text"
+    }, /*#__PURE__*/React.createElement("strong", null, "Privacy Settings"), /*#__PURE__*/React.createElement("span", null, "Manage analytics consent \u0026 your data rights"))), /*#__PURE__*/React.createElement("span", {
+      className: "history-entry-arrow",
+      "aria-hidden": "true"
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "16", height: "16", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor"
+    }, /*#__PURE__*/React.createElement("path", {
+      strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M9 5l7 7-7 7"
+    }))))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        margin: '24px 0 8px',
+        borderTop: '1px solid var(--gray-100)',
+        paddingTop: 20
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "section-title",
       style: {
         marginBottom: 12
       }
@@ -5938,20 +5974,31 @@ function MainApp(_ref16) {
     },
     onAdd: addHabit
   }), /*#__PURE__*/React.createElement("div", {
-    className: "tab-bar"
+    className: "tab-bar",
+    role: "tablist",
+    "aria-label": "Main navigation"
   }, /*#__PURE__*/React.createElement("button", {
     className: "tab-item".concat(activeTab === 'home' ? ' active' : ''),
+    role: "tab",
+    "aria-selected": activeTab === 'home',
+    "aria-controls": "main-content",
     onClick: function onClick() {
       setActiveTab('home');
       setSelectedHabit(null);
     }
   }, /*#__PURE__*/React.createElement(HomeIcon, null), /*#__PURE__*/React.createElement("span", null, "Home")), /*#__PURE__*/React.createElement("button", {
     className: "tab-item".concat(activeTab === 'feed' ? ' active' : ''),
+    role: "tab",
+    "aria-selected": activeTab === 'feed',
+    "aria-controls": "main-content",
     onClick: function onClick() {
       return setActiveTab('feed');
     }
   }, /*#__PURE__*/React.createElement(FeedIcon, null), /*#__PURE__*/React.createElement("span", null, "Feed")), /*#__PURE__*/React.createElement("button", {
     className: "tab-item".concat(activeTab === 'profile' ? ' active' : ''),
+    role: "tab",
+    "aria-selected": activeTab === 'profile',
+    "aria-controls": "main-content",
     onClick: function onClick() {
       return setActiveTab('profile');
     }
@@ -6007,7 +6054,7 @@ function App() {
     onAuthSuccess: setUser
   });
 }
-var _root = ReactDOM.createRoot(document.getElementById('root'));
+var _root = ReactDOM.createRoot(document.getElementById('main-content'));
 _root.render(/*#__PURE__*/React.createElement(App, null));
 
 </script>
@@ -6493,12 +6540,4 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 
     /* ─────────────────────────────────────────
        AUTO INIT
-    ───────────────────────────────────────── */
-    window.addEventListener('load', function () {
-        setTimeout(initAgeGate, 400);
-    });
-
-}());
-</script>
-</body>
-</html>
+    ──────

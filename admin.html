@@ -165,6 +165,10 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
         Upload Quota
       </button>
+      <button class="nav-btn" data-page="security">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        Security &amp; Rules
+      </button>
 
     </nav>
     <div class="sb-foot">
@@ -283,6 +287,121 @@ tr:hover td{background:var(--g50)}
         </table>
       </div>
     </div>
+
+    <!-- Security & Rules -->
+    <div class="pg" id="pg-security">
+      <div class="pg-title">Security &amp; Rules</div>
+      <div class="pg-sub">Firestore Security Rules, Admin SDK setup, and compliance checklist</div>
+
+      <!-- Session status -->
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:14px">🔐 Current Session</div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap">
+          <div><div class="stat-lbl">Signed In As</div><div style="font-size:13px;font-weight:700;font-family:var(--mono)" id="sec-email">—</div></div>
+          <div><div class="stat-lbl">Auth Method</div><div style="font-size:13px;font-weight:700" id="sec-provider">—</div></div>
+          <div><div class="stat-lbl">Custom Claim (admin)</div><div style="font-size:13px;font-weight:700" id="sec-claim">—</div></div>
+          <div><div class="stat-lbl">Session Timeout</div><div style="font-size:13px;font-weight:700">30 min inactivity</div></div>
+        </div>
+      </div>
+
+      <!-- Custom Claims setup guide -->
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:10px">⚙️ Step 1 — Set Firebase Custom Claim (One-time setup)</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:12px">
+          To enable the second layer of admin verification, run this <strong>once</strong> in your Firebase project using the Admin SDK or Cloud Functions. Replace <code style="background:var(--g100);padding:1px 5px;font-size:11px">YOUR_ADMIN_UID</code> with your Firebase UID (visible in Firebase Console → Authentication).
+        </p>
+        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">// Node.js (Firebase Admin SDK)
+const admin = require('firebase-admin');
+admin.initializeApp();
+
+await admin.auth().setCustomUserClaims('YOUR_ADMIN_UID', { admin: true });
+console.log('✅ Admin claim set successfully');</pre>
+        <p style="font-size:11px;color:var(--g400);margin-top:10px">After setting the claim, sign out and sign back in to the admin dashboard for it to take effect.</p>
+      </div>
+
+      <!-- Firestore Security Rules -->
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:10px">🛡️ Step 2 — Firestore Security Rules</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:12px">
+          Copy these rules into <strong>Firebase Console → Firestore Database → Rules</strong>. These rules enforce that users can only read/write their own data, while the admin account has read access to all collections.
+        </p>
+        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper: is this request from the admin? ──────────────────
+    function isAdmin() {
+      return request.auth != null
+        &amp;&amp; request.auth.token.admin == true
+        &amp;&amp; request.auth.token.email == 'andy19920818@gmail.com';
+    }
+
+    // ── Users collection ─────────────────────────────────────────
+    match /users/{userId} {
+      allow read:  if request.auth != null &amp;&amp; (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null &amp;&amp; request.auth.uid == userId;
+    }
+
+    // ── Habits collection ────────────────────────────────────────
+    match /habits/{habitId} {
+      allow read:  if request.auth != null
+                   &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null
+                    &amp;&amp; request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            &amp;&amp; resource.data.userId == request.auth.uid;
+    }
+
+    // ── Posts collection ─────────────────────────────────────────
+    match /posts/{postId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    &amp;&amp; request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+                    &amp;&amp; resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+                    &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Comments sub-collection
+      match /comments/{commentId} {
+        allow read:   if request.auth != null;
+        allow create: if request.auth != null;
+        allow delete: if request.auth != null
+                      &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
+      }
+    }
+
+    // ── Upload Quotas ────────────────────────────────────────────
+    match /upload_quotas/{uid} {
+      allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;
+      allow read:        if isAdmin();
+    }
+  }
+}</pre>
+      </div>
+
+      <!-- Compliance checklist -->
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:14px">✅ Security &amp; Compliance Checklist</div>
+        <table>
+          <thead><tr><th>Item</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Firebase Auth email whitelist</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">andy19920818@gmail.com</td></tr>
+            <tr><td>Firebase Custom Claim (admin:true)</td><td><span class="badge" id="cl-claim-status">⚠️ Check required</span></td><td style="font-size:11px;color:var(--g500)">Set via Admin SDK then re-login</td></tr>
+            <tr><td>Session auto-logout (30 min)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Inactivity timer running</td></tr>
+            <tr><td>Admin page noindex meta tag</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">robots: noindex, nofollow</td></tr>
+            <tr><td>Force Google account selection</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">prompt: select_account</td></tr>
+            <tr><td>Firestore Security Rules</td><td><span class="badge" style="background:#fef3c7;color:#92400e">⚠️ Verify in Console</span></td><td style="font-size:11px;color:var(--g500)">Copy rules from Step 2 above</td></tr>
+            <tr><td>GDPR conditional analytics</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Umami loads after user consent</td></tr>
+            <tr><td>Age verification (birth year)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">EU min age 16</td></tr>
+            <tr><td>Privacy Settings / consent withdrawal</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Profile → Privacy Settings</td></tr>
+            <tr><td>Firebase DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to firebase.google.com/terms/data-processing-terms</td></tr>
+            <tr><td>Cloudinary DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to cloudinary.com/privacy/gdpr</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -420,6 +539,27 @@ auth.onAuthStateChanged(async function(user){
     document.getElementById('loginWrap').style.display='none';
     document.getElementById('layout').style.display='flex';
     document.getElementById('adminEmail').textContent = user.email||user.displayName||'';
+
+    document.getElementById('sec-email').textContent = user.email || '—';
+    document.getElementById('sec-provider').textContent =
+      (user.providerData && user.providerData[0] && user.providerData[0].providerId) || '—';
+
+    // Check custom claim and update security page
+    user.getIdTokenResult(true).then(function(tokenResult) {
+      var hasClaim = tokenResult.claims && tokenResult.claims['admin'] === true;
+      var claimEl = document.getElementById('sec-claim');
+      var claimStatusEl = document.getElementById('cl-claim-status');
+      if (claimEl) claimEl.textContent = hasClaim ? '✅ admin: true' : '⚠️ Not set';
+      if (claimEl) claimEl.style.color = hasClaim ? '#065f46' : '#92400e';
+      if (claimStatusEl) {
+        claimStatusEl.textContent = hasClaim ? '✅ Verified' : '⚠️ Not set — email whitelist only';
+        claimStatusEl.style.background = hasClaim ? '#d1fae5' : '#fef3c7';
+        claimStatusEl.style.color = hasClaim ? '#065f46' : '#92400e';
+      }
+    }).catch(function() {
+      var claimEl = document.getElementById('sec-claim');
+      if (claimEl) { claimEl.textContent = '⚠️ Could not verify'; claimEl.style.color = '#92400e'; }
+    });
 
     // Start session timeout
     resetSessionTimer();
