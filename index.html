@@ -4022,15 +4022,10 @@ function MainApp(_ref16) {
       return;
     }
     var unsub = db.collection('habits').where('userId', '==', user.uid).onSnapshot(function (snap) {
-      var today = toISODay();
       var list = snap.docs.map(function (d) {
         return _objectSpread({
           id: d.id
         }, d.data());
-      }).filter(function (h) {
-        // 過濾掉已到期的習慣，避免離線緩存在 delete 完成前把它們重新帶回來
-        var end = parseTimeRange(h.timeRange).end;
-        return !end || end > today;
       }).sort(function (a, b) {
         var _a$createdAt, _a$createdAt$toMillis, _b$createdAt, _b$createdAt$toMillis;
         var ta = ((_a$createdAt = a.createdAt) === null || _a$createdAt === void 0 || (_a$createdAt$toMillis = _a$createdAt.toMillis) === null || _a$createdAt$toMillis === void 0 ? void 0 : _a$createdAt$toMillis.call(_a$createdAt)) || 0;
@@ -4188,10 +4183,6 @@ function MainApp(_ref16) {
                 _context4.n = 2;
                 return db.collection('habits').doc(h.id).delete();
               case 2:
-                // delete 成功後立即從 React state 移除，不等 onSnapshot 回呼
-                setHabits(function (prev) {
-                  return prev.filter(function (item) { return item.id !== h.id; });
-                });
                 _context4.n = 4;
                 break;
               case 3:
@@ -4207,6 +4198,15 @@ function MainApp(_ref16) {
           return _ref20.apply(this, arguments);
         };
       }());
+      // Firestore delete 完成後 onSnapshot 會更新 habits state
+      // 但為了 UI 即時反應，先從 React state 移除
+      setHabits(function (prev) {
+        return prev.filter(function (h) {
+          return !expired.find(function (e) {
+            return e.id === h.id;
+          });
+        });
+      });
     }
   }, [habits, loading]);
 
