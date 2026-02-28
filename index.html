@@ -2059,7 +2059,7 @@ function AuthPage(_ref2) {
           case 2:
             _context2.p = 2;
             if (!isLogin) {
-              _context2.n = 8;
+              _context2.n = 18;
               break;
             }
             console.log('[AUTH] handleSubmit: calling signInWithEmailAndPassword');
@@ -2083,24 +2083,28 @@ function AuthPage(_ref2) {
             startCooldown();
             return _context2.a(2);
           case 5:
-            // 強制刷新 ID token，確保 onAuthStateChanged 拿到最新的 emailVerified=true
+            // reload 確保拿到 Firebase 最新的 emailVerified 狀態（避免緩存舊值）
             _context2.n = 6;
-            return r.user.getIdToken(true);
+            return r.user.reload();
           case 6:
+            // reload 完成後取最新的 currentUser
             _context2.n = 7;
+            return (auth.currentUser || r.user).getIdToken(true);
+          case 7:
+            _context2.n = 8;
             return db.collection('users').doc(r.user.uid).set({
-              displayName: r.user.displayName || displayName || '',
-              email: r.user.email || '',
+              displayName: (auth.currentUser || r.user).displayName || displayName || '',
+              email: (auth.currentUser || r.user).email || '',
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             }, {
               merge: true
             });
-          case 7:
+          case 8:
             console.log('[AUTH] handleSubmit: calling onAuthSuccess ✅');
-            onAuthSuccess(r.user);
+            onAuthSuccess(auth.currentUser || r.user);
             _context2.n = 13;
             break;
-          case 8:
+          case 18:
             _context2.n = 9;
             return auth.createUserWithEmailAndPassword(email, password);
           case 9:
@@ -5898,20 +5902,53 @@ function App() {
       if (u && isFirebaseConfigured) {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         console.log('[AUTH] isGoogle:', isGoogle, '| emailVerified:', u.emailVerified);
-        if (!isGoogle && !u.emailVerified) {
-          console.log('[AUTH] ❌ emailVerified=false → calling signOut');
-          auth.signOut();
-          return;
+        if (isGoogle) {
+          // Google 帳號直接放行
+          console.log('[AUTH] ✅ Google user → calling setUser');
+          db.collection('users').doc(u.uid).set({
+            uid: u.uid,
+            email: u.email || '',
+            displayName: u.displayName || '',
+            photoURL: u.photoURL || '',
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(function () {});
+          setUser(u);
+        } else {
+          // Email/Password 帳號：先 reload 取得最新 emailVerified 狀態，避免緩存誤判
+          u.reload().then(function() {
+            var freshUser = auth.currentUser;
+            console.log('[AUTH] after reload emailVerified:', freshUser ? freshUser.emailVerified : 'null');
+            if (!freshUser || !freshUser.emailVerified) {
+              console.log('[AUTH] ❌ emailVerified=false → calling signOut');
+              auth.signOut();
+              return;
+            }
+            console.log('[AUTH] ✅ verified → calling setUser');
+            db.collection('users').doc(freshUser.uid).set({
+              uid: freshUser.uid,
+              email: freshUser.email || '',
+              displayName: freshUser.displayName || '',
+              photoURL: freshUser.photoURL || '',
+              lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(function () {});
+            setUser(freshUser);
+          }).catch(function(err) {
+            console.log('[AUTH] reload error:', err);
+            // reload 失敗（例如離線），以現有的 emailVerified 狀態做判斷
+            if (!u.emailVerified) {
+              auth.signOut();
+              return;
+            }
+            db.collection('users').doc(u.uid).set({
+              uid: u.uid,
+              email: u.email || '',
+              displayName: u.displayName || '',
+              photoURL: u.photoURL || '',
+              lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(function () {});
+            setUser(u);
+          });
         }
-        console.log('[AUTH] ✅ verified → calling setUser');
-        db.collection('users').doc(u.uid).set({
-          uid: u.uid,
-          email: u.email || '',
-          displayName: u.displayName || '',
-          photoURL: u.photoURL || '',
-          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(function () {});
-        setUser(u);
       } else {
         console.log('[AUTH] user is null → setUser(null)');
         setUser(u || null);
