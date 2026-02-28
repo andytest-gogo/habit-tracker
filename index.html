@@ -3551,14 +3551,31 @@ function HistoryPage(_ref15) {
     archivedHabits = _ref15.archivedHabits,
     percentile = _ref15.percentile,
     onBack = _ref15.onBack;
-  // Sorted archived: newest first by archivedAt
-  var sorted = _toConsumableArray(archivedHabits).sort(function (a, b) {
-    return (b.archivedAt || '') > (a.archivedAt || '') ? 1 : -1;
+  // 合併來源：habits 裡已到期的 + archivedHabits（舊資料相容）
+  var _historyToday = toISODay();
+  var expiredFromHabits = habits.filter(function(h) {
+    var _e = parseTimeRange(h.timeRange).end;
+    return _e && _e < _historyToday;
+  }).map(function(h) {
+    return Object.assign({}, h, { finalRate: h.finalRate || calcCompletionRate(h) });
   });
-  var expiredRates = archivedHabits.map(function (h) {
+  // 合併，以 id 去重（habits 優先，archivedHabits 補舊資料）
+  var seenIds = new Set(expiredFromHabits.map(function(h){ return h.id; }));
+  var fromArchived = archivedHabits.filter(function(h){ return !seenIds.has(h.id); });
+  var allExpired = expiredFromHabits.concat(fromArchived);
+  // Sorted archived: newest first by archivedAt / end date
+  var sorted = allExpired.sort(function (a, b) {
+    var da = a.archivedAt || parseTimeRange(a.timeRange).end || '';
+    var db2 = b.archivedAt || parseTimeRange(b.timeRange).end || '';
+    return db2 > da ? 1 : -1;
+  });
+  var expiredRates = allExpired.map(function (h) {
     return h.finalRate || 0;
   });
-  var activeRates = habits.map(function (h) {
+  var activeRates = habits.filter(function(h) {
+    var _e2 = parseTimeRange(h.timeRange).end;
+    return !_e2 || _e2 >= _historyToday;
+  }).map(function (h) {
     return calcCompletionRate(h);
   });
   var expiredAvg = expiredRates.length ? Math.round(expiredRates.reduce(function (s, r) {
@@ -3569,11 +3586,11 @@ function HistoryPage(_ref15) {
   }, 0) / activeRates.length) : 0;
 
   // Meaningful stats
-  var totalCompleted = archivedHabits.length;
-  var bestHabit = archivedHabits.reduce(function (best, h) {
+  var totalCompleted = sorted.length;
+  var bestHabit = sorted.reduce(function (best, h) {
     return !best || (h.finalRate || 0) > (best.finalRate || 0) ? h : best;
   }, null);
-  var highCount = archivedHabits.filter(function (h) {
+  var highCount = sorted.filter(function (h) {
     return (h.finalRate || 0) >= 70;
   }).length;
   var allRates = [].concat(_toConsumableArray(expiredRates), _toConsumableArray(activeRates));
@@ -4131,84 +4148,7 @@ function MainApp(_ref16) {
     setShowModal(false);
   };
 
-  // Auto-archive habits whose end date has passed
-  useEffect(function () {
-    if (loading || habits.length === 0) return;
-    var today = toISODay();
-    var expired = habits.filter(function (h) {
-      var _parseTimeRange3 = parseTimeRange(h.timeRange),
-        end = _parseTimeRange3.end;
-      return end && end <= today;
-    });
-    if (expired.length === 0) return;
-    var existingIds = new Set(archivedHabits.map(function (a) {
-      return a.id;
-    }));
-    var toAdd = expired.filter(function (h) {
-      return !existingIds.has(h.id);
-    }).map(function (h) {
-      return _objectSpread(_objectSpread({}, h), {}, {
-        archivedAt: today,
-        finalRate: calcCompletionRate(h)
-      });
-    });
-    if (toAdd.length === 0) return;
-    // Sort by archivedAt desc when merging
-    setArchivedHabits(function (prev) {
-      return [].concat(_toConsumableArray(toAdd), _toConsumableArray(prev)).sort(function (a, b) {
-        return (b.archivedAt || '') > (a.archivedAt || '') ? 1 : -1;
-      });
-    });
-    if (!isFirebaseConfigured) {
-      setHabits(function (prev) {
-        return prev.filter(function (h) {
-          return !expired.find(function (e) {
-            return e.id === h.id;
-          });
-        });
-      });
-    } else {
-      toAdd.forEach(/*#__PURE__*/function () {
-        var _ref20 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4(h) {
-          var _t4;
-          return _regenerator().w(function (_context4) {
-            while (1) switch (_context4.p = _context4.n) {
-              case 0:
-                _context4.p = 0;
-                _context4.n = 1;
-                return db.collection('archived_habits').doc(h.id).set(_objectSpread(_objectSpread({}, h), {}, {
-                  userId: user.uid
-                }));
-              case 1:
-                _context4.n = 2;
-                return db.collection('habits').doc(h.id).delete();
-              case 2:
-                _context4.n = 4;
-                break;
-              case 3:
-                _context4.p = 3;
-                _t4 = _context4.v;
-                console.warn('Archive error', _t4);
-              case 4:
-                return _context4.a(2);
-            }
-          }, _callee4, null, [[0, 3]]);
-        }));
-        return function (_x11) {
-          return _ref20.apply(this, arguments);
-        };
-      }());
-      // Firestore delete 完成後 onSnapshot 會更新 habits state
-      // 但為了 UI 即時反應，先從 React state 移除
-      setHabits(function (prev) {
-        return prev.filter(function (h) {
-          return !expired.find(function (e) {
-            return e.id === h.id;
-          });
-        });
-      });
-    }
-  }, [habits, loading]);
+  // Auto-archive removed: expired habits are now filtered at display layer only
 
   // Percentile computation
   useEffect(function () {
@@ -4216,10 +4156,18 @@ function MainApp(_ref16) {
     var expiredRates = archivedHabits.map(function (h) {
       return h.finalRate || 0;
     });
-    var activeRates = habits.map(function (h) {
+    var _percToday = toISODay();
+    var activeRates = habits.filter(function(h) {
+      var _pe = parseTimeRange(h.timeRange).end;
+      return !_pe || _pe >= _percToday;
+    }).map(function (h) {
       return calcCompletionRate(h);
     });
-    var all = [].concat(_toConsumableArray(expiredRates), _toConsumableArray(activeRates));
+    var _expiredForPerc = habits.filter(function(h) {
+      var _pe2 = parseTimeRange(h.timeRange).end;
+      return _pe2 && _pe2 < _percToday;
+    }).map(function(h){ return h.finalRate || calcCompletionRate(h); });
+    var all = [].concat(_toConsumableArray(_expiredForPerc), _toConsumableArray(expiredRates), _toConsumableArray(activeRates));
     var myAvg = all.length ? Math.round(all.reduce(function (s, r) {
       return s + r;
     }, 0) / all.length) : 0;
@@ -5148,9 +5096,15 @@ function MainApp(_ref16) {
         textTransform: 'uppercase',
         letterSpacing: .8
       }
-    }, habits.length, "/30")), habits.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    }, habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=toISODay(); }).length, "/30")), (function(){
+      var _today = toISODay();
+      var activeHabits = habits.filter(function(h) {
+        var _end = parseTimeRange(h.timeRange).end;
+        return !_end || _end >= _today;
+      });
+      return activeHabits.length === 0 ? /*#__PURE__*/React.createElement("div", {
       className: "empty-state"
-    }, /*#__PURE__*/React.createElement(HomeIcon, null), /*#__PURE__*/React.createElement("h3", null, "No habits yet"), /*#__PURE__*/React.createElement("p", null, "Tap + Create your first habit")) : habits.map(function (habit) {
+    }, /*#__PURE__*/React.createElement(HomeIcon, null), /*#__PURE__*/React.createElement("h3", null, "No habits yet"), /*#__PURE__*/React.createElement("p", null, "Tap + Create your first habit")) : activeHabits.map(function (habit) {
       var todayKey = currentDay;
       // Home bar: cumulative completion rate (supports custom intervalDays)
       var progPct = calcCompletionRate(habit);
@@ -5244,7 +5198,8 @@ function MainApp(_ref16) {
         strokeLinejoin: "round",
         d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
       })), "Delete Habit")));
-    }));
+    });
+    }()));
   };
   var renderGroups = function renderGroups() {
     if (selectedGroup) {
