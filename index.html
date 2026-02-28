@@ -2051,91 +2051,80 @@ function AuthPage(_ref2) {
           case 2:
             setLoading(true);
             if (isFirebaseConfigured) {
-              _context2.n = 2;
+              _context2.n = 3;
               break;
             }
             handleDemoLogin();
             return _context2.a(2);
-          case 2:
-            _context2.p = 2;
-            if (!isLogin) {
-              _context2.n = 18;
-              break;
-            }
-            console.log('[AUTH] handleSubmit: calling signInWithEmailAndPassword');
-            _context2.n = 3;
-            return auth.signInWithEmailAndPassword(email, password);
           case 3:
-            r = _context2.v;
-            console.log('[AUTH] handleSubmit: signIn success. emailVerified:', r.user.emailVerified);
-            // Only enforce email verification for email/password accounts
-            // Google accounts (providerData has google.com) are already verified
-            if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
-              _context2.n = 5;
+            _context2.p = 3;
+            if (!isLogin) {
+              _context2.n = 20;
               break;
             }
-            console.log('[AUTH] handleSubmit: not verified → signOut + show verification screen');
             _context2.n = 4;
-            return auth.signOut();
+            return auth.signInWithEmailAndPassword(email, password);
           case 4:
+            r = _context2.v;
+            if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
+              _context2.n = 7;
+              break;
+            }
+            _context2.n = 5;
+            return auth.signOut();
+          case 5:
             setSentEmail(email);
             setVerificationSent(true);
             startCooldown();
-            return _context2.a(2);
-          case 5:
-            // reload 確保拿到 Firebase 最新的 emailVerified 狀態（避免緩存舊值）
-            _context2.n = 6;
-            return r.user.reload();
-          case 6:
-            // reload 完成後取最新的 currentUser
-            _context2.n = 7;
-            return (auth.currentUser || r.user).getIdToken(true);
+            _context2.n = 10;
+            break;
           case 7:
             _context2.n = 8;
+            return r.user.reload();
+          case 8:
+            _context2.n = 9;
+            return (auth.currentUser || r.user).getIdToken(true);
+          case 9:
+            _context2.n = 10;
             return db.collection('users').doc(r.user.uid).set({
               displayName: (auth.currentUser || r.user).displayName || displayName || '',
               email: (auth.currentUser || r.user).email || '',
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, {
-              merge: true
-            });
-          case 8:
-            console.log('[AUTH] handleSubmit: calling onAuthSuccess ✅');
+            }, { merge: true });
+          case 10:
             onAuthSuccess(auth.currentUser || r.user);
             _context2.n = 13;
             break;
-          case 18:
-            _context2.n = 9;
+          case 20:
+            _context2.n = 21;
             return auth.createUserWithEmailAndPassword(email, password);
-          case 9:
+          case 21:
             _r = _context2.v;
-            _context2.n = 10;
-            return _r.user.updateProfile({
-              displayName: displayName
-            });
-          case 10:
-            // ✅ 只寄驗證信，不寫入 Firestore（等登入且驗證通過後才寫）
-            // actionCodeSettings 提升信件送達率，並設定驗證後回跳網址
+            _context2.n = 22;
+            return _r.user.updateProfile({ displayName: displayName });
+          case 22:
             actionCodeSettings = {
               url: window.location.origin + window.location.pathname,
               handleCodeInApp: false
             };
-            _context2.n = 11;
+            _context2.n = 23;
             return _r.user.sendEmailVerification(actionCodeSettings);
-          case 11:
-            _context2.n = 12;
+          case 23:
+            _context2.n = 24;
             return auth.signOut();
-          case 12:
+          case 24:
             setSentEmail(email);
             setVerificationSent(true);
             startCooldown();
+            _context2.n = 13;
+            break;
+          case 11:
+            _context2.p = 11;
+            _t2 = _context2.v;
+            setError(firebaseErrMsg(_t2.code) || _t2.message);
           case 13:
             _context2.n = 15;
             break;
-          case 14:
-            _context2.p = 14;
-            _t2 = _context2.v;
-            setError(firebaseErrMsg(_t2.code) || _t2.message);
           case 15:
             _context2.p = 15;
             setLoading(false);
@@ -2143,7 +2132,7 @@ function AuthPage(_ref2) {
           case 16:
             return _context2.a(2);
         }
-      }, _callee2, null, [[2, 14, 15, 16]]);
+      }, _callee2, null, [[3, 11, 15, 16]]);
     }));
     return function handleSubmit(_x10) {
       return _ref4.apply(this, arguments);
@@ -5897,61 +5886,58 @@ function App() {
       if (u) setUser(JSON.parse(u));
       return;
     }
+    var _authHandling = false;
     var unsub = auth.onAuthStateChanged(function (u) {
       console.log('[AUTH] onAuthStateChanged fired. user:', u ? u.email : 'null', '| emailVerified:', u ? u.emailVerified : 'N/A');
       if (u && isFirebaseConfigured) {
+        // 防止 reload() 觸發的二次 onAuthStateChanged 造成無窮迴圈
+        if (_authHandling) { return; }
+        _authHandling = true;
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         console.log('[AUTH] isGoogle:', isGoogle, '| emailVerified:', u.emailVerified);
-        if (isGoogle) {
-          // Google 帳號直接放行
-          console.log('[AUTH] ✅ Google user → calling setUser');
-          db.collection('users').doc(u.uid).set({
-            uid: u.uid,
-            email: u.email || '',
-            displayName: u.displayName || '',
-            photoURL: u.photoURL || '',
+
+        var saveAndLogin = function(fu) {
+          db.collection('users').doc(fu.uid).set({
+            uid: fu.uid,
+            email: fu.email || '',
+            displayName: fu.displayName || '',
+            photoURL: fu.photoURL || '',
             lastSeen: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true }).catch(function () {});
-          setUser(u);
+          setUser(fu);
+          _authHandling = false;
+        };
+
+        if (isGoogle) {
+          console.log('[AUTH] ✅ Google user → calling setUser');
+          saveAndLogin(u);
+        } else if (u.emailVerified) {
+          // 已知 emailVerified=true，直接放行，不需 reload
+          console.log('[AUTH] ✅ emailVerified=true → calling setUser');
+          saveAndLogin(u);
         } else {
-          // Email/Password 帳號：先 reload 取得最新 emailVerified 狀態，避免緩存誤判
+          // emailVerified=false：可能是緩存，reload 一次確認
           u.reload().then(function() {
             var freshUser = auth.currentUser;
             console.log('[AUTH] after reload emailVerified:', freshUser ? freshUser.emailVerified : 'null');
             if (!freshUser || !freshUser.emailVerified) {
-              console.log('[AUTH] ❌ emailVerified=false → calling signOut');
+              console.log('[AUTH] ❌ still not verified → signOut');
+              _authHandling = false;
               auth.signOut();
               return;
             }
-            console.log('[AUTH] ✅ verified → calling setUser');
-            db.collection('users').doc(freshUser.uid).set({
-              uid: freshUser.uid,
-              email: freshUser.email || '',
-              displayName: freshUser.displayName || '',
-              photoURL: freshUser.photoURL || '',
-              lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }).catch(function () {});
-            setUser(freshUser);
+            console.log('[AUTH] ✅ now verified after reload → setUser');
+            saveAndLogin(freshUser);
           }).catch(function(err) {
             console.log('[AUTH] reload error:', err);
-            // reload 失敗（例如離線），以現有的 emailVerified 狀態做判斷
-            if (!u.emailVerified) {
-              auth.signOut();
-              return;
-            }
-            db.collection('users').doc(u.uid).set({
-              uid: u.uid,
-              email: u.email || '',
-              displayName: u.displayName || '',
-              photoURL: u.photoURL || '',
-              lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }).catch(function () {});
-            setUser(u);
+            _authHandling = false;
+            auth.signOut();
           });
         }
       } else {
+        _authHandling = false;
         console.log('[AUTH] user is null → setUser(null)');
-        setUser(u || null);
+        setUser(null);
       }
     });
     return function () { unsub(); };
