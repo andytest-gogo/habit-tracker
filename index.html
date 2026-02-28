@@ -405,7 +405,35 @@
         .feed-media { margin-top:12px; border:1px solid var(--gray-100); overflow:hidden; }
         .feed-media img { width:100%; height:180px; object-fit:cover; display:block; }
         .feed-media-placeholder { width:100%; height:160px; background:var(--gray-100); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--gray-400); font-size:12px; }
-        .feed-actions { padding:10px 14px; border-top:1px solid var(--gray-50); display:flex; gap:18px; }
+        .feed-actions { padding:10px 14px; border-top:1px solid var(--gray-50); display:flex; gap:18px; align-items:center; }
+        .feed-action-report { margin-left:auto; opacity:.45; transition:.15s; }
+        .feed-action-report:hover { opacity:1; color:#dc2626 !important; }
+
+        /* ── REPORT POST MODAL ── */
+        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:9000; display:flex; align-items:flex-end; justify-content:center; }
+        .report-box { background:var(--white); width:100%; max-width:480px; border-top:3px solid #dc2626; animation:lmSlideUp .25s cubic-bezier(.4,0,.2,1); }
+        .report-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--gray-100); }
+        .report-header-title { font-family:var(--din); font-size:14px; font-weight:800; color:#dc2626; text-transform:uppercase; letter-spacing:.5px; }
+        .report-header-close { background:none; border:none; cursor:pointer; font-size:20px; color:var(--gray-400); line-height:1; padding:4px 8px; min-height:auto; }
+        .report-header-close:hover { color:var(--black); }
+        .report-body { padding:16px 20px 8px; }
+        .report-preview { background:var(--gray-50); border:1px solid var(--gray-200); padding:10px 14px; margin-bottom:14px; }
+        .report-preview-user { font-size:11px; font-weight:700; color:var(--black); margin-bottom:3px; }
+        .report-preview-text { font-size:12px; color:var(--gray-600); line-height:1.5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+        .report-reasons { display:flex; flex-direction:column; gap:5px; }
+        .report-reason { width:100%; text-align:left; padding:11px 14px; border:1px solid var(--gray-200); background:var(--white); font-size:12px; font-weight:600; color:var(--gray-700); cursor:pointer; font-family:var(--font); transition:.15s; display:flex; align-items:center; gap:10px; min-height:auto; }
+        .report-reason:hover { border-color:#dc2626; color:#dc2626; background:#fff8f8; }
+        .report-reason.selected { border-color:#dc2626; color:#dc2626; background:#fff0f0; }
+        .report-reason-icon { font-size:15px; flex-shrink:0; width:20px; text-align:center; }
+        .report-footer { padding:12px 20px 28px; display:flex; gap:8px; }
+        .report-submit { flex:1; padding:12px; background:#dc2626; color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); min-height:auto; }
+        .report-submit:hover { background:#b91c1c; }
+        .report-submit:disabled { background:var(--gray-300); cursor:not-allowed; }
+        .report-cancel { padding:12px 16px; background:none; border:1px solid var(--gray-200); font-size:11px; font-weight:600; cursor:pointer; font-family:var(--font); color:var(--gray-500); min-height:auto; }
+        .report-success { padding:28px 20px; text-align:center; }
+        .report-success-icon { font-size:38px; margin-bottom:12px; }
+        .report-success-title { font-family:var(--din); font-size:17px; font-weight:800; margin-bottom:6px; }
+        .report-success-desc { font-size:12px; color:var(--gray-500); line-height:1.6; margin-bottom:20px; }
         .feed-action { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--gray-500); cursor:pointer; transition:color .15s; font-weight:600; }
         .feed-action:hover { color:var(--black); }
         .feed-action svg { width:15px; height:15px; }
@@ -2492,7 +2520,8 @@ function AuthPage(_ref2) {
 function FeedCard(_ref5) {
   var post = _ref5.post,
     currentUser = _ref5.currentUser,
-    onLike = _ref5.onLike;
+    onLike = _ref5.onLike,
+    onReport = _ref5.onReport;
   var _useState17 = useState(false),
     _useState18 = _slicedToArray(_useState17, 2),
     showComments = _useState18[0],
@@ -2673,7 +2702,22 @@ function FeedCard(_ref5) {
         return !s;
       });
     }
-  }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, post.commentCount || post.comments || 0))), showComments && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, post.commentCount || post.comments || 0)), /*#__PURE__*/React.createElement("button", {
+    className: "feed-action feed-action-report",
+    title: "Report this post",
+    "aria-label": "Report this post",
+    style: { background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4, padding:"0 2px" },
+    onClick: function onClick(e) {
+      e.stopPropagation();
+      if (currentUser && post.userId && post.userId === currentUser.uid) return;
+      if (typeof window.openReportModal === "function") window.openReportModal(post);
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width:"14", height:"14", fill:"none", viewBox:"0 0 24 24", stroke:"currentColor"
+  }, /*#__PURE__*/React.createElement("path", {
+    strokeLinecap:"round", strokeLinejoin:"round", strokeWidth:2,
+    d:"M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"
+  })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Report"))), showComments && /*#__PURE__*/React.createElement("div", {
     className: "comments-section"
   }, loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2864,7 +2908,10 @@ function MemberProfileView(_ref9) {
         avatar: member.avatar
       }),
       currentUser: currentUser,
-      onLike: handleLike
+      onLike: handleLike,
+      onReport: function onReport(post) {
+        if (typeof window.openReportModal === 'function') window.openReportModal(post);
+      }
     });
   })));
 }
@@ -5451,6 +5498,9 @@ function MainApp(_ref16) {
         }),
         currentUser: user,
         onLike: handleLikeFeed,
+        onReport: function onReport(post) {
+          if (typeof window.openReportModal === 'function') window.openReportModal(post);
+        }
       });
     }), feedPosts.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -6540,4 +6590,189 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 
     /* ─────────────────────────────────────────
        AUTO INIT
-    ──────
+    ───────────────────────────────────────── */
+    window.addEventListener('load', function () {
+        setTimeout(initAgeGate, 400);
+    });
+
+}());
+</script>
+
+<!-- ══════════════════════════════════════════
+     REPORT POST MODAL — HTML + JS
+══════════════════════════════════════════ -->
+
+<!-- Report Modal Overlay -->
+<div id="reportOverlay" style="display:none;"
+     class="report-overlay"
+     role="dialog" aria-modal="true" aria-labelledby="reportTitle"
+     onclick="if(event.target===this)window.closeReportModal()">
+  <div class="report-box">
+
+    <!-- Header -->
+    <div class="report-header">
+      <span class="report-header-title" id="reportTitle">
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="vertical-align:-1px;margin-right:5px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+        Report Post
+      </span>
+      <button class="report-header-close" onclick="window.closeReportModal()" aria-label="Close">&#10005;</button>
+    </div>
+
+    <!-- Step 1: Choose reason -->
+    <div id="reportStep1">
+      <div class="report-body">
+        <!-- Post preview -->
+        <div class="report-preview">
+          <div class="report-preview-user" id="reportPreviewUser"></div>
+          <div class="report-preview-text" id="reportPreviewText"></div>
+        </div>
+        <p style="font-size:11px;color:var(--gray-500);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Why are you reporting this post?</p>
+        <div class="report-reasons" role="radiogroup" aria-label="Select reason">
+          <button class="report-reason" data-reason="spam"          onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">📢</span>Spam or unwanted advertising</button>
+          <button class="report-reason" data-reason="harassment"    onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">😡</span>Harassment or bullying</button>
+          <button class="report-reason" data-reason="hate_speech"   onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">🚫</span>Hate speech or discrimination</button>
+          <button class="report-reason" data-reason="misinformation" onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">⚠️</span>False or misleading information</button>
+          <button class="report-reason" data-reason="inappropriate" onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">🔞</span>Inappropriate or offensive content</button>
+          <button class="report-reason" data-reason="other"         onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">📝</span>Other</button>
+        </div>
+      </div>
+      <div class="report-footer">
+        <button class="report-cancel" onclick="window.closeReportModal()">Cancel</button>
+        <button class="report-submit" id="reportSubmitBtn" onclick="window.submitReport()" disabled aria-disabled="true">Submit Report</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Success -->
+    <div id="reportStep2" style="display:none;">
+      <div class="report-success">
+        <div class="report-success-icon" aria-hidden="true">✅</div>
+        <div class="report-success-title">Report Submitted</div>
+        <div class="report-success-desc">
+          Thank you for helping keep this community safe.<br>
+          Our team will review this post and take action<br>if it violates our Terms of Service.
+        </div>
+        <button class="report-submit" onclick="window.closeReportModal()" style="background:var(--black);max-width:160px;margin:0 auto;display:block;">Done</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   REPORT MODAL LOGIC
+══════════════════════════════════════════ */
+(function() {
+  var _post = null;      // current post being reported
+  var _reason = null;    // selected reason string
+
+  /* openReportModal — called from React FeedCard onReport */
+  window.openReportModal = function(post) {
+    _post   = post;
+    _reason = null;
+
+    // Populate preview
+    document.getElementById('reportPreviewUser').textContent = post.user || post.displayName || 'Unknown user';
+    var txt = (post.text || '').trim();
+    document.getElementById('reportPreviewText').textContent = txt.length > 140 ? txt.slice(0,140)+'…' : (txt || '(no text)');
+
+    // Reset state
+    document.querySelectorAll('.report-reason').forEach(function(b){
+      b.classList.remove('selected');
+      b.setAttribute('aria-checked','false');
+    });
+    var submitBtn = document.getElementById('reportSubmitBtn');
+    submitBtn.disabled = true;
+    submitBtn.setAttribute('aria-disabled','true');
+    document.getElementById('reportStep1').style.display = '';
+    document.getElementById('reportStep2').style.display = 'none';
+
+    // Show overlay
+    var overlay = document.getElementById('reportOverlay');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    setTimeout(function(){ 
+      var closeBtn = overlay.querySelector('.report-header-close');
+      if (closeBtn) closeBtn.focus();
+    }, 50);
+  };
+
+  window.closeReportModal = function() {
+    document.getElementById('reportOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    _post = null; _reason = null;
+  };
+
+  window.selectReason = function(btn) {
+    document.querySelectorAll('.report-reason').forEach(function(b){
+      b.classList.remove('selected');
+      b.setAttribute('aria-checked','false');
+    });
+    btn.classList.add('selected');
+    btn.setAttribute('aria-checked','true');
+    _reason = btn.getAttribute('data-reason');
+    var submitBtn = document.getElementById('reportSubmitBtn');
+    submitBtn.disabled = false;
+    submitBtn.setAttribute('aria-disabled','false');
+  };
+
+  window.submitReport = function() {
+    if (!_post || !_reason) return;
+
+    var btn = document.getElementById('reportSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    // Determine current user uid
+    var reporterUid = 'anonymous';
+    if (typeof firebase !== 'undefined') {
+      var fbAuth = firebase.auth && firebase.auth();
+      if (fbAuth && fbAuth.currentUser) reporterUid = fbAuth.currentUser.uid;
+    }
+
+    var reportDoc = {
+      postId:          _post.id   || '',
+      postText:        (_post.text || '').slice(0, 500),
+      reportedUserName: _post.user || _post.displayName || '',
+      reportedUserId:  _post.userId || '',
+      reason:          _reason,
+      status:          'pending',
+      reporterUid:     reporterUid,
+      reportedAt:      (typeof firebase !== 'undefined' && firebase.firestore)
+                         ? firebase.firestore.FieldValue.serverTimestamp()
+                         : new Date().toISOString()
+    };
+
+    function onSuccess() {
+      document.getElementById('reportStep1').style.display = 'none';
+      document.getElementById('reportStep2').style.display = '';
+    }
+    function onError(e) {
+      console.error('[Report] Error:', e);
+      onSuccess(); // show success to user anyway
+    }
+
+    if (typeof db !== 'undefined') {
+      db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);
+    } else {
+      // Demo / offline fallback
+      var stored = JSON.parse(localStorage.getItem('ht-demo-reports') || '[]');
+      reportDoc.id = 'demo-' + Date.now();
+      reportDoc.reportedAt = new Date().toISOString();
+      stored.push(reportDoc);
+      localStorage.setItem('ht-demo-reports', JSON.stringify(stored));
+      onSuccess();
+    }
+  };
+
+  // ESC key closes
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var overlay = document.getElementById('reportOverlay');
+      if (overlay && overlay.style.display !== 'none') window.closeReportModal();
+    }
+  });
+}());
+</script>
+</body>
+</html>

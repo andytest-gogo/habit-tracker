@@ -169,6 +169,11 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
         Security &amp; Rules
       </button>
+      <button class="nav-btn" data-page="reports" id="navReports">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+        Reports
+        <span id="reportsBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+      </button>
 
     </nav>
     <div class="sb-foot">
@@ -333,7 +338,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null
         &amp;&amp; request.auth.token.admin == true
-        &amp;&amp; request.auth.token.email == 'andy19920818@gmail.com';
+        &amp;&amp; request.auth.token.email == '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4a2b242e337b7373787a727b720a2d272b232664292527">[email&#160;protected]</a>';
     }
 
     // ── Users collection ─────────────────────────────────────────
@@ -386,7 +391,7 @@ service cloud.firestore {
         <table>
           <thead><tr><th>Item</th><th>Status</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>Firebase Auth email whitelist</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">andy19920818@gmail.com</td></tr>
+            <tr><td>Firebase Auth email whitelist</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2948474d501810101b19111811694e44484045074a4644">[email&#160;protected]</a></td></tr>
             <tr><td>Firebase Custom Claim (admin:true)</td><td><span class="badge" id="cl-claim-status">⚠️ Check required</span></td><td style="font-size:11px;color:var(--g500)">Set via Admin SDK then re-login</td></tr>
             <tr><td>Session auto-logout (30 min)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Inactivity timer running</td></tr>
             <tr><td>Admin page noindex meta tag</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">robots: noindex, nofollow</td></tr>
@@ -402,10 +407,64 @@ service cloud.firestore {
       </div>
     </div>
 
+    <!-- ══ REPORTS PAGE ══ -->
+    <div class="pg" id="pg-reports">
+      <div class="pg-title">Reports</div>
+      <div class="pg-sub" id="reportsUpdated">Loading...</div>
+
+      <!-- Summary stats -->
+      <div class="stat-grid" style="margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Total Reports</div><div class="stat-val" id="rTotal">—</div><div class="stat-note">All time</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Pending</div><div class="stat-val" id="rPending" style="color:#d97706">—</div><div class="stat-note">Awaiting review</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Reviewed</div><div class="stat-val" id="rReviewed" style="color:#059669">—</div><div class="stat-note">Action taken</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Dismissed</div><div class="stat-val" id="rDismissed">—</div><div class="stat-note">No violation</div></div>
+      </div>
+
+      <!-- Filter row -->
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+        <select id="reportStatusFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+          <option value="all">All statuses</option>
+          <option value="pending" selected>Pending only</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="dismissed">Dismissed</option>
+        </select>
+        <select id="reportReasonFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+          <option value="all">All reasons</option>
+          <option value="spam">Spam</option>
+          <option value="harassment">Harassment</option>
+          <option value="hate_speech">Hate speech</option>
+          <option value="misinformation">Misinformation</option>
+          <option value="inappropriate">Inappropriate</option>
+          <option value="other">Other</option>
+        </select>
+        <button class="refresh" id="reportsRefreshBtn" onclick="loadReports()">Refresh</button>
+        <div style="margin-left:auto;font-size:11px;color:var(--g400)" id="reportsCnt"></div>
+      </div>
+
+      <!-- Reports table -->
+      <div class="tbl-card">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:130px">Reported User</th>
+              <th>Post Content</th>
+              <th style="width:110px">Reason</th>
+              <th style="width:90px">Status</th>
+              <th style="width:120px">Reported At</th>
+              <th style="width:140px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reportsTbody">
+            <tr class="loading-row"><td colspan="6">Loading reports...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -652,8 +711,9 @@ function loadAll(){
     renderHabits('');
     document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-US');
   });
-  // Quota 獨立載入（不影響主畫面速度）
+  // Quota & Reports 獨立載入
   loadQuota();
+  loadReports();
 }
 
 function loadUsers(){
@@ -1010,13 +1070,143 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
 function resetUserDaily(uid){
   if(!confirm('Reset today\'s upload count for this user?')) return;
   db.collection('upload_quotas').doc(uid).update({
-    dailyDate: '1970-01-01',
-    dailyImages: 0,
-    dailyVideos: 0,
-  }).then(function(){
-    loadQuota();
-  }).catch(function(e){ alert('Failed: '+e.message); });
+    dailyDate: '1970-01-01', dailyImages: 0, dailyVideos: 0,
+  }).then(function(){ loadQuota(); }).catch(function(e){ alert('Failed: '+e.message); });
 }
+
+/* ══════════════════════════════════════════
+   REPORTS — load, render, actions
+══════════════════════════════════════════ */
+var allReports = [];
+
+function loadReports(){
+  document.getElementById('reportsUpdated').textContent = 'Loading...';
+  db.collection('reports').orderBy('reportedAt','desc').get()
+    .then(function(snap){
+      allReports = snap.docs.map(function(d){
+        var data = d.data();
+        var ts = data.reportedAt && data.reportedAt.toDate ? data.reportedAt.toDate() : null;
+        return Object.assign({ id: d.id }, data, { reportedAtDate: ts });
+      });
+      updateReportsBadge();
+      renderReportStats();
+      renderReports();
+      document.getElementById('reportsUpdated').textContent = 'Last updated: ' + new Date().toLocaleString('en-US');
+    })
+    .catch(function(e){
+      document.getElementById('reportsUpdated').textContent = '⚠️ Load failed: ' + e.message;
+      document.getElementById('reportsTbody').innerHTML =
+        '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load reports: ' + htmlEsc(e.message) +
+        '<br><br>Ensure Firestore Rules allow admin to read <code>reports</code> collection.</td></tr>';
+    });
+}
+
+function updateReportsBadge(){
+  var pending = allReports.filter(function(r){ return r.status === 'pending'; }).length;
+  var badge = document.getElementById('reportsBadge');
+  if (!badge) return;
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderReportStats(){
+  var total     = allReports.length;
+  var pending   = allReports.filter(function(r){ return r.status==='pending'; }).length;
+  var reviewed  = allReports.filter(function(r){ return r.status==='reviewed'; }).length;
+  var dismissed = allReports.filter(function(r){ return r.status==='dismissed'; }).length;
+  document.getElementById('rTotal').textContent     = total;
+  document.getElementById('rPending').textContent   = pending;
+  document.getElementById('rReviewed').textContent  = reviewed;
+  document.getElementById('rDismissed').textContent = dismissed;
+}
+
+var REASON_LABELS = {
+  spam:          '📢 Spam',
+  harassment:    '😡 Harassment',
+  hate_speech:   '🚫 Hate speech',
+  misinformation:'⚠️ Misinformation',
+  inappropriate: '🔞 Inappropriate',
+  other:         '📝 Other'
+};
+
+var STATUS_STYLE = {
+  pending:   'background:#fef3c7;color:#92400e;',
+  reviewed:  'background:#d1fae5;color:#065f46;',
+  dismissed: 'background:#f3f4f6;color:#6b7280;'
+};
+
+function renderReports(){
+  var statusFilter = document.getElementById('reportStatusFilter').value;
+  var reasonFilter = document.getElementById('reportReasonFilter').value;
+
+  var list = allReports.filter(function(r){
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (reasonFilter !== 'all' && r.reason !== reasonFilter) return false;
+    return true;
+  });
+
+  document.getElementById('reportsCnt').textContent = list.length + ' report(s) shown';
+  var tb = document.getElementById('reportsTbody');
+  if (!list.length) {
+    tb.innerHTML = '<tr class="loading-row"><td colspan="6">No reports match the current filter</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = list.map(function(r){
+    var reasonLabel  = REASON_LABELS[r.reason] || r.reason || '—';
+    var statusStyle  = STATUS_STYLE[r.status] || '';
+    var statusLabel  = (r.status || 'pending').charAt(0).toUpperCase() + (r.status||'pending').slice(1);
+    var timeStr      = r.reportedAtDate ? r.reportedAtDate.toLocaleString('en-US',{month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    var postPreview  = htmlEsc((r.postText||'(no text)').slice(0,80)) + ((r.postText||'').length>80?'…':'');
+    var reportedUser = htmlEsc(r.reportedUserName || r.reportedUserId || '—');
+    var postIdShort  = r.postId ? r.postId.slice(0,10)+'…' : '—';
+
+    // Action buttons depending on status
+    var actionBtns = '';
+    if (r.status === 'pending') {
+      actionBtns =
+        '<button class="del" style="background:#059669;color:#fff;border-color:#059669;margin-right:4px" '
+        + 'onclick="setReportStatus(\''+r.id+'\',\'reviewed\')" title="Mark as reviewed — post has been actioned">✓ Reviewed</button>'
+        + '<button class="del" style="color:var(--g500)" '
+        + 'onclick="setReportStatus(\''+r.id+'\',\'dismissed\')" title="Dismiss — no violation found">✗ Dismiss</button>';
+    } else {
+      actionBtns =
+        '<button class="del" onclick="setReportStatus(\''+r.id+'\',\'pending\')" title="Move back to pending">↩ Reopen</button>';
+    }
+
+    return '<tr>'
+      + '<td><div class="uc"><div class="av">' + (reportedUser[0]||'?').toUpperCase() + '</div>'
+      + '<div><strong style="font-size:12px">' + reportedUser + '</strong>'
+      + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono)">' + htmlEsc(r.reportedUserId||'').slice(0,16) + '</div></div></div></td>'
+      + '<td><div class="ptxt" title="' + htmlEsc(r.postText||'') + '">' + postPreview + '</div>'
+      + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono);margin-top:2px">ID: ' + htmlEsc(postIdShort) + '</div></td>'
+      + '<td style="font-size:11px">' + reasonLabel + '</td>'
+      + '<td><span class="badge" style="' + statusStyle + '">' + statusLabel + '</span></td>'
+      + '<td style="font-size:10px;color:var(--g400)">' + timeStr + '</td>'
+      + '<td>' + actionBtns + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function setReportStatus(reportId, newStatus){
+  db.collection('reports').doc(reportId).update({
+    status: newStatus,
+    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    reviewedBy: auth.currentUser ? auth.currentUser.email : 'admin'
+  }).then(function(){
+    // Update in-memory
+    var r = allReports.find(function(x){ return x.id === reportId; });
+    if (r) r.status = newStatus;
+    updateReportsBadge();
+    renderReportStats();
+    renderReports();
+  }).catch(function(e){ alert('Update failed: ' + e.message); });
+}
+
 </script>
 </body>
 </html>
