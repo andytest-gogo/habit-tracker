@@ -5,6 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Habit Tracker Pro - Community Edition">
     <meta name="theme-color" content="#000000">
+    <!-- ── Content Security Policy (NIS2 / NIST / OWASP baseline) ──
+         Restricts script, style, image, connect, and frame sources to known trusted origins.
+         'unsafe-inline' for scripts is required by inline React/Firebase SDK pattern;
+         migrate to nonces or hashes before full production launch. -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src  'self' 'unsafe-inline' 'unsafe-eval'
+                    https://www.gstatic.com
+                    https://unpkg.com
+                    https://umami-psi-opal.vercel.app;
+        style-src   'self' 'unsafe-inline'
+                    https://fonts.googleapis.com;
+        font-src    'self'
+                    https://fonts.gstatic.com;
+        img-src     'self' data: blob:
+                    https://res.cloudinary.com
+                    https://lh3.googleusercontent.com
+                    https://firebasestorage.googleapis.com;
+        connect-src 'self'
+                    https://*.firebaseio.com
+                    https://*.googleapis.com
+                    https://*.cloudfunctions.net
+                    https://identitytoolkit.googleapis.com
+                    https://securetoken.googleapis.com
+                    https://api.cloudinary.com
+                    https://umami-psi-opal.vercel.app;
+        media-src   'self' blob:
+                    https://res.cloudinary.com;
+        frame-src   'none';
+        object-src  'none';
+        base-uri    'self';
+        form-action 'self';
+    ">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Habit Tracker Pro</title>
 
     <!-- ── PWA ── -->
@@ -644,9 +680,22 @@
         .gdpr-desc { font-size:11px; line-height:1.65; opacity:.7; }
         .gdpr-desc a { color:var(--white); font-weight:600; text-decoration:underline; opacity:1; cursor:pointer; }
         .gdpr-actions { display:flex; flex-direction:column; gap:7px; flex-shrink:0; min-width:130px; }
-        .gdpr-accept { padding:10px 18px; background:var(--white); color:var(--black); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); }
-        .gdpr-decline { padding:8px 18px; background:transparent; color:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.2); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); }
-        .gdpr-decline:hover { color:var(--white); }
+        /* ── GDPR Equal Prominence (GDPR Art.7 / EDPB Guidelines) ──
+           Accept and Decline must be visually identical — same size, same weight.
+           Regulators (CNIL, ICO, DPC) consistently penalise asymmetric designs. */
+        .gdpr-accept,
+        .gdpr-decline {
+            padding:10px 18px;
+            font-size:11px; font-weight:700; text-transform:uppercase;
+            letter-spacing:1px; cursor:pointer; font-family:var(--font);
+            min-width:130px; min-height:40px; text-align:center;
+            border:1.5px solid var(--white);
+            transition: background .15s, color .15s;
+        }
+        .gdpr-accept  { background:var(--white);       color:var(--black); }
+        .gdpr-decline { background:transparent;         color:var(--white); }
+        .gdpr-accept:hover  { background:var(--gray-100); }
+        .gdpr-decline:hover { background:rgba(255,255,255,.12); }
         .gdpr-policy-link { font-size:10px; color:rgba(255,255,255,.4); text-align:center; cursor:pointer; font-weight:600; text-decoration:underline; }
         /* ── AGE GATE ── */
         .age-gate-overlay { position:fixed; inset:0; background:rgba(10,10,10,.88); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -803,9 +852,10 @@
         </div>
     </div>
     <div class="gdpr-actions">
-        <button class="gdpr-accept" onclick="gdprAccept()" aria-label="Accept analytics and continue">Accept Analytics</button>
-        <button class="gdpr-decline" onclick="gdprDecline()" aria-label="Decline optional analytics">Essential Only</button>
-        <div class="gdpr-policy-link" onclick="openLegalModal('privacy')" role="button" tabindex="0">Privacy Policy</div>
+        <!-- GDPR Art.7 / EDPB Guidelines: Accept & Decline must be equally prominent -->
+        <button class="gdpr-decline" onclick="gdprDecline()" aria-label="Decline optional analytics — essential cookies only">Decline</button>
+        <button class="gdpr-accept"  onclick="gdprAccept()"  aria-label="Accept optional analytics cookies">Accept Analytics</button>
+        <div class="gdpr-policy-link" onclick="openPrivacySettings()" role="button" tabindex="0" style="text-decoration:underline;cursor:pointer;">Manage Preferences</div>
     </div>
 </div>
 
@@ -862,8 +912,24 @@
             </div>
 
             <div class="priv-rights-section">
-                <p class="priv-dpa-title">Your Rights</p>
-                <p>Under GDPR / CCPA you have the right to access, correct, delete, or export your data. To exercise these rights, delete your account from Profile → Delete Account, or contact us at <strong>privacy&#64;habittrackerpro&#46;app</strong>.</p>
+                <p class="priv-dpa-title">Your Rights (GDPR Art. 15–20 / CCPA)</p>
+                <p>You have the right to access, correct, delete, or export your data. Delete your account from Profile → Delete Account, or contact us at <strong>privacy&#64;habittrackerpro&#46;app</strong>.</p>
+            </div>
+
+            <!-- GDPR Art.20 Data Portability — functional export -->
+            <div class="priv-rights-section" style="margin-top:10px;">
+                <p class="priv-dpa-title">📦 Export Your Data (GDPR Art. 20)</p>
+                <p style="margin-bottom:12px;">Download a copy of all your habits and profile data as a JSON file.</p>
+                <button id="exportDataBtn" onclick="exportUserData()"
+                    style="width:100%;padding:11px;background:var(--white);border:1.5px solid var(--black);
+                           font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+                           cursor:pointer;font-family:var(--font);transition:.15s;"
+                    onmouseover="this.style.background='var(--gray-50)'"
+                    onmouseout="this.style.background='var(--white)'"
+                    aria-label="Download your data as JSON">
+                    ⬇ Download My Data (JSON)
+                </button>
+                <p id="exportStatus" style="font-size:10px;color:var(--gray-500);margin-top:7px;text-align:center;min-height:16px;"></p>
             </div>
         </div>
         <div class="privacy-settings-footer">
@@ -5522,13 +5588,13 @@ function MainApp(_ref16) {
         letterSpacing: '.3px',
         transition: 'all .2s'
       }
-    }, feedLoadingMore ? '載入中…' : '載入更多貼文') : /*#__PURE__*/React.createElement("div", {
+    }, feedLoadingMore ? 'Loading…' : 'Load More Posts') : /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         color: 'var(--gray-400)',
         padding: '4px 0'
       }
-    }, "\u2014 \u5DF2\u986F\u793A\u5168\u90E8\u8CBC\u6587 \u2014")));
+    }, "\u2014 All posts loaded \u2014")));
   };
   var renderProfile = function renderProfile() {
     var _ref31;
@@ -6283,7 +6349,13 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
   <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
 <h3>0. Data Controller</h3>
-<p>This service is operated by an <strong>individual independent developer</strong>, not a registered company. For all privacy-related matters, contact: <strong>privacy@habittrackerpro.app</strong>. We aim to respond within 30 days.</p>
+<p>This service is operated by an <strong>individual independent developer</strong> (sole trader, not a registered company). For all privacy-related matters:</p>
+<p>
+  <strong>Email:</strong> privacy@habittrackerpro.app<br>
+  <strong>Postal address:</strong> Habit Tracker Pro, c/o [Your Name], [Your Address — complete before EU launch]<br>
+  <strong>Response time:</strong> We aim to respond to all data-subject requests within <strong>30 days</strong> (as required by GDPR Art. 12).
+</p>
+<p>EU/EEA users: if you believe we have not handled your request correctly, you have the right to lodge a complaint with your national Data Protection Authority (DPA). A list of EU DPAs is available at <a href="https://edpb.europa.eu/about-edpb/about-edpb/members_en" target="_blank" rel="noopener noreferrer">edpb.europa.eu ↗</a>.</p>
 <h3>1. What Data We Collect</h3>
 <p><strong>Account data:</strong> Email address and display name (required for login).</p>
 <p><strong>Habit data:</strong> Habit names, schedules, time ranges, and completion logs — the core of what the app stores.</p>
@@ -6300,9 +6372,9 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p>We do <strong>not</strong> sell, rent, or trade your personal information. Ever.</p>
 <p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase and Cloudinary process data under Standard Contractual Clauses (SCCs) as required by GDPR Chapter 5.</p>
 <h3>4. Your Rights</h3>
-<p><strong>Access:</strong> Request a copy of your data. <strong>Correction:</strong> Fix inaccurate data in your profile. <strong>Deletion:</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability:</strong> Request a JSON export of your habit data. <strong>Object / Withdraw Consent:</strong> Change or withdraw analytics consent anytime via Profile → Privacy Settings.</p>
-<p><strong>EU/GDPR users:</strong> You may lodge a complaint with your local data protection authority.</p>
-<p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in).</p>
+<p><strong>Access (Art.15):</strong> Request a copy of your data. <strong>Correction (Art.16):</strong> Fix inaccurate data in your profile. <strong>Deletion (Art.17):</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability (Art.20):</strong> Download a JSON export of all your data directly from Profile → Privacy Settings → Download My Data. <strong>Object / Withdraw Consent (Art.7):</strong> Change or withdraw analytics consent anytime via Profile → Privacy Settings.</p>
+<p><strong>EU/GDPR users:</strong> You may lodge a complaint with your local Data Protection Authority (DPA) at any time.</p>
+<p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in). To exercise these rights, use the in-app deletion feature or email privacy@habittrackerpro.app.</p>
 <h3>5. Consent & Withdrawal</h3>
 <p>You can accept or decline optional analytics at any time. Your choice is respected immediately. To change your preference, go to <strong>Profile → Privacy Settings</strong>. Withdrawing consent does not affect the lawfulness of processing before withdrawal.</p>
 <h3>6. Cookies & Analytics</h3>
@@ -6349,8 +6421,12 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>9. Termination</h3>
 <p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
 <h3>10. Governing Law</h3>
-<p>EU users retain all rights under applicable consumer protection laws. For disputes, contact us first at <strong>legal@habittrackerpro.app</strong> — most issues can be resolved quickly. EU users may also use the EU Online Dispute Resolution platform.</p>
-<h3>11. Contact</h3>
+<p>EU users retain all rights under applicable consumer protection laws. For disputes, contact us first at <strong>legal@habittrackerpro.app</strong> — most issues can be resolved quickly. EU users may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>.</p>
+<h3>11. Copyright Complaints — DMCA (US) &amp; DSA (EU)</h3>
+<p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>legal@habittrackerpro.app</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
+<p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days and will inform the reporter of the outcome. Persistent or severe violations may result in account suspension.</p>
+<p><strong>Counter-Notice:</strong> If you believe your content was removed in error, contact <strong>legal@habittrackerpro.app</strong> with details and we will review within 14 business days.</p>
+<h3>12. Contact</h3>
 <p>Questions about these Terms: <strong>legal@habittrackerpro.app</strong></p>`
         }
     };
@@ -6573,6 +6649,97 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         closePrivacySettings();
         // Show brief confirmation toast
         showToast(enabled ? 'Analytics enabled. Thank you!' : 'Analytics disabled. Your preference is saved.');
+    };
+
+    /* ─────────────────────────────────────────
+       DATA EXPORT — GDPR Article 20 (Data Portability)
+       Exports all user habit data + profile as a structured JSON file.
+    ───────────────────────────────────────── */
+    window.exportUserData = async function () {
+        var btn = document.getElementById('exportDataBtn');
+        var statusEl = document.getElementById('exportStatus');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Preparing export…'; }
+        if (statusEl) statusEl.textContent = '';
+
+        try {
+            // Collect data from Firebase if available, else use localStorage demo data
+            var exportPayload = {
+                exportedAt: new Date().toISOString(),
+                exportVersion: '1.0',
+                gdprNote: 'This file contains all personal data held about you by Habit Tracker Pro, as required by GDPR Article 20 (Right to Data Portability).',
+                profile: {},
+                habits: [],
+                posts: [],
+                consentHistory: {
+                    analyticsChoice: localStorage.getItem('ht-gdpr-choice') || 'not set',
+                    choiceDate: localStorage.getItem('ht-gdpr-date') || null,
+                    ageConfirmed: !!localStorage.getItem('ht-age-confirmed')
+                }
+            };
+
+            if (typeof firebase !== 'undefined' && firebase.auth) {
+                var fbAuth = firebase.auth();
+                var currentUser = fbAuth && fbAuth.currentUser;
+
+                if (currentUser) {
+                    exportPayload.profile = {
+                        uid: currentUser.uid,
+                        email: currentUser.email,
+                        displayName: currentUser.displayName,
+                        createdAt: currentUser.metadata && currentUser.metadata.creationTime
+                    };
+
+                    // Fetch habits from Firestore
+                    if (typeof db !== 'undefined') {
+                        try {
+                            var habitsSnap = await db.collection('habits')
+                                .where('userId', '==', currentUser.uid).get();
+                            habitsSnap.forEach(function(doc) {
+                                exportPayload.habits.push(Object.assign({ id: doc.id }, doc.data()));
+                            });
+                        } catch(e) { exportPayload.habits = [{ error: 'Could not fetch: ' + e.message }]; }
+
+                        // Fetch posts from Firestore
+                        try {
+                            var postsSnap = await db.collection('posts')
+                                .where('userId', '==', currentUser.uid).get();
+                            postsSnap.forEach(function(doc) {
+                                var d = doc.data();
+                                // Strip any server timestamps to make JSON serialisable
+                                if (d.createdAt && d.createdAt.toDate) d.createdAt = d.createdAt.toDate().toISOString();
+                                exportPayload.posts.push(Object.assign({ id: doc.id }, d));
+                            });
+                        } catch(e) { exportPayload.posts = [{ error: 'Could not fetch: ' + e.message }]; }
+                    }
+                } else {
+                    exportPayload.profile = { note: 'Not signed in — no server data available.' };
+                }
+            } else {
+                // Demo/offline mode: grab from localStorage
+                var demoHabits = localStorage.getItem('ht-demo-habits');
+                exportPayload.habits = demoHabits ? JSON.parse(demoHabits) : [];
+                exportPayload.profile = { note: 'Demo mode — data stored locally only.' };
+            }
+
+            // Serialise and trigger download
+            var json = JSON.stringify(exportPayload, null, 2);
+            var blob = new Blob([json], { type: 'application/json' });
+            var url  = URL.createObjectURL(blob);
+            var a    = document.createElement('a');
+            a.href     = url;
+            a.download = 'habittrackerpro-my-data-' + new Date().toISOString().slice(0,10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+
+            if (statusEl) statusEl.textContent = '✅ Export complete — check your Downloads folder.';
+        } catch (err) {
+            console.error('[Export] Error:', err);
+            if (statusEl) statusEl.textContent = '⚠️ Export failed: ' + err.message;
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '⬇ Download My Data (JSON)'; }
+        }
     };
 
     function showToast(msg) {
