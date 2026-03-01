@@ -5083,6 +5083,29 @@ function MainApp(_ref16) {
             result = _context0.v;
             setAvatarUrl(result.url);
             localStorage.setItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid), result.url);
+            // ── 同步更新 Firestore 中該用戶所有舊貼文的 avatarUrl ──
+            if (typeof db !== 'undefined' && user && user.uid) {
+              (function() {
+                var newAvatarUrl = result.url;
+                var uid = user.uid;
+                db.collection('posts').where('userId', '==', uid).get().then(function(snap) {
+                  if (snap.empty) return;
+                  var CHUNK = 400; // Firestore batch 上限 500，保守用 400
+                  var docs = snap.docs;
+                  var batches = [];
+                  for (var i = 0; i < docs.length; i += CHUNK) {
+                    var batch = db.batch();
+                    docs.slice(i, i + CHUNK).forEach(function(d) {
+                      batch.update(d.ref, { avatarUrl: newAvatarUrl });
+                    });
+                    batches.push(batch.commit());
+                  }
+                  return Promise.all(batches);
+                }).catch(function(err) {
+                  console.warn('[Avatar sync] Failed to update past posts:', err);
+                });
+              })();
+            }
             _context0.n = 5;
             break;
           case 4:

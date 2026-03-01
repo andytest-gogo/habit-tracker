@@ -81,7 +81,8 @@ th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;col
 td{font-size:12px;padding:11px 18px;border-bottom:1px solid var(--g50);color:var(--g800);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--g50)}
-.av{width:26px;height:26px;background:var(--black);color:var(--white);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+.av{width:26px;height:26px;background:var(--black);color:var(--white);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;overflow:hidden}
+.av img{width:26px;height:26px;object-fit:cover;display:block}
 .uc{display:flex;align-items:center;gap:9px}
 .badge{display:inline-block;padding:2px 7px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--g100);color:var(--g500)}
 .del{padding:5px 11px;background:none;border:1px solid var(--g200);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;color:var(--g500);font-family:var(--font)}
@@ -846,7 +847,7 @@ function buildUsers(){
   // Add users from Firestore users collection (those who have logged in)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen};
+    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen, photoURL:u.photoURL||u.avatarUrl||''};
   });
 
   // Supplement from habits
@@ -859,8 +860,9 @@ function buildUsers(){
   // Supplement from posts
   allPosts.forEach(function(p){
     if(!p.userId) return;
-    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[]};
+    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[],photoURL:''};
     if(p.user) map[p.userId].name=p.user;
+    if(p.avatarUrl && !map[p.userId].photoURL) map[p.userId].photoURL=p.avatarUrl;
     map[p.userId].posts.push(p);
   });
 
@@ -893,12 +895,21 @@ function renderCharts(){
   });
 }
 
+// Helper: render avatar cell (shows image if avatarUrl exists, else initial letter)
+function renderAv(avatarUrl, fallback) {
+  var init = ((fallback||'?')[0]).toUpperCase();
+  if (avatarUrl) {
+    return '<div class="av"><img src="'+htmlEsc(avatarUrl)+'" alt="'+init+'" onerror="this.parentNode.innerHTML=\''+init+'\'"></div>';
+  }
+  return '<div class="av">'+init+'</div>';
+}
+
 function renderRecent(){
   var tb=document.getElementById('recentTbody');
   var list=allPosts.slice(0,10);
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No posts yet</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
-    return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
+    return '<tr><td><div class="uc">'+renderAv(p.avatarUrl, p.avatar||p.user)+htmlEsc(p.user||'—')+'</div></td>'+
       '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
       '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
       '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td></tr>';
@@ -913,7 +924,7 @@ function renderUsers(f){
   tb.innerHTML=list.map(function(u){
     var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
     return '<tr>'+
-      '<td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong>'+
+      '<td><div class="uc">'+renderAv(u.photoURL||u.avatarUrl, u.name)+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
       '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
       '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
@@ -961,7 +972,7 @@ function renderPosts(f){
   document.getElementById('postCnt').textContent=list.length+' post(s)';
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="7">No matching posts</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
-    return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
+    return '<tr><td><div class="uc">'+renderAv(p.avatarUrl, p.avatar||p.user)+htmlEsc(p.user||'—')+'</div></td>'+
       '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
       '<td>'+(p.hasImage?'📷':p.hasVideo?'🎬':'—')+'</td>'+
       '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
