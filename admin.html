@@ -847,7 +847,7 @@ function buildUsers(){
   // Add users from Firestore users collection (those who have logged in)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen, photoURL:u.photoURL||u.avatarUrl||''};
+    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen, photoURL:u.avatarUrl||u.photoURL||''};
   });
 
   // Supplement from habits
@@ -862,6 +862,7 @@ function buildUsers(){
     if(!p.userId) return;
     if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[],photoURL:''};
     if(p.user) map[p.userId].name=p.user;
+    // posts 是 desc 排序，第一次讀到的就是最新貼文 — 若 users collection 沒有 avatarUrl，用最新貼文的
     if(p.avatarUrl && !map[p.userId].photoURL) map[p.userId].photoURL=p.avatarUrl;
     map[p.userId].posts.push(p);
   });
