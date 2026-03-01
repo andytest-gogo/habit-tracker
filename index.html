@@ -3481,23 +3481,133 @@ function AddHabitModal(_ref12) {
     return durPreset.label;
   };
   var handleAdd = function handleAdd() {
-    if (!name.trim()) return;
-    // Validate custom duration input
-    if ((durPreset === null || durPreset === void 0 ? void 0 : durPreset.value) === null && !durCustom.toString().trim()) {
-      alert('Please enter a custom duration value.');
+    if (!name.trim()) {
+      alert('Please enter a habit name.');
       return;
     }
-    // Validate date range
+
+    // ── Validate date range ──
     if (startDate > endDate) {
       alert('End date must be on or after start date.');
       return;
     }
+
+    // Calculate total days in the period (inclusive)
+    var msPerDay = 86400000;
+    var start = new Date(startDate);
+    var end = new Date(endDate);
+    var totalDays = Math.round((end - start) / msPerDay) + 1; // inclusive
+
+    // ── Validate custom duration input ──
+    if ((durPreset === null || durPreset === void 0 ? void 0 : durPreset.value) === null) {
+      var durVal = parseFloat(durCustom);
+      if (!durCustom.toString().trim() || isNaN(durVal) || durVal <= 0) {
+        alert('Please enter a valid custom duration (must be a positive number).');
+        return;
+      }
+      // Convert duration to minutes for limit checks
+      var durInMinutes = durUnit === 'hour' ? durVal * 60 : durVal;
+      if (durInMinutes > 720) {
+        alert('Duration per session cannot exceed 12 hours (720 minutes).');
+        return;
+      }
+    }
+
+    // ── Validate custom frequency ──
+    var _fp = getFreqParams();
+    var timesPerCycle = _fp.timesPerCycle;
+    var intervalDays = _fp.intervalDays;
+
+    if (freqPreset && freqPreset.periodUnit === 'custom') {
+      var fN = parseInt(freqCustomN);
+      var fD = parseInt(freqIntervalDays);
+      if (isNaN(fN) || fN < 1) {
+        alert('Frequency: number of times must be at least 1.');
+        return;
+      }
+      if (isNaN(fD) || fD < 1) {
+        alert('Frequency: interval must be at least 1 day.');
+        return;
+      }
+      // The interval cannot exceed the total duration of the habit
+      if (fD > totalDays) {
+        alert('Frequency interval (' + fD + ' days) cannot exceed the total habit duration (' + totalDays + ' day' + (totalDays > 1 ? 's' : '') + ').\nPlease shorten the interval or extend the habit end date.');
+        return;
+      }
+      // Times per cycle cannot be unreasonably high
+      // Each session needs at least 1 min, and there are 1440 min/day
+      var maxTimesPerCycle = fD * 1440;
+      if (fN > maxTimesPerCycle) {
+        alert('That\'s too many sessions (' + fN + ') for a ' + fD + '-day cycle.\nMaximum is ' + maxTimesPerCycle + ' sessions per cycle (1 per minute).');
+        return;
+      }
+      // Sanity cap: max 48 times per day on average
+      var avgPerDay = fN / fD;
+      if (avgPerDay > 48) {
+        alert('Average frequency (' + fN + ' times every ' + fD + ' day' + (fD > 1 ? 's' : '') + ') seems unrealistically high.\nMaximum allowed is 48 sessions per day on average.');
+        return;
+      }
+    }
+
+    // ── Cross-validate frequency × duration × period ──
+    // Get duration in minutes for cross-validation
+    var sessionMinutes = 0;
+    if (durPreset && durPreset.value !== null) {
+      sessionMinutes = durPreset.value; // already in minutes
+    } else if (durPreset && durPreset.value === null) {
+      var _dv = parseFloat(durCustom);
+      sessionMinutes = durUnit === 'hour' ? _dv * 60 : _dv;
+    }
+
+    if (sessionMinutes > 0 && freqPreset) {
+      // Total sessions that would occur over the entire habit period
+      var totalCycles = Math.ceil(totalDays / intervalDays);
+      var totalSessions = totalCycles * timesPerCycle;
+      // Total time commitment in hours
+      var totalHours = (totalSessions * sessionMinutes) / 60;
+
+      // Each session must fit within the day:
+      // timesPerCycle sessions × sessionMinutes must fit within intervalDays days
+      var minutesAvailablePerCycle = intervalDays * 24 * 60;
+      var minutesNeededPerCycle = timesPerCycle * sessionMinutes;
+      if (minutesNeededPerCycle > minutesAvailablePerCycle) {
+        var hoursNeeded = (minutesNeededPerCycle / 60).toFixed(1);
+        var hoursAvailable = (minutesAvailablePerCycle / 60).toFixed(0);
+        alert(
+          'Time conflict: ' + timesPerCycle + ' session' + (timesPerCycle > 1 ? 's' : '') +
+          ' × ' + (sessionMinutes >= 60 ? (sessionMinutes/60).toFixed(1) + ' hr' : sessionMinutes + ' min') +
+          ' = ' + hoursNeeded + ' hours needed,\nbut the cycle is only ' + intervalDays +
+          ' day' + (intervalDays > 1 ? 's' : '') + ' (' + hoursAvailable + ' hours available).\n' +
+          'Please reduce frequency, shorten session duration, or extend the cycle interval.'
+        );
+        return;
+      }
+
+      // Warn if habit requires more than 8 hours/day on average
+      var avgHoursPerDay = (timesPerCycle * sessionMinutes) / (intervalDays * 60);
+      if (avgHoursPerDay > 8) {
+        var proceed = window.confirm(
+          'This habit requires an average of ' + avgHoursPerDay.toFixed(1) + ' hours per day.\n' +
+          'That\'s quite a significant time commitment. Are you sure you want to continue?'
+        );
+        if (!proceed) return;
+      }
+    }
+
+    // ── Frequency must be achievable within the habit period ──
+    if (freqPreset && intervalDays > totalDays) {
+      alert(
+        'The habit period is only ' + totalDays + ' day' + (totalDays > 1 ? 's' : '') +
+        ' long, but the frequency cycle is ' + intervalDays + ' days.\n' +
+        'The habit would never need to be completed.\n' +
+        'Please shorten the frequency interval or extend the habit end date.'
+      );
+      return;
+    }
+
     var timeRange = "".concat(startDate, " \uFF5E ").concat(endDate);
     var freqLabel = getFreqLabel();
     var durLabel = getDurLabel();
-    var _getFreqParams = getFreqParams(),
-      timesPerCycle = _getFreqParams.timesPerCycle,
-      intervalDays = _getFreqParams.intervalDays;
     onAdd({
       name: name.trim(),
       category: category,
