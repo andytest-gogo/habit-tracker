@@ -3576,16 +3576,21 @@ function AddHabitModal(_ref12) {
         return;
       }
 
-      // Start-day remaining time check:
-      // If the habit starts today, only the remaining minutes of today (until
-      // end of first cycle) are available, not the full 24 hrs.
+      // ── Start-day remaining time check ──
+      // If the habit starts today, only the remaining minutes until end of
+      // the first cycle are available — not a full 24 hrs per day.
+      // Bug fix: parse startDate parts manually to get LOCAL midnight, not UTC.
       var nowForCheck = new Date();
       var todayIso = toISODay(nowForCheck);
       if (startDate === todayIso) {
-        var firstCycleEndMidnight = new Date(startDate);
-        firstCycleEndMidnight.setDate(firstCycleEndMidnight.getDate() + intervalDays);
-        var msRemaining = firstCycleEndMidnight - nowForCheck;
-        var minutesRemaining = msRemaining / 60000;
+        var sdParts = startDate.split('-');
+        // Local midnight of (startDate + intervalDays) = end of first cycle
+        var firstCycleEnd = new Date(
+          parseInt(sdParts[0]),
+          parseInt(sdParts[1]) - 1,
+          parseInt(sdParts[2]) + intervalDays  // JS Date handles month overflow
+        ); // this is local midnight
+        var minutesRemaining = (firstCycleEnd - nowForCheck) / 60000;
 
         if (minutesNeededPerCycle > minutesRemaining) {
           var minsRem = Math.floor(minutesRemaining);
@@ -3608,14 +3613,16 @@ function AddHabitModal(_ref12) {
         }
       }
 
-      // Warn if daily average exceeds 8 hours
+      // ── Hard block: daily average exceeds 8 hours ──
+      // Previously this was a confirm() warning — now it is a hard block.
       var avgHoursPerDay = (timesPerCycle * sessionMinutes) / (intervalDays * 60);
       if (avgHoursPerDay > 8) {
-        var proceed = window.confirm(
-          'This habit requires an average of ' + avgHoursPerDay.toFixed(1) + ' hours per day.\n' +
-          'That\'s quite a significant time commitment. Are you sure you want to continue?'
+        alert(
+          'This setting requires an average of ' + avgHoursPerDay.toFixed(1) + ' hours per day, ' +
+          'which exceeds the 8-hour daily limit.\n\n' +
+          'Please reduce the number of sessions or shorten the session duration.'
         );
-        if (!proceed) return;
+        return;
       }
     }
 
