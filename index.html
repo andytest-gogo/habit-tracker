@@ -3560,14 +3560,7 @@ function AddHabitModal(_ref12) {
     }
 
     if (sessionMinutes > 0 && freqPreset) {
-      // Total sessions that would occur over the entire habit period
-      var totalCycles = Math.ceil(totalDays / intervalDays);
-      var totalSessions = totalCycles * timesPerCycle;
-      // Total time commitment in hours
-      var totalHours = (totalSessions * sessionMinutes) / 60;
-
-      // Each session must fit within the day:
-      // timesPerCycle sessions × sessionMinutes must fit within intervalDays days
+      // Standard cycle check: sessions x duration must fit within cycle
       var minutesAvailablePerCycle = intervalDays * 24 * 60;
       var minutesNeededPerCycle = timesPerCycle * sessionMinutes;
       if (minutesNeededPerCycle > minutesAvailablePerCycle) {
@@ -3575,7 +3568,7 @@ function AddHabitModal(_ref12) {
         var hoursAvailable = (minutesAvailablePerCycle / 60).toFixed(0);
         alert(
           'Time conflict: ' + timesPerCycle + ' session' + (timesPerCycle > 1 ? 's' : '') +
-          ' × ' + (sessionMinutes >= 60 ? (sessionMinutes/60).toFixed(1) + ' hr' : sessionMinutes + ' min') +
+          ' x ' + (sessionMinutes >= 60 ? (sessionMinutes/60).toFixed(1) + ' hr' : sessionMinutes + ' min') +
           ' = ' + hoursNeeded + ' hours needed,\nbut the cycle is only ' + intervalDays +
           ' day' + (intervalDays > 1 ? 's' : '') + ' (' + hoursAvailable + ' hours available).\n' +
           'Please reduce frequency, shorten session duration, or extend the cycle interval.'
@@ -3583,7 +3576,39 @@ function AddHabitModal(_ref12) {
         return;
       }
 
-      // Warn if habit requires more than 8 hours/day on average
+      // Start-day remaining time check:
+      // If the habit starts today, only the remaining minutes of today (until
+      // end of first cycle) are available, not the full 24 hrs.
+      var nowForCheck = new Date();
+      var todayIso = toISODay(nowForCheck);
+      if (startDate === todayIso) {
+        var firstCycleEndMidnight = new Date(startDate);
+        firstCycleEndMidnight.setDate(firstCycleEndMidnight.getDate() + intervalDays);
+        var msRemaining = firstCycleEndMidnight - nowForCheck;
+        var minutesRemaining = msRemaining / 60000;
+
+        if (minutesNeededPerCycle > minutesRemaining) {
+          var minsRem = Math.floor(minutesRemaining);
+          var hRem = Math.floor(minsRem / 60);
+          var minRem = minsRem % 60;
+          var remainStr = hRem > 0 ? hRem + ' hr ' + minRem + ' min' : minRem + ' min';
+          var endOverflowDate = new Date(nowForCheck.getTime() + minutesNeededPerCycle * 60000);
+          var overflowStr = endOverflowDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                            ' at ' + endOverflowDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          alert(
+            'Schedule overflow: ' + timesPerCycle + ' session' + (timesPerCycle > 1 ? 's' : '') +
+            ' x ' + (sessionMinutes >= 60 ? (sessionMinutes/60).toFixed(1) + ' hr' : sessionMinutes + ' min') +
+            ' requires ' + (minutesNeededPerCycle / 60).toFixed(1) + ' hours,\n' +
+            'but starting now (' + nowForCheck.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) + ') ' +
+            'only ' + remainStr + ' remain' + (intervalDays > 1 ? ' in this ' + intervalDays + '-day cycle' : ' today') + '.\n\n' +
+            'At this pace you would finish around ' + overflowStr + ', which exceeds the end date.\n' +
+            'Please reduce the number of sessions, shorten session duration, or start the habit tomorrow.'
+          );
+          return;
+        }
+      }
+
+      // Warn if daily average exceeds 8 hours
       var avgHoursPerDay = (timesPerCycle * sessionMinutes) / (intervalDays * 60);
       if (avgHoursPerDay > 8) {
         var proceed = window.confirm(
