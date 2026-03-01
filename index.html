@@ -1635,7 +1635,7 @@ function _checkQuotaFS() {
             _context17.n = 1;
             break;
           }
-          throw new Error("\u6A94\u6848\u592A\u5927\uFF01".concat(isVideo ? '影片' : '圖片', "\u4E0A\u9650 ").concat(maxMB, " MB\uFF0C\u6B64\u6A94\u6848\u7D04 ").concat(fileMB.toFixed(1), " MB"));
+          throw new Error("File too large! ".concat(isVideo ? 'Video' : 'Image', " limit ").concat(maxMB, " MB\uFF0C\u6B64\u6A94\u6848\u7D04 ").concat(fileMB.toFixed(1), " MB"));
         case 1:
           _context17.n = 2;
           return fetchQuotaDoc(uid);
@@ -1649,19 +1649,19 @@ function _checkQuotaFS() {
             _context17.n = 3;
             break;
           }
-          throw new Error("\u4ECA\u65E5\u5716\u7247\u4E0A\u50B3\u5DF2\u9054\u4E0A\u9650 ".concat(UPLOAD_LIMITS.DAILY_IMAGE_COUNT, " \u5F35\uFF0C\u660E\u5929\u518D\u8A66\uFF01"));
+          throw new Error("Daily image upload limit reached (".concat(UPLOAD_LIMITS.DAILY_IMAGE_COUNT, " images). Please try again tomorrow!"));
         case 3:
           if (!(isVideo && dailyVideos >= UPLOAD_LIMITS.DAILY_VIDEO_COUNT)) {
             _context17.n = 4;
             break;
           }
-          throw new Error("\u4ECA\u65E5\u5F71\u7247\u4E0A\u50B3\u5DF2\u9054\u4E0A\u9650 ".concat(UPLOAD_LIMITS.DAILY_VIDEO_COUNT, " \u652F\uFF0C\u660E\u5929\u518D\u8A66\uFF01"));
+          throw new Error("Daily video upload limit reached (".concat(UPLOAD_LIMITS.DAILY_VIDEO_COUNT, " videos). Please try again tomorrow!"));
         case 4:
           if (!(monthlyMB + fileMB > UPLOAD_LIMITS.MONTHLY_TOTAL_MB)) {
             _context17.n = 5;
             break;
           }
-          throw new Error("\u672C\u6708\u4E0A\u50B3\u6D41\u91CF\u5DF2\u9054\u4E0A\u9650 ".concat(UPLOAD_LIMITS.MONTHLY_TOTAL_MB, " MB\uFF0C\u4E0B\u6708\u91CD\u7F6E\uFF01"));
+          throw new Error("Monthly upload bandwidth limit reached (".concat(UPLOAD_LIMITS.MONTHLY_TOTAL_MB, " MB). Resets next month!"));
         case 5:
           return _context17.a(2, {
             dailyImages: dailyImages,
@@ -2680,7 +2680,7 @@ function FeedCard(_ref5) {
             _context3.p = 7;
             _t3 = _context3.v;
             if (_t3.code === 'permission-denied' || _t3.message && _t3.message.toLowerCase().includes('permission')) {
-              alert('留言失敗：Firestore 安全規則尚未設定留言寫入權限。\n請到 Firebase Console → Firestore → Rules，加入 comments subcollection 的寫入規則。\n\n詳細規則範本請見 README 或聯絡管理員。');
+              alert('Comment failed: Firestore security rules do not allow writing to comments.\nPlease go to Firebase Console → Firestore → Rules and add write permissions for the comments subcollection.\n\nSee README or contact admin for rule templates.');
             } else {
               alert('Comment failed: ' + _t3.message);
             }
@@ -3849,6 +3849,14 @@ function HistoryPage(_ref15) {
     return (h.finalRate || 0) >= 70;
   }).length;
   var allRates = [].concat(_toConsumableArray(expiredRates), _toConsumableArray(activeRates));
+
+  // Pagination state: show 10 items at a time
+  var _visibleState = React.useState(10);
+  var visibleCount = _visibleState[0];
+  var setVisibleCount = _visibleState[1];
+  var visibleHabits = sorted.slice(0, visibleCount);
+  var hasMore = visibleCount < sorted.length;
+
   return /*#__PURE__*/React.createElement("div", {
     className: "app-container",
     style: {
@@ -4078,7 +4086,7 @@ function HistoryPage(_ref15) {
       color: 'var(--gray-300)',
       lineHeight: 1.6
     }
-  }, "Habits will appear here once their", /*#__PURE__*/React.createElement("br", null), "end date has passed.")) : sorted.map(function (h, i) {
+  }, "Habits will appear here once their", /*#__PURE__*/React.createElement("br", null), "end date has passed.")) : /*#__PURE__*/React.createElement(React.Fragment, null, visibleHabits.map(function (h, i) {
     var r = h.finalRate || 0;
     var barColor = r >= 70 ? '#4ade80' : r >= 40 ? '#fbbf24' : '#f87171';
     var textColor = r >= 70 ? '#16a34a' : r >= 40 ? '#d97706' : '#dc2626';
@@ -4130,7 +4138,24 @@ function HistoryPage(_ref15) {
     }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
       className: "archive-tag"
     }, h.durLabel)));
-  })), /*#__PURE__*/React.createElement("div", {
+  }), hasMore && /*#__PURE__*/React.createElement("div", {
+    style: { textAlign: 'center', padding: '16px 0 4px' }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function() { setVisibleCount(function(c) { return c + 10; }); },
+    style: {
+      background: 'var(--black)',
+      color: 'var(--white)',
+      border: 'none',
+      cursor: 'pointer',
+      fontSize: 12,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+      padding: '10px 24px',
+      fontFamily: 'var(--font)',
+      width: '100%'
+    }
+  }, "Load More History (", sorted.length - visibleCount, " remaining)"))), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 40
     }
@@ -4959,7 +4984,7 @@ function MainApp(_ref16) {
             var _postLimitKey = 'postLimit_' + user.uid + '_' + _today;
             var _dailyCount = parseInt(localStorage.getItem(_postLimitKey) || '0', 10);
             if (_dailyCount >= 5) {
-              alert('您今日已達發文上限（每日最多 5 篇），請明天再試。');
+              alert('You have reached today\'s post limit (max 5 posts per day). Please try again tomorrow.');
               return _context1.a(2);
             }
             // ── 發文冷卻時間：至少間隔 3 分鐘 ──
@@ -4971,7 +4996,7 @@ function MainApp(_ref16) {
               var _remaining = 180 - _elapsed;
               var _mins = Math.floor(_remaining / 60);
               var _secs = _remaining % 60;
-              alert('\u767C\u6587\u9593\u9694\u592A\u77ED\uFF01\u8ACB\u518D\u7B49 ' + (_mins > 0 ? _mins + ' \u5206 ' : '') + _secs + ' \u79D2\u5F8C\u518D\u767C\u6587\u3002');
+              alert('Posts too frequent! Please wait ' + (_mins > 0 ? _mins + ' min ' : '') + _secs + ' sec before posting.');
               return _context1.a(2);
             }
           case 13:
@@ -5280,12 +5305,12 @@ function MainApp(_ref16) {
             _t17 = _context13.v;
             setDeleteStep(2);
             errMap = {
-              'auth/wrong-password': '密碼錯誤，請再試一次',
-              'auth/invalid-credential': '密碼錯誤，請再試一次',
-              'auth/too-many-requests': '嘗試次數過多，請稍後再試',
-              'auth/requires-recent-login': '請重新登入後再試'
+              'auth/wrong-password': 'Incorrect password, please try again',
+              'auth/invalid-credential': 'Incorrect password, please try again',
+              'auth/too-many-requests': 'Too many attempts, please try again later',
+              'auth/requires-recent-login': 'Please log in again and retry'
             };
-            setDeleteError(errMap[_t17.code] || '刪除失敗：' + _t17.message);
+            setDeleteError(errMap[_t17.code] || 'Deletion failed: ' + _t17.message);
           case 39:
             return _context13.a(2);
         }
