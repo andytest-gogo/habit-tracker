@@ -104,6 +104,19 @@ tr:hover td{background:var(--g50)}
 .pct-fill.danger{background:#c00}
 .uid-small{font-size:9px;color:var(--g400);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
 
+/* ── ACTIVITY PAGE ── */
+.act-filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.act-filter-btn{padding:6px 14px;border:1px solid var(--g200);background:var(--white);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;font-family:var(--font);color:var(--g500);transition:.15s}
+.act-filter-btn:hover{border-color:var(--black);color:var(--black)}
+.act-filter-btn.on{background:var(--black);color:var(--white);border-color:var(--black)}
+.act-status{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex-shrink:0}
+.act-status.green{background:#16a34a}
+.act-status.yellow{background:#d97706}
+.act-status.red{background:#dc2626}
+.act-status.gray{background:#9a9a9a}
+.act-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:11px;color:var(--g500)}
+.act-legend span{display:flex;align-items:center;gap:5px}
+
 /* ── MOBILE RWD ── */
 .hamburger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--black);border:none;padding:8px 10px;cursor:pointer;line-height:1;color:var(--white);font-size:18px}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:98}
@@ -168,6 +181,10 @@ tr:hover td{background:var(--g50)}
       <button class="nav-btn" data-page="security">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
         Security &amp; Rules
+      </button>
+      <button class="nav-btn" data-page="activity">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        User Activity
       </button>
       <button class="nav-btn" data-page="reports" id="navReports">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
@@ -290,6 +307,69 @@ tr:hover td{background:var(--g50)}
           </tr></thead>
           <tbody id="quotaTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- User Activity -->
+    <div class="pg" id="pg-activity">
+      <div class="pg-title">User Activity</div>
+      <div class="pg-sub">Active users based on last login time — sourced from Firestore lastSeen field</div>
+
+      <!-- Summary Stats -->
+      <div class="stat-grid" id="actStatGrid">
+        <div class="stat dark"><div class="stat-lbl">Daily Active (24h)</div><div class="stat-val" id="actDAU">—</div><div class="stat-note">Logged in today</div></div>
+        <div class="stat"><div class="stat-lbl">Weekly Active (7d)</div><div class="stat-val" id="actWAU">—</div><div class="stat-note">Last 7 days</div></div>
+        <div class="stat"><div class="stat-lbl">Monthly Active (30d)</div><div class="stat-val" id="actMAU">—</div><div class="stat-note">Last 30 days</div></div>
+        <div class="stat"><div class="stat-lbl">Dormant (90d+)</div><div class="stat-val" id="actDormant">—</div><div class="stat-note">No login in 90 days</div></div>
+      </div>
+
+      <!-- Activity Chart -->
+      <div class="chart-row" style="grid-template-columns:2fr 1fr">
+        <div class="chart-box">
+          <div class="chart-ttl">Login Activity — Last 14 Days</div>
+          <div class="chart-wrap"><canvas id="chartActivity"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <div class="chart-ttl">User Status Breakdown</div>
+          <div class="chart-wrap"><canvas id="chartActStatus"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Filter + Table -->
+      <div class="tbl-card">
+        <div class="tbl-hd" style="flex-wrap:wrap;gap:10px">
+          <div class="tbl-ttl">User Activity List</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div class="act-filter-row" style="margin:0">
+              <button class="act-filter-btn on" data-filter="all" onclick="setActFilter('all',this)">All</button>
+              <button class="act-filter-btn" data-filter="dau" onclick="setActFilter('dau',this)">● Today</button>
+              <button class="act-filter-btn" data-filter="wau" onclick="setActFilter('wau',this)">● 7 Days</button>
+              <button class="act-filter-btn" data-filter="mau" onclick="setActFilter('mau',this)">● 30 Days</button>
+              <button class="act-filter-btn" data-filter="dormant" onclick="setActFilter('dormant',this)">● Dormant</button>
+              <button class="act-filter-btn" data-filter="never" onclick="setActFilter('never',this)">● Never Seen</button>
+            </div>
+            <button class="refresh" onclick="renderActivity()">Refresh</button>
+          </div>
+        </div>
+        <div class="act-legend">
+          <span><span class="act-status green"></span>Active today</span>
+          <span><span class="act-status yellow"></span>Active this week</span>
+          <span><span class="act-status red"></span>Active this month</span>
+          <span><span class="act-status gray"></span>Dormant / Never</span>
+        </div>
+        <table>
+          <thead><tr>
+            <th>User</th>
+            <th>Status</th>
+            <th>Last Seen</th>
+            <th>Days Inactive</th>
+            <th>Habits</th>
+            <th>Posts</th>
+            <th>Joined</th>
+          </tr></thead>
+          <tbody id="actTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+        <div style="padding:10px 18px;font-size:10px;color:var(--g400);border-top:1px solid var(--g100)" id="actTableNote"></div>
       </div>
     </div>
 
@@ -699,6 +779,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
     btn.classList.add('on');
     document.getElementById('pg-'+btn.dataset.page).classList.add('on');
+    if (btn.dataset.page === 'activity') renderActivity();
   };
 });
 
@@ -718,6 +799,7 @@ function loadAll(){
     renderRecent();
     renderUsers('');
     renderPosts('');
+    renderActivity();
     renderHabits('');
     document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-US');
   });
@@ -1215,6 +1297,187 @@ function setReportStatus(reportId, newStatus){
     renderReportStats();
     renderReports();
   }).catch(function(e){ alert('Update failed: ' + e.message); });
+}
+
+
+/* ══════════════════════════════════════════
+   USER ACTIVITY PAGE
+══════════════════════════════════════════ */
+var actFilter = 'all';
+var actChart = null, actStatusChart = null;
+
+function setActFilter(filter, btn) {
+  actFilter = filter;
+  document.querySelectorAll('.act-filter-btn').forEach(function(b){ b.classList.remove('on'); });
+  if (btn) btn.classList.add('on');
+  renderActivityTable();
+}
+
+function getActivityStatus(lastSeen) {
+  // Returns: 'dau' | 'wau' | 'mau' | 'dormant' | 'never'
+  if (!lastSeen) return 'never';
+  var now = Date.now();
+  var ls = lastSeen.toMillis ? lastSeen.toMillis() : (lastSeen instanceof Date ? lastSeen.getTime() : 0);
+  if (!ls) return 'never';
+  var diffDays = (now - ls) / 86400000;
+  if (diffDays < 1)   return 'dau';
+  if (diffDays < 7)   return 'wau';
+  if (diffDays < 30)  return 'mau';
+  return 'dormant';
+}
+
+function actStatusLabel(status) {
+  return { dau: 'Active Today', wau: 'Active This Week', mau: 'Active This Month', dormant: 'Dormant', never: 'Never Seen' }[status] || '—';
+}
+
+function actStatusDotClass(status) {
+  return { dau: 'green', wau: 'yellow', mau: 'red', dormant: 'gray', never: 'gray' }[status] || 'gray';
+}
+
+function renderActivity() {
+  if (!allUsers || !allUsers.length) return;
+  renderActivityStats();
+  renderActivityCharts();
+  renderActivityTable();
+}
+
+function renderActivityStats() {
+  var now = Date.now();
+  var dau = 0, wau = 0, mau = 0, dormant = 0;
+  allUsers.forEach(function(u) {
+    var s = getActivityStatus(u.lastSeen);
+    if (s === 'dau') { dau++; wau++; mau++; }
+    else if (s === 'wau') { wau++; mau++; }
+    else if (s === 'mau') { mau++; }
+    else { dormant++; }
+  });
+  document.getElementById('actDAU').textContent = dau;
+  document.getElementById('actWAU').textContent = wau;
+  document.getElementById('actMAU').textContent = mau;
+  document.getElementById('actDormant').textContent = dormant;
+}
+
+function renderActivityCharts() {
+  var now = Date.now();
+
+  // ── 14-day daily login bar chart ──
+  var days = [];
+  var dayCounts = {};
+  for (var i = 13; i >= 0; i--) {
+    var d = new Date(now - i * 86400000);
+    var key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    days.push(key);
+    dayCounts[key] = 0;
+  }
+  allUsers.forEach(function(u) {
+    if (!u.lastSeen) return;
+    var ls = u.lastSeen.toMillis ? u.lastSeen.toMillis() : (u.lastSeen instanceof Date ? u.lastSeen.getTime() : 0);
+    if (!ls) return;
+    var d = new Date(ls);
+    var key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (dayCounts[key] !== undefined) dayCounts[key]++;
+  });
+
+  if (actChart) actChart.destroy();
+  actChart = new Chart(document.getElementById('chartActivity'), {
+    type: 'bar',
+    data: {
+      labels: days,
+      datasets: [{ label: 'Logins', data: days.map(function(d){ return dayCounts[d]; }),
+        backgroundColor: '#0a0a0a', borderRadius: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 9 }, maxRotation: 45 } },
+        y: { ticks: { stepSize: 1, font: { size: 10 } }, beginAtZero: true }
+      }
+    }
+  });
+
+  // ── Status doughnut ──
+  var counts = { dau: 0, wau: 0, mau: 0, dormant: 0, never: 0 };
+  allUsers.forEach(function(u){ counts[getActivityStatus(u.lastSeen)]++; });
+  if (actStatusChart) actStatusChart.destroy();
+  actStatusChart = new Chart(document.getElementById('chartActStatus'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Today', 'This Week', 'This Month', 'Dormant', 'Never'],
+      datasets: [{ data: [counts.dau, counts.wau, counts.mau, counts.dormant, counts.never],
+        backgroundColor: ['#16a34a', '#d97706', '#dc2626', '#9a9a9a', '#e0e0e0'] }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8 } } }
+    }
+  });
+}
+
+function renderActivityTable() {
+  var tb = document.getElementById('actTbody');
+  var now = Date.now();
+
+  var filtered = allUsers.filter(function(u) {
+    var s = getActivityStatus(u.lastSeen);
+    if (actFilter === 'all') return true;
+    if (actFilter === 'dau') return s === 'dau';
+    if (actFilter === 'wau') return s === 'dau' || s === 'wau';
+    if (actFilter === 'mau') return s === 'dau' || s === 'wau' || s === 'mau';
+    if (actFilter === 'dormant') return s === 'dormant';
+    if (actFilter === 'never') return s === 'never';
+    return true;
+  });
+
+  // Sort: most recently active first, never seen last
+  filtered.sort(function(a, b) {
+    var la = a.lastSeen && (a.lastSeen.toMillis ? a.lastSeen.toMillis() : 0) || 0;
+    var lb = b.lastSeen && (b.lastSeen.toMillis ? b.lastSeen.toMillis() : 0) || 0;
+    return lb - la;
+  });
+
+  document.getElementById('actTableNote').textContent =
+    'Showing ' + filtered.length + ' of ' + allUsers.length + ' users · Filter: ' + (actFilter === 'all' ? 'All' : actStatusLabel(actFilter));
+
+  if (!filtered.length) {
+    tb.innerHTML = '<tr class="loading-row"><td colspan="7">No users match this filter</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = filtered.map(function(u) {
+    var status = getActivityStatus(u.lastSeen);
+    var dotClass = actStatusDotClass(status);
+    var statusLabel = actStatusLabel(status);
+
+    var ls = u.lastSeen && (u.lastSeen.toMillis ? u.lastSeen.toMillis() : (u.lastSeen instanceof Date ? u.lastSeen.getTime() : 0)) || 0;
+    var lastSeenStr = ls ? new Date(ls).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+    var daysInactive = ls ? Math.floor((now - ls) / 86400000) : '—';
+    var daysStr = typeof daysInactive === 'number'
+      ? (daysInactive === 0 ? '<span style="color:#16a34a;font-weight:700">Today</span>'
+        : daysInactive === 1 ? '<span style="color:#d97706">1 day ago</span>'
+        : daysInactive + ' days')
+      : '—';
+
+    // Joined date from fsUsers
+    var fsU = window.fsUsers && window.fsUsers[u.uid];
+    var joinedStr = '—';
+    if (fsU && fsU.createdAt) {
+      var jt = fsU.createdAt.toMillis ? fsU.createdAt.toMillis() : 0;
+      if (jt) joinedStr = new Date(jt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    return '<tr>'
+      + '<td><div class="uc"><div class="av">' + ((u.name||'?')[0]).toUpperCase() + '</div>'
+      + '<div><strong>' + htmlEsc(u.name) + '</strong>'
+      + '<div style="font-size:10px;color:var(--g400)">' + htmlEsc(u.email||'') + '</div></div></div></td>'
+      + '<td><span class="act-status ' + dotClass + '"></span>' + statusLabel + '</td>'
+      + '<td style="font-size:11px;color:var(--g500)">' + lastSeenStr + '</td>'
+      + '<td style="font-size:12px">' + daysStr + '</td>'
+      + '<td>' + u.habits.length + '</td>'
+      + '<td>' + u.posts.length + '</td>'
+      + '<td style="font-size:11px;color:var(--g400)">' + joinedStr + '</td>'
+      + '</tr>';
+  }).join('');
 }
 
 </script>
