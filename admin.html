@@ -1009,7 +1009,7 @@ function renderHabits(f){
       '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
       '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
-      '<td><button class="del" onclick="deleteUserData(\''+h.userId+'\',\''+htmlEsc(nm[h.userId]||h.userId||\'\')+'\')">Delete Data</button></td></tr>';
+      '<td><button class="del" onclick="deleteUserData('+"'\'+"+"h.userId+"+"'\',\'+"+"htmlEsc(nm[h.userId]||h.userId||'')+"+"'\')"+'" title="Delete all Firestore data for this user">Delete Data</button></td></tr>\';'
   }).join('');
 }
 
