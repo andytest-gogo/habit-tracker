@@ -913,7 +913,7 @@
 
             <div class="priv-rights-section">
                 <p class="priv-dpa-title">Your Rights (GDPR Art. 15–20 / CCPA)</p>
-                <p>You have the right to access, correct, delete, or export your data. Delete your account from Profile → Delete Account, or contact us at <strong>privacy&#64;habittrackerpro&#46;app</strong>.</p>
+                <p>You have the right to access, correct, delete, or export your data. Delete your account from Profile → Delete Account, or contact us at <strong>HealthHabitTracker@gmail.com</strong>.</p>
             </div>
 
             <!-- GDPR Art.20 Data Portability — functional export -->
@@ -3806,6 +3806,10 @@ function HistoryPage(_ref15) {
     archivedHabits = _ref15.archivedHabits,
     percentile = _ref15.percentile,
     onBack = _ref15.onBack;
+  var _useStateHP = useState(10),
+    _useStateHP2 = _slicedToArray(_useStateHP, 2),
+    visibleCount = _useStateHP2[0],
+    setVisibleCount = _useStateHP2[1];
   // 合併來源：habits 裡已到期的 + archivedHabits（舊資料相容）
   var _historyToday = toISODay();
   var expiredFromHabits = habits.filter(function(h) {
@@ -3824,6 +3828,8 @@ function HistoryPage(_ref15) {
     var db2 = b.archivedAt || parseTimeRange(b.timeRange).end || '';
     return db2 > da ? 1 : -1;
   });
+  var visibleSorted = sorted.slice(0, visibleCount);
+  var hasMore = sorted.length > visibleCount;
   var expiredRates = allExpired.map(function (h) {
     return h.finalRate || 0;
   });
@@ -4078,7 +4084,7 @@ function HistoryPage(_ref15) {
       color: 'var(--gray-300)',
       lineHeight: 1.6
     }
-  }, "Habits will appear here once their", /*#__PURE__*/React.createElement("br", null), "end date has passed.")) : sorted.map(function (h, i) {
+  }, "Habits will appear here once their", /*#__PURE__*/React.createElement("br", null), "end date has passed.")) : visibleSorted.map(function (h, i) {
     var r = h.finalRate || 0;
     var barColor = r >= 70 ? '#4ade80' : r >= 40 ? '#fbbf24' : '#f87171';
     var textColor = r >= 70 ? '#16a34a' : r >= 40 ? '#d97706' : '#dc2626';
@@ -4130,7 +4136,28 @@ function HistoryPage(_ref15) {
     }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
       className: "archive-tag"
     }, h.durLabel)));
-  })), /*#__PURE__*/React.createElement("div", {
+  }), hasMore && /*#__PURE__*/React.createElement("div", {
+    style: { padding: '16px 20px 0', textAlign: 'center' }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function() { setVisibleCount(function(c) { return c + 10; }); },
+    style: {
+      width: '100%',
+      padding: '12px 0',
+      background: 'var(--black)',
+      color: 'var(--white)',
+      border: 'none',
+      fontSize: 12,
+      fontWeight: 700,
+      fontFamily: 'var(--din)',
+      letterSpacing: '1px',
+      textTransform: 'uppercase',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8
+    }
+  }, "繼續載入 (", sorted.length - visibleCount, " 筆剩餘)"))), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 40
     }
@@ -4916,6 +4943,10 @@ function MainApp(_ref16) {
             result = _context0.v;
             setAvatarUrl(result.url);
             localStorage.setItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid), result.url);
+            // Sync photoURL to Firestore so admin dashboard reflects the new avatar
+            if (user && user.uid && typeof db !== 'undefined') {
+              db.collection('users').doc(user.uid).set({ photoURL: result.url }, { merge: true }).catch(function(){});
+            }
             _context0.n = 5;
             break;
           case 4:
@@ -6351,8 +6382,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>0. Data Controller</h3>
 <p>This service is operated by an <strong>individual independent developer</strong> (sole trader, not a registered company). For all privacy-related matters:</p>
 <p>
-  <strong>Email:</strong> privacy@habittrackerpro.app<br>
-  <strong>Postal address:</strong> Habit Tracker Pro, c/o [Your Name], [Your Address — complete before EU launch]<br>
+  <strong>Email:</strong> HealthHabitTracker@gmail.com<br>
   <strong>Response time:</strong> We aim to respond to all data-subject requests within <strong>30 days</strong> (as required by GDPR Art. 12).
 </p>
 <p>EU/EEA users: if you believe we have not handled your request correctly, you have the right to lodge a complaint with your national Data Protection Authority (DPA). A list of EU DPAs is available at <a href="https://edpb.europa.eu/about-edpb/about-edpb/members_en" target="_blank" rel="noopener noreferrer">edpb.europa.eu ↗</a>.</p>
@@ -6374,7 +6404,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>4. Your Rights</h3>
 <p><strong>Access (Art.15):</strong> Request a copy of your data. <strong>Correction (Art.16):</strong> Fix inaccurate data in your profile. <strong>Deletion (Art.17):</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability (Art.20):</strong> Download a JSON export of all your data directly from Profile → Privacy Settings → Download My Data. <strong>Object / Withdraw Consent (Art.7):</strong> Change or withdraw analytics consent anytime via Profile → Privacy Settings.</p>
 <p><strong>EU/GDPR users:</strong> You may lodge a complaint with your local Data Protection Authority (DPA) at any time.</p>
-<p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in). To exercise these rights, use the in-app deletion feature or email privacy@habittrackerpro.app.</p>
+<p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in). To exercise these rights, use the in-app deletion feature or email HealthHabitTracker@gmail.com.</p>
 <h3>5. Consent & Withdrawal</h3>
 <p>You can accept or decline optional analytics at any time. Your choice is respected immediately. To change your preference, go to <strong>Profile → Privacy Settings</strong>. Withdrawing consent does not affect the lawfulness of processing before withdrawal.</p>
 <h3>6. Cookies & Analytics</h3>
@@ -6384,7 +6414,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>8. Children</h3>
 <p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
 <h3>9. Contact</h3>
-<p>For privacy requests: <strong>privacy@habittrackerpro.app</strong><br>We aim to respond within 30 days.</p>`
+<p>For privacy requests: <strong>HealthHabitTracker@gmail.com</strong><br>We aim to respond within 30 days.</p>`
         },
 
         terms: {
@@ -6421,13 +6451,13 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>9. Termination</h3>
 <p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
 <h3>10. Governing Law</h3>
-<p>EU users retain all rights under applicable consumer protection laws. For disputes, contact us first at <strong>legal@habittrackerpro.app</strong> — most issues can be resolved quickly. EU users may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>.</p>
+<p>EU users retain all rights under applicable consumer protection laws. For disputes, contact us first at <strong>HealthHabitTracker@gmail.com</strong> — most issues can be resolved quickly. EU users may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>.</p>
 <h3>11. Copyright Complaints — DMCA (US) &amp; DSA (EU)</h3>
-<p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>legal@habittrackerpro.app</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
+<p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>HealthHabitTracker@gmail.com</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
 <p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days and will inform the reporter of the outcome. Persistent or severe violations may result in account suspension.</p>
-<p><strong>Counter-Notice:</strong> If you believe your content was removed in error, contact <strong>legal@habittrackerpro.app</strong> with details and we will review within 14 business days.</p>
+<p><strong>Counter-Notice:</strong> If you believe your content was removed in error, contact <strong>HealthHabitTracker@gmail.com</strong> with details and we will review within 14 business days.</p>
 <h3>12. Contact</h3>
-<p>Questions about these Terms: <strong>legal@habittrackerpro.app</strong></p>`
+<p>Questions about these Terms: <strong>HealthHabitTracker@gmail.com</strong></p>`
         }
     };
 

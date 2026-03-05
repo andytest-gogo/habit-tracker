@@ -764,7 +764,7 @@ function buildUsers(){
   // Add users from Firestore users collection (those who have logged in)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen};
+    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', photoURL:u.photoURL||'', habits:[], posts:[], lastSeen:u.lastSeen};
   });
 
   // Supplement from habits
@@ -830,8 +830,11 @@ function renderUsers(f){
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No matching users</td></tr>';return;}
   tb.innerHTML=list.map(function(u){
     var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
+    var avHtml = u.photoURL
+      ? '<img src="'+htmlEsc(u.photoURL)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'"><div class="av" style="display:none">'+htmlEsc((u.name||'?')[0])+'</div>'
+      : '<div class="av">'+htmlEsc((u.name||'?')[0])+'</div>';
     return '<tr>'+
-      '<td><div class="uc"><div class="av">'+((u.name||'?')[0])+'</div><div><strong>'+htmlEsc(u.name)+'</strong>'+
+      '<td><div class="uc">'+avHtml+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
       '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
       '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
@@ -909,13 +912,13 @@ function renderHabits(f){
   allUsers.forEach(function(u){ nm[u.uid]=u.name; });
   tb.innerHTML=list.map(function(h){
     var r=calcRate(h);
+    var userName=nm[h.userId]||((h.userId||'').slice(0,8))||'—';
     return '<tr><td><strong>'+htmlEsc(h.name||'—')+'</strong></td>'+
-      '<td>'+(nm[h.userId]||((h.userId||'').slice(0,8))||'—')+'</td>'+
+      '<td>'+htmlEsc(userName)+'</td>'+
       '<td><span class="badge">'+htmlEsc(h.category||'—')+'</span></td>'+
       '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
       '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
-      '<td><button class="del" onclick="deleteUserData(\''+u.uid+'\',\''+htmlEsc(u.name)+'\')" title="Delete all Firestore data for this user">Delete Data</button></td></tr>';
+      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
   }).join('');
 }
 
