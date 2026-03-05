@@ -6217,13 +6217,20 @@ function App() {
           return;
         }
         // 已驗證：更新 Firestore 並登入
-        db.collection('users').doc(u.uid).set({
-          uid: u.uid,
-          email: u.email || '',
-          displayName: u.displayName || '',
-          photoURL: u.photoURL || '',
-          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(function () {});
+        // First fetch existing doc to avoid overwriting a custom Cloudinary avatar
+        // with the Firebase Auth photoURL (e.g. Google profile pic or empty string).
+        db.collection('users').doc(u.uid).get().then(function(docSnap) {
+          var existing = docSnap.exists ? docSnap.data() : {};
+          // Only use Firebase Auth photoURL if there is no custom avatar already stored
+          var photoURL = existing.photoURL || u.photoURL || '';
+          return db.collection('users').doc(u.uid).set({
+            uid: u.uid,
+            email: u.email || '',
+            displayName: u.displayName || '',
+            photoURL: photoURL,
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }).catch(function () {});
         setUser(u);
       } else {
         setUser(null);
