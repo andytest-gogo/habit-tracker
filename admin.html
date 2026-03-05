@@ -585,7 +585,7 @@ service cloud.firestore {
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -625,7 +625,7 @@ var ADMIN_CUSTOM_CLAIM = 'admin'; // claim key — must be true in Firebase toke
 var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 // Set to true ONLY during initial onboarding to allow email-only access before claim is set
 // Switch to false immediately once admin claim is configured in Firebase
-var ALLOW_EMAIL_ONLY_FALLBACK = false;
+var ALLOW_EMAIL_ONLY_FALLBACK = true; // Set to false after configuring Firebase Custom Claims
 // ────────────────────────────────────────────────────────────────────
 
 var allUsers=[], allPosts=[], allHabits=[];
