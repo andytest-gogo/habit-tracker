@@ -3505,7 +3505,7 @@ function AddHabitModal(_ref12) {
       alert('End date must be on or after start date.');
       return;
     }
-    // Validate that the date range is long enough for the selected frequency
+    // Validate frequency × duration does not exceed available time
     var _fp = getFreqParams();
     var _timesPerCycle = _fp.timesPerCycle;
     var _intervalDays = _fp.intervalDays;
@@ -3515,11 +3515,24 @@ function AddHabitModal(_ref12) {
     } else if (durPreset && durPreset.value === null) {
       _durMins = durUnit === 'hour' ? (parseFloat(durCustom) || 0) * 60 : (parseFloat(durCustom) || 0);
     }
-    // Total required minutes per cycle = timesPerCycle * durMins
-    // Total available minutes per day = 24 * 60 = 1440
-    // So timesPerCycle * durMins must not exceed intervalDays * 1440
-    if (_durMins > 0 && _timesPerCycle * _durMins > _intervalDays * 1440) {
-      alert('The frequency and duration combination exceeds 24 hours per day. Please reduce the frequency or duration.');
+    // Per-day total = timesPerCycle * durMins / intervalDays
+    // Must not exceed 24 hours (1440 min) in a single day
+    var _dailyTotalMins = (_timesPerCycle * _durMins) / _intervalDays;
+    if (_durMins > 0 && _dailyTotalMins > 1440) {
+      alert('The frequency and duration combination exceeds 24 hours in a single day. Please reduce the frequency or duration.');
+      return;
+    }
+    // Also validate total habit duration vs date range:
+    // The total minutes required per cycle must fit within the number of days available.
+    // e.g. 12 times × 60 min = 720 min per day is technically < 1440, but
+    // we cap the realistic daily maximum at 12 hours (720 min) to avoid unreasonable schedules.
+    var MAX_DAILY_MINS = 720; // 12 hours per day maximum
+    if (_durMins > 0 && _dailyTotalMins > MAX_DAILY_MINS) {
+      var _maxTimes = Math.floor(MAX_DAILY_MINS / _durMins) * _intervalDays;
+      alert(
+        'The total session time per day (' + Math.round(_dailyTotalMins / 60 * 10) / 10 + ' hrs) exceeds the 12-hour daily limit.\n' +
+        'For ' + _durMins + '-minute sessions, you can set at most ' + _maxTimes + ' time(s) per ' + (_intervalDays === 1 ? 'day' : _intervalDays + ' days') + '.'
+      );
       return;
     }
     var timeRange = "".concat(startDate, " \uFF5E ").concat(endDate);
