@@ -3481,15 +3481,45 @@ function AddHabitModal(_ref12) {
     return durPreset.label;
   };
   var handleAdd = function handleAdd() {
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      alert('Please enter a habit name.');
+      return;
+    }
+    // Validate frequency is selected
+    if (!freqPreset) {
+      alert('Please select a frequency.');
+      return;
+    }
+    // Validate duration per session is selected
+    if (!durPreset) {
+      alert('Please select a duration per session.');
+      return;
+    }
     // Validate custom duration input
     if ((durPreset === null || durPreset === void 0 ? void 0 : durPreset.value) === null && !durCustom.toString().trim()) {
       alert('Please enter a custom duration value.');
       return;
     }
-    // Validate date range
+    // Validate date range: end date must be after start date (not equal, since same-day is only 1 day)
     if (startDate > endDate) {
       alert('End date must be on or after start date.');
+      return;
+    }
+    // Validate that the date range is long enough for the selected frequency
+    var _fp = getFreqParams();
+    var _timesPerCycle = _fp.timesPerCycle;
+    var _intervalDays = _fp.intervalDays;
+    var _durMins = 0;
+    if (durPreset && durPreset.value !== null) {
+      _durMins = durPreset.value || 0;
+    } else if (durPreset && durPreset.value === null) {
+      _durMins = durUnit === 'hour' ? (parseFloat(durCustom) || 0) * 60 : (parseFloat(durCustom) || 0);
+    }
+    // Total required minutes per cycle = timesPerCycle * durMins
+    // Total available minutes per day = 24 * 60 = 1440
+    // So timesPerCycle * durMins must not exceed intervalDays * 1440
+    if (_durMins > 0 && _timesPerCycle * _durMins > _intervalDays * 1440) {
+      alert('The frequency and duration combination exceeds 24 hours per day. Please reduce the frequency or duration.');
       return;
     }
     var timeRange = "".concat(startDate, " \uFF5E ").concat(endDate);
@@ -4422,12 +4452,25 @@ function MainApp(_ref16) {
       setHabits([_objectSpread(_objectSpread({}, habit), {}, {
         id: Date.now().toString()
       })].concat(_toConsumableArray(habits)));
+      setShowModal(false);
     } else {
+      var tempId = 'temp-' + Date.now().toString();
+      // Optimistically add to local state immediately for instant UI update
+      setHabits(function(prev) {
+        return [_objectSpread(_objectSpread({}, habit), {}, { id: tempId })].concat(_toConsumableArray(prev));
+      });
+      setShowModal(false);
       db.collection('habits').add(_objectSpread(_objectSpread({}, habit), {}, {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }));
+      })).catch(function(err) {
+        console.error('Failed to save habit:', err);
+        // Roll back optimistic update on error
+        setHabits(function(prev) {
+          return prev.filter(function(h) { return h.id !== tempId; });
+        });
+        alert('Failed to save habit. Please try again.');
+      });
     }
-    setShowModal(false);
   };
 
   // Auto-archive removed: expired habits are now filtered at display layer only
