@@ -187,7 +187,10 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
         User Activity
       </button>
-      <button class="nav-btn" data-page="reports" id="navReports">
+      <button class="nav-btn" data-page="follows">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Follows
+      </button>
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
         Reports
         <span id="reportsBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
@@ -488,6 +491,43 @@ service cloud.firestore {
       </div>
     </div>
 
+    <!-- ══ FOLLOWS PAGE ══ -->
+    <div class="pg" id="pg-follows">
+      <div class="pg-title">Follows</div>
+      <div class="pg-sub" id="followsUpdated">Loading...</div>
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Total Follows</div><div class="stat-val" id="fTotal">—</div><div class="stat-note">Active relationships</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Pending Requests</div><div class="stat-val" id="fPending" style="color:#d97706">—</div><div class="stat-note">Awaiting approval</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Unique Users</div><div class="stat-val" id="fUsers" style="color:#059669">—</div><div class="stat-note">Involved in follows</div></div>
+      </div>
+      <input class="search" id="followSearch" placeholder="Search by follower or following name...">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <select id="followStatusFilter" onchange="renderFollows()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+          <option value="all">All statuses</option>
+          <option value="following">Following</option>
+          <option value="pending">Pending</option>
+        </select>
+        <button class="refresh" onclick="loadFollows()">Refresh</button>
+        <div style="margin-left:auto;font-size:11px;color:var(--g400)" id="followCnt"></div>
+      </div>
+      <div class="tbl-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Follower</th>
+              <th>Following</th>
+              <th style="width:100px">Status</th>
+              <th style="width:130px">Since</th>
+              <th style="width:80px">Action</th>
+            </tr>
+          </thead>
+          <tbody id="followsTbody">
+            <tr class="loading-row"><td colspan="5">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ══ REPORTS PAGE ══ -->
     <div class="pg" id="pg-reports">
       <div class="pg-title">Reports</div>
@@ -781,6 +821,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     btn.classList.add('on');
     document.getElementById('pg-'+btn.dataset.page).classList.add('on');
     if (btn.dataset.page === 'activity') renderActivity();
+    if (btn.dataset.page === 'follows') loadFollows();
   };
 });
 
@@ -810,13 +851,21 @@ function loadAll(){
 }
 
 function loadUsers(){
-  return db.collection('users').get().then(function(snap){
-    // Load Firestore users collection first
-    window.fsUsers = {};
-    snap.docs.forEach(function(d){
-      window.fsUsers[d.id] = d.data();
-    });
-  }).catch(function(){ window.fsUsers={}; });
+  return new Promise(function(resolve) {
+    db.collection('users').onSnapshot(function(snap){
+      window.fsUsers = {};
+      snap.docs.forEach(function(d){
+        window.fsUsers[d.id] = d.data();
+      });
+      // Re-render users table if already loaded
+      if (allUsers.length > 0) {
+        buildUsers();
+        renderUsers(document.getElementById('userSearch') ? document.getElementById('userSearch').value : '');
+        renderActivityTable && renderActivityTable();
+      }
+      resolve();
+    }, function(){ window.fsUsers={}; resolve(); });
+  });
 }
 
 function loadHabits(){
@@ -847,7 +896,7 @@ function buildUsers(){
   // Add users from Firestore users collection (those who have logged in)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen, photoURL:u.avatarUrl||u.photoURL||''};
+    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', habits:[], posts:[], lastSeen:u.lastSeen, photoURL:u.avatarUrl||u.avatar||u.photoURL||''};
   });
 
   // Supplement from habits
@@ -1426,7 +1475,73 @@ function renderActivityCharts() {
   });
 }
 
-function renderActivityTable() {
+/* ══════════════════════════════════════════
+   FOLLOWS
+   ══════════════════════════════════════════ */
+var allFollows = [];
+
+document.getElementById('followSearch').addEventListener('input', function(){ renderFollows(); });
+
+function loadFollows() {
+  document.getElementById('followsUpdated').textContent = 'Loading...';
+  db.collection('follows').get().then(function(snap) {
+    allFollows = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    renderFollows();
+    document.getElementById('followsUpdated').textContent = 'Last updated: ' + new Date().toLocaleString('en-US');
+  }).catch(function(e){ document.getElementById('followsUpdated').textContent = 'Error: ' + e.message; });
+}
+
+function renderFollows() {
+  var f = document.getElementById('followSearch').value.toLowerCase();
+  var statusFilter = document.getElementById('followStatusFilter').value;
+  var list = allFollows.filter(function(r) {
+    var matchText = !f || (r.followerName||'').toLowerCase().includes(f) || (r.followingName||'').toLowerCase().includes(f);
+    var matchStatus = statusFilter === 'all' || r.status === statusFilter;
+    return matchText && matchStatus;
+  });
+  // Stats
+  var totalFollowing = allFollows.filter(function(r){ return r.status === 'following'; }).length;
+  var totalPending = allFollows.filter(function(r){ return r.status === 'pending'; }).length;
+  var uniqueUsers = new Set();
+  allFollows.forEach(function(r){ uniqueUsers.add(r.followerId); uniqueUsers.add(r.followingId); });
+  document.getElementById('fTotal').textContent = totalFollowing;
+  document.getElementById('fPending').textContent = totalPending;
+  document.getElementById('fUsers').textContent = uniqueUsers.size;
+  document.getElementById('followCnt').textContent = list.length + ' record(s)';
+
+  var tb = document.getElementById('followsTbody');
+  if (!list.length) {
+    tb.innerHTML = '<tr class="loading-row"><td colspan="5">No records match</td></tr>';
+    return;
+  }
+  tb.innerHTML = list.map(function(r) {
+    var statusBadge = r.status === 'following'
+      ? '<span class="badge" style="background:#d1fae5;color:#065f46">Following</span>'
+      : '<span class="badge" style="background:#fef3c7;color:#92400e">Pending</span>';
+    var ts = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    return '<tr>'
+      + '<td><div class="uc"><div class="av">' + htmlEsc((r.followerName||'?')[0].toUpperCase()) + '</div>'
+      + '<div><strong>' + htmlEsc(r.followerName||'—') + '</strong>'
+      + '<div class="uid-small">' + htmlEsc(r.followerId||'') + '</div></div></div></td>'
+      + '<td><div class="uc"><div class="av">' + htmlEsc((r.followingName||'?')[0].toUpperCase()) + '</div>'
+      + '<div><strong>' + htmlEsc(r.followingName||'—') + '</strong>'
+      + '<div class="uid-small">' + htmlEsc(r.followingId||'') + '</div></div></div></td>'
+      + '<td>' + statusBadge + '</td>'
+      + '<td style="font-size:11px;color:var(--g500)">' + ts + '</td>'
+      + '<td><button class="del" onclick="deleteFollow(\'' + r.id + '\')">Remove</button></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function deleteFollow(id) {
+  if (!confirm('Remove this follow relationship?')) return;
+  db.collection('follows').doc(id).delete().then(function(){
+    allFollows = allFollows.filter(function(r){ return r.id !== id; });
+    renderFollows();
+  }).catch(function(e){ alert('Error: ' + e.message); });
+}
+
+
   var tb = document.getElementById('actTbody');
   var now = Date.now();
 
