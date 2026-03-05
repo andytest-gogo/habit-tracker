@@ -727,22 +727,35 @@ function loadAll(){
 }
 
 var _usersUnsubscribe = null;
+var _initialUsersLoad = true; // skip heavy re-renders on first snapshot (loadAll handles them)
 
 function loadUsers(){
   // Use a real-time listener so avatar/profile changes in index.html
   // are reflected in the admin dashboard without needing a manual refresh.
   return new Promise(function(resolve){
     if(_usersUnsubscribe) _usersUnsubscribe(); // detach any previous listener
+    _initialUsersLoad = true;
     _usersUnsubscribe = db.collection('users').onSnapshot(function(snap){
       window.fsUsers = {};
       snap.docs.forEach(function(d){ window.fsUsers[d.id] = d.data(); });
-      // Re-build and re-render the Users table on every change
+      // Re-build user map
       buildUsers();
+      // Always re-render the Users table
       renderUsers(document.getElementById('userSearch').value||'');
       renderStats();
       renderCharts();
-      resolve();
-    }, function(){ window.fsUsers={}; resolve(); });
+      if(_initialUsersLoad){
+        _initialUsersLoad = false;
+        resolve();
+      } else {
+        // Subsequent snapshots = live avatar change — refresh all sections that show avatars
+        renderRecent();
+        renderPosts(document.getElementById('postSearch').value||'');
+        renderReports();
+        // Quota uses fsUsers too; re-render if quota data is available
+        if(allQuotas.length) renderQuota();
+      }
+    }, function(){ window.fsUsers={}; _initialUsersLoad=false; resolve(); });
   });
 }
 
@@ -826,7 +839,7 @@ function renderRecent(){
   var list=allPosts.slice(0,10);
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No posts yet</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
-    return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
+    return '<tr><td><div class="uc">'+avatarHtml(p.userId, p.user)+'<span>'+htmlEsc(p.user||'—')+'</span></div></td>'+
       '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
       '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
       '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td></tr>';
@@ -840,9 +853,7 @@ function renderUsers(f){
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No matching users</td></tr>';return;}
   tb.innerHTML=list.map(function(u){
     var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
-    var avHtml = u.photoURL
-      ? '<img src="'+htmlEsc(u.photoURL)+'" width="28" height="28" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;flex-shrink:0;" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'inline-flex\';"><div class="av" style="display:none;">'+htmlEsc((u.name||'?')[0])+'</div>'
-      : '<div class="av">'+htmlEsc((u.name||'?')[0])+'</div>';
+    var avHtml = avatarHtml(u.uid, u.name);
     return '<tr>'+
       '<td><div class="uc">'+avHtml+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
       '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
@@ -892,7 +903,7 @@ function renderPosts(f){
   document.getElementById('postCnt').textContent=list.length+' post(s)';
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="7">No matching posts</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
-    return '<tr><td><div class="uc"><div class="av">'+((p.avatar||p.user||'?')[0])+'</div>'+htmlEsc(p.user||'—')+'</div></td>'+
+    return '<tr><td><div class="uc">'+avatarHtml(p.userId, p.user)+'<span>'+htmlEsc(p.user||'—')+'</span></div></td>'+
       '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
       '<td>'+(p.hasImage?'📷':p.hasVideo?'🎬':'—')+'</td>'+
       '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
@@ -944,6 +955,20 @@ function calcRate(h){
 }
 
 function htmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* Shared avatar helper — looks up photoURL from fsUsers by uid.
+   Falls back to the black-square initial if no photo or load error. */
+function avatarHtml(uid, fallbackName){
+  var photoURL = (window.fsUsers && uid && window.fsUsers[uid]) ? (window.fsUsers[uid].photoURL||'') : '';
+  var initial  = htmlEsc(((fallbackName||'?')[0]).toUpperCase());
+  if(photoURL){
+    return '<img src="'+htmlEsc(photoURL)+'" width="26" height="26" '
+      +'style="width:26px;height:26px;border-radius:50%;object-fit:cover;display:block;flex-shrink:0;" '
+      +'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'inline-flex\';">'
+      +'<div class="av" style="display:none;">'+initial+'</div>';
+  }
+  return '<div class="av">'+initial+'</div>';
+}
 
 /* ══════════════════════════════════════════
    UPLOAD QUOTA
@@ -1056,7 +1081,7 @@ function renderQuota(){
     var imgCls = dImg>=QUOTA_LIMITS.DAILY_IMAGE_COUNT ? 'color:#c00;font-weight:700' : '';
     var vidCls = dVid>=QUOTA_LIMITS.DAILY_VIDEO_COUNT ? 'color:#c00;font-weight:700' : '';
     return '<tr>'+
-      '<td><div class="uc"><div class="av">'+((q.displayName||q.uid||'?')[0].toUpperCase())+'</div>'+
+      '<td><div class="uc">'+avatarHtml(q.id, q.displayName||q.uid)+
         '<div><strong>'+htmlEsc(q.displayName||'Unknown')+'</strong>'+
         '<div class="uid-small">'+htmlEsc(q.email||q.uid||'')+'</div></div></div></td>'+
       '<td style="font-family:var(--mono);font-size:11px">'+
@@ -1202,7 +1227,7 @@ function renderReports(){
     }
 
     return '<tr>'
-      + '<td><div class="uc"><div class="av">' + (reportedUser[0]||'?').toUpperCase() + '</div>'
+      + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
       + '<div><strong style="font-size:12px">' + reportedUser + '</strong>'
       + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono)">' + htmlEsc(r.reportedUserId||'').slice(0,16) + '</div></div></div></td>'
       + '<td><div class="ptxt" title="' + htmlEsc(r.postText||'') + '">' + postPreview + '</div>'
