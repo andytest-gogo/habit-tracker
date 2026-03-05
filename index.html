@@ -2831,7 +2831,7 @@ function FeedCard(_ref5) {
   onFollow && currentUser && post.userId && post.userId !== (currentUser && currentUser.uid) && /*#__PURE__*/React.createElement("button", {
     className: "follow-btn-sm" + (followState === 'following' ? ' following' : followState === 'pending' ? ' pending' : ''),
     onClick: function onClick(e) { e.stopPropagation(); onFollow(post.userId, post.user, post.avatarUrl); }
-  }, followState === 'following' ? '✓ Following' : followState === 'pending' ? 'Requested' : 'Follow')),
+  }, followState === 'following' ? '✓ Following' : followState === 'pending' ? 'Requested' : 'Follow')), /*#__PURE__*/React.createElement("div", {
     className: "feed-content"
   }, post.text && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
@@ -4919,13 +4919,7 @@ function MainApp(_ref16) {
     feedLoadingMore = _useState100[0],
     setFeedLoadingMore = _useState100[1];
 
-  var _useState99 = useState(false),
-    _useState100 = _slicedToArray(_useState99, 2),
-    feedLoadingMore = _useState100[0],
-    setFeedLoadingMore = _useState100[1];
-
-  // ── FOLLOW SYSTEM STATE ──
-  // followMap: { [targetUid]: 'following' | 'pending' }
+  // ── FOLLOW SYSTEM STATE ──// followMap: { [targetUid]: 'following' | 'pending' }
   var _useStateFS1 = useState({}),
     _useStateFS2 = _slicedToArray(_useStateFS1, 2),
     followMap = _useStateFS2[0],
