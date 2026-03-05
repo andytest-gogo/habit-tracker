@@ -3505,7 +3505,7 @@ function AddHabitModal(_ref12) {
       alert('End date must be on or after start date.');
       return;
     }
-    // Validate frequency × duration does not exceed available time
+    // Validate frequency x duration does not exceed available time
     var _fp = getFreqParams();
     var _timesPerCycle = _fp.timesPerCycle;
     var _intervalDays = _fp.intervalDays;
@@ -3515,25 +3515,48 @@ function AddHabitModal(_ref12) {
     } else if (durPreset && durPreset.value === null) {
       _durMins = durUnit === 'hour' ? (parseFloat(durCustom) || 0) * 60 : (parseFloat(durCustom) || 0);
     }
-    // Per-day total = timesPerCycle * durMins / intervalDays
-    // Must not exceed 24 hours (1440 min) in a single day
-    var _dailyTotalMins = (_timesPerCycle * _durMins) / _intervalDays;
-    if (_durMins > 0 && _dailyTotalMins > 1440) {
-      alert('The frequency and duration combination exceeds 24 hours in a single day. Please reduce the frequency or duration.');
-      return;
-    }
-    // Also validate total habit duration vs date range:
-    // The total minutes required per cycle must fit within the number of days available.
-    // e.g. 12 times × 60 min = 720 min per day is technically < 1440, but
-    // we cap the realistic daily maximum at 12 hours (720 min) to avoid unreasonable schedules.
-    var MAX_DAILY_MINS = 720; // 12 hours per day maximum
-    if (_durMins > 0 && _dailyTotalMins > MAX_DAILY_MINS) {
-      var _maxTimes = Math.floor(MAX_DAILY_MINS / _durMins) * _intervalDays;
-      alert(
-        'The total session time per day (' + Math.round(_dailyTotalMins / 60 * 10) / 10 + ' hrs) exceeds the 12-hour daily limit.\n' +
-        'For ' + _durMins + '-minute sessions, you can set at most ' + _maxTimes + ' time(s) per ' + (_intervalDays === 1 ? 'day' : _intervalDays + ' days') + '.'
-      );
-      return;
+    if (_durMins > 0) {
+      // Daily session total (minutes) = timesPerCycle x durMins / intervalDays
+      var _dailyTotalMins = (_timesPerCycle * _durMins) / _intervalDays;
+      // Hard cap: cannot exceed 24 hours in a day
+      if (_dailyTotalMins > 1440) {
+        alert('The frequency and duration combination exceeds 24 hours in a single day. Please reduce the frequency or duration.');
+        return;
+      }
+      // Practical cap: total daily session time must not exceed 8 hours (480 min).
+      // e.g. 12 times x 1 hr = 12 hrs/day is blocked.
+      var MAX_DAILY_MINS = 480; // 8 hours per day maximum
+      if (_dailyTotalMins > MAX_DAILY_MINS) {
+        var _maxTimes = Math.floor(MAX_DAILY_MINS / _durMins) * _intervalDays;
+        var _totalHrs = Math.round(_dailyTotalMins / 60 * 10) / 10;
+        var _durLabel2 = _durMins >= 60 ? (_durMins / 60) + '-hr' : _durMins + '-min';
+        var _cycleLabel = _intervalDays === 1 ? 'day' : _intervalDays + ' days';
+        alert(
+          'The total session time per day (' + _totalHrs + ' hrs) exceeds the 8-hour daily limit.\n' +
+          'For ' + _durLabel2 + ' sessions, the maximum is ' + _maxTimes + ' time(s) per ' + _cycleLabel + '.'
+        );
+        return;
+      }
+      // Date-range check: total required minutes across the entire habit period
+      // must not exceed totalDays x MAX_DAILY_MINS.
+      var _startParts = startDate.split('-').map(Number);
+      var _endParts = endDate.split('-').map(Number);
+      var _startD = new Date(_startParts[0], _startParts[1] - 1, _startParts[2]);
+      var _endD   = new Date(_endParts[0],   _endParts[1] - 1,   _endParts[2]);
+      var _totalDays = Math.round((_endD - _startD) / 86400000) + 1; // inclusive
+      var _totalSessions = Math.ceil(_totalDays / _intervalDays) * _timesPerCycle;
+      var _totalRequiredMins = _totalSessions * _durMins;
+      var _totalAvailableMins = _totalDays * MAX_DAILY_MINS;
+      if (_totalRequiredMins > _totalAvailableMins) {
+        var _neededDays = Math.ceil(_totalRequiredMins / MAX_DAILY_MINS);
+        alert(
+          'This habit requires ' + Math.round(_totalRequiredMins / 60 * 10) / 10 + ' total hours ' +
+          'across ' + _totalDays + ' day(s), but the 8-hour daily limit only allows ' +
+          Math.round(_totalAvailableMins / 60) + ' hours total.\n' +
+          'Please extend the end date to at least ' + _neededDays + ' day(s), or reduce the frequency/duration.'
+        );
+        return;
+      }
     }
     var timeRange = "".concat(startDate, " \uFF5E ").concat(endDate);
     var freqLabel = getFreqLabel();
