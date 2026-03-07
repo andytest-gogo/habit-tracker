@@ -912,9 +912,12 @@
             </div>
 
             <div class="priv-rights-section">
-                <p class="priv-dpa-title">Your Rights (GDPR Art. 15–20 / CCPA)</p>
-                <p>You have the right to access, correct, delete, or export your data. Delete your account from Profile → Delete Account, or contact us at <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong>.</p>
-            </div>
+                <p class="priv-dpa-title">Your Rights (GDPR Art. 15–20 / CCPA &amp; US State Laws)</p>
+                <p>You have the right to <strong>access, correct, delete, or export</strong> your data at any time — use the tools below or Profile → Delete Account.<br>
+                <strong>EU/EEA:</strong> Lodge a complaint with your national DPA if needed.<br>
+                <strong>US (CA, VA, CO, CT, TX, OR, MT):</strong> Right to know, correct, delete, and opt out of data sales (we do not sell data).<br>
+                Contact: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — we respond within 30 days (45 days for CCPA).</p>
+            </div>            </div>
 
             <!-- GDPR Art.20 Data Portability — functional export -->
             <div class="priv-rights-section" style="margin-top:10px;">
@@ -950,7 +953,7 @@
 </div>
 
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <!-- React -->
@@ -6513,7 +6516,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         privacy: {
             title: 'Privacy Policy',
             html: `
-<p class="legal-modal-meta">Effective: January 1, 2025 &nbsp;·&nbsp; Version 1.1 — Updated for GDPR compliance</p>
+<p class="legal-modal-meta">Effective: March 7, 2026 &nbsp;·&nbsp; Version 1.2 — Updated for GDPR Art.33/34, US state privacy laws &amp; governing law</p>
 <div class="legal-modal-highlight">
   <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
@@ -6540,9 +6543,33 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p>We do <strong>not</strong> sell, rent, or trade your personal information. Ever.</p>
 <p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase and Cloudinary process data under Standard Contractual Clauses (SCCs) as required by GDPR Chapter 5.</p>
 <h3>4. Your Rights</h3>
-<p><strong>Access (Art.15):</strong> Request a copy of your data. <strong>Correction (Art.16):</strong> Fix inaccurate data in your profile. <strong>Deletion (Art.17):</strong> Delete your account and all data via Profile → Delete Account. <strong>Portability (Art.20):</strong> Download a JSON export of all your data directly from Profile → Privacy Settings → Download My Data. <strong>Object / Withdraw Consent (Art.7):</strong> Change or withdraw analytics consent anytime via Profile → Privacy Settings.</p>
-<p><strong>EU/GDPR users:</strong> You may lodge a complaint with your local Data Protection Authority (DPA) at any time.</p>
-<p><strong>California/CCPA users:</strong> We do not sell personal information. You have the right to know, delete, and opt out of data sales (which we do not engage in). To exercise these rights, use the in-app deletion feature or email HealthHabitTracker@gmail.com.</p>
+<p><strong>EU/EEA — GDPR Rights:</strong></p>
+<ul>
+  <li><strong>Access (Art.15):</strong> Request a copy of your data.</li>
+  <li><strong>Correction (Art.16):</strong> Fix inaccurate data in your profile.</li>
+  <li><strong>Deletion (Art.17):</strong> Delete your account and all data via Profile → Delete Account.</li>
+  <li><strong>Portability (Art.20):</strong> Download a JSON export via Profile → Privacy Settings → Download My Data.</li>
+  <li><strong>Withdraw Consent (Art.7):</strong> Change analytics consent anytime in Profile → Privacy Settings.</li>
+  <li><strong>Complaint:</strong> You may lodge a complaint with your national Data Protection Authority (DPA) at any time.</li>
+</ul>
+<p><strong>US State Privacy Rights (CA, VA, CO, CT, TX, OR, MT):</strong></p>
+<ul>
+  <li>Right to <strong>know</strong> what personal data we collect and how it is used.</li>
+  <li>Right to <strong>correct</strong> inaccurate personal data.</li>
+  <li>Right to <strong>delete</strong> your personal data.</li>
+  <li>Right to <strong>data portability</strong> — download your data via Profile → Privacy Settings → Download My Data.</li>
+  <li>Right to <strong>opt out</strong> of sale or sharing of personal data for targeted advertising — we do not engage in these activities.</li>
+  <li>We will not discriminate against you for exercising any of these rights.</li>
+  <li>California residents: we respond within <strong>45 days</strong>; all others within <strong>30 days</strong>.</li>
+</ul>
+<p>To exercise any of the above rights, use the in-app tools or contact <a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a>.</p>
+<p><strong>US State Privacy Rights</strong><br>
+We comply with applicable US state privacy laws. We do <strong>not</strong> sell or share personal information for cross-context behavioral advertising.</p>
+<ul>
+  <li><strong>California (CCPA/CPRA):</strong> Right to know, delete, correct, and opt out of data sales. We do not sell or share your data. To exercise rights, use the in-app deletion/export features or email <a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a>. We will respond within 45 days.</li>
+  <li><strong>Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), Texas (TDPSA), Oregon (OCPA), Montana (MCDPA):</strong> You have the right to access, correct, delete, and obtain a portable copy of your personal data, and to opt out of targeted advertising and profiling with legal effects. We do not engage in any of these activities. Exercise rights via the in-app tools or by emailing us.</li>
+</ul>
+<p>We do not discriminate against users who exercise their privacy rights.</p>
 <h3>5. Consent & Withdrawal</h3>
 <p>You can accept or decline optional analytics at any time. Your choice is respected immediately. To change your preference, go to <strong>Profile → Privacy Settings</strong>. Withdrawing consent does not affect the lawfulness of processing before withdrawal.</p>
 <h3>6. Cookies & Analytics</h3>
@@ -6553,14 +6580,16 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
 <h3>9. Data Breach Notification</h3>
 <p>In the event of a personal data breach that poses a risk to your rights and freedoms, we will notify the relevant supervisory authority within <strong>72 hours</strong> of becoming aware of the breach, as required by GDPR Art. 33. If the breach is likely to result in high risk to you personally, we will also notify you directly without undue delay, as required by GDPR Art. 34, via the email address associated with your account.</p>
-<h3>10. Contact</h3>
+<h3>10. Changes to This Policy</h3>
+<p>We may update this Privacy Policy from time to time. When we make <strong>material changes</strong> (such as collecting new categories of data or changing how we use your data), we will notify you by email at the address associated with your account at least <strong>14 days</strong> before the changes take effect. Non-material changes (such as clarifications or corrections) will be reflected by updating the version number and effective date above. Continued use of the app after the effective date constitutes acceptance of the updated policy.</p>
+<h3>11. Contact</h3>
 <p>For privacy requests: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong><br>We aim to respond within 30 days.</p>`
         },
 
         terms: {
             title: 'Terms of Service',
             html: `
-<p class="legal-modal-meta">Effective: January 1, 2025 &nbsp;·&nbsp; Version 1.0</p>
+<p class="legal-modal-meta">Effective: March 7, 2026 &nbsp;·&nbsp; Version 1.1 — Updated governing law &amp; jurisdiction</p>
 <div class="legal-modal-highlight">
   <p><strong>By creating an account or using Habit Tracker Pro, you agree to these Terms.</strong> If you do not agree, please do not use the app.</p>
 </div>
@@ -6599,8 +6628,10 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>HealthHabitTracker@gmail.com</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
 <p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days and will inform the reporter of the outcome. Persistent or severe violations may result in account suspension.</p>
 <p><strong>Counter-Notice:</strong> If you believe your content was removed in error, contact <strong>HealthHabitTracker@gmail.com</strong> with details and we will review within 14 business days.</p>
-<h3>12. Contact</h3>
-<p>Questions about these Terms: <strong>HealthHabitTracker@gmail.com</strong></p>`
+<h3>12. Changes to These Terms</h3>
+<p>We may update these Terms from time to time. For <strong>material changes</strong>, we will notify you by email at least <strong>30 days</strong> before the new Terms take effect. Non-material changes (clarifications, corrections) will be noted by updating the version number and date above. Your continued use of the app after the effective date constitutes acceptance. If you do not agree, you may delete your account before the changes take effect.</p>
+<h3>13. Contact</h3>
+<p>Questions about these Terms: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong></p>`
         }
     };
 
@@ -7097,13 +7128,4 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
     } else {
       // Demo / offline fallback
       var stored = JSON.parse(localStorage.getItem('ht-demo-reports') || '[]');
-      reportDoc.id = 'demo-' + Date.now();
-      reportDoc.reportedAt = new Date().toISOString();
-      stored.push(reportDoc);
-      localStorage.setItem('ht-demo-reports', JSON.stringify(stored));
-      onSuccess();
-    }
-  };
-
-  // ESC key closes
-  document.addEventListener('ke
+      reportDoc.id =
