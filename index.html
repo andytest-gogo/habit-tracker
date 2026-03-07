@@ -5040,9 +5040,20 @@ function MainApp(_ref16) {
             result = _context0.v;
             setAvatarUrl(result.url);
             localStorage.setItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid), result.url);
-            // Sync photoURL to Firestore so admin dashboard reflects the new avatar
+            // Sync photoURL to Firestore (admin dashboard reads from here)
             if (user && user.uid && typeof db !== 'undefined') {
               db.collection('users').doc(user.uid).set({ photoURL: result.url }, { merge: true }).catch(function(){});
+              // Batch-update avatarUrl on all existing posts by this user so feed stays in sync
+              (function(newUrl, uid) {
+                db.collection('posts').where('userId', '==', uid).get().then(function(snap) {
+                  if (snap.empty) return;
+                  var batch = db.batch();
+                  snap.docs.forEach(function(doc) {
+                    batch.update(doc.ref, { avatarUrl: newUrl });
+                  });
+                  return batch.commit();
+                }).catch(function() {});
+              })(result.url, user.uid);
             }
             _context0.n = 5;
             break;
