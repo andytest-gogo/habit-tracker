@@ -913,7 +913,7 @@
 
             <div class="priv-rights-section">
                 <p class="priv-dpa-title">Your Rights (GDPR Art. 15–20 / CCPA)</p>
-                <p>You have the right to access, correct, delete, or export your data. Delete your account from Profile → Delete Account, or contact us at <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="b1f9d4d0ddc5d9f9d0d3d8c5e5c3d0d2dad4c3f1d6dcd0d8dd9fd2dedc">[email&#160;protected]</a></strong>.</p>
+                <p>You have the right to access, correct, delete, or export your data. Delete your account from Profile → Delete Account, or contact us at <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong>.</p>
             </div>
 
             <!-- GDPR Art.20 Data Portability — functional export -->
@@ -950,7 +950,7 @@
 </div>
 
 <!-- Firebase SDK -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <!-- React -->
@@ -5393,6 +5393,15 @@ function MainApp(_ref16) {
           case 33:
             _context13.p = 33;
             _context13.n = 34;
+            // GDPR Art.17: also delete reports submitted BY this user (reporterUid)
+            // Runs fire-and-forget; failure is swallowed so it doesn't block account deletion.
+            db.collection('reports').where('reporterUid', '==', uid).get()
+              .then(function(rSnap) {
+                if (rSnap.empty) return;
+                var rBatch = db.batch();
+                rSnap.docs.forEach(function(d) { rBatch.delete(d.ref); });
+                return rBatch.commit();
+              }).catch(function() {});
             return db.collection('users').doc(uid).delete();
           case 34:
             _context13.n = 36;
@@ -5407,6 +5416,9 @@ function MainApp(_ref16) {
             localStorage.removeItem('notif-asked');
             localStorage.removeItem('ios-hint-shown');
             localStorage.removeItem('avatar_' + uid);
+            localStorage.removeItem('ht-age-confirmed');
+            localStorage.removeItem('ht-age-confirmed-year');
+            localStorage.removeItem('ht-gdpr-choice');
 
             // Step 3: 刪除 Firebase Auth 帳號（最後執行）
             _context13.n = 37;
@@ -6288,13 +6300,24 @@ function App() {
           var existing = docSnap.exists ? docSnap.data() : {};
           // Only use Firebase Auth photoURL if there is no custom avatar already stored
           var photoURL = existing.photoURL || u.photoURL || '';
-          return db.collection('users').doc(u.uid).set({
+          // Persist age-verification to Firestore so it survives localStorage clears
+          var ageConfirmedLocal = !!localStorage.getItem('ht-age-confirmed');
+          var updateDoc = {
             uid: u.uid,
             email: u.email || '',
             displayName: u.displayName || '',
             photoURL: photoURL,
             lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
+          };
+          if (ageConfirmedLocal && !existing.ageVerified) {
+            updateDoc.ageVerified = true;
+            updateDoc.ageVerifiedAt = firebase.firestore.FieldValue.serverTimestamp();
+          }
+          // If Firestore already has ageVerified, sync back to localStorage
+          if (existing.ageVerified && !ageConfirmedLocal) {
+            localStorage.setItem('ht-age-confirmed', '1');
+          }
+          return db.collection('users').doc(u.uid).set(updateDoc, { merge: true });
         }).catch(function () {});
         setUser(u);
       } else {
@@ -6495,9 +6518,9 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
   <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
 <h3>0. Data Controller</h3>
-<p>This service is operated by an <strong>individual independent developer</strong> (sole trader, not a registered company). For all privacy-related matters:</p>
+<p>This service is operated by an <strong>individual independent developer</strong> (sole trader, not a registered company) based in <strong>Taiwan (Republic of China)</strong>. For all privacy-related matters:</p>
 <p>
-  <strong>Email:</strong> HealthHabitTracker@gmail.com<br>
+  <strong>Email:</strong> <a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a><br>
   <strong>Response time:</strong> We aim to respond to all data-subject requests within <strong>30 days</strong> (as required by GDPR Art. 12).
 </p>
 <p>EU/EEA users: if you believe we have not handled your request correctly, you have the right to lodge a complaint with your national Data Protection Authority (DPA). A list of EU DPAs is available at <a href="https://edpb.europa.eu/about-edpb/about-edpb/members_en" target="_blank" rel="noopener noreferrer">edpb.europa.eu ↗</a>.</p>
@@ -6528,8 +6551,10 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p>Your data is retained while your account is active. When you delete your account, all data is permanently erased from Firebase within 30 days and from Cloudinary within 7 days.</p>
 <h3>8. Children</h3>
 <p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
-<h3>9. Contact</h3>
-<p>For privacy requests: <strong>HealthHabitTracker@gmail.com</strong><br>We aim to respond within 30 days.</p>`
+<h3>9. Data Breach Notification</h3>
+<p>In the event of a personal data breach that poses a risk to your rights and freedoms, we will notify the relevant supervisory authority within <strong>72 hours</strong> of becoming aware of the breach, as required by GDPR Art. 33. If the breach is likely to result in high risk to you personally, we will also notify you directly without undue delay, as required by GDPR Art. 34, via the email address associated with your account.</p>
+<h3>10. Contact</h3>
+<p>For privacy requests: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong><br>We aim to respond within 30 days.</p>`
         },
 
         terms: {
@@ -6565,8 +6590,11 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
 <h3>9. Termination</h3>
 <p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
-<h3>10. Governing Law</h3>
-<p>EU users retain all rights under applicable consumer protection laws. For disputes, contact us first at <strong>HealthHabitTracker@gmail.com</strong> — most issues can be resolved quickly. EU users may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>.</p>
+<h3>10. Governing Law & Jurisdiction</h3>
+<p>These Terms are governed by and construed in accordance with the laws of the <strong>Republic of China (Taiwan)</strong>, without regard to conflict-of-law principles. Any disputes shall be subject to the exclusive jurisdiction of the courts in Taiwan, except where mandatory local consumer protection laws provide otherwise.</p>
+<p><strong>EU users:</strong> You retain all rights under applicable EU consumer protection laws (including EU Directive 2011/83/EU). You may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>. Nothing in these Terms limits your statutory rights as an EU consumer.</p>
+<p><strong>US users:</strong> For disputes, you may also pursue claims in your state of residence to the extent permitted by applicable law.</p>
+<p>For all disputes, please contact us first at <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — most issues can be resolved quickly.</p>
 <h3>11. Copyright Complaints — DMCA (US) &amp; DSA (EU)</h3>
 <p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>HealthHabitTracker@gmail.com</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
 <p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days and will inform the reporter of the outcome. Persistent or severe violations may result in account suspension.</p>
