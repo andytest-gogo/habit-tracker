@@ -900,7 +900,7 @@
                     </li>
                     <li>
                         <strong>Cloudinary</strong> (Media storage) —
-                        <a href="https://cloudinary.com/privacy/gdpr" target="_blank" rel="noopener noreferrer">GDPR Compliance &amp; DPA ↗</a>
+                        <a href="https://cloudinary.com/privacy" target="_blank" rel="noopener noreferrer">GDPR Compliance &amp; DPA ↗</a>
                         · EU data residency available
                     </li>
                     <li>
@@ -4938,6 +4938,19 @@ function MainApp(_ref16) {
     _useState106 = _slicedToArray(_useState105, 2),
     avatarUrl = _useState106[0],
     setAvatarUrl = _useState106[1];
+  // On mount: sync avatar from Firestore so admin dashboard stays in sync
+  // even when the user hasn't re-uploaded their avatar in this session.
+  useEffect(function () {
+    if (!user || !user.uid || typeof db === 'undefined') return;
+    db.collection('users').doc(user.uid).get().then(function (docSnap) {
+      if (!docSnap.exists) return;
+      var fsPhotoURL = (docSnap.data().photoURL || '').trim();
+      if (fsPhotoURL) {
+        localStorage.setItem("avatar_".concat(user.uid), fsPhotoURL);
+        setAvatarUrl(fsPhotoURL);
+      }
+    }).catch(function () {});
+  }, [user]);
   var _useState107 = useState(false),
     _useState108 = _slicedToArray(_useState107, 2),
     uploadingAvatar = _useState108[0],
@@ -6488,7 +6501,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <p>To provide and operate the app, authenticate your account, display your habits and progress, and enable optional community features. We never use your data to serve you ads or sell it to third parties.</p>
 <h3>3. Data Sharing & Third Parties</h3>
 <p><strong>Google Firebase</strong> — stores your account and habit data on servers in the United States. Firebase processes data under a <a href="https://firebase.google.com/terms/data-processing-terms" target="_blank" rel="noopener noreferrer">Data Processing Agreement (DPA)</a> and Standard Contractual Clauses (SCCs) for EU/EEA transfers.</p>
-<p><strong>Cloudinary</strong> — stores uploaded photos and videos. Cloudinary provides a <a href="https://cloudinary.com/privacy/gdpr" target="_blank" rel="noopener noreferrer">GDPR-compliant DPA</a> and supports EU data residency.</p>
+<p><strong>Cloudinary</strong> — stores uploaded photos and videos. Cloudinary provides a <a href="https://cloudinary.com/privacy" target="_blank" rel="noopener noreferrer">GDPR-compliant DPA</a> and supports EU data residency.</p>
 <p><strong>Umami (self-hosted)</strong> — anonymous, cookieless analytics. No personal data shared. Only activated after your explicit consent.</p>
 <p>We do <strong>not</strong> sell, rent, or trade your personal information. Ever.</p>
 <p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase and Cloudinary process data under Standard Contractual Clauses (SCCs) as required by GDPR Chapter 5.</p>
