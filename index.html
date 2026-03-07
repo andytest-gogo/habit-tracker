@@ -271,6 +271,9 @@
         .auth-switch a { color:var(--black); text-decoration:none; font-weight:700; cursor:pointer; }
         .demo-badge { background:var(--gray-50); border:1px solid var(--gray-200); padding:12px 16px; margin-bottom:24px; font-size:12px; max-width:360px; width:100%; color:var(--gray-600); }
         .demo-badge strong { color:var(--black); }
+        .beta-banner { background:#FFF8E1; border:1.5px solid #FFD54F; padding:11px 16px; margin-bottom:28px; font-size:11px; max-width:360px; width:100%; color:#5D4037; line-height:1.7; text-align:center; }
+        .beta-banner strong { color:#E65100; font-size:12px; display:block; margin-bottom:2px; letter-spacing:0.5px; }
+        .beta-disclaimer { background:var(--gray-50); border:1px solid var(--gray-200); padding:11px 14px; margin-top:12px; font-size:10px; color:var(--gray-500); line-height:1.7; }
         .error-message { background:var(--black); color:var(--white); padding:12px 16px; margin-bottom:16px; font-size:12px; max-width:360px; width:100%; }
 
         /* ── HEADER ── */
@@ -916,7 +919,7 @@
                 <p>You have the right to <strong>access, correct, delete, or export</strong> your data at any time — use the tools below or Profile → Delete Account.<br>
                 <strong>EU/EEA:</strong> Lodge a complaint with your national DPA if needed.<br>
                 <strong>US (CA, VA, CO, CT, TX, OR, MT):</strong> Right to know, correct, delete, and opt out of data sales (we do not sell data).<br>
-                Contact: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — we respond within 30 days (45 days for CCPA).</p>
+                Contact: <strong><a href="/cdn-cgi/l/email-protection#b5fdd0d4d9c1ddfdd4d7dcc1e1c7d4d6ded0c7f5d2d8d4dcd99bd6dad8"><span class="__cf_email__" data-cfemail="88c0ede9e4fce0c0e9eae1fcdcfae9ebe3edfac8efe5e9e1e4a6ebe7e5">[email&#160;protected]</span></a></strong> — we respond within 30 days (45 days for CCPA).</p>
             </div>            </div>
 
             <!-- GDPR Art.20 Data Portability — functional export -->
@@ -953,7 +956,7 @@
 </div>
 
 <!-- Firebase SDK -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <!-- React -->
@@ -2479,7 +2482,9 @@ function AuthPage(_ref2) {
     className: "auth-logo"
   }, "Habit Tracker"), /*#__PURE__*/React.createElement("div", {
     className: "auth-subtitle"
-  }, "PROFESSIONAL WELLNESS"), !isFirebaseConfigured && /*#__PURE__*/React.createElement("div", {
+  }, "PROFESSIONAL WELLNESS"), /*#__PURE__*/React.createElement("div", {
+    className: "beta-banner"
+  }, /*#__PURE__*/React.createElement("strong", null, "\uD83D\uDEA7 BETA — Early Access"), "This app is in public beta. Features may change, and occasional bugs may occur. Not intended for critical health tracking. Use at your own discretion."), !isFirebaseConfigured && /*#__PURE__*/React.createElement("div", {
     className: "demo-badge"
   }, /*#__PURE__*/React.createElement("strong", null, "Demo Mode:"), "Firebase not configured. Click to use the local demo version."), error && /*#__PURE__*/React.createElement("div", {
     className: "error-message"
@@ -2553,6 +2558,9 @@ function AuthPage(_ref2) {
     ),
     /*#__PURE__*/React.createElement("div", { className: "legal-error-msg", id: "legalErrorMsg" },
       "Please accept all required terms to create an account."
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "beta-disclaimer" },
+      "\uD83D\uDEA7 ", /*#__PURE__*/React.createElement("strong", null, "Beta Disclaimer:"), " Habit Tracker Pro is currently in beta testing. The service is provided \u201Cas is\u201D without warranty of any kind. Features may be added, changed, or removed without notice. Data loss, though unlikely, is possible during this phase. By signing up, you acknowledge and accept these beta limitations."
     )
   ),
   /*#__PURE__*/React.createElement("button", {
@@ -6615,7 +6623,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <p>Habit Tracker Pro is currently free. We reserve the right to introduce paid features with at least 30 days' notice. We may modify or discontinue features at any time with reasonable notice.</p>
 <h3>7. Intellectual Property</h3>
 <p>All app code, design, and content we create is owned by Habit Tracker Pro. You may not copy, modify, or reverse engineer any part of the app.</p>
-<h3>8. Disclaimer</h3>
+<h3>8. Beta Testing Disclaimer</h3>
+<p>Habit Tracker Pro is currently in <strong>public beta</strong>. By using the app during this period, you acknowledge and agree to the following:</p>
+<ul>
+  <li><strong>Provided "as is":</strong> The beta version is provided without any warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, or uninterrupted service.</li>
+  <li><strong>Features may change:</strong> Any feature, functionality, or content may be added, modified, or removed at any time without prior notice during the beta period.</li>
+  <li><strong>Data loss risk:</strong> While we take reasonable precautions, data loss is possible during beta. We recommend not relying solely on this app for critical habit or health tracking.</li>
+  <li><strong>Not for medical use:</strong> This app is a productivity and wellness tool only. It is <strong>not</strong> a medical device and does not provide medical advice, diagnosis, or treatment.</li>
+  <li><strong>Feedback:</strong> We may contact beta users to request feedback to improve the app. Participation is entirely voluntary.</li>
+</ul>
+<p>The beta period will end when the app is officially launched. We will notify registered users at least <strong>14 days</strong> in advance of any material changes to these Terms associated with the transition out of beta.</p>
+<h3>9. Disclaimer</h3>
 <p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
 <h3>9. Termination</h3>
 <p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
@@ -7123,9 +7141,3 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       onSuccess(); // show success to user anyway
     }
 
-    if (typeof db !== 'undefined') {
-      db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);
-    } else {
-      // Demo / offline fallback
-      var stored = JSON.parse(localStorage.getItem('ht-demo-reports') || '[]');
-      reportDoc.id =
