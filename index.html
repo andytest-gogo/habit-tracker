@@ -3523,22 +3523,9 @@ function AddHabitModal(_ref12) {
         alert('The frequency and duration combination exceeds 24 hours in a single day. Please reduce the frequency or duration.');
         return;
       }
-      // Practical cap: total daily session time must not exceed 8 hours (480 min).
-      // e.g. 12 times x 1 hr = 12 hrs/day is blocked.
-      var MAX_DAILY_MINS = 480; // 8 hours per day maximum
-      if (_dailyTotalMins > MAX_DAILY_MINS) {
-        var _maxTimes = Math.floor(MAX_DAILY_MINS / _durMins) * _intervalDays;
-        var _totalHrs = Math.round(_dailyTotalMins / 60 * 10) / 10;
-        var _durLabel2 = _durMins >= 60 ? (_durMins / 60) + '-hr' : _durMins + '-min';
-        var _cycleLabel = _intervalDays === 1 ? 'day' : _intervalDays + ' days';
-        alert(
-          'The total session time per day (' + _totalHrs + ' hrs) exceeds the 8-hour daily limit.\n' +
-          'For ' + _durLabel2 + ' sessions, the maximum is ' + _maxTimes + ' time(s) per ' + _cycleLabel + '.'
-        );
-        return;
-      }
-      // Date-range check: total required minutes across the entire habit period
-      // must not exceed totalDays x MAX_DAILY_MINS.
+      // Date-range check: total required minutes must fit within the available time window.
+      // For same-day habits (start == end), available time = remaining minutes today (from now to midnight).
+      // For multi-day habits, available time = totalDays x 1440 min (no artificial daily cap).
       var _startParts = startDate.split('-').map(Number);
       var _endParts = endDate.split('-').map(Number);
       var _startD = new Date(_startParts[0], _startParts[1] - 1, _startParts[2]);
@@ -3546,15 +3533,33 @@ function AddHabitModal(_ref12) {
       var _totalDays = Math.round((_endD - _startD) / 86400000) + 1; // inclusive
       var _totalSessions = Math.ceil(_totalDays / _intervalDays) * _timesPerCycle;
       var _totalRequiredMins = _totalSessions * _durMins;
-      var _totalAvailableMins = _totalDays * MAX_DAILY_MINS;
+      var _totalAvailableMins;
+      if (_totalDays === 1) {
+        // Same-day: available = minutes remaining today from current time to midnight
+        var _now = new Date();
+        var _midnight = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 1, 0, 0, 0);
+        _totalAvailableMins = Math.floor((_midnight - _now) / 60000);
+      } else {
+        _totalAvailableMins = _totalDays * 1440;
+      }
       if (_totalRequiredMins > _totalAvailableMins) {
-        var _neededDays = Math.ceil(_totalRequiredMins / MAX_DAILY_MINS);
-        alert(
-          'This habit requires ' + Math.round(_totalRequiredMins / 60 * 10) / 10 + ' total hours ' +
-          'across ' + _totalDays + ' day(s), but the 8-hour daily limit only allows ' +
-          Math.round(_totalAvailableMins / 60) + ' hours total.\n' +
-          'Please extend the end date to at least ' + _neededDays + ' day(s), or reduce the frequency/duration.'
-        );
+        if (_totalDays === 1) {
+          var _remainHrs = Math.round(_totalAvailableMins / 60 * 10) / 10;
+          var _requiredHrs = Math.round(_totalRequiredMins / 60 * 10) / 10;
+          alert(
+            'This habit requires ' + _requiredHrs + ' hrs on a single day, ' +
+            'but only ' + _remainHrs + ' hrs remain today (until midnight).\n' +
+            'Please reduce the frequency/duration, or extend the end date.'
+          );
+        } else {
+          var _neededDays = Math.ceil(_totalRequiredMins / 1440);
+          alert(
+            'This habit requires ' + Math.round(_totalRequiredMins / 60 * 10) / 10 + ' total hours ' +
+            'across ' + _totalDays + ' day(s), but only ' +
+            Math.round(_totalAvailableMins / 60) + ' hours are available in that period.\n' +
+            'Please extend the end date to at least ' + _neededDays + ' day(s), or reduce the frequency/duration.'
+          );
+        }
         return;
       }
     }
