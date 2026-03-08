@@ -2351,6 +2351,8 @@ function AuthPage(_ref2) {
         // If anything below fails, delete the just-created account to prevent ghost accounts
         try {
           await _r.user.updateProfile({ displayName: displayName.trim() });
+          // Force token refresh so Firestore rules can verify auth.uid correctly
+          await _r.user.getIdToken(true);
 
           // 4. Reserve username and save user profile
           var batch = db.batch();
@@ -2387,6 +2389,9 @@ function AuthPage(_ref2) {
       if (err.code === 'auth/email-already-in-use') {
         setEmailStatus('taken');
         setError('This email is already registered. Please sign in instead.');
+      } else if (err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'))) {
+        // Firestore write failed after account was created — account has been cleaned up
+        setError('Registration failed due to a server error. Please try again.');
       } else {
         setError(firebaseErrMsg(err.code) || err.message);
       }
