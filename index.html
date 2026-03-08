@@ -2254,135 +2254,91 @@ function AuthPage(_ref2) {
       return _ref3.apply(this, arguments);
     };
   }();
-  var handleSubmit = /*#__PURE__*/function () {
-    var _ref4 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
-      var validErr, r, _r, actionCodeSettings, _t2;
-      return _regenerator().w(function (_context2) {
-        while (1) switch (_context2.p = _context2.n) {
-          case 0:
-            e.preventDefault();
-            setError('');
-            validErr = validateForm();
-            if (!validErr) {
-              _context2.n = 1;
-              break;
-            }
-            setError(validErr);
-            return _context2.a(2);
-          case 1:
-            if (isLogin) { _context2.n = 2; break; }
-            var _ct = document.getElementById('checkTerms');
-            var _ca = document.getElementById('checkAge');
-            var _cd = document.getElementById('checkData');
-            var _le = document.getElementById('legalErrorMsg');
-            if (_ct && _ca && _cd && _ct.checked && _ca.checked && _cd.checked) {
-              if (_le) _le.classList.remove('visible');
-              _context2.n = 2; break;
-            }
-            if (_le) _le.classList.add('visible');
-            return _context2.a(2);
-          case 2:
-            setLoading(true);
-            if (isFirebaseConfigured) {
-              _context2.n = 3;
-              break;
-            }
-            handleDemoLogin();
-            return _context2.a(2);
-          case 3:
-            _context2.p = 3;
-            if (!isLogin) {
-              _context2.n = 20;
-              break;
-            }
-            _context2.n = 4;
-            return auth.signInWithEmailAndPassword(email, password);
-          case 4:
-            r = _context2.v;
-            // 已驗證（含 Google 帳號）→ 讓 onAuthStateChanged 負責呼叫 setUser，這裡不主動呼叫
-            if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
-              _context2.n = 13;
-              break;
-            }
-            // 未驗證 → signOut，顯示驗證畫面
-            _context2.n = 5;
-            return auth.signOut();
-          case 5:
-            setSentEmail(email);
-            setVerificationSent(true);
-            startCooldown();
-            setLoading(false);
-            _context2.n = 13;
-            break;
-          case 20:
-            // ── Pre-signup checks: duplicate email & display name ──
-            _context2.n = 30;
-            return db.collection('users').where('displayName_lower', '==', displayName.trim().toLowerCase()).limit(1).get();
-          case 30:
-            if (_context2.v.empty) { _context2.n = 31; break; }
-            setError('This username is already taken. Please choose a different name.');
-            setLoading(false);
-            return _context2.a(2);
-          case 31:
-            _context2.n = 32;
-            return auth.fetchSignInMethodsForEmail(email.trim());
-          case 32:
-            if (!_context2.v || _context2.v.length === 0) { _context2.n = 33; break; }
-            setError('This email is already registered. Please sign in instead.');
-            setLoading(false);
-            return _context2.a(2);
-          case 33:
-            _context2.n = 21;
-            return auth.createUserWithEmailAndPassword(email, password);
-          case 21:
-            _r = _context2.v;
-            _context2.n = 22;
-            return _r.user.updateProfile({ displayName: displayName.trim() });
-          case 22:
-            // Save user profile to Firestore so username uniqueness can be queried
-            _context2.n = 34;
-            return db.collection('users').doc(_r.user.uid).set({
-              displayName: displayName.trim(),
-              displayName_lower: displayName.trim().toLowerCase(),
-              email: email.trim(),
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-          case 34:
-            actionCodeSettings = {
-              url: window.location.origin + window.location.pathname,
-              handleCodeInApp: false
-            };
-            _context2.n = 23;
-            return _r.user.sendEmailVerification(actionCodeSettings);
-          case 23:
-            _context2.n = 24;
-            return auth.signOut();
-          case 24:
-            setSentEmail(email);
-            setVerificationSent(true);
-            startCooldown();
-            _context2.n = 13;
-            break;
-          case 11:
-            _context2.p = 11;
-            _t2 = _context2.v;
-            setError(firebaseErrMsg(_t2.code) || _t2.message);
-          case 13:
-            _context2.n = 15;
-            break;
-          case 15:
-            _context2.p = 15;
-            setLoading(false);
-            return _context2.f(15);
-          case 16:
-            return _context2.a(2);
+  var handleSubmit = async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+
+    // ── Form validation ──
+    var validErr = validateForm();
+    if (validErr) { setError(validErr); return; }
+
+    // ── Legal checkboxes (sign up only) ──
+    if (!isLogin) {
+      var _ct = document.getElementById('checkTerms');
+      var _ca = document.getElementById('checkAge');
+      var _cd = document.getElementById('checkData');
+      var _le = document.getElementById('legalErrorMsg');
+      if (!_ct || !_ca || !_cd || !_ct.checked || !_ca.checked || !_cd.checked) {
+        if (_le) _le.classList.add('visible');
+        return;
+      }
+      if (_le) _le.classList.remove('visible');
+    }
+
+    setLoading(true);
+
+    if (!isFirebaseConfigured) { handleDemoLogin(); return; }
+
+    try {
+      if (isLogin) {
+        // ── Sign In ──
+        var r = await auth.signInWithEmailAndPassword(email, password);
+        if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
+          // verified — onAuthStateChanged handles the rest
+        } else {
+          // Not verified → sign out and show verification screen
+          await auth.signOut();
+          setSentEmail(email);
+          setVerificationSent(true);
+          startCooldown();
+          setLoading(false);
         }
-      }, _callee2, null, [[3, 11, 15, 16]]);
-    }));
-    return function handleSubmit(_x10) {
-      return _ref4.apply(this, arguments);
-    };
-  }();
+      } else {
+        // ── Sign Up: pre-checks for duplicate username & email ──
+        var nameSnap = await db.collection('users')
+          .where('displayName_lower', '==', displayName.trim().toLowerCase())
+          .limit(1).get();
+        if (!nameSnap.empty) {
+          setError('This username is already taken. Please choose a different name.');
+          setLoading(false);
+          return;
+        }
+
+        var methods = await auth.fetchSignInMethodsForEmail(email.trim());
+        if (methods && methods.length > 0) {
+          setError('This email is already registered. Please sign in instead.');
+          setLoading(false);
+          return;
+        }
+
+        // ── Create account ──
+        var _r = await auth.createUserWithEmailAndPassword(email, password);
+        await _r.user.updateProfile({ displayName: displayName.trim() });
+
+        // Save to Firestore for future uniqueness checks
+        await db.collection('users').doc(_r.user.uid).set({
+          displayName: displayName.trim(),
+          displayName_lower: displayName.trim().toLowerCase(),
+          email: email.trim(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        var actionCodeSettings = {
+          url: window.location.origin + window.location.pathname,
+          handleCodeInApp: false
+        };
+        await _r.user.sendEmailVerification(actionCodeSettings);
+        await auth.signOut();
+        setSentEmail(email);
+        setVerificationSent(true);
+        startCooldown();
+      }
+    } catch (err) {
+      setError(firebaseErrMsg(err.code) || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /* ── Verification email sent screen ── */
   if (verificationSent) {
