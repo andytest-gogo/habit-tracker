@@ -2123,6 +2123,38 @@ function AuthPage(_ref2) {
     _useStateFP4 = _slicedToArray(_useStateFP3, 2),
     resetSent = _useStateFP4[0],
     setResetSent = _useStateFP4[1];
+  // Inline field validation states
+  var _useStateUN1 = useState(''),
+    _useStateUN2 = _slicedToArray(_useStateUN1, 2),
+    usernameStatus = _useStateUN2[0],
+    setUsernameStatus = _useStateUN2[1];
+  var _useStateEM1 = useState(''),
+    _useStateEM2 = _slicedToArray(_useStateEM1, 2),
+    emailStatus = _useStateEM2[0],
+    setEmailStatus = _useStateEM2[1];
+
+  var handleNameBlur = async function() {
+    var name = displayName.trim();
+    if (!name || isLogin) return;
+    setUsernameStatus('checking');
+    try {
+      var key = name.toLowerCase().replace(/\s+/g, '_');
+      var doc = await db.collection('usernames').doc(key).get();
+      setUsernameStatus(doc.exists ? 'taken' : 'available');
+    } catch(e) { setUsernameStatus(''); }
+  };
+
+  var handleEmailBlur = async function() {
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    var em = email.trim();
+    if (!em || !emailRegex.test(em) || isLogin) return;
+    setEmailStatus('checking');
+    try {
+      var methods = await auth.fetchSignInMethodsForEmail(em);
+      setEmailStatus(methods && methods.length > 0 ? 'taken' : 'available');
+    } catch(e) { setEmailStatus(''); }
+  };
+
   var handleForgotPassword = function handleForgotPassword() {
     var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim() || !emailRegex.test(email.trim())) {
@@ -2294,15 +2326,26 @@ function AuthPage(_ref2) {
         }
       } else {
         // ── Sign Up ──
-        // 1. Check username uniqueness via public `usernames` collection
+        // 1. Block early if inline checks already detected conflicts
+        if (usernameStatus === 'taken') {
+          setError('This username is already taken. Please choose a different name.');
+          return;
+        }
+        if (emailStatus === 'taken') {
+          setError('This email is already registered. Please sign in instead.');
+          return;
+        }
+
+        // 2. Final check username uniqueness via public `usernames` collection
         var usernameKey = displayName.trim().toLowerCase().replace(/\s+/g, '_');
         var usernameDoc = await db.collection('usernames').doc(usernameKey).get();
         if (usernameDoc.exists) {
+          setUsernameStatus('taken');
           setError('This username is already taken. Please choose a different name.');
           return;
         }
 
-        // 2. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
+        // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
         var _r = await auth.createUserWithEmailAndPassword(email, password);
         await _r.user.updateProfile({ displayName: displayName.trim() });
 
@@ -2333,6 +2376,7 @@ function AuthPage(_ref2) {
       }
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
+        setEmailStatus('taken');
         setError('This email is already registered. Please sign in instead.');
       } else {
         setError(firebaseErrMsg(err.code) || err.message);
@@ -2469,27 +2513,37 @@ function AuthPage(_ref2) {
   }, !isLogin && /*#__PURE__*/React.createElement("div", {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
-    className: "form-label"
-  }, "Name"), /*#__PURE__*/React.createElement("input", {
+    className: "form-label",
+    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+  }, "Name",
+    usernameStatus === 'checking' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-400)', fontWeight: 400 } }, "Checking..."),
+    usernameStatus === 'taken'    && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500 } }, "✗ Username already taken"),
+    usernameStatus === 'available'&& /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#38a169', fontWeight: 500 } }, "✓ Available")
+  ), /*#__PURE__*/React.createElement("input", {
     type: "text",
     className: "form-input",
     value: displayName,
-    onChange: function onChange(e) {
-      return setDisplayName(e.target.value);
-    },
-    placeholder: "Your name"
+    onChange: function onChange(e) { setDisplayName(e.target.value); setUsernameStatus(''); },
+    onBlur: handleNameBlur,
+    placeholder: "Your name",
+    style: usernameStatus === 'taken' ? { borderColor: '#e53e3e' } : usernameStatus === 'available' ? { borderColor: '#38a169' } : {}
   })), /*#__PURE__*/React.createElement("div", {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
-    className: "form-label"
-  }, "Email"), /*#__PURE__*/React.createElement("input", {
+    className: "form-label",
+    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+  }, "Email",
+    !isLogin && emailStatus === 'checking'  && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-400)', fontWeight: 400 } }, "Checking..."),
+    !isLogin && emailStatus === 'taken'     && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500 } }, "✗ Email already registered"),
+    !isLogin && emailStatus === 'available' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#38a169', fontWeight: 500 } }, "✓ Available")
+  ), /*#__PURE__*/React.createElement("input", {
     type: "email",
     className: "form-input",
     value: email,
-    onChange: function onChange(e) {
-      return setEmail(e.target.value);
-    },
-    placeholder: "your@email.com"
+    onChange: function onChange(e) { setEmail(e.target.value); setEmailStatus(''); },
+    onBlur: handleEmailBlur,
+    placeholder: "your@email.com",
+    style: !isLogin && emailStatus === 'taken' ? { borderColor: '#e53e3e' } : !isLogin && emailStatus === 'available' ? { borderColor: '#38a169' } : {}
   })), !forgotMode && /*#__PURE__*/React.createElement("div", {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
