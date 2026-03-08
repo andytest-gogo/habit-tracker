@@ -2144,33 +2144,15 @@ function AuthPage(_ref2) {
     } catch(e) { setUsernameStatus(''); }
   };
 
-  var handleEmailBlur = async function() {
+  var handleEmailBlur = function() {
+    // Email duplicate check is done at submit time via auth/email-already-in-use.
+    // No reliable client-side API exists to pre-check without side effects.
+    // We only validate format here.
     var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     var em = email.trim();
-    if (!em || !emailRegex.test(em) || isLogin) return;
-    setEmailStatus('checking');
-    try {
-      // fetchSignInMethodsForEmail is deprecated and always returns [].
-      // Instead, attempt sign-in with a dummy password:
-      // - auth/wrong-password or auth/invalid-credential → email EXISTS
-      // - auth/user-not-found or auth/invalid-login-credentials → email does NOT exist
-      await auth.signInWithEmailAndPassword(em, '___dummy_check_password___');
-      // If somehow it succeeds (extremely unlikely), treat as taken
-      setEmailStatus('taken');
-    } catch(e) {
-      var taken = (
-        e.code === 'auth/wrong-password' ||
-        e.code === 'auth/invalid-credential' ||
-        e.code === 'auth/too-many-requests'
-      );
-      var notFound = (
-        e.code === 'auth/user-not-found' ||
-        e.code === 'auth/invalid-login-credentials'
-      );
-      if (taken) { setEmailStatus('taken'); }
-      else if (notFound) { setEmailStatus('available'); }
-      else { setEmailStatus(''); } // unknown error, show nothing
-    }
+    if (!em || isLogin) return;
+    if (!emailRegex.test(em)) { setEmailStatus(''); return; }
+    setEmailStatus('available'); // format is valid; duplicate check happens on submit
   };
 
   var handleForgotPassword = function handleForgotPassword() {
@@ -2365,32 +2347,41 @@ function AuthPage(_ref2) {
 
         // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
         var _r = await auth.createUserWithEmailAndPassword(email, password);
-        await _r.user.updateProfile({ displayName: displayName.trim() });
 
-        // 3. Reserve username and save user profile
-        var batch = db.batch();
-        batch.set(db.collection('usernames').doc(usernameKey), {
-          uid: _r.user.uid,
-          displayName: displayName.trim(),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        batch.set(db.collection('users').doc(_r.user.uid), {
-          displayName: displayName.trim(),
-          displayName_lower: usernameKey,
-          email: email.trim(),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        await batch.commit();
+        // ── From here: if anything fails, delete the just-created account to avoid ghost accounts ──
+        try {
+          await _r.user.updateProfile({ displayName: displayName.trim() });
 
-        // 4. Send verification email then sign out
-        await _r.user.sendEmailVerification({
-          url: window.location.origin + window.location.pathname,
-          handleCodeInApp: false
-        });
-        await auth.signOut();
-        setSentEmail(email);
-        setVerificationSent(true);
-        startCooldown();
+          // 4. Reserve username and save user profile (batch write)
+          var batch = db.batch();
+          batch.set(db.collection('usernames').doc(usernameKey), {
+            uid: _r.user.uid,
+            displayName: displayName.trim(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          batch.set(db.collection('users').doc(_r.user.uid), {
+            displayName: displayName.trim(),
+            displayName_lower: usernameKey,
+            email: email.trim(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          await batch.commit();
+
+          // 5. Send verification email then sign out
+          await _r.user.sendEmailVerification({
+            url: window.location.origin + window.location.pathname,
+            handleCodeInApp: false
+          });
+          await auth.signOut();
+          setSentEmail(email);
+          setVerificationSent(true);
+          startCooldown();
+        } catch (postCreateErr) {
+          // Something failed after account creation — clean up to prevent ghost account
+          try { await _r.user.delete(); } catch(e) {}
+          try { await auth.signOut(); } catch(e) {}
+          throw postCreateErr; // re-throw to outer catch
+        }
       }
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
@@ -2551,9 +2542,7 @@ function AuthPage(_ref2) {
     className: "form-label",
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
   }, "Email",
-    !isLogin && emailStatus === 'checking'  && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-400)', fontWeight: 400 } }, "Checking..."),
-    !isLogin && emailStatus === 'taken'     && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500 } }, "✗ Email already registered"),
-    !isLogin && emailStatus === 'available' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#38a169', fontWeight: 500 } }, "✓ Available")
+    !isLogin && emailStatus === 'taken' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500 } }, "✗ Email already registered")
   ), /*#__PURE__*/React.createElement("input", {
     type: "email",
     className: "form-input",
@@ -2561,7 +2550,7 @@ function AuthPage(_ref2) {
     onChange: function onChange(e) { setEmail(e.target.value); if (e.target.value.trim() !== email.trim()) setEmailStatus(''); },
     onBlur: handleEmailBlur,
     placeholder: "your@email.com",
-    style: !isLogin && emailStatus === 'taken' ? { borderColor: '#e53e3e' } : !isLogin && emailStatus === 'available' ? { borderColor: '#38a169' } : {}
+    style: !isLogin && emailStatus === 'taken' ? { borderColor: '#e53e3e' } : {}
   })), !forgotMode && /*#__PURE__*/React.createElement("div", {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
