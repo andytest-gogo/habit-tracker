@@ -2523,7 +2523,7 @@ function AuthPage(_ref2) {
     type: "text",
     className: "form-input",
     value: displayName,
-    onChange: function onChange(e) { setDisplayName(e.target.value); setUsernameStatus(''); },
+    onChange: function onChange(e) { setDisplayName(e.target.value); if (e.target.value.trim() !== displayName.trim()) setUsernameStatus(''); },
     onBlur: handleNameBlur,
     placeholder: "Your name",
     style: usernameStatus === 'taken' ? { borderColor: '#e53e3e' } : usernameStatus === 'available' ? { borderColor: '#38a169' } : {}
@@ -2540,7 +2540,7 @@ function AuthPage(_ref2) {
     type: "email",
     className: "form-input",
     value: email,
-    onChange: function onChange(e) { setEmail(e.target.value); setEmailStatus(''); },
+    onChange: function onChange(e) { setEmail(e.target.value); if (e.target.value.trim() !== email.trim()) setEmailStatus(''); },
     onBlur: handleEmailBlur,
     placeholder: "your@email.com",
     style: !isLogin && emailStatus === 'taken' ? { borderColor: '#e53e3e' } : !isLogin && emailStatus === 'available' ? { borderColor: '#38a169' } : {}

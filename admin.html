@@ -385,6 +385,24 @@ service cloud.firestore {
 }</pre>
       </div>
 
+
+      <!-- Username Migration Tool -->
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:8px">🔧 Username Migration Tool</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:14px">
+          Run this <strong>once</strong> to sync all existing users' display names into the <code style="background:var(--g100);padding:1px 5px;font-size:11px">usernames</code> collection.
+          This is required for the duplicate username check on the sign-up page to work correctly for users who registered before this feature was added.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button onclick="runUsernameMigration()" id="migrationBtn"
+            style="padding:8px 18px;background:var(--black);color:var(--white);border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:.5px">
+            Run Migration
+          </button>
+          <div id="migrationStatus" style="font-size:12px;color:var(--g500)"></div>
+        </div>
+        <div id="migrationLog" style="margin-top:12px;font-size:11px;color:var(--g500);line-height:1.8;max-height:160px;overflow-y:auto;display:none;background:var(--g50);padding:10px 12px;border:1px solid var(--g200)"></div>
+      </div>
+
       <!-- Compliance checklist -->
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
         <div class="chart-ttl" style="margin-bottom:14px">✅ Security &amp; Compliance Checklist</div>
@@ -728,6 +746,63 @@ function loadAll(){
 
 var _usersUnsubscribe = null;
 var _initialUsersLoad = true; // skip heavy re-renders on first snapshot (loadAll handles them)
+
+
+async function runUsernameMigration() {
+  var btn = document.getElementById('migrationBtn');
+  var statusEl = document.getElementById('migrationStatus');
+  var logEl = document.getElementById('migrationLog');
+
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  logEl.style.display = 'block';
+  logEl.innerHTML = '';
+  statusEl.textContent = 'Starting migration...';
+
+  try {
+    var snap = await db.collection('users').get();
+    var total = snap.docs.length;
+    var done = 0, skipped = 0, errors = 0;
+
+    for (var doc of snap.docs) {
+      var data = doc.data();
+      var uid = doc.id;
+      var displayName = (data.displayName || '').trim();
+      if (!displayName) { skipped++; continue; }
+
+      var key = displayName.toLowerCase().replace(/\s+/g, '_');
+      try {
+        var existing = await db.collection('usernames').doc(key).get();
+        if (existing.exists) {
+          logEl.innerHTML += '<span style="color:#92400e">⚠ Skipped (already exists): ' + displayName + '</span><br>';
+          skipped++;
+        } else {
+          await db.collection('usernames').doc(key).set({
+            uid: uid,
+            displayName: displayName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          logEl.innerHTML += '<span style="color:#065f46">✓ Migrated: ' + displayName + '</span><br>';
+          done++;
+        }
+      } catch(e) {
+        logEl.innerHTML += '<span style="color:#991b1b">✗ Error for ' + displayName + ': ' + e.message + '</span><br>';
+        errors++;
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+      statusEl.textContent = 'Processing ' + (done + skipped + errors) + ' / ' + total + '...';
+    }
+
+    statusEl.style.color = errors > 0 ? '#d97706' : '#065f46';
+    statusEl.textContent = '✅ Done — ' + done + ' migrated, ' + skipped + ' skipped, ' + errors + ' errors';
+    btn.textContent = 'Run Again';
+  } catch(e) {
+    statusEl.style.color = '#991b1b';
+    statusEl.textContent = '✗ Migration failed: ' + e.message;
+    btn.textContent = 'Run Migration';
+  }
+  btn.disabled = false;
+}
 
 function loadUsers(){
   // Use a real-time listener so avatar/profile changes in index.html
