@@ -2145,14 +2145,14 @@ function AuthPage(_ref2) {
   };
 
   var handleEmailBlur = function() {
-    // Email duplicate check is done at submit time via auth/email-already-in-use.
-    // No reliable client-side API exists to pre-check without side effects.
+    // No reliable client-side API exists to pre-check email without side effects.
+    // Duplicate detection is handled at submit via auth/email-already-in-use.
     // We only validate format here.
     var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     var em = email.trim();
     if (!em || isLogin) return;
-    if (!emailRegex.test(em)) { setEmailStatus(''); return; }
-    setEmailStatus('available'); // format is valid; duplicate check happens on submit
+    // just clear any stale status — real check happens on submit
+    if (emailStatus !== 'taken') setEmailStatus('');
   };
 
   var handleForgotPassword = function handleForgotPassword() {
@@ -2348,11 +2348,11 @@ function AuthPage(_ref2) {
         // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
         var _r = await auth.createUserWithEmailAndPassword(email, password);
 
-        // ── From here: if anything fails, delete the just-created account to avoid ghost accounts ──
+        // If anything below fails, delete the just-created account to prevent ghost accounts
         try {
           await _r.user.updateProfile({ displayName: displayName.trim() });
 
-          // 4. Reserve username and save user profile (batch write)
+          // 4. Reserve username and save user profile
           var batch = db.batch();
           batch.set(db.collection('usernames').doc(usernameKey), {
             uid: _r.user.uid,
@@ -2377,10 +2377,10 @@ function AuthPage(_ref2) {
           setVerificationSent(true);
           startCooldown();
         } catch (postCreateErr) {
-          // Something failed after account creation — clean up to prevent ghost account
+          // Clean up ghost account
           try { await _r.user.delete(); } catch(e) {}
           try { await auth.signOut(); } catch(e) {}
-          throw postCreateErr; // re-throw to outer catch
+          throw postCreateErr;
         }
       }
     } catch (err) {
