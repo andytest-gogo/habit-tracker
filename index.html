@@ -2315,13 +2315,39 @@ function AuthPage(_ref2) {
             _context2.n = 13;
             break;
           case 20:
+            // ── Pre-signup checks: duplicate email & display name ──
+            _context2.n = 30;
+            return db.collection('users').where('displayName_lower', '==', displayName.trim().toLowerCase()).limit(1).get();
+          case 30:
+            if (_context2.v.empty) { _context2.n = 31; break; }
+            setError('This username is already taken. Please choose a different name.');
+            setLoading(false);
+            return _context2.a(2);
+          case 31:
+            _context2.n = 32;
+            return auth.fetchSignInMethodsForEmail(email.trim());
+          case 32:
+            if (!_context2.v || _context2.v.length === 0) { _context2.n = 33; break; }
+            setError('This email is already registered. Please sign in instead.');
+            setLoading(false);
+            return _context2.a(2);
+          case 33:
             _context2.n = 21;
             return auth.createUserWithEmailAndPassword(email, password);
           case 21:
             _r = _context2.v;
             _context2.n = 22;
-            return _r.user.updateProfile({ displayName: displayName });
+            return _r.user.updateProfile({ displayName: displayName.trim() });
           case 22:
+            // Save user profile to Firestore so username uniqueness can be queried
+            _context2.n = 34;
+            return db.collection('users').doc(_r.user.uid).set({
+              displayName: displayName.trim(),
+              displayName_lower: displayName.trim().toLowerCase(),
+              email: email.trim(),
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          case 34:
             actionCodeSettings = {
               url: window.location.origin + window.location.pathname,
               handleCodeInApp: false
