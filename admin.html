@@ -391,7 +391,8 @@ service cloud.firestore {
         <div class="chart-ttl" style="margin-bottom:8px">🔧 Username Migration Tool</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:14px">
           Run this <strong>once</strong> to sync all existing users' display names into the <code style="background:var(--g100);padding:1px 5px;font-size:11px">usernames</code> collection.
-          This is required for the duplicate username check on the sign-up page to work correctly for users who registered before this feature was added.
+          This is required for the duplicate username check on the sign-up page to work correctly for users who registered before this feature was added.<br><br>
+          <strong>You only need to run this once.</strong> New users who register after this point are automatically added to the <code style="background:var(--g100);padding:1px 5px;font-size:11px">usernames</code> collection at sign-up — no further migration is needed.
         </p>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button onclick="runUsernameMigration()" id="migrationBtn"

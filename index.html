@@ -2150,9 +2150,27 @@ function AuthPage(_ref2) {
     if (!em || !emailRegex.test(em) || isLogin) return;
     setEmailStatus('checking');
     try {
-      var methods = await auth.fetchSignInMethodsForEmail(em);
-      setEmailStatus(methods && methods.length > 0 ? 'taken' : 'available');
-    } catch(e) { setEmailStatus(''); }
+      // fetchSignInMethodsForEmail is deprecated and always returns [].
+      // Instead, attempt sign-in with a dummy password:
+      // - auth/wrong-password or auth/invalid-credential → email EXISTS
+      // - auth/user-not-found or auth/invalid-login-credentials → email does NOT exist
+      await auth.signInWithEmailAndPassword(em, '___dummy_check_password___');
+      // If somehow it succeeds (extremely unlikely), treat as taken
+      setEmailStatus('taken');
+    } catch(e) {
+      var taken = (
+        e.code === 'auth/wrong-password' ||
+        e.code === 'auth/invalid-credential' ||
+        e.code === 'auth/too-many-requests'
+      );
+      var notFound = (
+        e.code === 'auth/user-not-found' ||
+        e.code === 'auth/invalid-login-credentials'
+      );
+      if (taken) { setEmailStatus('taken'); }
+      else if (notFound) { setEmailStatus('available'); }
+      else { setEmailStatus(''); } // unknown error, show nothing
+    }
   };
 
   var handleForgotPassword = function handleForgotPassword() {
