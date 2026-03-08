@@ -2131,30 +2131,21 @@ function AuthPage(_ref2) {
     }
     setError('');
     setLoading(true);
-    // First check if account exists AND is registered with email/password
-    auth.fetchSignInMethodsForEmail(email.trim()).then(function(methods) {
-      if (!methods || methods.length === 0) {
-        // Account does not exist — don't reveal this for security, but block reset
-        setError('No account found with this email. Please sign up first.');
-        setLoading(false);
-        return;
-      }
-      if (!methods.includes('password')) {
-        // Account exists but uses Google login — no password to reset
-        setError('This account uses Google sign-in and does not have a password.');
-        setLoading(false);
-        return;
-      }
-      // Account exists with email/password — safe to send reset email
-      return auth.sendPasswordResetEmail(email.trim(), {
-        url: window.location.origin + window.location.pathname,
-        handleCodeInApp: false
-      }).then(function() {
-        setResetSent(true);
-        setLoading(false);
-      });
+    // Directly send reset email; handle errors in catch (fetchSignInMethodsForEmail is deprecated)
+    auth.sendPasswordResetEmail(email.trim(), {
+      url: window.location.origin + window.location.pathname,
+      handleCodeInApp: false
+    }).then(function() {
+      setResetSent(true);
+      setLoading(false);
     }).catch(function(e) {
-      setError(e.message);
+      if (e.code === 'auth/user-not-found') {
+        setError('No account found with this email. Please sign up first.');
+      } else if (e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else {
+        setError(e.message);
+      }
       setLoading(false);
     });
   };
@@ -2515,7 +2506,7 @@ function AuthPage(_ref2) {
       return setEmail(e.target.value);
     },
     placeholder: "your@email.com"
-  })), /*#__PURE__*/React.createElement("div", {
+  })), !forgotMode && /*#__PURE__*/React.createElement("div", {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
     className: "form-label"
