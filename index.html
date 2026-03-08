@@ -2284,57 +2284,59 @@ function AuthPage(_ref2) {
         // ── Sign In ──
         var r = await auth.signInWithEmailAndPassword(email, password);
         if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
-          // verified — onAuthStateChanged handles the rest
+          // verified — onAuthStateChanged handles navigation
         } else {
           // Not verified → sign out and show verification screen
           await auth.signOut();
           setSentEmail(email);
           setVerificationSent(true);
           startCooldown();
-          setLoading(false);
         }
       } else {
-        // ── Sign Up: pre-checks for duplicate username & email ──
-        var nameSnap = await db.collection('users')
-          .where('displayName_lower', '==', displayName.trim().toLowerCase())
-          .limit(1).get();
-        if (!nameSnap.empty) {
+        // ── Sign Up ──
+        // 1. Check username uniqueness via public `usernames` collection
+        var usernameKey = displayName.trim().toLowerCase().replace(/\s+/g, '_');
+        var usernameDoc = await db.collection('usernames').doc(usernameKey).get();
+        if (usernameDoc.exists) {
           setError('This username is already taken. Please choose a different name.');
-          setLoading(false);
           return;
         }
 
-        var methods = await auth.fetchSignInMethodsForEmail(email.trim());
-        if (methods && methods.length > 0) {
-          setError('This email is already registered. Please sign in instead.');
-          setLoading(false);
-          return;
-        }
-
-        // ── Create account ──
+        // 2. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
         var _r = await auth.createUserWithEmailAndPassword(email, password);
         await _r.user.updateProfile({ displayName: displayName.trim() });
 
-        // Save to Firestore for future uniqueness checks
-        await db.collection('users').doc(_r.user.uid).set({
+        // 3. Reserve username and save user profile
+        var batch = db.batch();
+        batch.set(db.collection('usernames').doc(usernameKey), {
+          uid: _r.user.uid,
           displayName: displayName.trim(),
-          displayName_lower: displayName.trim().toLowerCase(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        batch.set(db.collection('users').doc(_r.user.uid), {
+          displayName: displayName.trim(),
+          displayName_lower: usernameKey,
           email: email.trim(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
+        await batch.commit();
 
-        var actionCodeSettings = {
+        // 4. Send verification email then sign out
+        await _r.user.sendEmailVerification({
           url: window.location.origin + window.location.pathname,
           handleCodeInApp: false
-        };
-        await _r.user.sendEmailVerification(actionCodeSettings);
+        });
         await auth.signOut();
         setSentEmail(email);
         setVerificationSent(true);
         startCooldown();
       }
     } catch (err) {
-      setError(firebaseErrMsg(err.code) || err.message);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please sign in instead.');
+      } else {
+        setError(firebaseErrMsg(err.code) || err.message);
+      }
     } finally {
       setLoading(false);
     }
