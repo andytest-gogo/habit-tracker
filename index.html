@@ -2354,7 +2354,7 @@ function AuthPage(_ref2) {
           // Force token refresh so Firestore rules can verify auth.uid correctly
           await _r.user.getIdToken(true);
           // Wait for token to propagate to Firestore backend (prevents race condition)
-          await new Promise(function(resolve){ setTimeout(resolve, 1000); });
+          await new Promise(function(resolve){ setTimeout(resolve, 2000); });
 
           // 4. Reserve username and save user profile
           var batch = db.batch();
@@ -2394,9 +2394,9 @@ function AuthPage(_ref2) {
         setError('This email is already registered. Please sign in instead.');
       } else if (err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'))) {
         // Firestore write failed after account was created — account has been cleaned up
-        setError('Registration failed due to a server error. Please try again.');
+        setError('Registration failed due to a server error. Please try again. [DEBUG: ' + err.code + ' — ' + err.message + ']');
       } else {
-        setError(firebaseErrMsg(err.code) || err.message);
+        setError((firebaseErrMsg(err.code) || err.message) + ' [code: ' + (err.code||'none') + ']');
       }
     } finally {
       setLoading(false);
