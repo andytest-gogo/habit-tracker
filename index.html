@@ -2353,8 +2353,12 @@ function AuthPage(_ref2) {
           await _r.user.updateProfile({ displayName: displayName.trim() });
           // Force token refresh so Firestore rules can verify auth.uid correctly
           await _r.user.getIdToken(true);
-          // Wait for token to propagate to Firestore backend (prevents race condition)
-          await new Promise(function(resolve){ setTimeout(resolve, 2000); });
+          // Force Firestore to re-authenticate with fresh token by cycling network
+          // This is needed because enablePersistence() caches the old auth state
+          try { await db.disableNetwork(); } catch(e) {}
+          await new Promise(function(resolve){ setTimeout(resolve, 500); });
+          try { await db.enableNetwork(); } catch(e) {}
+          await new Promise(function(resolve){ setTimeout(resolve, 1000); });
 
           // 4. Reserve username and save user profile
           var batch = db.batch();
