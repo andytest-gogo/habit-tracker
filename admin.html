@@ -320,7 +320,8 @@ tr:hover td{background:var(--g50)}
       <!-- Info banner -->
       <div style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.7">
         <strong>⚠️ 注意：</strong> 前端無法直接刪除 Firebase Auth 帳號，需要手動到 Firebase Console 操作。
-        此頁面可以幫你：<strong>①</strong> 找出所有殭屍帳號的 UID　<strong>②</strong> 一鍵清除對應的 Firestore 資料（users / usernames）　<strong>③</strong> 提供 Firebase Console 連結讓你快速刪除 Auth 帳號。
+        此頁面只顯示 <strong>emailVerified: false 且超過 24 小時</strong>的帳號（已驗證的正常用戶不會出現）。
+        可以幫你：<strong>①</strong> 一鍵清除對應的 Firestore 資料（users / usernames）　<strong>②</strong> 提供 Firebase Console 連結讓你快速刪除 Auth 帳號。
       </div>
 
       <div class="tbl-card">
@@ -1284,14 +1285,11 @@ function loadCleanup() {
   var cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
   // Query Firestore users collection — find docs older than 24h
-  db.collection('users').get().then(function(snap) {
+  db.collection('users').where('emailVerified', '==', false).get().then(function(snap) {
     var candidates = [];
     snap.docs.forEach(function(doc) {
       var data = doc.data();
       var createdAt = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : null;
-      // Only include users created more than 24h ago
-      // We don't know emailVerified from Firestore — flag all old unverified-looking accounts
-      // Admin can confirm from the table
       if (createdAt && createdAt < cutoff) {
         candidates.push({
           uid: doc.id,
@@ -1309,7 +1307,7 @@ function loadCleanup() {
     updateCleanupBadge();
     document.getElementById('cleanupUpdated').textContent =
       'Last scanned: ' + new Date().toLocaleString('en-US') +
-      ' — Showing Firestore users created >24h ago (confirm email verified status in Firebase Console)';
+      ' — Showing unverified accounts (emailVerified: false) created more than 24h ago';
     if (allZombies.length > 0) {
       document.getElementById('cleanupAllBtn').style.display = '';
     }

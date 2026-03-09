@@ -2367,6 +2367,7 @@ function AuthPage(_ref2) {
             displayName: displayName.trim(),
             displayName_lower: usernameKey,
             email: email.trim(),
+            emailVerified: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
           await batch.commit();
@@ -6366,6 +6367,7 @@ function App() {
             email: u.email || '',
             displayName: u.displayName || '',
             photoURL: photoURL,
+            emailVerified: true,
             lastSeen: firebase.firestore.FieldValue.serverTimestamp()
           };
           if (ageConfirmedLocal && !existing.ageVerified) {
