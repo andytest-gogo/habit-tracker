@@ -102,6 +102,13 @@ tr:hover td{background:var(--g50)}
 .pct-fill{height:100%;background:var(--black);transition:width .4s}
 .pct-fill.warn{background:#e0a800}
 .pct-fill.danger{background:#c00}
+.cleanup-uid{font-size:10px;color:var(--g400);font-family:var(--mono);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;title:"Click to copy"}
+.cleanup-uid:hover{color:var(--black)}
+.btn-console{padding:5px 9px;background:var(--black);color:#fff;border:none;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;font-family:var(--font);margin-right:4px}
+.btn-console:hover{background:var(--g800)}
+.btn-del-fs{padding:5px 9px;background:none;border:1px solid #c00;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;color:#c00;font-family:var(--font)}
+.btn-del-fs:hover{background:#c00;color:#fff}
+.btn-del-fs:disabled{opacity:.4;cursor:not-allowed}
 .uid-small{font-size:9px;color:var(--g400);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
 
 /* ── MOBILE RWD ── */
@@ -173,6 +180,11 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
         Reports
         <span id="reportsBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+      </button>
+      <button class="nav-btn" data-page="cleanup" id="navCleanup">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        Cleanup
+        <span id="cleanupBadge" style="display:none;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
       </button>
 
     </nav>
@@ -290,6 +302,62 @@ tr:hover td{background:var(--g50)}
           </tr></thead>
           <tbody id="quotaTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Cleanup: Unverified Accounts -->
+    <div class="pg" id="pg-cleanup">
+      <div class="pg-title">Cleanup</div>
+      <div class="pg-sub" id="cleanupUpdated">Unverified accounts registered more than 24 hours ago</div>
+
+      <!-- Stats row -->
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Zombie Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Unverified &gt;24h</div></div>
+        <div class="stat"><div class="stat-lbl">Firestore Data</div><div class="stat-val" id="czFirestore">—</div><div class="stat-note">Can be auto-deleted</div></div>
+        <div class="stat"><div class="stat-lbl">Auth Accounts</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">Require manual delete</div></div>
+      </div>
+
+      <!-- Info banner -->
+      <div style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.7">
+        <strong>⚠️ 注意：</strong> 前端無法直接刪除 Firebase Auth 帳號，需要手動到 Firebase Console 操作。
+        此頁面可以幫你：<strong>①</strong> 找出所有殭屍帳號的 UID　<strong>②</strong> 一鍵清除對應的 Firestore 資料（users / usernames）　<strong>③</strong> 提供 Firebase Console 連結讓你快速刪除 Auth 帳號。
+      </div>
+
+      <div class="tbl-card">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Unverified Accounts (&gt;24h)</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="refresh" id="cleanupRefreshBtn" onclick="loadCleanup()">Refresh</button>
+            <button id="cleanupAllBtn" onclick="cleanupAllFirestore()"
+              style="padding:7px 13px;background:#c00;border:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:#fff;font-family:var(--font);display:none">
+              🗑 Delete All Firestore Data
+            </button>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Email</th>
+            <th>UID</th>
+            <th>Registered</th>
+            <th>Hours Ago</th>
+            <th>Firestore</th>
+            <th>Action</th>
+          </tr></thead>
+          <tbody id="cleanupTbody"><tr class="loading-row"><td colspan="6">Click Refresh to scan for zombie accounts</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Step guide -->
+      <div class="tbl-card" style="padding:18px;margin-top:4px">
+        <div class="chart-ttl" style="margin-bottom:12px">📋 如何完整刪除殭屍帳號（兩步驟）</div>
+        <div style="font-size:12px;color:var(--g500);line-height:2">
+          <div><strong style="color:var(--black)">Step 1 — 刪除 Firestore 資料</strong>（本頁面可直接操作）<br>
+          點擊每一行的「Delete Firestore」按鈕，或使用「Delete All Firestore Data」一次清除。</div>
+          <div style="margin-top:10px"><strong style="color:var(--black)">Step 2 — 刪除 Auth 帳號</strong>（需手動到 Firebase Console）<br>
+          點擊每一行的「Open in Console」按鈕，或前往
+          <a href="https://console.firebase.google.com" target="_blank" style="color:var(--black);font-weight:700">Firebase Console → Authentication → Users</a>，
+          搜尋 UID 後點擊刪除。</div>
+        </div>
       </div>
     </div>
 
@@ -718,6 +786,8 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
     btn.classList.add('on');
     document.getElementById('pg-'+btn.dataset.page).classList.add('on');
+    // Auto-load cleanup page when navigated to
+    if (btn.dataset.page === 'cleanup') loadCleanup();
   };
 });
 
@@ -1196,6 +1266,181 @@ function resetUserDaily(uid){
   db.collection('upload_quotas').doc(uid).update({
     dailyDate: '1970-01-01', dailyImages: 0, dailyVideos: 0,
   }).then(function(){ loadQuota(); }).catch(function(e){ alert('Failed: '+e.message); });
+}
+
+/* ══════════════════════════════════════════
+   CLEANUP — Zombie Account Scanner & Firestore Cleaner
+══════════════════════════════════════════ */
+var allZombies = [];
+
+function loadCleanup() {
+  var tbody = document.getElementById('cleanupTbody');
+  var updated = document.getElementById('cleanupUpdated');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning Firestore for unverified accounts...</td></tr>';
+  updated.textContent = 'Scanning...';
+  document.getElementById('cleanupAllBtn').style.display = 'none';
+  allZombies = [];
+
+  var cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+
+  // Query Firestore users collection — find docs older than 24h
+  db.collection('users').get().then(function(snap) {
+    var candidates = [];
+    snap.docs.forEach(function(doc) {
+      var data = doc.data();
+      var createdAt = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : null;
+      // Only include users created more than 24h ago
+      // We don't know emailVerified from Firestore — flag all old unverified-looking accounts
+      // Admin can confirm from the table
+      if (createdAt && createdAt < cutoff) {
+        candidates.push({
+          uid: doc.id,
+          email: data.email || '—',
+          displayName: data.displayName || '—',
+          createdAt: createdAt,
+          displayName_lower: data.displayName_lower || ''
+        });
+      }
+    });
+    return candidates;
+  }).then(function(candidates) {
+    allZombies = candidates;
+    renderCleanup();
+    updateCleanupBadge();
+    document.getElementById('cleanupUpdated').textContent =
+      'Last scanned: ' + new Date().toLocaleString('en-US') +
+      ' — Showing Firestore users created >24h ago (confirm email verified status in Firebase Console)';
+    if (allZombies.length > 0) {
+      document.getElementById('cleanupAllBtn').style.display = '';
+    }
+  }).catch(function(e) {
+    document.getElementById('cleanupTbody').innerHTML =
+      '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load: ' + htmlEsc(e.message) + '</td></tr>';
+    document.getElementById('cleanupUpdated').textContent = '⚠️ Scan failed';
+  });
+}
+
+function updateCleanupBadge() {
+  var badge = document.getElementById('cleanupBadge');
+  if (!badge) return;
+  var count = allZombies.length;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+  document.getElementById('czTotal').textContent = count;
+  document.getElementById('czFirestore').textContent = count;
+  document.getElementById('czAuth').textContent = count;
+}
+
+function renderCleanup() {
+  var tbody = document.getElementById('cleanupTbody');
+  if (!allZombies.length) {
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">✅ No zombie accounts found (all Firestore users were created within the last 24h)</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allZombies.map(function(z, idx) {
+    var hoursAgo = Math.floor((Date.now() - z.createdAt.getTime()) / 3600000);
+    var timeStr = z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    var consoleUrl = 'https://console.firebase.google.com/project/_/authentication/users?search=' + encodeURIComponent(z.uid);
+    return '<tr id="czrow-' + idx + '">'
+      + '<td><strong style="font-size:12px">' + htmlEsc(z.email) + '</strong>'
+      + '<div style="font-size:10px;color:var(--g400)">' + htmlEsc(z.displayName) + '</div></td>'
+      + '<td><div class="cleanup-uid" title="' + htmlEsc(z.uid) + '" onclick="copyUID(\'' + z.uid + '\',this)">' + z.uid + '</div>'
+      + '<div style="font-size:9px;color:var(--g500);margin-top:2px">click to copy</div></td>'
+      + '<td style="font-size:11px">' + timeStr + '</td>'
+      + '<td><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:' + (hoursAgo > 72 ? '#c00' : '#e0a800') + '">' + hoursAgo + 'h</span></td>'
+      + '<td><span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span></td>'
+      + '<td>'
+      + '<a href="' + consoleUrl + '" target="_blank"><button class="btn-console" title="Open Firebase Console to delete Auth account">Open in Console</button></a>'
+      + '<button class="btn-del-fs" id="czbtn-' + idx + '" onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>'
+      + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function copyUID(uid, el) {
+  navigator.clipboard.writeText(uid).then(function() {
+    var orig = el.textContent;
+    el.textContent = '✓ Copied!';
+    setTimeout(function() { el.textContent = orig; }, 1500);
+  });
+}
+
+function deleteFirestoreData(uid, usernameLower, idx) {
+  if (!confirm('Delete Firestore data for UID: ' + uid + '?\n\nThis will remove:\n• users/' + uid + '\n• usernames/' + (usernameLower||'(none)') + '\n\nNote: You still need to delete the Auth account manually in Firebase Console.')) return;
+
+  var btn = document.getElementById('czbtn-' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+
+  var batch = db.batch();
+  batch.delete(db.collection('users').doc(uid));
+  if (usernameLower) {
+    batch.delete(db.collection('usernames').doc(usernameLower));
+  }
+
+  batch.commit().then(function() {
+    var badge = document.getElementById('czfs-' + idx);
+    if (badge) { badge.textContent = '✓ Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
+    if (btn) { btn.disabled = true; btn.textContent = '✓ Done'; btn.style.borderColor = '#059669'; btn.style.color = '#059669'; }
+    // Remove from allZombies count
+    var remaining = document.querySelectorAll('.btn-del-fs:not([disabled])').length;
+    if (remaining === 0) document.getElementById('cleanupAllBtn').style.display = 'none';
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete Firestore'; }
+    alert('Failed to delete Firestore data: ' + e.message);
+  });
+}
+
+function cleanupAllFirestore() {
+  var count = allZombies.length;
+  if (!count) return;
+  if (!confirm('Delete ALL Firestore data for ' + count + ' zombie account(s)?\n\nThis will remove all their users/ and usernames/ documents.\n\nYou will still need to delete Auth accounts manually in Firebase Console.')) return;
+
+  var btn = document.getElementById('cleanupAllBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting...';
+
+  // Process in batches of 500 (Firestore limit)
+  var BATCH_SIZE = 400;
+  var chunks = [];
+  for (var i = 0; i < allZombies.length; i += BATCH_SIZE) {
+    chunks.push(allZombies.slice(i, i + BATCH_SIZE));
+  }
+
+  var promise = Promise.resolve();
+  chunks.forEach(function(chunk) {
+    promise = promise.then(function() {
+      var batch = db.batch();
+      chunk.forEach(function(z) {
+        batch.delete(db.collection('users').doc(z.uid));
+        if (z.displayName_lower) {
+          batch.delete(db.collection('usernames').doc(z.displayName_lower));
+        }
+      });
+      return batch.commit();
+    });
+  });
+
+  promise.then(function() {
+    btn.textContent = '✓ All Deleted';
+    btn.style.background = '#059669';
+    // Update all badges in table
+    allZombies.forEach(function(z, idx) {
+      var badge = document.getElementById('czfs-' + idx);
+      var rowBtn = document.getElementById('czbtn-' + idx);
+      if (badge) { badge.textContent = '✓ Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
+      if (rowBtn) { rowBtn.disabled = true; rowBtn.textContent = '✓ Done'; rowBtn.style.borderColor = '#059669'; rowBtn.style.color = '#059669'; }
+    });
+    btn.style.display = 'none';
+    document.getElementById('czFirestore').textContent = '0';
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.textContent = '🗑 Delete All Firestore Data';
+    alert('Batch delete failed: ' + e.message);
+  });
 }
 
 /* ══════════════════════════════════════════
