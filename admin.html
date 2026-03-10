@@ -312,9 +312,9 @@ tr:hover td{background:var(--g50)}
 
       <!-- Stats row -->
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Zombie Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Unverified &gt;24h</div></div>
+        <div class="stat dark"><div class="stat-lbl">Zombie Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Unverified &gt;24h (Auth+FS)</div></div>
         <div class="stat"><div class="stat-lbl">Firestore Data</div><div class="stat-val" id="czFirestore">—</div><div class="stat-note">Can be auto-deleted</div></div>
-        <div class="stat"><div class="stat-lbl">Auth Accounts</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">Require manual delete</div></div>
+        <div class="stat"><div class="stat-lbl">Auth Only</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">No Firestore data</div></div>
       </div>
 
       <!-- Info banner -->
@@ -1274,46 +1274,151 @@ function resetUserDaily(uid){
 ══════════════════════════════════════════ */
 var allZombies = [];
 
+// Fetch all unverified Auth accounts via Firebase Auth REST API (uses admin ID token)
+// Firebase's download/list endpoint requires an ID token with admin claim
+async function fetchAuthUnverifiedAccounts() {
+  var user = auth.currentUser;
+  if (!user) return {};
+  var idToken = await user.getIdToken(true);
+
+  var apiKey = 'AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA';
+  var authMap = {}; // uid → { email, emailVerified, createdAt(ms) }
+
+  // Use the downloadAccount (list) endpoint — pages through all users
+  var nextPageToken = null;
+  var maxPages = 20; // safety limit (~20 000 accounts)
+  do {
+    var body = { maxResults: 1000 };
+    if (nextPageToken) body.nextPageToken = nextPageToken;
+
+    var resp = await fetch(
+      'https://identitytoolkit.googleapis.com/v1/projects/health-habit-tracker-e6b50/accounts:query?key=' + apiKey,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+        body: JSON.stringify({ returnUserInfo: true, limit: 1000, offset: 0 })
+      }
+    );
+
+    // Fallback to download endpoint if query not supported
+    if (!resp.ok) {
+      var resp2 = await fetch(
+        'https://identitytoolkit.googleapis.com/v1/projects/health-habit-tracker-e6b50/accounts:batchGet?key=' + apiKey + '&maxResults=1000' + (nextPageToken ? '&nextPageToken=' + nextPageToken : ''),
+        { headers: { 'Authorization': 'Bearer ' + idToken } }
+      );
+      if (!resp2.ok) break;
+      var data2 = await resp2.json();
+      (data2.users || []).forEach(function(u) {
+        if (!u.emailVerified) {
+          // createdAt from Firebase is in ms string
+          authMap[u.localId] = {
+            email: u.email || '—',
+            emailVerified: false,
+            createdAt: u.createdAt ? new Date(parseInt(u.createdAt)) : null
+          };
+        }
+      });
+      nextPageToken = data2.nextPageToken || null;
+    } else {
+      var data = await resp.json();
+      (data.userInfo || []).forEach(function(u) {
+        if (!u.emailVerified) {
+          authMap[u.localId] = {
+            email: u.email || '—',
+            emailVerified: false,
+            createdAt: u.createdAt ? new Date(parseInt(u.createdAt)) : null
+          };
+        }
+      });
+      nextPageToken = data.nextPageToken || null;
+    }
+    maxPages--;
+  } while (nextPageToken && maxPages > 0);
+
+  return authMap;
+}
+
 function loadCleanup() {
   var tbody = document.getElementById('cleanupTbody');
   var updated = document.getElementById('cleanupUpdated');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning Firestore for unverified accounts...</td></tr>';
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning Firebase Auth + Firestore for unverified accounts...</td></tr>';
   updated.textContent = 'Scanning...';
   document.getElementById('cleanupAllBtn').style.display = 'none';
   allZombies = [];
 
   var cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
-  // Query Firestore users collection — find docs older than 24h
-  db.collection('users').where('emailVerified', '==', false).get().then(function(snap) {
-    var candidates = [];
-    snap.docs.forEach(function(doc) {
-      var data = doc.data();
-      var createdAt = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : null;
-      if (createdAt && createdAt < cutoff) {
-        candidates.push({
-          uid: doc.id,
-          email: data.email || '—',
-          displayName: data.displayName || '—',
-          createdAt: createdAt,
-          displayName_lower: data.displayName_lower || ''
-        });
-      }
+  // Run Auth scan + Firestore scan in parallel
+  Promise.all([
+    // 1. Fetch unverified Auth accounts via REST API
+    fetchAuthUnverifiedAccounts().catch(function(e) {
+      console.warn('[cleanup] Auth REST scan failed:', e.message);
+      return {};
+    }),
+    // 2. Fetch Firestore users with emailVerified: false
+    db.collection('users').where('emailVerified', '==', false).get().catch(function(e) {
+      console.warn('[cleanup] Firestore scan failed:', e.message);
+      return { docs: [] };
+    })
+  ]).then(function(results) {
+    var authMap = results[0];      // uid → { email, createdAt }
+    var firestoreSnap = results[1];
+
+    // Build Firestore map: uid → doc data
+    var fsMap = {};
+    firestoreSnap.docs.forEach(function(doc) {
+      fsMap[doc.id] = doc.data();
     });
-    return candidates;
-  }).then(function(candidates) {
+
+    // Merge: union of all UIDs from both sources
+    var allUids = new Set(Object.keys(authMap).concat(Object.keys(fsMap)));
+    var candidates = [];
+
+    allUids.forEach(function(uid) {
+      var authEntry = authMap[uid];   // from Firebase Auth REST
+      var fsEntry   = fsMap[uid];     // from Firestore
+
+      // Determine createdAt — prefer Auth (more reliable), fallback to Firestore
+      var createdAt = null;
+      if (authEntry && authEntry.createdAt) {
+        createdAt = authEntry.createdAt;
+      } else if (fsEntry && fsEntry.createdAt && fsEntry.createdAt.toDate) {
+        createdAt = fsEntry.createdAt.toDate();
+      }
+
+      // Only show accounts older than 24h
+      if (!createdAt || createdAt >= cutoff) return;
+
+      var email = (authEntry && authEntry.email) || (fsEntry && fsEntry.email) || '—';
+      var displayName = (fsEntry && fsEntry.displayName) || '—';
+      var displayName_lower = (fsEntry && fsEntry.displayName_lower) || '';
+
+      candidates.push({
+        uid: uid,
+        email: email,
+        displayName: displayName,
+        createdAt: createdAt,
+        displayName_lower: displayName_lower,
+        inAuth: !!authEntry,       // exists in Firebase Auth
+        inFirestore: !!fsEntry     // exists in Firestore
+      });
+    });
+
+    // Sort: oldest first
+    candidates.sort(function(a, b) { return a.createdAt - b.createdAt; });
+
     allZombies = candidates;
     renderCleanup();
     updateCleanupBadge();
     document.getElementById('cleanupUpdated').textContent =
       'Last scanned: ' + new Date().toLocaleString('en-US') +
-      ' — Showing unverified accounts (emailVerified: false) created more than 24h ago';
+      ' — Showing unverified accounts (Auth + Firestore) created more than 24h ago';
     if (allZombies.length > 0) {
       document.getElementById('cleanupAllBtn').style.display = '';
     }
   }).catch(function(e) {
     document.getElementById('cleanupTbody').innerHTML =
-      '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load: ' + htmlEsc(e.message) + '</td></tr>';
+      '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Scan failed: ' + htmlEsc(e.message) + '</td></tr>';
     document.getElementById('cleanupUpdated').textContent = '⚠️ Scan failed';
   });
 }
@@ -1322,6 +1427,8 @@ function updateCleanupBadge() {
   var badge = document.getElementById('cleanupBadge');
   if (!badge) return;
   var count = allZombies.length;
+  var fsCount   = allZombies.filter(function(z){ return z.inFirestore; }).length;
+  var authCount = allZombies.filter(function(z){ return z.inAuth && !z.inFirestore; }).length;
   if (count > 0) {
     badge.textContent = count;
     badge.style.display = 'inline';
@@ -1329,31 +1436,47 @@ function updateCleanupBadge() {
     badge.style.display = 'none';
   }
   document.getElementById('czTotal').textContent = count;
-  document.getElementById('czFirestore').textContent = count;
-  document.getElementById('czAuth').textContent = count;
+  document.getElementById('czFirestore').textContent = fsCount;
+  document.getElementById('czAuth').textContent = authCount;
 }
 
 function renderCleanup() {
   var tbody = document.getElementById('cleanupTbody');
   if (!allZombies.length) {
-    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">✅ No zombie accounts found (all Firestore users were created within the last 24h)</td></tr>';
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">✅ No zombie accounts found (all unverified accounts were created within the last 24h)</td></tr>';
     return;
   }
   tbody.innerHTML = allZombies.map(function(z, idx) {
     var hoursAgo = Math.floor((Date.now() - z.createdAt.getTime()) / 3600000);
     var timeStr = z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-    var consoleUrl = 'https://console.firebase.google.com/project/_/authentication/users?search=' + encodeURIComponent(z.uid);
+    var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(z.uid);
+
+    // Source tags: where was this zombie detected
+    var sourceTags = '';
+    if (z.inAuth)      sourceTags += '<span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;margin-right:3px;font-weight:700">AUTH</span>';
+    if (z.inFirestore) sourceTags += '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;font-weight:700">FIRESTORE</span>';
+
+    // Firestore status badge
+    var fsBadge = z.inFirestore
+      ? '<span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span>'
+      : '<span class="badge" id="czfs-' + idx + '" style="background:#f3f4f6;color:#6b7280">None</span>';
+
+    // Only show Delete Firestore btn if Firestore data actually exists
+    var delFsBtn = z.inFirestore
+      ? '<button class="btn-del-fs" id="czbtn-' + idx + '" onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>'
+      : '<span style="font-size:10px;color:var(--g400);padding:4px 6px">No FS data</span>';
+
     return '<tr id="czrow-' + idx + '">'
       + '<td><strong style="font-size:12px">' + htmlEsc(z.email) + '</strong>'
-      + '<div style="font-size:10px;color:var(--g400)">' + htmlEsc(z.displayName) + '</div></td>'
+      + '<div style="margin-top:3px">' + sourceTags + '</div></td>'
       + '<td><div class="cleanup-uid" title="' + htmlEsc(z.uid) + '" onclick="copyUID(\'' + z.uid + '\',this)">' + z.uid + '</div>'
       + '<div style="font-size:9px;color:var(--g500);margin-top:2px">click to copy</div></td>'
       + '<td style="font-size:11px">' + timeStr + '</td>'
       + '<td><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:' + (hoursAgo > 72 ? '#c00' : '#e0a800') + '">' + hoursAgo + 'h</span></td>'
-      + '<td><span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span></td>'
+      + '<td>' + fsBadge + '</td>'
       + '<td>'
       + '<a href="' + consoleUrl + '" target="_blank"><button class="btn-console" title="Open Firebase Console to delete Auth account">Open in Console</button></a>'
-      + '<button class="btn-del-fs" id="czbtn-' + idx + '" onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>'
+      + delFsBtn
       + '</td>'
       + '</tr>';
   }).join('');
