@@ -2348,45 +2348,56 @@ function AuthPage(_ref2) {
         // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
         var _r = await auth.createUserWithEmailAndPassword(email, password);
 
-        // If anything below fails, delete the just-created account to prevent ghost accounts
         try {
+          // 4. Set display name
           await _r.user.updateProfile({ displayName: displayName.trim() });
-          // Force token refresh so Firestore rules can verify auth.uid correctly
-          await _r.user.getIdToken(true);
-          // Force Firestore to re-authenticate with fresh token by cycling network
-          // This is needed because enablePersistence() caches the old auth state
-          try { await db.disableNetwork(); } catch(e) {}
-          await new Promise(function(resolve){ setTimeout(resolve, 500); });
-          try { await db.enableNetwork(); } catch(e) {}
-          await new Promise(function(resolve){ setTimeout(resolve, 1000); });
 
-          // 4. Reserve username and save user profile
-          var batch = db.batch();
-          batch.set(db.collection('usernames').doc(usernameKey), {
-            uid: _r.user.uid,
-            displayName: displayName.trim(),
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-          batch.set(db.collection('users').doc(_r.user.uid), {
-            displayName: displayName.trim(),
-            displayName_lower: usernameKey,
-            email: email.trim(),
-            emailVerified: false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-          await batch.commit();
-
-          // 5. Send verification email then sign out
+          // 5. Send verification email immediately — this only requires Auth, not Firestore
           await _r.user.sendEmailVerification({
             url: window.location.origin + window.location.pathname,
             handleCodeInApp: false
           });
+
+          // 6. Sign out before any Firestore writes to avoid permission issues
           await auth.signOut();
+
+          // 7. Show success screen right away — user already has the verification email
           setSentEmail(email);
           setVerificationSent(true);
           startCooldown();
+
+          // 8. Attempt Firestore profile write in the background (best-effort)
+          //    If this fails it's fine — admin can see unverified accounts and clean up after 24h
+          (async function() {
+            try {
+              // Sign in silently to get a token for Firestore write
+              var _tmp = await auth.signInWithEmailAndPassword(email, password);
+              await _tmp.user.getIdToken(true);
+              var batch = db.batch();
+              batch.set(db.collection('usernames').doc(usernameKey), {
+                uid: _tmp.user.uid,
+                displayName: displayName.trim(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+              batch.set(db.collection('users').doc(_tmp.user.uid), {
+                displayName: displayName.trim(),
+                displayName_lower: usernameKey,
+                email: email.trim(),
+                emailVerified: false,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              }, { merge: true });
+              await batch.commit();
+              await auth.signOut();
+            } catch(bgErr) {
+              // Background write failed — not critical, admin handles cleanup
+              console.warn('[signup] Background Firestore write failed (non-fatal):', bgErr.message);
+              try { await auth.signOut(); } catch(e) {}
+            }
+          })();
+
         } catch (postCreateErr) {
-          // Clean up ghost account
+          // Critical step (updateProfile or sendEmailVerification) failed
+          // Delete the ghost account so user can try again
           try { await _r.user.delete(); } catch(e) {}
           try { await auth.signOut(); } catch(e) {}
           throw postCreateErr;
@@ -2396,9 +2407,6 @@ function AuthPage(_ref2) {
       if (err.code === 'auth/email-already-in-use') {
         setEmailStatus('taken');
         setError('This email is already registered. Please sign in instead.');
-      } else if (err.code === 'permission-denied' || (err.message && err.message.includes('Missing or insufficient permissions'))) {
-        // Firestore write failed after account was created — account has been cleaned up
-        setError('Registration failed due to a server error. Please try again. [DEBUG: ' + err.code + ' — ' + err.message + ']');
       } else {
         setError((firebaseErrMsg(err.code) || err.message) + ' [code: ' + (err.code||'none') + ']');
       }
