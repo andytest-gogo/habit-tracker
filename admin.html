@@ -592,7 +592,7 @@ var ADMIN_CUSTOM_CLAIM = 'admin'; // claim key — must be true in Firebase toke
 var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 // Set to true ONLY during initial onboarding to allow email-only access before claim is set
 // Switch to false immediately once admin claim is configured in Firebase
-var ALLOW_EMAIL_ONLY_FALLBACK = false;
+var ALLOW_EMAIL_ONLY_FALLBACK = true; // ⚠️ TEMP: custom claim was lost — re-set claim then switch back to false
 // ────────────────────────────────────────────────────────────────────
 
 var allUsers=[], allPosts=[], allHabits=[];
