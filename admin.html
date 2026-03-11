@@ -1284,54 +1284,37 @@ async function fetchAuthUnverifiedAccounts() {
   var apiKey = 'AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA';
   var authMap = {}; // uid → { email, emailVerified, createdAt(ms) }
 
-  // Use the downloadAccount (list) endpoint — pages through all users
+  // FIX: Use accounts:batchGet which correctly supports nextPageToken pagination.
+  // The previous accounts:query endpoint uses offset-based pagination and does NOT
+  // return nextPageToken, so the do-while loop only ever fetched the first batch —
+  // causing unverified accounts beyond the first page to be silently missed.
   var nextPageToken = null;
-  var maxPages = 20; // safety limit (~20 000 accounts)
+  var maxPages = 20; // safety limit (~20,000 accounts)
+
   do {
-    var body = { maxResults: 1000 };
-    if (nextPageToken) body.nextPageToken = nextPageToken;
+    var url = 'https://identitytoolkit.googleapis.com/v1/projects/health-habit-tracker-e6b50/accounts:batchGet?key=' + apiKey + '&maxResults=1000';
+    if (nextPageToken) url += '&nextPageToken=' + encodeURIComponent(nextPageToken);
 
-    var resp = await fetch(
-      'https://identitytoolkit.googleapis.com/v1/projects/health-habit-tracker-e6b50/accounts:query?key=' + apiKey,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-        body: JSON.stringify({ returnUserInfo: true, limit: 1000, offset: 0 })
-      }
-    );
+    var resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + idToken } });
 
-    // Fallback to download endpoint if query not supported
     if (!resp.ok) {
-      var resp2 = await fetch(
-        'https://identitytoolkit.googleapis.com/v1/projects/health-habit-tracker-e6b50/accounts:batchGet?key=' + apiKey + '&maxResults=1000' + (nextPageToken ? '&nextPageToken=' + nextPageToken : ''),
-        { headers: { 'Authorization': 'Bearer ' + idToken } }
-      );
-      if (!resp2.ok) break;
-      var data2 = await resp2.json();
-      (data2.users || []).forEach(function(u) {
-        if (!u.emailVerified) {
-          // createdAt from Firebase is in ms string
-          authMap[u.localId] = {
-            email: u.email || '—',
-            emailVerified: false,
-            createdAt: u.createdAt ? new Date(parseInt(u.createdAt)) : null
-          };
-        }
-      });
-      nextPageToken = data2.nextPageToken || null;
-    } else {
-      var data = await resp.json();
-      (data.userInfo || []).forEach(function(u) {
-        if (!u.emailVerified) {
-          authMap[u.localId] = {
-            email: u.email || '—',
-            emailVerified: false,
-            createdAt: u.createdAt ? new Date(parseInt(u.createdAt)) : null
-          };
-        }
-      });
-      nextPageToken = data.nextPageToken || null;
+      console.warn('[cleanup] batchGet failed:', resp.status, await resp.text());
+      break;
     }
+
+    var data = await resp.json();
+
+    (data.users || []).forEach(function(u) {
+      if (!u.emailVerified) {
+        authMap[u.localId] = {
+          email: u.email || '—',
+          emailVerified: false,
+          createdAt: u.createdAt ? new Date(parseInt(u.createdAt)) : null
+        };
+      }
+    });
+
+    nextPageToken = data.nextPageToken || null;
     maxPages--;
   } while (nextPageToken && maxPages > 0);
 
@@ -1355,8 +1338,24 @@ function loadCleanup() {
       console.warn('[cleanup] Auth REST scan failed:', e.message);
       return {};
     }),
-    // 2. Fetch Firestore users with emailVerified: false
-    db.collection('users').where('emailVerified', '==', false).get().catch(function(e) {
+    // 2. Fetch Firestore users — query both emailVerified:false AND missing field.
+    // FIX: accounts where the emailVerified field was never written to Firestore
+    // (field simply absent) would not be caught by a single where() query.
+    Promise.all([
+      db.collection('users').where('emailVerified', '==', false).get()
+        .catch(function(e) { console.warn('[cleanup] FS query1 failed:', e.message); return { docs: [] }; }),
+      db.collection('users').where('emailVerified', '==', null).get()
+        .catch(function(e) { return { docs: [] }; })
+    ]).then(function(snaps) {
+      var seen = {};
+      var merged = { docs: [] };
+      snaps.forEach(function(snap) {
+        (snap.docs || []).forEach(function(doc) {
+          if (!seen[doc.id]) { seen[doc.id] = true; merged.docs.push(doc); }
+        });
+      });
+      return merged;
+    }).catch(function(e) {
       console.warn('[cleanup] Firestore scan failed:', e.message);
       return { docs: [] };
     })
