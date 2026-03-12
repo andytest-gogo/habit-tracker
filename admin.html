@@ -125,6 +125,22 @@ tr:hover td{background:var(--g50)}
   .quota-summary{grid-template-columns:repeat(2,1fr)}
   table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
+
+/* ── Activity filter buttons ── */
+.act-filter{padding:6px 13px;border:1px solid var(--g200);background:var(--white);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;cursor:pointer;color:var(--g500);font-family:var(--font);transition:all .15s}
+.act-filter:hover{border-color:var(--black);color:var(--black)}
+.act-filter.on{background:var(--black);border-color:var(--black);color:var(--white)}
+/* ── Activity status pills ── */
+.apill{display:inline-block;padding:3px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;line-height:1.6}
+.apill-active {background:#dcfce7;color:#15803d}
+.apill-idle   {background:#fef9c3;color:#92400e}
+.apill-dormant{background:#fee2e2;color:#991b1b}
+.apill-never  {background:#f3f4f6;color:#6b7280}
+/* ── Last-seen text colour ── */
+.ls-active {color:#16a34a;font-weight:600}
+.ls-idle   {color:#ca8a04;font-weight:600}
+.ls-dormant{color:#dc2626;font-weight:600}
+.ls-never  {color:#9ca3af}
 </style>
 </head>
 <body>
@@ -221,12 +237,76 @@ tr:hover td{background:var(--g50)}
     <!-- Users -->
     <div class="pg" id="pg-users">
       <div class="pg-title">Users</div>
-      <div class="pg-sub">All registered users</div>
-      <input class="search" id="userSearch" placeholder="Search by name / UID...">
+      <div class="pg-sub">Activity-based user segmentation</div>
+
+      <!-- Activity summary cards -->
+      <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
+        <div class="stat dark">
+          <div class="stat-lbl">Total</div>
+          <div class="stat-val" id="uStatTotal">—</div>
+          <div class="stat-note">Verified users</div>
+        </div>
+        <div class="stat" style="border-top:3px solid #16a34a">
+          <div class="stat-lbl" style="color:#16a34a">🟢 Active</div>
+          <div class="stat-val" id="uStatActive">—</div>
+          <div class="stat-note">Seen within 7 days</div>
+        </div>
+        <div class="stat" style="border-top:3px solid #ca8a04">
+          <div class="stat-lbl" style="color:#ca8a04">🟡 Idle</div>
+          <div class="stat-val" id="uStatIdle">—</div>
+          <div class="stat-note">8 – 30 days ago</div>
+        </div>
+        <div class="stat" style="border-top:3px solid #dc2626">
+          <div class="stat-lbl" style="color:#dc2626">🔴 Dormant</div>
+          <div class="stat-val" id="uStatDormant">—</div>
+          <div class="stat-note">31+ days ago</div>
+        </div>
+        <div class="stat" style="border-top:3px solid #9ca3af">
+          <div class="stat-lbl" style="color:#9ca3af">⚪ Never</div>
+          <div class="stat-val" id="uStatNever">—</div>
+          <div class="stat-note">No login recorded</div>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <input class="search" id="userSearch" placeholder="Search by name / email / UID..."
+          style="flex:1;min-width:180px;margin-bottom:0">
+        <div style="display:flex;gap:5px;flex-shrink:0" id="activityFilterBtns">
+          <button class="act-filter on" data-f="all"     onclick="setActFilter('all')">All</button>
+          <button class="act-filter"    data-f="active"  onclick="setActFilter('active')">🟢 Active</button>
+          <button class="act-filter"    data-f="idle"    onclick="setActFilter('idle')">🟡 Idle</button>
+          <button class="act-filter"    data-f="dormant" onclick="setActFilter('dormant')">🔴 Dormant</button>
+          <button class="act-filter"    data-f="never"   onclick="setActFilter('never')">⚪ Never</button>
+        </div>
+        <select id="userSortSel" onchange="renderUsers(document.getElementById('userSearch').value||'')"
+          style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);background:var(--white);outline:none;cursor:pointer;flex-shrink:0">
+          <option value="lastSeen">Sort: Last Seen ↓</option>
+          <option value="habits">Sort: Habits ↓</option>
+          <option value="posts">Sort: Posts ↓</option>
+          <option value="completion">Sort: Completion ↓</option>
+          <option value="joined">Sort: Joined ↓</option>
+        </select>
+      </div>
+
       <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">Users</div><div class="tbl-cnt" id="userCnt">—</div></div>
-        <table><thead><tr><th>User</th><th>UID</th><th>Habits</th><th>Posts</th><th>Avg. Completion</th><th>Action</th></tr></thead>
-        <tbody id="userTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody></table>
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Users</div>
+          <div class="tbl-cnt" id="userCnt">—</div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>User</th>
+            <th>Status</th>
+            <th>Last Seen</th>
+            <th>Joined</th>
+            <th>Habits</th>
+            <th>Posts</th>
+            <th>Avg. Completion</th>
+            <th>Action</th>
+          </tr></thead>
+          <tbody id="userTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
+        </table>
       </div>
     </div>
 
@@ -634,6 +714,7 @@ var ALLOW_EMAIL_ONLY_FALLBACK = false;
 // ────────────────────────────────────────────────────────────────────
 
 var allUsers=[], allPosts=[], allHabits=[];
+var _actFilter='all';
 var catChart=null, userChart=null;
 var _sessionTimer = null;
 var _lastActivity = Date.now();
@@ -966,26 +1047,64 @@ function loadPosts(){
   }).catch(function(){ allPosts=[]; });
 }
 
+/* ── Activity classification helper ── */
+function userActivity(lastSeen){
+  if(!lastSeen) return 'never';
+  var ts = lastSeen.toDate ? lastSeen.toDate() : new Date(lastSeen);
+  var days = (Date.now() - ts.getTime()) / 86400000;
+  if(days <= 7)  return 'active';
+  if(days <= 30) return 'idle';
+  return 'dormant';
+}
+
+/* ── Human-readable "last seen" ── */
+function fmtLastSeen(lastSeen){
+  if(!lastSeen) return {txt:'Never', cls:'ls-never'};
+  var ts = lastSeen.toDate ? lastSeen.toDate() : new Date(lastSeen);
+  var mins  = Math.floor((Date.now()-ts.getTime())/60000);
+  var txt;
+  if(mins < 2)        txt = 'Just now';
+  else if(mins < 60)  txt = mins + ' mins ago';
+  else if(mins < 1440)txt = Math.floor(mins/60) + ' hrs ago';
+  else if(mins < 10080) txt = Math.floor(mins/1440) + ' days ago';
+  else                txt = ts.toLocaleDateString();
+  var act = userActivity(lastSeen);
+  var cls = act==='active'?'ls-active':act==='idle'?'ls-idle':act==='dormant'?'ls-dormant':'ls-never';
+  return {txt:txt, cls:cls};
+}
+
+/* ── Current activity filter state ── */
+var _actFilter = 'all';
+function setActFilter(f){
+  _actFilter = f;
+  document.querySelectorAll('.act-filter').forEach(function(b){
+    b.classList.toggle('on', b.dataset.f === f);
+  });
+  renderUsers(document.getElementById('userSearch').value||'');
+}
+
 function buildUsers(){
   var map={};
 
   // Add users from Firestore users collection (those who have logged in)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
-    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', photoURL:u.photoURL||'', habits:[], posts:[], lastSeen:u.lastSeen};
+    var createdAt = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt)) : null;
+    map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', photoURL:u.photoURL||'',
+              habits:[], posts:[], lastSeen:u.lastSeen, createdAt:createdAt};
   });
 
   // Supplement from habits
   allHabits.forEach(function(h){
     if(!h.userId) return;
-    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'User',email:'',habits:[],posts:[]};
+    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'User',email:'',habits:[],posts:[],lastSeen:null,createdAt:null};
     map[h.userId].habits.push(h);
   });
 
   // Supplement from posts
   allPosts.forEach(function(p){
     if(!p.userId) return;
-    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[]};
+    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[],lastSeen:null,createdAt:null};
     if(p.user) map[p.userId].name=p.user;
     map[p.userId].posts.push(p);
   });
@@ -995,6 +1114,15 @@ function buildUsers(){
 
 function renderStats(){
   document.getElementById('sUsers').textContent=allUsers.length;
+  /* Also update activity stat cards if on users page */
+  var counts={active:0,idle:0,dormant:0,never:0};
+  allUsers.forEach(function(u){ counts[userActivity(u.lastSeen)]++; });
+  var el;
+  el=document.getElementById('uStatTotal');   if(el) el.textContent=allUsers.length;
+  el=document.getElementById('uStatActive');  if(el) el.textContent=counts.active;
+  el=document.getElementById('uStatIdle');    if(el) el.textContent=counts.idle;
+  el=document.getElementById('uStatDormant'); if(el) el.textContent=counts.dormant;
+  el=document.getElementById('uStatNever');   if(el) el.textContent=counts.never;
   document.getElementById('sPosts').textContent=allPosts.length;
   document.getElementById('sHabits').textContent=allHabits.length;
   var c=allPosts.reduce(function(s,p){ return s+(p.commentCount||0); },0);
@@ -1033,19 +1161,72 @@ function renderRecent(){
 
 function renderUsers(f){
   var tb=document.getElementById('userTbody');
-  var list=allUsers.filter(function(u){ return !f||u.name.includes(f)||u.uid.includes(f)||(u.email||'').includes(f); });
-  document.getElementById('userCnt').textContent=list.length+' user(s)';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="5">No matching users</td></tr>';return;}
-  tb.innerHTML=list.map(function(u){
-    var r=u.habits.length?Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length):0;
-    var avHtml = avatarHtml(u.uid, u.name);
+
+  /* ── Sort ── */
+  var sortKey = document.getElementById('userSortSel') ? document.getElementById('userSortSel').value : 'lastSeen';
+  var sorted = allUsers.slice().sort(function(a,b){
+    if(sortKey==='habits')     return b.habits.length - a.habits.length;
+    if(sortKey==='posts')      return b.posts.length  - a.posts.length;
+    if(sortKey==='joined'){
+      var at=a.createdAt?a.createdAt.getTime():0, bt=b.createdAt?b.createdAt.getTime():0;
+      return bt-at;
+    }
+    if(sortKey==='completion'){
+      var ar=a.habits.length?Math.round(a.habits.reduce(function(s,h){return s+calcRate(h);},0)/a.habits.length):0;
+      var br=b.habits.length?Math.round(b.habits.reduce(function(s,h){return s+calcRate(h);},0)/b.habits.length):0;
+      return br-ar;
+    }
+    /* default: lastSeen */
+    var at2=a.lastSeen?(a.lastSeen.toDate?a.lastSeen.toDate():new Date(a.lastSeen)).getTime():0;
+    var bt2=b.lastSeen?(b.lastSeen.toDate?b.lastSeen.toDate():new Date(b.lastSeen)).getTime():0;
+    return bt2-at2;
+  });
+
+  /* ── Activity filter ── */
+  var filtered = sorted.filter(function(u){
+    if(_actFilter!=='all' && userActivity(u.lastSeen)!==_actFilter) return false;
+    if(!f) return true;
+    var q=f.toLowerCase();
+    return u.name.toLowerCase().includes(q)||u.uid.includes(q)||(u.email||'').toLowerCase().includes(q);
+  });
+
+  /* ── Update stat cards ── */
+  var counts={active:0,idle:0,dormant:0,never:0};
+  allUsers.forEach(function(u){ counts[userActivity(u.lastSeen)]++; });
+  var el;
+  el=document.getElementById('uStatTotal');   if(el) el.textContent=allUsers.length;
+  el=document.getElementById('uStatActive');  if(el) el.textContent=counts.active;
+  el=document.getElementById('uStatIdle');    if(el) el.textContent=counts.idle;
+  el=document.getElementById('uStatDormant'); if(el) el.textContent=counts.dormant;
+  el=document.getElementById('uStatNever');   if(el) el.textContent=counts.never;
+
+  document.getElementById('userCnt').textContent = filtered.length+' user(s)';
+  if(!filtered.length){
+    tb.innerHTML='<tr class="loading-row"><td colspan="8">No matching users</td></tr>';
+    return;
+  }
+
+  tb.innerHTML=filtered.map(function(u){
+    var r    = u.habits.length ? Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length) : 0;
+    var act  = userActivity(u.lastSeen);
+    var ls   = fmtLastSeen(u.lastSeen);
+    var joined = u.createdAt ? u.createdAt.toLocaleDateString() : '—';
+    var pillLabel = {active:'Active',idle:'Idle',dormant:'Dormant',never:'Never'}[act];
+    var pillCls   = 'apill apill-'+act;
+    var avHtml    = avatarHtml(u.uid, u.name);
     return '<tr>'+
-      '<td><div class="uc">'+avHtml+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
-      '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
-      '<td style="font-size:10px;color:var(--g400);font-family:var(--mono)">'+u.uid.slice(0,16)+'…</td>'+
-      '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
+      '<td><div class="uc">'+avHtml+'<div>'+
+        '<strong>'+htmlEsc(u.name)+'</strong>'+
+        '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div>'+
+      '</div></div></td>'+
+      '<td><span class="'+pillCls+'">'+pillLabel+'</span></td>'+
+      '<td style="font-size:11px;white-space:nowrap" class="'+ls.cls+'">'+htmlEsc(ls.txt)+'</td>'+
+      '<td style="font-size:11px;color:var(--g400);white-space:nowrap">'+joined+'</td>'+
+      '<td>'+u.habits.length+'</td>'+
+      '<td>'+u.posts.length+'</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
-      '<td><button class="del" onclick="deleteUserData(\''+u.uid+'\',\''+htmlEsc(u.name)+'\')" title="Delete all Firestore data for this user">Delete Data</button></td></tr>';
+      '<td><button class="del" onclick="deleteUserData(''+u.uid+'',''+htmlEsc(u.name)+'')" title="Delete all Firestore data">Delete Data</button></td>'+
+      '</tr>';
   }).join('');
 }
 
