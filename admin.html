@@ -314,7 +314,7 @@ tr:hover td{background:var(--g50)}
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
         <div class="stat dark"><div class="stat-lbl">Zombie Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Unverified &gt;24h (Auth+FS)</div></div>
         <div class="stat"><div class="stat-lbl">Firestore Data</div><div class="stat-val" id="czFirestore">—</div><div class="stat-note">Can be auto-deleted</div></div>
-        <div class="stat"><div class="stat-lbl">Auth Only</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">No Firestore data</div></div>
+        <div class="stat"><div class="stat-lbl">Auth Only</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">Requires backend SDK</div></div>
       </div>
 
       <!-- Info banner -->
@@ -1271,172 +1271,101 @@ function resetUserDaily(uid){
 
 /* ══════════════════════════════════════════
    CLEANUP — Zombie Account Scanner & Firestore Cleaner
+   Strategy: Full Firestore scan + JS-side filtering.
+   The Firebase Auth REST batchGet API requires a backend service account token
+   and cannot be called from the frontend with a user ID token (returns 403).
+   Instead, we fetch ALL users from Firestore and filter in JS for:
+     1. emailVerified === false  (explicit field)
+     2. emailVerified field is missing/undefined  (never written)
+     3. createdAt older than 24h
 ══════════════════════════════════════════ */
 var allZombies = [];
-
-// Fetch all unverified Auth accounts via Firebase Auth REST API (uses admin ID token)
-// Firebase's download/list endpoint requires an ID token with admin claim
-async function fetchAuthUnverifiedAccounts() {
-  var user = auth.currentUser;
-  if (!user) return {};
-  var idToken = await user.getIdToken(true);
-
-  var apiKey = 'AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA';
-  var authMap = {}; // uid → { email, emailVerified, createdAt(ms) }
-
-  // FIX: Use accounts:batchGet which correctly supports nextPageToken pagination.
-  // The previous accounts:query endpoint uses offset-based pagination and does NOT
-  // return nextPageToken, so the do-while loop only ever fetched the first batch —
-  // causing unverified accounts beyond the first page to be silently missed.
-  var nextPageToken = null;
-  var maxPages = 20; // safety limit (~20,000 accounts)
-
-  do {
-    var url = 'https://identitytoolkit.googleapis.com/v1/projects/health-habit-tracker-e6b50/accounts:batchGet?key=' + apiKey + '&maxResults=1000';
-    if (nextPageToken) url += '&nextPageToken=' + encodeURIComponent(nextPageToken);
-
-    var resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + idToken } });
-
-    if (!resp.ok) {
-      console.warn('[cleanup] batchGet failed:', resp.status, await resp.text());
-      break;
-    }
-
-    var data = await resp.json();
-
-    (data.users || []).forEach(function(u) {
-      if (!u.emailVerified) {
-        authMap[u.localId] = {
-          email: u.email || '—',
-          emailVerified: false,
-          createdAt: u.createdAt ? new Date(parseInt(u.createdAt)) : null
-        };
-      }
-    });
-
-    nextPageToken = data.nextPageToken || null;
-    maxPages--;
-  } while (nextPageToken && maxPages > 0);
-
-  return authMap;
-}
 
 function loadCleanup() {
   var tbody = document.getElementById('cleanupTbody');
   var updated = document.getElementById('cleanupUpdated');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning Firebase Auth + Firestore for unverified accounts...</td></tr>';
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning Firestore for unverified accounts...</td></tr>';
   updated.textContent = 'Scanning...';
   document.getElementById('cleanupAllBtn').style.display = 'none';
   allZombies = [];
 
   var cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
-  // Run Auth scan + Firestore scan in parallel
-  Promise.all([
-    // 1. Fetch unverified Auth accounts via REST API
-    fetchAuthUnverifiedAccounts().catch(function(e) {
-      console.warn('[cleanup] Auth REST scan failed:', e.message);
-      return {};
-    }),
-    // 2. Fetch Firestore users — query both emailVerified:false AND missing field.
-    // FIX: accounts where the emailVerified field was never written to Firestore
-    // (field simply absent) would not be caught by a single where() query.
-    Promise.all([
-      db.collection('users').where('emailVerified', '==', false).get()
-        .catch(function(e) { console.warn('[cleanup] FS query1 failed:', e.message); return { docs: [] }; }),
-      db.collection('users').where('emailVerified', '==', null).get()
-        .catch(function(e) { return { docs: [] }; })
-    ]).then(function(snaps) {
-      var seen = {};
-      var merged = { docs: [] };
-      snaps.forEach(function(snap) {
-        (snap.docs || []).forEach(function(doc) {
-          if (!seen[doc.id]) { seen[doc.id] = true; merged.docs.push(doc); }
+  // Full scan: fetch ALL users from Firestore, then filter in JS.
+  // This correctly catches docs where emailVerified is:
+  //   - explicitly false
+  //   - missing (field never written — Firestore cannot query for absent fields)
+  db.collection('users').get()
+    .then(function(snap) {
+      var candidates = [];
+
+      snap.docs.forEach(function(doc) {
+        var data = doc.data();
+        var uid  = doc.id;
+
+        // Skip verified users (Google OAuth users have emailVerified: true)
+        // emailVerified missing is treated as unverified (same as false)
+        var isVerified = data.emailVerified === true;
+        if (isVerified) return;
+
+        // Determine createdAt from Firestore Timestamp
+        var createdAt = null;
+        if (data.createdAt && data.createdAt.toDate) {
+          createdAt = data.createdAt.toDate();
+        } else if (data.createdAt && typeof data.createdAt === 'string') {
+          createdAt = new Date(data.createdAt);
+        }
+
+        // Skip accounts created within the last 24h (give users time to verify)
+        if (!createdAt || createdAt >= cutoff) return;
+
+        candidates.push({
+          uid:              uid,
+          email:            data.email || '—',
+          displayName:      data.displayName || '—',
+          displayName_lower: data.displayName_lower || '',
+          createdAt:        createdAt,
+          inFirestore:      true,
+          // emailVerified field status for UI info
+          evField:          Object.prototype.hasOwnProperty.call(data, 'emailVerified')
+                              ? String(data.emailVerified)
+                              : '(missing)'
         });
       });
-      return merged;
-    }).catch(function(e) {
-      console.warn('[cleanup] Firestore scan failed:', e.message);
-      return { docs: [] };
-    })
-  ]).then(function(results) {
-    var authMap = results[0];      // uid → { email, createdAt }
-    var firestoreSnap = results[1];
 
-    // Build Firestore map: uid → doc data
-    var fsMap = {};
-    firestoreSnap.docs.forEach(function(doc) {
-      fsMap[doc.id] = doc.data();
-    });
+      // Sort: oldest first
+      candidates.sort(function(a, b) { return a.createdAt - b.createdAt; });
 
-    // Merge: union of all UIDs from both sources
-    var allUids = new Set(Object.keys(authMap).concat(Object.keys(fsMap)));
-    var candidates = [];
-
-    allUids.forEach(function(uid) {
-      var authEntry = authMap[uid];   // from Firebase Auth REST
-      var fsEntry   = fsMap[uid];     // from Firestore
-
-      // Determine createdAt — prefer Auth (more reliable), fallback to Firestore
-      var createdAt = null;
-      if (authEntry && authEntry.createdAt) {
-        createdAt = authEntry.createdAt;
-      } else if (fsEntry && fsEntry.createdAt && fsEntry.createdAt.toDate) {
-        createdAt = fsEntry.createdAt.toDate();
+      allZombies = candidates;
+      renderCleanup();
+      updateCleanupBadge();
+      document.getElementById('cleanupUpdated').textContent =
+        'Last scanned: ' + new Date().toLocaleString('en-US') +
+        ' — Scanned ' + snap.docs.length + ' users, found ' + candidates.length + ' zombie account(s) (unverified + older than 24h)';
+      if (allZombies.length > 0) {
+        document.getElementById('cleanupAllBtn').style.display = '';
       }
-
-      // Only show accounts older than 24h
-      if (!createdAt || createdAt >= cutoff) return;
-
-      var email = (authEntry && authEntry.email) || (fsEntry && fsEntry.email) || '—';
-      var displayName = (fsEntry && fsEntry.displayName) || '—';
-      var displayName_lower = (fsEntry && fsEntry.displayName_lower) || '';
-
-      candidates.push({
-        uid: uid,
-        email: email,
-        displayName: displayName,
-        createdAt: createdAt,
-        displayName_lower: displayName_lower,
-        inAuth: !!authEntry,       // exists in Firebase Auth
-        inFirestore: !!fsEntry     // exists in Firestore
-      });
+    })
+    .catch(function(e) {
+      document.getElementById('cleanupTbody').innerHTML =
+        '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Scan failed: ' + htmlEsc(e.message) + '</td></tr>';
+      document.getElementById('cleanupUpdated').textContent = '⚠️ Scan failed';
     });
-
-    // Sort: oldest first
-    candidates.sort(function(a, b) { return a.createdAt - b.createdAt; });
-
-    allZombies = candidates;
-    renderCleanup();
-    updateCleanupBadge();
-    document.getElementById('cleanupUpdated').textContent =
-      'Last scanned: ' + new Date().toLocaleString('en-US') +
-      ' — Showing unverified accounts (Auth + Firestore) created more than 24h ago';
-    if (allZombies.length > 0) {
-      document.getElementById('cleanupAllBtn').style.display = '';
-    }
-  }).catch(function(e) {
-    document.getElementById('cleanupTbody').innerHTML =
-      '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Scan failed: ' + htmlEsc(e.message) + '</td></tr>';
-    document.getElementById('cleanupUpdated').textContent = '⚠️ Scan failed';
-  });
 }
 
 function updateCleanupBadge() {
   var badge = document.getElementById('cleanupBadge');
   if (!badge) return;
   var count = allZombies.length;
-  var fsCount   = allZombies.filter(function(z){ return z.inFirestore; }).length;
-  var authCount = allZombies.filter(function(z){ return z.inAuth && !z.inFirestore; }).length;
   if (count > 0) {
     badge.textContent = count;
     badge.style.display = 'inline';
   } else {
     badge.style.display = 'none';
   }
-  document.getElementById('czTotal').textContent = count;
-  document.getElementById('czFirestore').textContent = fsCount;
-  document.getElementById('czAuth').textContent = authCount;
+  document.getElementById('czTotal').textContent     = count;
+  document.getElementById('czFirestore').textContent = count; // all are from Firestore
+  document.getElementById('czAuth').textContent      = '—';  // Auth scan not available from frontend
 }
 
 function renderCleanup() {
@@ -1450,24 +1379,19 @@ function renderCleanup() {
     var timeStr = z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'});
     var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(z.uid);
 
-    // Source tags: where was this zombie detected
-    var sourceTags = '';
-    if (z.inAuth)      sourceTags += '<span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;margin-right:3px;font-weight:700">AUTH</span>';
-    if (z.inFirestore) sourceTags += '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;font-weight:700">FIRESTORE</span>';
+    // emailVerified field status tag
+    var evTag = z.evField === 'false'
+      ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;font-weight:700">emailVerified: false</span>'
+      : '<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:1px 5px;font-weight:700">field missing</span>';
 
-    // Firestore status badge
-    var fsBadge = z.inFirestore
-      ? '<span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span>'
-      : '<span class="badge" id="czfs-' + idx + '" style="background:#f3f4f6;color:#6b7280">None</span>';
+    // Firestore status badge — always exists since we scanned from Firestore
+    var fsBadge = '<span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span>';
 
-    // Only show Delete Firestore btn if Firestore data actually exists
-    var delFsBtn = z.inFirestore
-      ? '<button class="btn-del-fs" id="czbtn-' + idx + '" onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>'
-      : '<span style="font-size:10px;color:var(--g400);padding:4px 6px">No FS data</span>';
+    var delFsBtn = '<button class="btn-del-fs" id="czbtn-' + idx + '" onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>';
 
     return '<tr id="czrow-' + idx + '">'
       + '<td><strong style="font-size:12px">' + htmlEsc(z.email) + '</strong>'
-      + '<div style="margin-top:3px">' + sourceTags + '</div></td>'
+      + '<div style="margin-top:3px">' + evTag + '</div></td>'
       + '<td><div class="cleanup-uid" title="' + htmlEsc(z.uid) + '" onclick="copyUID(\'' + z.uid + '\',this)">' + z.uid + '</div>'
       + '<div style="font-size:9px;color:var(--g500);margin-top:2px">click to copy</div></td>'
       + '<td style="font-size:11px">' + timeStr + '</td>'
