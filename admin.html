@@ -1073,8 +1073,6 @@ function fmtLastSeen(lastSeen){
   return {txt:txt, cls:cls};
 }
 
-/* ── Current activity filter state ── */
-var _actFilter = 'all';
 function setActFilter(f){
   _actFilter = f;
   document.querySelectorAll('.act-filter').forEach(function(b){
@@ -1161,36 +1159,29 @@ function renderRecent(){
 
 function renderUsers(f){
   var tb=document.getElementById('userTbody');
-
-  /* ── Sort ── */
   var sortKey = document.getElementById('userSortSel') ? document.getElementById('userSortSel').value : 'lastSeen';
   var sorted = allUsers.slice().sort(function(a,b){
-    if(sortKey==='habits')     return b.habits.length - a.habits.length;
-    if(sortKey==='posts')      return b.posts.length  - a.posts.length;
-    if(sortKey==='joined'){
-      var at=a.createdAt?a.createdAt.getTime():0, bt=b.createdAt?b.createdAt.getTime():0;
-      return bt-at;
-    }
+    if(sortKey==='habits')    return b.habits.length - a.habits.length;
+    if(sortKey==='posts')     return b.posts.length  - a.posts.length;
     if(sortKey==='completion'){
       var ar=a.habits.length?Math.round(a.habits.reduce(function(s,h){return s+calcRate(h);},0)/a.habits.length):0;
       var br=b.habits.length?Math.round(b.habits.reduce(function(s,h){return s+calcRate(h);},0)/b.habits.length):0;
       return br-ar;
     }
-    /* default: lastSeen */
-    var at2=a.lastSeen?(a.lastSeen.toDate?a.lastSeen.toDate():new Date(a.lastSeen)).getTime():0;
-    var bt2=b.lastSeen?(b.lastSeen.toDate?b.lastSeen.toDate():new Date(b.lastSeen)).getTime():0;
-    return bt2-at2;
+    if(sortKey==='joined'){
+      var aj=a.createdAt?a.createdAt.getTime():0, bj=b.createdAt?b.createdAt.getTime():0;
+      return bj-aj;
+    }
+    var at=a.lastSeen?(a.lastSeen.toDate?a.lastSeen.toDate():new Date(a.lastSeen)).getTime():0;
+    var bt=b.lastSeen?(b.lastSeen.toDate?b.lastSeen.toDate():new Date(b.lastSeen)).getTime():0;
+    return bt-at;
   });
-
-  /* ── Activity filter ── */
   var filtered = sorted.filter(function(u){
     if(_actFilter!=='all' && userActivity(u.lastSeen)!==_actFilter) return false;
     if(!f) return true;
     var q=f.toLowerCase();
     return u.name.toLowerCase().includes(q)||u.uid.includes(q)||(u.email||'').toLowerCase().includes(q);
   });
-
-  /* ── Update stat cards ── */
   var counts={active:0,idle:0,dormant:0,never:0};
   allUsers.forEach(function(u){ counts[userActivity(u.lastSeen)]++; });
   var el;
@@ -1199,33 +1190,26 @@ function renderUsers(f){
   el=document.getElementById('uStatIdle');    if(el) el.textContent=counts.idle;
   el=document.getElementById('uStatDormant'); if(el) el.textContent=counts.dormant;
   el=document.getElementById('uStatNever');   if(el) el.textContent=counts.never;
-
   document.getElementById('userCnt').textContent = filtered.length+' user(s)';
-  if(!filtered.length){
-    tb.innerHTML='<tr class="loading-row"><td colspan="8">No matching users</td></tr>';
-    return;
-  }
-
+  if(!filtered.length){tb.innerHTML='<tr class="loading-row"><td colspan="8">No matching users</td></tr>';return;}
   tb.innerHTML=filtered.map(function(u){
-    var r    = u.habits.length ? Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length) : 0;
-    var act  = userActivity(u.lastSeen);
-    var ls   = fmtLastSeen(u.lastSeen);
-    var joined = u.createdAt ? u.createdAt.toLocaleDateString() : '—';
+    var r   = u.habits.length ? Math.round(u.habits.reduce(function(s,h){return s+calcRate(h);},0)/u.habits.length) : 0;
+    var act = userActivity(u.lastSeen);
+    var ls  = fmtLastSeen(u.lastSeen);
+    var joined = u.createdAt ? u.createdAt.toLocaleDateString() : '\u2014';
     var pillLabel = {active:'Active',idle:'Idle',dormant:'Dormant',never:'Never'}[act];
-    var pillCls   = 'apill apill-'+act;
-    var avHtml    = avatarHtml(u.uid, u.name);
+    var av  = avatarHtml(u.uid, u.name);
+    var safeUid  = u.uid.replace(/'/g,"\\'");
+    var safeName = htmlEsc(u.name).replace(/'/g,"&#39;");
     return '<tr>'+
-      '<td><div class="uc">'+avHtml+'<div>'+
-        '<strong>'+htmlEsc(u.name)+'</strong>'+
-        '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div>'+
-      '</div></div></td>'+
-      '<td><span class="'+pillCls+'">'+pillLabel+'</span></td>'+
+      '<td><div class="uc">'+av+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
+      '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
+      '<td><span class="apill apill-'+act+'">'+pillLabel+'</span></td>'+
       '<td style="font-size:11px;white-space:nowrap" class="'+ls.cls+'">'+htmlEsc(ls.txt)+'</td>'+
       '<td style="font-size:11px;color:var(--g400);white-space:nowrap">'+joined+'</td>'+
-      '<td>'+u.habits.length+'</td>'+
-      '<td>'+u.posts.length+'</td>'+
+      '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
-      '<td><button class="del" onclick="deleteUserData(''+u.uid+'',''+htmlEsc(u.name)+'')" title="Delete all Firestore data">Delete Data</button></td>'+
+      '<td><button class="del" onclick="deleteUserData(\''+safeUid+'\',\''+safeName+'\')" title="Delete all Firestore data">Delete Data</button></td>'+
       '</tr>';
   }).join('');
 }
