@@ -308,25 +308,24 @@ tr:hover td{background:var(--g50)}
     <!-- Cleanup: Unverified Accounts -->
     <div class="pg" id="pg-cleanup">
       <div class="pg-title">Cleanup</div>
-      <div class="pg-sub" id="cleanupUpdated">Unverified accounts registered more than 24 hours ago</div>
+      <div class="pg-sub" id="cleanupUpdated">All registered but unverified accounts — review and delete as needed</div>
 
       <!-- Stats row -->
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Zombie Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Unverified &gt;24h (Auth+FS)</div></div>
+        <div class="stat dark"><div class="stat-lbl">Unverified Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Registered but not verified</div></div>
         <div class="stat"><div class="stat-lbl">Firestore Data</div><div class="stat-val" id="czFirestore">—</div><div class="stat-note">Can be auto-deleted</div></div>
         <div class="stat"><div class="stat-lbl">Auth Only</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">Requires backend SDK</div></div>
       </div>
 
       <!-- Info banner -->
       <div style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.7">
-        <strong>⚠️ 注意：</strong> 前端無法直接刪除 Firebase Auth 帳號，需要手動到 Firebase Console 操作。
-        此頁面只顯示 <strong>emailVerified: false 且超過 24 小時</strong>的帳號（已驗證的正常用戶不會出現）。
-        可以幫你：<strong>①</strong> 一鍵清除對應的 Firestore 資料（users / usernames）　<strong>②</strong> 提供 Firebase Console 連結讓你快速刪除 Auth 帳號。
+        <strong>📋 說明：</strong> 此頁面列出所有 <strong>已註冊但尚未驗證 Email</strong> 的帳號（已驗證的正常用戶不會出現）。
+        由管理員自行判斷是否需要刪除。可以幫你：<strong>①</strong> 一鍵清除對應的 Firestore 資料（users / usernames）　<strong>②</strong> 提供 Firebase Console 連結讓你手動刪除 Auth 帳號。
       </div>
 
       <div class="tbl-card">
         <div class="tbl-hd">
-          <div class="tbl-ttl">Unverified Accounts (&gt;24h)</div>
+          <div class="tbl-ttl">Unverified Accounts</div>
           <div style="display:flex;align-items:center;gap:8px">
             <button class="refresh" id="cleanupRefreshBtn" onclick="loadCleanup()">Refresh</button>
             <button id="cleanupAllBtn" onclick="cleanupAllFirestore()"
@@ -340,7 +339,7 @@ tr:hover td{background:var(--g50)}
             <th>Email</th>
             <th>UID</th>
             <th>Registered</th>
-            <th>Hours Ago</th>
+            <th>Since</th>
             <th>Firestore</th>
             <th>Action</th>
           </tr></thead>
@@ -350,7 +349,7 @@ tr:hover td{background:var(--g50)}
 
       <!-- Step guide -->
       <div class="tbl-card" style="padding:18px;margin-top:4px">
-        <div class="chart-ttl" style="margin-bottom:12px">📋 如何完整刪除殭屍帳號（兩步驟）</div>
+        <div class="chart-ttl" style="margin-bottom:12px">📋 如何完整刪除未驗證帳號（兩步驟）</div>
         <div style="font-size:12px;color:var(--g500);line-height:2">
           <div><strong style="color:var(--black)">Step 1 — 刪除 Firestore 資料</strong>（本頁面可直接操作）<br>
           點擊每一行的「Delete Firestore」按鈕，或使用「Delete All Firestore Data」一次清除。</div>
@@ -1282,16 +1281,20 @@ function resetUserDaily(uid){
 }
 
 /* ══════════════════════════════════════════
-   CLEANUP — Zombie Account Scanner & Firestore Cleaner
-   Strategy: Full Firestore scan + JS-side filtering.
-   The Firebase Auth REST batchGet API requires a backend service account token
-   and cannot be called from the frontend with a user ID token (returns 403).
-   Instead, we fetch ALL users from Firestore and filter in JS for:
-     1. emailVerified === false  (explicit field)
-     2. emailVerified field is missing/undefined  (never written)
-     3. createdAt older than 24h
+   CLEANUP — Unverified Account Scanner & Firestore Cleaner
+   Lists ALL registered but unverified accounts for admin review.
+   Admin decides which to delete — no time-based filtering.
 ══════════════════════════════════════════ */
 var allZombies = [];
+
+function formatDuration(ms) {
+  var mins  = Math.floor(ms / 60000);
+  var hours = Math.floor(ms / 3600000);
+  var days  = Math.floor(ms / 86400000);
+  if (days >= 1)  return days  + ' day'  + (days  > 1 ? 's' : '') + ' ago';
+  if (hours >= 1) return hours + ' hr'   + (hours > 1 ? 's' : '') + ' ago';
+  return mins + ' min' + (mins !== 1 ? 's' : '') + ' ago';
+}
 
 function loadCleanup() {
   var tbody = document.getElementById('cleanupTbody');
@@ -1301,12 +1304,7 @@ function loadCleanup() {
   document.getElementById('cleanupAllBtn').style.display = 'none';
   allZombies = [];
 
-  var cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
-
-  // Full scan: fetch ALL users from Firestore, then filter in JS.
-  // This correctly catches docs where emailVerified is:
-  //   - explicitly false
-  //   - missing (field never written — Firestore cannot query for absent fields)
+  // Full scan: fetch ALL users, filter in JS for unverified only (no time cutoff).
   db.collection('users').get()
     .then(function(snap) {
       var candidates = [];
@@ -1315,12 +1313,10 @@ function loadCleanup() {
         var data = doc.data();
         var uid  = doc.id;
 
-        // Skip verified users (Google OAuth users have emailVerified: true)
-        // emailVerified missing is treated as unverified (same as false)
-        var isVerified = data.emailVerified === true;
-        if (isVerified) return;
+        // Only show unverified — skip Google OAuth and verified email users
+        if (data.emailVerified === true) return;
 
-        // Determine createdAt from Firestore Timestamp
+        // Parse createdAt
         var createdAt = null;
         if (data.createdAt && data.createdAt.toDate) {
           createdAt = data.createdAt.toDate();
@@ -1328,32 +1324,28 @@ function loadCleanup() {
           createdAt = new Date(data.createdAt);
         }
 
-        // Skip accounts created within the last 24h (give users time to verify)
-        if (!createdAt || createdAt >= cutoff) return;
-
         candidates.push({
-          uid:              uid,
-          email:            data.email || '—',
-          displayName:      data.displayName || '—',
+          uid:               uid,
+          email:             data.email || '—',
+          displayName:       data.displayName || '—',
           displayName_lower: data.displayName_lower || '',
-          createdAt:        createdAt,
-          inFirestore:      true,
-          // emailVerified field status for UI info
-          evField:          Object.prototype.hasOwnProperty.call(data, 'emailVerified')
-                              ? String(data.emailVerified)
-                              : '(missing)'
+          createdAt:         createdAt,
         });
       });
 
       // Sort: oldest first
-      candidates.sort(function(a, b) { return a.createdAt - b.createdAt; });
+      candidates.sort(function(a, b) {
+        var at = a.createdAt ? a.createdAt.getTime() : 0;
+        var bt = b.createdAt ? b.createdAt.getTime() : 0;
+        return at - bt;
+      });
 
       allZombies = candidates;
       renderCleanup();
       updateCleanupBadge();
       document.getElementById('cleanupUpdated').textContent =
         'Last scanned: ' + new Date().toLocaleString('en-US') +
-        ' — Scanned ' + snap.docs.length + ' users, found ' + candidates.length + ' zombie account(s) (unverified + older than 24h)';
+        ' — ' + snap.docs.length + ' total users, ' + candidates.length + ' unverified';
       if (allZombies.length > 0) {
         document.getElementById('cleanupAllBtn').style.display = '';
       }
@@ -1376,41 +1368,48 @@ function updateCleanupBadge() {
     badge.style.display = 'none';
   }
   document.getElementById('czTotal').textContent     = count;
-  document.getElementById('czFirestore').textContent = count; // all are from Firestore
-  document.getElementById('czAuth').textContent      = '—';  // Auth scan not available from frontend
+  document.getElementById('czFirestore').textContent = count;
+  document.getElementById('czAuth').textContent      = '—';
 }
 
 function renderCleanup() {
   var tbody = document.getElementById('cleanupTbody');
   if (!allZombies.length) {
-    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">✅ No zombie accounts found (all unverified accounts were created within the last 24h)</td></tr>';
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">✅ No unverified accounts found</td></tr>';
     return;
   }
+  var now = Date.now();
   tbody.innerHTML = allZombies.map(function(z, idx) {
-    var hoursAgo = Math.floor((Date.now() - z.createdAt.getTime()) / 3600000);
-    var timeStr = z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'});
     var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(z.uid);
 
-    // emailVerified field status tag
-    var evTag = z.evField === 'false'
-      ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;font-weight:700">emailVerified: false</span>'
-      : '<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:1px 5px;font-weight:700">field missing</span>';
+    // Registered time display
+    var timeStr     = z.createdAt ? z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    var elapsed     = z.createdAt ? now - z.createdAt.getTime() : null;
+    var durationStr = elapsed !== null ? formatDuration(elapsed) : '—';
 
-    // Firestore status badge — always exists since we scanned from Firestore
-    var fsBadge = '<span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span>';
+    // Age-based colour: red >7d, orange 1–7d, yellow <1d
+    var daysOld  = elapsed !== null ? elapsed / 86400000 : 0;
+    var ageColor = daysOld >= 7 ? '#c00' : daysOld >= 1 ? '#e0a800' : '#059669';
 
-    var delFsBtn = '<button class="btn-del-fs" id="czbtn-' + idx + '" onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>';
+    var fsBadge  = '<span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span>';
+    var delFsBtn = '<button class="btn-del-fs" id="czbtn-' + idx + '" '
+      + 'onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" '
+      + 'title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>';
 
     return '<tr id="czrow-' + idx + '">'
-      + '<td><strong style="font-size:12px">' + htmlEsc(z.email) + '</strong>'
-      + '<div style="margin-top:3px">' + evTag + '</div></td>'
+      + '<td>'
+      + '<strong style="font-size:12px">' + htmlEsc(z.email) + '</strong>'
+      + '<div style="font-size:11px;color:var(--g500);margin-top:2px">' + htmlEsc(z.displayName) + '</div>'
+      + '</td>'
       + '<td><div class="cleanup-uid" title="' + htmlEsc(z.uid) + '" onclick="copyUID(\'' + z.uid + '\',this)">' + z.uid + '</div>'
       + '<div style="font-size:9px;color:var(--g500);margin-top:2px">click to copy</div></td>'
-      + '<td style="font-size:11px">' + timeStr + '</td>'
-      + '<td><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:' + (hoursAgo > 72 ? '#c00' : '#e0a800') + '">' + hoursAgo + 'h</span></td>'
+      + '<td style="font-size:11px;color:var(--g500)">' + timeStr + '</td>'
+      + '<td>'
+      + '<span style="font-family:var(--mono);font-size:12px;font-weight:700;color:' + ageColor + '">' + durationStr + '</span>'
+      + '</td>'
       + '<td>' + fsBadge + '</td>'
       + '<td>'
-      + '<a href="' + consoleUrl + '" target="_blank"><button class="btn-console" title="Open Firebase Console to delete Auth account">Open in Console</button></a>'
+      + '<a href="' + consoleUrl + '" target="_blank"><button class="btn-console">Open in Console</button></a>'
       + delFsBtn
       + '</td>'
       + '</tr>';
