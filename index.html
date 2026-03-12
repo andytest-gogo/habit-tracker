@@ -2350,22 +2350,17 @@ function AuthPage(_ref2) {
         }
 
         // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
+        // Set _registering = true BEFORE createUser so that onAuthStateChanged
+        // (which fires immediately after account creation) does not call signOut()
+        // and invalidate our token before we finish writing to Firestore.
+        _registering = true;
         var _r = await auth.createUserWithEmailAndPassword(email, password);
 
         try {
           // 4. Set display name
           await _r.user.updateProfile({ displayName: displayName.trim() });
 
-          // 5. Send verification email immediately — this only requires Auth, not Firestore
-          await _r.user.sendEmailVerification({
-            url: window.location.origin + window.location.pathname,
-            handleCodeInApp: false
-          });
-
-          // 6. Write Firestore profile while user is still signed in.
-          //    Set _registering = true so onAuthStateChanged does NOT call signOut()
-          //    and invalidate our auth token before the Firestore write completes.
-          _registering = true;
+          // 5. Write Firestore profile while user is signed in
           try {
             var _uid = _r.user.uid;
             var _batch = db.batch();
@@ -2385,11 +2380,16 @@ function AuthPage(_ref2) {
             console.log('[signup] Firestore write successful for:', _uid);
           } catch(fsErr) {
             console.warn('[signup] Firestore write failed:', fsErr.message);
-          } finally {
-            _registering = false;
           }
 
-          // 7. Sign out after Firestore write is complete
+          // 6. Send verification email
+          await _r.user.sendEmailVerification({
+            url: window.location.origin + window.location.pathname,
+            handleCodeInApp: false
+          });
+
+          // 7. Sign out — AFTER Firestore write and verification email are done
+          _registering = false;
           await auth.signOut();
 
           // 8. Show success screen
@@ -2398,8 +2398,8 @@ function AuthPage(_ref2) {
           startCooldown();
 
         } catch (postCreateErr) {
-          // Critical step (updateProfile or sendEmailVerification) failed
-          // Delete the ghost account so user can try again
+          // Critical step failed — clean up auth account and reset flag
+          _registering = false;
           try { await _r.user.delete(); } catch(e) {}
           try { await auth.signOut(); } catch(e) {}
           throw postCreateErr;
