@@ -956,9 +956,10 @@
 </div>
 
 <!-- Firebase SDK -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js" crossorigin="anonymous"></script>
 <!-- React -->
 <script>/* React 18 */
 /**
@@ -2358,42 +2359,35 @@ function AuthPage(_ref2) {
             handleCodeInApp: false
           });
 
-          // 6. Sign out before any Firestore writes to avoid permission issues
+          // 6. Write Firestore profile while user is still signed in
+          //    (must happen BEFORE signOut to have a valid auth token)
+          try {
+            var _uid = _r.user.uid;
+            var _batch = db.batch();
+            _batch.set(db.collection('usernames').doc(usernameKey), {
+              uid: _uid,
+              displayName: displayName.trim(),
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            _batch.set(db.collection('users').doc(_uid), {
+              displayName: displayName.trim(),
+              displayName_lower: usernameKey,
+              email: email.trim(),
+              emailVerified: false,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            await _batch.commit();
+          } catch(fsErr) {
+            console.warn('[signup] Firestore write failed (non-fatal):', fsErr.message);
+          }
+
+          // 7. Sign out after Firestore write is complete
           await auth.signOut();
 
-          // 7. Show success screen right away — user already has the verification email
+          // 8. Show success screen
           setSentEmail(email);
           setVerificationSent(true);
           startCooldown();
-
-          // 8. Attempt Firestore profile write in the background (best-effort)
-          //    If this fails it's fine — admin can see unverified accounts and clean up after 24h
-          (async function() {
-            try {
-              // Sign in silently to get a token for Firestore write
-              var _tmp = await auth.signInWithEmailAndPassword(email, password);
-              await _tmp.user.getIdToken(true);
-              var batch = db.batch();
-              batch.set(db.collection('usernames').doc(usernameKey), {
-                uid: _tmp.user.uid,
-                displayName: displayName.trim(),
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-              });
-              batch.set(db.collection('users').doc(_tmp.user.uid), {
-                displayName: displayName.trim(),
-                displayName_lower: usernameKey,
-                email: email.trim(),
-                emailVerified: false,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-              }, { merge: true });
-              await batch.commit();
-              await auth.signOut();
-            } catch(bgErr) {
-              // Background write failed — not critical, admin handles cleanup
-              console.warn('[signup] Background Firestore write failed (non-fatal):', bgErr.message);
-              try { await auth.signOut(); } catch(e) {}
-            }
-          })();
 
         } catch (postCreateErr) {
           // Critical step (updateProfile or sendEmailVerification) failed
@@ -6659,7 +6653,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         terms: {
             title: 'Terms of Service',
             html: `
-<p class="legal-modal-meta">Effective: March 7, 2026 &nbsp;·&nbsp; Version 1.1 — Updated governing law &amp; jurisdiction</p>
+<p class="legal-modal-meta">Effective: March 7, 2026 &nbsp;·&nbsp; Version 1.2 — Fixed section numbering; governing law &amp; jurisdiction</p>
 <div class="legal-modal-highlight">
   <p><strong>By creating an account or using Habit Tracker Pro, you agree to these Terms.</strong> If you do not agree, please do not use the app.</p>
 </div>
@@ -6697,20 +6691,20 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <p>The beta period will end when the app is officially launched. We will notify registered users at least <strong>14 days</strong> in advance of any material changes to these Terms associated with the transition out of beta.</p>
 <h3>9. Disclaimer</h3>
 <p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
-<h3>9. Termination</h3>
+<h3>10. Termination</h3>
 <p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
-<h3>10. Governing Law & Jurisdiction</h3>
+<h3>11. Governing Law & Jurisdiction</h3>
 <p>These Terms are governed by and construed in accordance with the laws of the <strong>Republic of China (Taiwan)</strong>, without regard to conflict-of-law principles. Any disputes shall be subject to the exclusive jurisdiction of the courts in Taiwan, except where mandatory local consumer protection laws provide otherwise.</p>
 <p><strong>EU users:</strong> You retain all rights under applicable EU consumer protection laws (including EU Directive 2011/83/EU). You may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>. Nothing in these Terms limits your statutory rights as an EU consumer.</p>
 <p><strong>US users:</strong> For disputes, you may also pursue claims in your state of residence to the extent permitted by applicable law.</p>
 <p>For all disputes, please contact us first at <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — most issues can be resolved quickly.</p>
-<h3>11. Copyright Complaints — DMCA (US) &amp; DSA (EU)</h3>
+<h3>12. Copyright Complaints — DMCA (US) &amp; DSA (EU)</h3>
 <p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>HealthHabitTracker@gmail.com</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
 <p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days and will inform the reporter of the outcome. Persistent or severe violations may result in account suspension.</p>
 <p><strong>Counter-Notice:</strong> If you believe your content was removed in error, contact <strong>HealthHabitTracker@gmail.com</strong> with details and we will review within 14 business days.</p>
-<h3>12. Changes to These Terms</h3>
+<h3>13. Changes to These Terms</h3>
 <p>We may update these Terms from time to time. For <strong>material changes</strong>, we will notify you by email at least <strong>30 days</strong> before the new Terms take effect. Non-material changes (clarifications, corrections) will be noted by updating the version number and date above. Your continued use of the app after the effective date constitutes acceptance. If you do not agree, you may delete your account before the changes take effect.</p>
-<h3>13. Contact</h3>
+<h3>14. Contact</h3>
 <p>Questions about these Terms: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong></p>`
         }
     };
