@@ -1304,6 +1304,9 @@ var firebaseConfig = {
   appId: "1:890093173627:web:54032fce30ae7ef3f41bde"
 };
 var app, auth, db;
+// Registration guard: prevents onAuthStateChanged from calling signOut()
+// and invalidating the auth token while registration is writing to Firestore.
+var _registering = false;
 var isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 if (isFirebaseConfigured) {
   app = firebase.initializeApp(firebaseConfig);
@@ -2359,8 +2362,10 @@ function AuthPage(_ref2) {
             handleCodeInApp: false
           });
 
-          // 6. Write Firestore profile while user is still signed in
-          //    (must happen BEFORE signOut to have a valid auth token)
+          // 6. Write Firestore profile while user is still signed in.
+          //    Set _registering = true so onAuthStateChanged does NOT call signOut()
+          //    and invalidate our auth token before the Firestore write completes.
+          _registering = true;
           try {
             var _uid = _r.user.uid;
             var _batch = db.batch();
@@ -2377,8 +2382,11 @@ function AuthPage(_ref2) {
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
             await _batch.commit();
+            console.log('[signup] Firestore write successful for:', _uid);
           } catch(fsErr) {
-            console.warn('[signup] Firestore write failed (non-fatal):', fsErr.message);
+            console.warn('[signup] Firestore write failed:', fsErr.message);
+          } finally {
+            _registering = false;
           }
 
           // 7. Sign out after Firestore write is complete
@@ -6356,7 +6364,8 @@ function App() {
         var verified = isGoogle || u.emailVerified;
         if (!verified) {
           // 未驗證的 email 帳號：直接登出，不更新 user state
-          auth.signOut();
+          // 但如果正在 registration 流程中（_registering），讓 registration 自己處理 signOut
+          if (!_registering) auth.signOut();
           return;
         }
         // 已驗證：更新 Firestore 並登入
