@@ -359,6 +359,33 @@ tr:hover td{background:var(--g50)}
           搜尋 UID 後點擊刪除。</div>
         </div>
       </div>
+
+      <!-- Orphaned Usernames Scanner -->
+      <div class="tbl-card" style="padding:18px;margin-top:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="chart-ttl" style="margin:0">🔍 孤立 Username 掃描器</div>
+          <div style="display:flex;gap:8px">
+            <button class="refresh" onclick="scanOrphanedUsernames()">Scan</button>
+            <button id="deleteOrphansBtn" onclick="deleteAllOrphans()"
+              style="display:none;padding:7px 13px;background:#c00;border:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:#fff;font-family:var(--font)">
+              🗑 Delete All Orphans
+            </button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--g500);margin-bottom:12px">
+          掃描 <code>usernames</code> collection 中沒有對應 <code>users</code> doc 的孤立記錄。這些記錄會導致新用戶無法使用已被刪除帳號的 username。
+        </div>
+        <div id="orphanStatus" style="font-size:11px;color:var(--g400);margin-bottom:8px"></div>
+        <table>
+          <thead><tr>
+            <th>Username Key</th>
+            <th>Linked UID</th>
+            <th>Display Name</th>
+            <th>Action</th>
+          </tr></thead>
+          <tbody id="orphanTbody"><tr class="loading-row"><td colspan="4">Click Scan to check for orphaned username entries</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Security & Rules -->
@@ -1614,6 +1641,105 @@ function renderReports(){
       + '<td>' + actionBtns + '</td>'
       + '</tr>';
   }).join('');
+}
+
+/* ══════════════════════════════════════════
+   ORPHANED USERNAMES SCANNER
+   Finds usernames/{key} docs with no matching users/{uid} doc.
+   These block new registrations from reusing deleted usernames.
+══════════════════════════════════════════ */
+var allOrphans = [];
+
+async function scanOrphanedUsernames() {
+  var tbody = document.getElementById('orphanTbody');
+  var status = document.getElementById('orphanStatus');
+  var deleteBtn = document.getElementById('deleteOrphansBtn');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="4">Scanning...</td></tr>';
+  status.textContent = 'Scanning...';
+  deleteBtn.style.display = 'none';
+  allOrphans = [];
+
+  try {
+    var unameSnap = await db.collection('usernames').get();
+    var orphans = [];
+
+    // Check each username doc — verify the linked uid has a users doc
+    var checks = unameSnap.docs.map(async function(doc) {
+      var data = doc.data();
+      var linkedUid = data.uid || null;
+      if (!linkedUid) {
+        // No uid field at all — definitely orphaned
+        orphans.push({ key: doc.id, uid: '(none)', displayName: data.displayName || '—' });
+        return;
+      }
+      var userDoc = await db.collection('users').doc(linkedUid).get();
+      if (!userDoc.exists) {
+        orphans.push({ key: doc.id, uid: linkedUid, displayName: data.displayName || '—' });
+      }
+    });
+
+    await Promise.all(checks);
+    allOrphans = orphans;
+
+    status.textContent = 'Scanned ' + unameSnap.docs.length + ' username(s) — found ' + orphans.length + ' orphaned entry(s)';
+
+    if (!orphans.length) {
+      tbody.innerHTML = '<tr class="loading-row"><td colspan="4">✅ No orphaned username entries found</td></tr>';
+      return;
+    }
+
+    deleteBtn.style.display = '';
+    tbody.innerHTML = orphans.map(function(o, i) {
+      return '<tr>'
+        + '<td><strong style="font-family:var(--mono);font-size:12px">' + htmlEsc(o.key) + '</strong></td>'
+        + '<td><span style="font-family:var(--mono);font-size:11px;color:var(--g400)">' + htmlEsc(o.uid) + '</span></td>'
+        + '<td>' + htmlEsc(o.displayName) + '</td>'
+        + '<td><button class="btn-del-fs" id="orphbtn-' + i + '" onclick="deleteOrphan(\'' + o.key + '\',' + i + ')">Delete</button></td>'
+        + '</tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:#c00;padding:16px;font-size:12px">Scan failed: ' + htmlEsc(e.message) + '</td></tr>';
+    status.textContent = '⚠️ Scan failed';
+  }
+}
+
+function deleteOrphan(key, idx) {
+  if (!confirm('Delete orphaned username entry "' + key + '"?\nThis will allow new users to register with this username.')) return;
+  var btn = document.getElementById('orphbtn-' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+  db.collection('usernames').doc(key).delete()
+    .then(function() {
+      if (btn) { btn.textContent = '✓ Deleted'; btn.style.borderColor = '#059669'; btn.style.color = '#059669'; }
+      allOrphans = allOrphans.filter(function(o) { return o.key !== key; });
+      if (!allOrphans.length) document.getElementById('deleteOrphansBtn').style.display = 'none';
+    })
+    .catch(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+      alert('Failed: ' + e.message);
+    });
+}
+
+async function deleteAllOrphans() {
+  if (!allOrphans.length) return;
+  if (!confirm('Delete all ' + allOrphans.length + ' orphaned username entry(s)?\nThis will free up these usernames for new registrations.')) return;
+  var btn = document.getElementById('deleteOrphansBtn');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  try {
+    var batch = db.batch();
+    allOrphans.forEach(function(o) {
+      batch.delete(db.collection('usernames').doc(o.key));
+    });
+    await batch.commit();
+    btn.textContent = '✓ All Deleted';
+    btn.style.background = '#059669';
+    document.getElementById('orphanTbody').innerHTML = '<tr class="loading-row"><td colspan="4">✅ All orphaned entries deleted</td></tr>';
+    document.getElementById('orphanStatus').textContent = 'Deleted ' + allOrphans.length + ' orphaned entry(s)';
+    allOrphans = [];
+    setTimeout(function() { btn.style.display = 'none'; }, 1500);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '🗑 Delete All Orphans';
+    alert('Batch delete failed: ' + e.message);
+  }
 }
 
 function setReportStatus(reportId, newStatus){

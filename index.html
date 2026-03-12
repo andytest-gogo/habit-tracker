@@ -2143,8 +2143,23 @@ function AuthPage(_ref2) {
     setUsernameStatus('checking');
     try {
       var key = name.toLowerCase().replace(/\s+/g, '_');
-      var doc = await db.collection('usernames').doc(key).get();
-      setUsernameStatus(doc.exists ? 'taken' : 'available');
+      var unameDoc = await db.collection('usernames').doc(key).get();
+      if (!unameDoc.exists) {
+        setUsernameStatus('available');
+        return;
+      }
+      // Username doc exists — verify the linked user account still exists.
+      // Orphaned username docs (from failed/deleted registrations) should not block new users.
+      var linkedUid = unameDoc.data() && unameDoc.data().uid;
+      if (linkedUid) {
+        var userDoc = await db.collection('users').doc(linkedUid).get();
+        if (!userDoc.exists) {
+          // Orphaned entry — the actual user no longer exists, treat as available
+          setUsernameStatus('available');
+          return;
+        }
+      }
+      setUsernameStatus('taken');
     } catch(e) { setUsernameStatus(''); }
   };
 
@@ -2344,9 +2359,19 @@ function AuthPage(_ref2) {
         var usernameKey = displayName.trim().toLowerCase().replace(/\s+/g, '_');
         var usernameDoc = await db.collection('usernames').doc(usernameKey).get();
         if (usernameDoc.exists) {
-          setUsernameStatus('taken');
-          setError('This username is already taken. Please choose a different name.');
-          return;
+          // Check if the linked user account still exists (guard against orphaned docs)
+          var _linkedUid = usernameDoc.data() && usernameDoc.data().uid;
+          var _isOrphaned = false;
+          if (_linkedUid) {
+            var _linkedUser = await db.collection('users').doc(_linkedUid).get();
+            _isOrphaned = !_linkedUser.exists;
+          }
+          if (!_isOrphaned) {
+            setUsernameStatus('taken');
+            setError('This username is already taken. Please choose a different name.');
+            return;
+          }
+          // Orphaned doc — silently overwrite it during registration batch write
         }
 
         // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
