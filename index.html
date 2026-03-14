@@ -4570,7 +4570,9 @@ function MainApp(_ref16) {
       durLabel = _ref19.durLabel,
       dailyTarget = _ref19.dailyTarget,
       intervalDays = _ref19.intervalDays;
-    if (habits.length >= 30) {
+    var _today0 = toISODay();
+    var _activeCount0 = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_today0; }).length;
+    if (_activeCount0 >= 30) {
       alert('You can have at most 30 active habits at a time.');
       return;
     }
@@ -5581,14 +5583,16 @@ function MainApp(_ref16) {
     }, /*#__PURE__*/React.createElement("button", {
       className: "center-add-btn-standalone",
       onClick: function onClick() {
-        if (habits.length >= 30) {
+        var _todayChk = toISODay();
+        var _activeCnt = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_todayChk; }).length;
+        if (_activeCnt >= 30) {
           alert('Max 30 active habits. Wait for habits to expire or delete one.');
           return;
         }
         setShowModal(true);
       },
       style: {
-        opacity: habits.length >= 30 ? 0.4 : 1
+        opacity: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? 0.4 : 1; })()
       }
     }, /*#__PURE__*/React.createElement(PlusIcon, null))), habits.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -5606,7 +5610,7 @@ function MainApp(_ref16) {
       style: {
         fontSize: 10,
         fontWeight: 700,
-        color: habits.length >= 30 ? '#dc2626' : 'var(--gray-400)',
+        color: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? '#dc2626' : 'var(--gray-400)'; })(),
         textTransform: 'uppercase',
         letterSpacing: .8
       }
