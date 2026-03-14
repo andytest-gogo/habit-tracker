@@ -13,8 +13,10 @@
         default-src 'self';
         script-src  'self' 'unsafe-inline' 'unsafe-eval'
                     https://www.gstatic.com
+                    https://*.gstatic.com
                     https://unpkg.com
-                    https://umami-psi-opal.vercel.app;
+                    https://umami-psi-opal.vercel.app
+                    https://cdn-cgi.cloudflare.com;
         style-src   'self' 'unsafe-inline'
                     https://fonts.googleapis.com;
         font-src    'self'
@@ -113,25 +115,35 @@
         .history-chart-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; opacity:.5; margin-bottom:16px; }
         .history-charts-row { display:flex; gap:16px; align-items:center; }
         .donut-wrap { position:relative; flex-shrink:0; }
-        .donut-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
+        .donut-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; width:100%; }
         .donut-center-val { font-size:22px; font-weight:700; font-family:var(--din); line-height:1; }
         .donut-center-lbl { font-size:9px; opacity:.55; text-transform:uppercase; letter-spacing:.8px; margin-top:2px; }
         .history-legend { flex:1; display:flex; flex-direction:column; gap:10px; }
+        /* Active Now card */
+        .active-now-card { display:flex; align-items:center; gap:14px; padding:10px 12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:0; }
+        .active-now-donut { flex-shrink:0; position:relative; }
+        .active-now-donut .donut-center-val { font-size:14px; }
+        .active-now-donut .donut-center-lbl { font-size:8px; }
+        .active-now-info { flex:1; min-width:0; }
+        .active-now-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; opacity:.45; margin-bottom:4px; }
+        .active-now-pct { font-size:28px; font-weight:700; font-family:var(--din); line-height:1; color:var(--gray-600); }
+        .active-now-pct span { font-size:16px; opacity:.7; }
+        .active-now-sub { font-size:11px; opacity:.6; margin-top:3px; }
         .legend-item { display:flex; align-items:center; gap:8px; }
         .legend-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
         .legend-label { font-size:11px; opacity:.65; flex:1; }
         .legend-val { font-size:14px; font-weight:700; font-family:var(--din); }
 
         /* percentile banner */
-        .history-percentile { margin:0; padding:16px 20px; background:#111; border-top:1px solid #222; display:flex; align-items:center; gap:14px; }
-        .percentile-big { font-size:40px; font-weight:700; font-family:var(--din); color:var(--white); line-height:1; }
+        .history-percentile { margin:0; padding:16px 20px; background:var(--white); border-top:1px solid var(--gray-100); border-bottom:1px solid var(--gray-100); display:flex; align-items:center; gap:14px; }
+        .percentile-big { font-size:40px; font-weight:700; font-family:var(--din); color:var(--black); line-height:1; }
         .percentile-big span { font-size:20px; }
         .percentile-text { flex:1; }
-        .percentile-text strong { display:block; font-size:13px; color:var(--white); margin-bottom:3px; }
-        .percentile-text small { font-size:11px; color:rgba(255,255,255,.5); }
+        .percentile-text strong { display:block; font-size:13px; color:var(--black); margin-bottom:3px; }
+        .percentile-text small { font-size:11px; color:var(--gray-500); }
         .percentile-bar-wrap { margin-top:8px; }
-        .percentile-bar-track { height:2px; background:rgba(255,255,255,.15); }
-        .percentile-bar-fill { height:100%; background:var(--white); transition:width 1s cubic-bezier(.4,0,.2,1); }
+        .percentile-bar-track { height:2px; background:var(--gray-200); }
+        .percentile-bar-fill { height:100%; background:var(--black); transition:width 1s cubic-bezier(.4,0,.2,1); }
 
         /* archive list */
         .archive-list-section { padding:20px; }
@@ -956,7 +968,6 @@
 </div>
 
 <!-- Firebase SDK -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js" crossorigin="anonymous"></script>
@@ -3277,18 +3288,46 @@ function HabitDetailView(_ref11) {
     currentDay = _ref11.currentDay;
   var todayKey = currentDay || toISODay();
   var target = habit.dailyTarget || 1;
-  var todayCounts = habit.todayCounts || {};
-  var done = todayCounts[todayKey] !== undefined ? todayCounts[todayKey] : todayCounts[new Date().toDateString()] || 0;
-  var progPct = Math.min(100, Math.round(done / target * 100));
   var intervalDays = habit.intervalDays || 1;
   var isActiveDay = isTodayActiveDay(habit, todayKey);
 
-  // Today's completion rate: actual completions today (capped at goal) / daily goal (N/A on non-scheduled days)
+  // Local state for immediate UI feedback on +/- press
+  var _rawDone = (habit.todayCounts || {})[todayKey] !== undefined
+    ? (habit.todayCounts || {})[todayKey]
+    : (habit.todayCounts || {})[new Date().toDateString()] || 0;
+  var _localState = useState(_rawDone);
+  var localDone = _localState[0];
+  var setLocalDone = _localState[1];
+
+  // Sync localDone when habit prop updates from parent (Firebase onSnapshot)
+  var _prevRef = useRef(null);
+  if (_prevRef.current === null) _prevRef.current = habit.id + '|' + _rawDone;
+  var _curKey = habit.id + '|' + _rawDone;
+  if (_prevRef.current !== _curKey) {
+    _prevRef.current = _curKey;
+    setLocalDone(_rawDone);
+  }
+
+  var done = localDone;
+  var progPct = Math.min(100, Math.round(done / target * 100));
+
+  // Today's completion rate
   var todayDone = Math.min(target, Math.max(0, done));
   var todayRate = isActiveDay ? Math.min(100, Math.round(todayDone / target * 100)) : null;
 
-  // Cumulative completion rate: use shared helper
-  var completionRate = calcCompletionRate(habit);
+  // Build a merged habit object with the latest localDone so calcCompletionRate
+  // reflects the current counter value immediately (before Firebase/state sync).
+  var _mergedCounts = Object.assign({}, habit.todayCounts || {});
+  _mergedCounts[todayKey] = done;
+  var _habitForCalc = Object.assign({}, habit, { todayCounts: _mergedCounts });
+  var completionRate = calcCompletionRate(_habitForCalc);
+
+  // Wrapped counter: update local state immediately, then sync to parent
+  var handleCount = function handleCount(id, delta) {
+    var next = Math.min(target, Math.max(0, done + delta));
+    setLocalDone(next);
+    onCount(id, delta);
+  };
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
     className: "back-nav",
     onClick: onBack
@@ -3399,7 +3438,7 @@ function HabitDetailView(_ref11) {
       height: 44
     },
     onClick: function onClick() {
-      return onCount(habit.id, -1);
+      return handleCount(habit.id, -1);
     }
   }, "\u2212"), /*#__PURE__*/React.createElement("input", {
     type: "number",
@@ -3423,7 +3462,7 @@ function HabitDetailView(_ref11) {
     value: done,
     onChange: function onChange(e) {
       var v = parseInt(e.target.value);
-      if (!isNaN(v) && v >= 0) onCount(habit.id, Math.min(target, v) - done);else if (e.target.value === '') onCount(habit.id, -done);
+      if (!isNaN(v) && v >= 0) handleCount(habit.id, Math.min(target, v) - done);else if (e.target.value === '') handleCount(habit.id, -done);
     }
   }), /*#__PURE__*/React.createElement("button", {
     className: "counter-btn",
@@ -3432,7 +3471,7 @@ function HabitDetailView(_ref11) {
       height: 44
     },
     onClick: function onClick() {
-      return onCount(habit.id, +1);
+      return handleCount(habit.id, +1);
     }
   }, "\uFF0B"))))));
 }
@@ -4056,8 +4095,8 @@ function HistoryPage(_ref15) {
     className: "history-charts-row"
   }, /*#__PURE__*/React.createElement(DonutChart, {
     pct: expiredAvg,
-    size: 108,
-    stroke: 12,
+    size: 112,
+    stroke: 13,
     color: "#ffffff",
     bg: "rgba(255,255,255,0.1)",
     sublabel: "EXPIRED AVG"
@@ -4065,34 +4104,45 @@ function HistoryPage(_ref15) {
     className: "history-legend"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
       paddingBottom: 10,
       borderBottom: '1px solid rgba(255,255,255,.1)'
     }
-  }, /*#__PURE__*/React.createElement(DonutChart, {
-    pct: activeAvg,
-    size: 52,
-    stroke: 6,
-    color: "#94a3b8",
-    bg: "rgba(255,255,255,0.08)",
-    sublabel: "NOW"
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      opacity: .5,
-      textTransform: 'uppercase',
-      letterSpacing: .8,
-      marginBottom: 2
-    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "active-now-card"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { position:'relative', flexShrink:0, width:64, height:64 }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width:64, height:64, style:{ transform:'rotate(-90deg)' }
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx:32, cy:32, r:26, fill:"none",
+    stroke:"rgba(255,255,255,0.08)", strokeWidth:7
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx:32, cy:32, r:26, fill:"none",
+    stroke:"#94a3b8", strokeWidth:7,
+    strokeDasharray: (activeAvg/100 * 2*Math.PI*26) + " " + (2*Math.PI*26),
+    strokeLinecap:"butt",
+    style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
+  })), /*#__PURE__*/React.createElement("div", {
+    style:{ position:'absolute', top:'50%', left:'50%',
+      transform:'translate(-50%,-50%)', textAlign:'center',
+      width:'100%', lineHeight:1 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#94a3b8', lineHeight:1 }
+  }, activeAvg, "%"), /*#__PURE__*/React.createElement("div", {
+    style:{ fontSize:8, opacity:.5, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#94a3b8' }
+  }, "NOW"))), /*#__PURE__*/React.createElement("div", {
+    className: "active-now-info"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "active-now-label"
   }, "Active Now"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      opacity: .8,
-      lineHeight: 1.4
-    }
-  }, habits.length, " habit", habits.length !== 1 ? 's' : '', " in progress"))), /*#__PURE__*/React.createElement("div", {
+    style:{ display:'flex', alignItems:'baseline', gap:4 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style:{ fontSize:28, fontWeight:700, fontFamily:'var(--din)', lineHeight:1, color:'#94a3b8' }
+  }, activeAvg), /*#__PURE__*/React.createElement("div", {
+    style:{ fontSize:16, fontWeight:700, fontFamily:'var(--din)', opacity:.7, color:'#94a3b8' }
+  }, "%")), /*#__PURE__*/React.createElement("div", {
+    style:{ fontSize:11, opacity:.55, marginTop:3 }
+  }, activeRates.length, " habit", activeRates.length !== 1 ? 's' : '', " in progress"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 0,
@@ -4331,7 +4381,7 @@ function HistoryPage(_ref15) {
     style: {
       height: 40
     }
-  }));
+  })));
 }
 
 /* ── MAIN APP ── */
@@ -4570,7 +4620,9 @@ function MainApp(_ref16) {
       durLabel = _ref19.durLabel,
       dailyTarget = _ref19.dailyTarget,
       intervalDays = _ref19.intervalDays;
-    if (habits.length >= 30) {
+    var _today0 = toISODay();
+    var _activeCount0 = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_today0; }).length;
+    if (_activeCount0 >= 30) {
       alert('You can have at most 30 active habits at a time.');
       return;
     }
@@ -4718,17 +4770,19 @@ function MainApp(_ref16) {
               streak++;
               cur2.setDate(cur2.getDate() - 1);
             }
-            if (isFirebaseConfigured) {
-              _context5.n = 2;
-              break;
-            }
-            setHabits(habits.map(function (h) {
+            // Always update local state immediately for instant UI sync
+            // (Firebase onSnapshot will confirm later; non-Firebase this is the only update)
+            setHabits(function(prev) { return prev.map(function (h) {
               return h.id === habitId ? _objectSpread(_objectSpread({}, h), {}, {
                 todayCounts: counts,
                 checkedDates: checkedDates,
                 streak: streak
               }) : h;
-            }));
+            }); });
+            if (isFirebaseConfigured) {
+              _context5.n = 2;
+              break;
+            }
             _context5.n = 3;
             break;
           case 2:
@@ -5581,14 +5635,16 @@ function MainApp(_ref16) {
     }, /*#__PURE__*/React.createElement("button", {
       className: "center-add-btn-standalone",
       onClick: function onClick() {
-        if (habits.length >= 30) {
+        var _todayChk = toISODay();
+        var _activeCnt = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_todayChk; }).length;
+        if (_activeCnt >= 30) {
           alert('Max 30 active habits. Wait for habits to expire or delete one.');
           return;
         }
         setShowModal(true);
       },
       style: {
-        opacity: habits.length >= 30 ? 0.4 : 1
+        opacity: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? 0.4 : 1; })()
       }
     }, /*#__PURE__*/React.createElement(PlusIcon, null))), habits.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -5606,7 +5662,7 @@ function MainApp(_ref16) {
       style: {
         fontSize: 10,
         fontWeight: 700,
-        color: habits.length >= 30 ? '#dc2626' : 'var(--gray-400)',
+        color: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? '#dc2626' : 'var(--gray-400)'; })(),
         textTransform: 'uppercase',
         letterSpacing: .8
       }
