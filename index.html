@@ -3304,8 +3304,12 @@ function HabitDetailView(_ref11) {
   var todayDone = Math.min(target, Math.max(0, done));
   var todayRate = isActiveDay ? Math.min(100, Math.round(todayDone / target * 100)) : null;
 
-  // Cumulative completion rate
-  var completionRate = calcCompletionRate(habit);
+  // Build a merged habit object with the latest localDone so calcCompletionRate
+  // reflects the current counter value immediately (before Firebase/state sync).
+  var _mergedCounts = Object.assign({}, habit.todayCounts || {});
+  _mergedCounts[todayKey] = done;
+  var _habitForCalc = Object.assign({}, habit, { todayCounts: _mergedCounts });
+  var completionRate = calcCompletionRate(_habitForCalc);
 
   // Wrapped counter: update local state immediately, then sync to parent
   var handleCount = function handleCount(id, delta) {
@@ -4744,10 +4748,8 @@ function MainApp(_ref16) {
               streak++;
               cur2.setDate(cur2.getDate() - 1);
             }
-            if (isFirebaseConfigured) {
-              _context5.n = 2;
-              break;
-            }
+            // Always update local state immediately for instant UI sync
+            // (Firebase onSnapshot will confirm later; non-Firebase this is the only update)
             setHabits(function(prev) { return prev.map(function (h) {
               return h.id === habitId ? _objectSpread(_objectSpread({}, h), {}, {
                 todayCounts: counts,
@@ -4755,6 +4757,10 @@ function MainApp(_ref16) {
                 streak: streak
               }) : h;
             }); });
+            if (isFirebaseConfigured) {
+              _context5.n = 2;
+              break;
+            }
             _context5.n = 3;
             break;
           case 2:
