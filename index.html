@@ -3277,18 +3277,42 @@ function HabitDetailView(_ref11) {
     currentDay = _ref11.currentDay;
   var todayKey = currentDay || toISODay();
   var target = habit.dailyTarget || 1;
-  var todayCounts = habit.todayCounts || {};
-  var done = todayCounts[todayKey] !== undefined ? todayCounts[todayKey] : todayCounts[new Date().toDateString()] || 0;
-  var progPct = Math.min(100, Math.round(done / target * 100));
   var intervalDays = habit.intervalDays || 1;
   var isActiveDay = isTodayActiveDay(habit, todayKey);
 
-  // Today's completion rate: actual completions today (capped at goal) / daily goal (N/A on non-scheduled days)
+  // Local state for immediate UI feedback on +/- press
+  var _rawDone = (habit.todayCounts || {})[todayKey] !== undefined
+    ? (habit.todayCounts || {})[todayKey]
+    : (habit.todayCounts || {})[new Date().toDateString()] || 0;
+  var _localState = useState(_rawDone);
+  var localDone = _localState[0];
+  var setLocalDone = _localState[1];
+
+  // Sync localDone when habit prop updates from parent (Firebase onSnapshot)
+  var _prevRef = useRef(null);
+  if (_prevRef.current === null) _prevRef.current = habit.id + '|' + _rawDone;
+  var _curKey = habit.id + '|' + _rawDone;
+  if (_prevRef.current !== _curKey) {
+    _prevRef.current = _curKey;
+    setLocalDone(_rawDone);
+  }
+
+  var done = localDone;
+  var progPct = Math.min(100, Math.round(done / target * 100));
+
+  // Today's completion rate
   var todayDone = Math.min(target, Math.max(0, done));
   var todayRate = isActiveDay ? Math.min(100, Math.round(todayDone / target * 100)) : null;
 
-  // Cumulative completion rate: use shared helper
+  // Cumulative completion rate
   var completionRate = calcCompletionRate(habit);
+
+  // Wrapped counter: update local state immediately, then sync to parent
+  var handleCount = function handleCount(id, delta) {
+    var next = Math.min(target, Math.max(0, done + delta));
+    setLocalDone(next);
+    onCount(id, delta);
+  };
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
     className: "back-nav",
     onClick: onBack
@@ -3399,7 +3423,7 @@ function HabitDetailView(_ref11) {
       height: 44
     },
     onClick: function onClick() {
-      return onCount(habit.id, -1);
+      return handleCount(habit.id, -1);
     }
   }, "\u2212"), /*#__PURE__*/React.createElement("input", {
     type: "number",
@@ -3423,7 +3447,7 @@ function HabitDetailView(_ref11) {
     value: done,
     onChange: function onChange(e) {
       var v = parseInt(e.target.value);
-      if (!isNaN(v) && v >= 0) onCount(habit.id, Math.min(target, v) - done);else if (e.target.value === '') onCount(habit.id, -done);
+      if (!isNaN(v) && v >= 0) handleCount(habit.id, Math.min(target, v) - done);else if (e.target.value === '') handleCount(habit.id, -done);
     }
   }), /*#__PURE__*/React.createElement("button", {
     className: "counter-btn",
@@ -3432,7 +3456,7 @@ function HabitDetailView(_ref11) {
       height: 44
     },
     onClick: function onClick() {
-      return onCount(habit.id, +1);
+      return handleCount(habit.id, +1);
     }
   }, "\uFF0B"))))));
 }
@@ -4724,13 +4748,13 @@ function MainApp(_ref16) {
               _context5.n = 2;
               break;
             }
-            setHabits(habits.map(function (h) {
+            setHabits(function(prev) { return prev.map(function (h) {
               return h.id === habitId ? _objectSpread(_objectSpread({}, h), {}, {
                 todayCounts: counts,
                 checkedDates: checkedDates,
                 streak: streak
               }) : h;
-            }));
+            }); });
             _context5.n = 3;
             break;
           case 2:
