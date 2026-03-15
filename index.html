@@ -2902,7 +2902,7 @@ function FeedCard(_ref5) {
         return !s;
       });
     }
-  }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, post.commentCount || post.comments || 0)), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, post.commentCount || post.comments || 0)), !(currentUser && post.userId && post.userId === currentUser.uid) && /*#__PURE__*/React.createElement("button", {
     className: "feed-action feed-action-report",
     title: "Report this post",
     "aria-label": "Report this post",
@@ -2982,14 +2982,14 @@ function UserPostsPage(_ref_upp) {
   function parsePost(d) {
     var data = d.data();
     var ts = data.createdAt;
-    var timeStr = '';
     var sortTs = 0;
+    var timeStr = '';
     if (ts && ts.toDate) {
       var dt = ts.toDate();
       sortTs = dt.getTime();
-      timeStr = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      timeStr = formatTime ? formatTime(dt) : dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
-    return Object.assign({}, data, { id: d.id, timeStr: timeStr, _sortTs: sortTs });
+    return Object.assign({}, data, { id: d.id, time: timeStr, _sortTs: sortTs });
   }
 
   useEffect(function() {
@@ -3004,48 +3004,31 @@ function UserPostsPage(_ref_upp) {
         setAllPosts(docs);
         setLoading(false);
       })
-      .catch(function(e) {
-        console.error('[UserPostsPage] error:', e);
-        setLoading(false);
-      });
+      .catch(function(e) { console.error('[UserPostsPage]', e); setLoading(false); });
   }, [user && user.uid]);
 
-  function handleDelete(id) {
-    if (!window.confirm('Delete this post?')) return;
-    db.collection('posts').doc(id).delete()
-      .then(function() { setAllPosts(function(prev) { return prev.filter(function(x) { return x.id !== id; }); }); })
-      .catch(function(e) { alert('Delete failed: ' + e.message); });
+  function handleLikeInPage(postId) {
+    if (!user) return;
+    var post = allPosts.find(function(p) { return p.id === postId; });
+    if (!post) return;
+    var likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
+    var hasLiked = likedBy.includes(user.uid);
+    var newLikedBy = hasLiked ? likedBy.filter(function(id) { return id !== user.uid; }) : likedBy.concat([user.uid]);
+    setAllPosts(function(prev) { return prev.map(function(p) {
+      if (p.id !== postId) return p;
+      return Object.assign({}, p, { likedBy: newLikedBy, likes: Math.max(0, (p.likes || 0) + (hasLiked ? -1 : 1)) });
+    }); });
+    if (typeof db !== 'undefined') {
+      db.collection('posts').doc(postId).update({
+        likes: (typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1) : (post.likes || 0) + (hasLiked ? -1 : 1)),
+        likedBy: (typeof firebase !== 'undefined' ? (hasLiked ? firebase.firestore.FieldValue.arrayRemove(user.uid) : firebase.firestore.FieldValue.arrayUnion(user.uid)) : newLikedBy)
+      }).catch(function(e) { console.error(e); });
+    }
   }
 
   var visiblePosts = allPosts.slice(0, (page + 1) * POSTS_PER_PAGE);
   var hasMore = allPosts.length > visiblePosts.length;
   var displayName = (user && (user.displayName || user.email)) || 'User';
-
-  function renderCard(p) {
-    return /*#__PURE__*/React.createElement('div', { key: p.id, className: 'my-post-item' },
-      /*#__PURE__*/React.createElement('div', { className: 'my-post-header' },
-        /*#__PURE__*/React.createElement('span', { className: 'my-post-time' }, p.timeStr),
-        /*#__PURE__*/React.createElement('button', { className: 'my-post-delete', onClick: function() { handleDelete(p.id); } }, 'Delete')
-      ),
-      p.text && /*#__PURE__*/React.createElement('div', { className: 'my-post-body' }, p.text),
-      p.mediaUrl && /*#__PURE__*/React.createElement('div', { className: 'my-post-media' },
-        p.hasImage
-          ? /*#__PURE__*/React.createElement('img', { src: p.mediaUrl, alt: 'post' })
-          : /*#__PURE__*/React.createElement('video', { src: p.mediaUrl, controls: true, playsInline: true, preload: 'metadata',
-              style: { width: '100%', height: 180, objectFit: 'contain', display: 'block', background: '#000' } })
-      ),
-      /*#__PURE__*/React.createElement('div', { className: 'my-post-actions' },
-        /*#__PURE__*/React.createElement('div', { className: 'feed-action' },
-          /*#__PURE__*/React.createElement(HeartIcon, { filled: false }),
-          /*#__PURE__*/React.createElement('span', null, p.likes || 0)
-        ),
-        /*#__PURE__*/React.createElement('div', { className: 'feed-action' },
-          /*#__PURE__*/React.createElement(ChatIcon, null),
-          /*#__PURE__*/React.createElement('span', null, p.comments || 0)
-        )
-      )
-    );
-  }
 
   return /*#__PURE__*/React.createElement('div', { className: 'app-container' },
     /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
@@ -3060,7 +3043,7 @@ function UserPostsPage(_ref_upp) {
       /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Post History'),
       /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
         /*#__PURE__*/React.createElement('div', null,
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, loading ? '—' : allPosts.length),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, loading ? '\u2014' : allPosts.length),
           /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Total Posts')
         ),
         /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
@@ -3069,23 +3052,33 @@ function UserPostsPage(_ref_upp) {
         )
       )
     ),
-    /*#__PURE__*/React.createElement('div', { style: { padding: '16px 16px 80px' } },
+    /*#__PURE__*/React.createElement('div', { style: { paddingBottom: 80 } },
       loading
-        ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
+        ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading\u2026')
         : allPosts.length === 0
           ? /*#__PURE__*/React.createElement('div', { className: 'empty-state', style: { paddingTop: 40 } },
               /*#__PURE__*/React.createElement('h3', null, 'No posts yet'),
               /*#__PURE__*/React.createElement('p', null, 'Share your first post from your profile')
             )
           : /*#__PURE__*/React.createElement('div', null,
-              visiblePosts.map(renderCard),
+              visiblePosts.map(function(p) {
+                var likedBy = Array.isArray(p.likedBy) ? p.likedBy : [];
+                var liked = likedBy.includes(user.uid);
+                return /*#__PURE__*/React.createElement(FeedCard, {
+                  key: p.id,
+                  post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
+                  currentUser: user,
+                  onLike: handleLikeInPage,
+                  onReport: null
+                });
+              }),
               hasMore
                 ? /*#__PURE__*/React.createElement('button', {
                     className: 'view-all-posts-btn',
-                    onClick: function() { setPage(function(p) { return p + 1; }); },
-                    style: { marginTop: 8 }
+                    onClick: function() { setPage(function(prev) { return prev + 1; }); },
+                    style: { margin: '8px 16px', width: 'calc(100% - 32px)' }
                   }, 'Load more')
-                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All posts loaded —')
+                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '\u2014 All posts loaded \u2014')
             )
     )
   );
@@ -6287,82 +6280,16 @@ function MainApp(_ref16) {
       className: "my-posts-section"
     }, myPosts.length > 0 && /*#__PURE__*/React.createElement("div", {
       className: "section-title"
-    }, "My Posts"), myPosts.slice(0, 3).map(function (p) {
-      return /*#__PURE__*/React.createElement("div", {
+    , "My Posts"), myPosts.slice(0, 3).map(function (p) {
+      var likedBy = Array.isArray(p.likedBy) ? p.likedBy : [];
+      var liked = isFirebaseConfigured ? likedBy.includes(user.uid) : p.liked || false;
+      return /*#__PURE__*/React.createElement(FeedCard, {
         key: p.id,
-        className: "my-post-item"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "my-post-header"
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "my-post-time"
-      }, p.time), /*#__PURE__*/React.createElement("button", {
-        className: "my-post-delete",
-        onClick: /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
-          var _t18;
-          return _regenerator().w(function (_context14) {
-            while (1) switch (_context14.p = _context14.n) {
-              case 0:
-                if (!isFirebaseConfigured) {
-                  _context14.n = 5;
-                  break;
-                }
-                _context14.p = 1;
-                _context14.n = 2;
-                return db.collection('posts').doc(p.id).delete();
-              case 2:
-                _context14.n = 4;
-                break;
-              case 3:
-                _context14.p = 3;
-                _t18 = _context14.v;
-                alert('Delete failed: ' + _t18.message);
-              case 4:
-                _context14.n = 6;
-                break;
-              case 5:
-                setMyPosts(function (prev) {
-                  return prev.filter(function (x) {
-                    return x.id !== p.id;
-                  });
-                });
-                setFeedPosts(function (prev) {
-                  return prev.filter(function (x) {
-                    return x.id !== p.id;
-                  });
-                });
-              case 6:
-                return _context14.a(2);
-            }
-          }, _callee12, null, [[1, 3]]);
-        }))
-      }, "Delete")), p.text && /*#__PURE__*/React.createElement("div", {
-        className: "my-post-body"
-      }, p.text), p.mediaUrl && /*#__PURE__*/React.createElement("div", {
-        className: "my-post-media"
-      }, p.hasImage ? /*#__PURE__*/React.createElement("img", {
-        src: p.mediaUrl,
-        alt: "post"
-      }) : /*#__PURE__*/React.createElement("video", {
-        src: p.mediaUrl,
-        controls: true,
-        playsInline: true,
-        preload: "metadata",
-        style: {
-          width: '100%',
-          height: 180,
-          objectFit: 'contain',
-          display: 'block',
-          background: '#000'
-        }
-      })), /*#__PURE__*/React.createElement("div", {
-        className: "my-post-actions"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "feed-action"
-      }, /*#__PURE__*/React.createElement(HeartIcon, {
-        filled: false
-      }), /*#__PURE__*/React.createElement("span", null, p.likes)), /*#__PURE__*/React.createElement("div", {
-        className: "feed-action"
-      }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, p.comments))));
+        post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
+        currentUser: user,
+        onLike: handleLikeFeed,
+        onReport: null
+      });
     }), myPosts.length > 3 && /*#__PURE__*/React.createElement("button", {
       className: "view-all-posts-btn",
       onClick: function onClick() { return setShowAllPosts(true); }
@@ -7476,3 +7403,4 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   };
 
 })();
+</script>
