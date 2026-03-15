@@ -3302,6 +3302,11 @@ function HabitDetailView(_ref11) {
   var localDone = _localState[0];
   var setLocalDone = _localState[1];
 
+  // Local string state for the input display (prevents leading zeros like "011" or "09")
+  var _inputValState = useState(String(_rawDone));
+  var inputVal = _inputValState[0];
+  var setInputVal = _inputValState[1];
+
   // Sync localDone when habit prop updates from parent (Firebase onSnapshot)
   var _prevRef = useRef(null);
   if (_prevRef.current === null) _prevRef.current = habit.id + '|' + _rawDone;
@@ -3309,6 +3314,7 @@ function HabitDetailView(_ref11) {
   if (_prevRef.current !== _curKey) {
     _prevRef.current = _curKey;
     setLocalDone(_rawDone);
+    setInputVal(String(_rawDone));
   }
 
   var done = localDone;
@@ -3329,6 +3335,7 @@ function HabitDetailView(_ref11) {
   var handleCount = function handleCount(id, delta) {
     var next = Math.min(target, Math.max(0, done + delta));
     setLocalDone(next);
+    setInputVal(String(next));
     onCount(id, delta);
   };
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
@@ -3462,10 +3469,26 @@ function HabitDetailView(_ref11) {
       cursor: 'text',
       MozAppearance: 'textfield'
     },
-    value: done,
+    value: inputVal,
     onChange: function onChange(e) {
-      var v = parseInt(e.target.value);
-      if (!isNaN(v) && v >= 0) handleCount(habit.id, Math.min(target, v) - done);else if (e.target.value === '') handleCount(habit.id, -done);
+      var raw = e.target.value;
+      // Allow empty string while typing
+      if (raw === '') {
+        setInputVal('');
+        handleCount(habit.id, -done);
+        return;
+      }
+      // Strip leading zeros: "011" -> "11", "09" -> "9"
+      var stripped = raw.replace(/^0+(\d)/, '$1');
+      var v = parseInt(stripped, 10);
+      if (!isNaN(v) && v >= 0) {
+        setInputVal(String(Math.min(target, v)));
+        handleCount(habit.id, Math.min(target, v) - done);
+      }
+    },
+    onBlur: function onBlur() {
+      // On blur, if empty restore to current done value
+      if (inputVal === '') setInputVal(String(done));
     }
   }), /*#__PURE__*/React.createElement("button", {
     className: "counter-btn",
