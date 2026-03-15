@@ -6280,7 +6280,7 @@ function MainApp(_ref16) {
       className: "my-posts-section"
     }, myPosts.length > 0 && /*#__PURE__*/React.createElement("div", {
       className: "section-title"
-    , "My Posts"), myPosts.slice(0, 3).map(function (p) {
+    }, "My Posts"), myPosts.slice(0, 3).map(function (p) {
       var likedBy = Array.isArray(p.likedBy) ? p.likedBy : [];
       var liked = isFirebaseConfigured ? likedBy.includes(user.uid) : p.liked || false;
       return /*#__PURE__*/React.createElement(FeedCard, {
