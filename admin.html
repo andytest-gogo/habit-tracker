@@ -653,15 +653,15 @@ service cloud.firestore {
           <thead>
             <tr>
               <th style="width:130px">Reported User</th>
-              <th>Post Content</th>
+              <th>Content</th>
+              <th style="width:65px">Type</th>
               <th style="width:110px">Reason</th>
-              <th style="width:90px">Status</th>
-              <th style="width:120px">Reported At</th>
-              <th style="width:140px">Actions</th>
-            </tr>
+              <th style="width:80px">Status</th>
+              <th style="width:115px">Reported At</th>
+              <th style="width:180px">Actions</th>
           </thead>
           <tbody id="reportsTbody">
-            <tr class="loading-row"><td colspan="6">Loading reports...</td></tr>
+            <tr class="loading-row"><td colspan="7">Loading reports...</td></tr>
           </tbody>
         </table>
       </div>
@@ -1253,12 +1253,14 @@ function renderPosts(f){
   document.getElementById('postCnt').textContent=list.length+' post(s)';
   if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="7">No matching posts</td></tr>';return;}
   tb.innerHTML=list.map(function(p){
-    return '<tr><td><div class="uc">'+avatarHtml(p.userId, p.user)+'<span>'+htmlEsc(p.user||'—')+'</span></div></td>'+
-      '<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'+
-      '<td>'+(p.hasImage?'📷':p.hasVideo?'🎬':'—')+'</td>'+
-      '<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'+
-      '<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td>'+
-      '<td><button class="del" onclick="delPost(\''+p.id+'\')">Delete</button></td></tr>';
+    return '<tr style="cursor:pointer" onclick="openPostModal(\''+p.id+'\')">'
+      +'<td><div class="uc">'+avatarHtml(p.userId, p.user)+'<span>'+htmlEsc(p.user||'—')+'</span></div></td>'
+      +'<td><div class="ptxt">'+htmlEsc(p.text||'(no text)')+'</div></td>'
+      +'<td>'+(p.hasImage?'📷':p.hasVideo?'🎬':'—')+'</td>'
+      +'<td>'+(p.likes||0)+'</td><td>'+(p.commentCount||0)+'</td>'
+      +'<td style="font-size:10px;color:var(--g400)">'+p.timeStr+'</td>'
+      +'<td onclick="event.stopPropagation()"><button class="del" onclick="delPost(\''+p.id+'\')" >Delete</button></td>'
+      +'</tr>';
   }).join('');
 }
 
@@ -1758,19 +1760,65 @@ var STATUS_STYLE = {
 function renderReports(){
   var statusFilter = document.getElementById('reportStatusFilter').value;
   var reasonFilter = document.getElementById('reportReasonFilter').value;
-
   var list = allReports.filter(function(r){
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
     if (reasonFilter !== 'all' && r.reason !== reasonFilter) return false;
     return true;
   });
-
   document.getElementById('reportsCnt').textContent = list.length + ' report(s) shown';
   var tb = document.getElementById('reportsTbody');
   if (!list.length) {
-    tb.innerHTML = '<tr class="loading-row"><td colspan="6">No reports match the current filter</td></tr>';
+    tb.innerHTML = '<tr class="loading-row"><td colspan="7">No reports match the current filter</td></tr>';
     return;
   }
+  tb.innerHTML = list.map(function(r){
+    var reasonLabel = REASON_LABELS[r.reason] || r.reason || '-';
+    var statusStyle = STATUS_STYLE[r.status] || '';
+    var statusLabel = (r.status || 'pending').charAt(0).toUpperCase() + (r.status||'pending').slice(1);
+    var timeStr = r.reportedAtDate ? r.reportedAtDate.toLocaleString('en-US',{month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
+    var reportedUser = htmlEsc(r.reportedUserName || r.reportedUserId || '-');
+    var isComment = !!(r.commentId || r.isComment);
+    var typeLabel = isComment
+      ? '<span class="badge" style="background:#e0e7ff;color:#3730a3;font-size:9px">Comment</span>'
+      : '<span class="badge" style="background:#fce7f3;color:#9d174d;font-size:9px">Post</span>';
+    var contentPreview = htmlEsc((r.postText||'(no text)').slice(0,80)) + ((r.postText||'').length > 80 ? '...' : '');
+    var contentId = isComment
+      ? (r.commentId ? r.commentId.slice(0,8)+'...' : '-')
+      : (r.postId ? r.postId.slice(0,8)+'...' : '-');
+    var deleteBtn = '';
+    if (r.postId) {
+      if (isComment && r.commentId) {
+        deleteBtn = '<button class="del" style="background:#dc2626;color:#fff;border-color:#dc2626;margin-right:3px;font-size:9px" '
+          + 'onclick="deleteReportedComment(''+r.postId+'',''+r.commentId+'',''+r.id+'')" title="Delete this comment">Del Comment</button>';
+      } else {
+        deleteBtn = '<button class="del" style="background:#dc2626;color:#fff;border-color:#dc2626;margin-right:3px;font-size:9px" '
+          + 'onclick="deleteReportedPost(''+r.postId+'',''+r.id+'')" title="Delete this post">Del Post</button>';
+      }
+    }
+    var actionBtns = deleteBtn;
+    if (r.status === 'pending') {
+      actionBtns += '<button class="del" style="background:#059669;color:#fff;border-color:#059669;margin-right:3px;font-size:9px" '
+        + 'onclick="setReportStatus(''+r.id+'','reviewed')">OK</button>'
+        + '<button class="del" style="color:var(--g500);font-size:9px" '
+        + 'onclick="setReportStatus(''+r.id+'','dismissed')">Dismiss</button>';
+    } else {
+      actionBtns += '<button class="del" style="font-size:9px" '
+        + 'onclick="setReportStatus(''+r.id+'','pending')">Reopen</button>';
+    }
+    return '<tr>'
+      + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
+      + '<div><strong style="font-size:12px">'+reportedUser+'</strong>'
+      + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono)">'+htmlEsc(r.reportedUserId||'').slice(0,16)+'</div></div></div></td>'
+      + '<td><div class="ptxt" title="'+htmlEsc(r.postText||'')+'">'+contentPreview+'</div>'
+      + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono);margin-top:2px">ID: '+htmlEsc(contentId)+'</div></td>'
+      + '<td>'+typeLabel+'</td>'
+      + '<td style="font-size:11px">'+reasonLabel+'</td>'
+      + '<td><span class="badge" style="'+statusStyle+'">'+statusLabel+'</span></td>'
+      + '<td style="font-size:10px;color:var(--g400)">'+timeStr+'</td>'
+      + '<td>'+actionBtns+'</td>'
+      + '</tr>';
+  }).join('');
+}
 
   tb.innerHTML = list.map(function(r){
     var reasonLabel  = REASON_LABELS[r.reason] || r.reason || '—';
@@ -1921,6 +1969,125 @@ function setReportStatus(reportId, newStatus){
     renderReports();
   }).catch(function(e){ alert('Update failed: ' + e.message); });
 }
+
+/* ─── Delete reported POST directly from Reports page ─── */
+function deleteReportedPost(postId, reportId) {
+  if (!confirm('Delete this post? This removes it for all users.')) return;
+  db.collection('posts').doc(postId).delete().then(function() {
+    db.collection('reports').doc(reportId).update({
+      status: 'reviewed',
+      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      reviewedBy: auth.currentUser ? auth.currentUser.email : 'admin'
+    }).catch(function(){});
+    allPosts = allPosts.filter(function(p){ return p.id !== postId; });
+    var r = allReports.find(function(x){ return x.id === reportId; });
+    if (r) r.status = 'reviewed';
+    updateReportsBadge(); renderReportStats(); renderReports();
+    renderPosts(document.getElementById('postSearch').value);
+    alert('Post deleted successfully.');
+  }).catch(function(e){ alert('Delete failed: ' + e.message); });
+}
+
+/* ─── Delete reported COMMENT directly from Reports page ─── */
+function deleteReportedComment(postId, commentId, reportId) {
+  if (!confirm('Delete this comment?')) return;
+  db.collection('posts').doc(postId).collection('comments').doc(commentId).delete().then(function() {
+    db.collection('posts').doc(postId).update({
+      comments: firebase.firestore.FieldValue.increment(-1)
+    }).catch(function(){});
+    db.collection('reports').doc(reportId).update({
+      status: 'reviewed',
+      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      reviewedBy: auth.currentUser ? auth.currentUser.email : 'admin'
+    }).catch(function(){});
+    var r = allReports.find(function(x){ return x.id === reportId; });
+    if (r) r.status = 'reviewed';
+    updateReportsBadge(); renderReportStats(); renderReports();
+    alert('Comment deleted successfully.');
+  }).catch(function(e){ alert('Delete failed: ' + e.message); });
+}
+
+/* ─── Post detail modal: view post + all comments with delete ─── */
+function openPostModal(postId) {
+  var post = allPosts.find(function(p){ return p.id === postId; });
+  if (!post) return;
+  var modal = document.getElementById('postDetailModal');
+  if (!modal) {
+    // Create modal dynamically
+    modal = document.createElement('div');
+    modal.id = 'postDetailModal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:flex-end;justify-content:center;';
+    modal.innerHTML = '<div style="background:#fff;width:100%;max-width:560px;max-height:80vh;overflow-y:auto;border-top:3px solid #000;display:flex;flex-direction:column;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#fff;">'
+      + '<strong style="font-size:13px;font-family:var(--font);text-transform:uppercase;letter-spacing:.5px">Post Detail</strong>'
+      + '<button onclick="closePostModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#737373;padding:0 4px">&times;</button>'
+      + '</div>'
+      + '<div id="postDetailContent" style="padding:20px;flex:1"></div>'
+      + '</div>';
+    modal.addEventListener('click', function(e){ if(e.target===modal) closePostModal(); });
+    document.body.appendChild(modal);
+  }
+
+  var mc = document.getElementById('postDetailContent');
+  mc.innerHTML = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
+    + avatarHtml(post.userId, post.user)
+    + '<div><strong style="font-size:14px">'+htmlEsc(post.user||'Unknown')+'</strong>'
+    + '<div style="font-size:10px;color:var(--g400)">'+post.timeStr+'</div></div></div>'
+    + (post.text ? '<div style="font-size:13px;line-height:1.6;padding:12px;background:#f8f8f8;margin-bottom:16px;white-space:pre-wrap">'+htmlEsc(post.text)+'</div>' : '')
+    + (post.hasImage && post.mediaUrl ? '<img src="'+post.mediaUrl+'" style="width:100%;max-height:200px;object-fit:cover;margin-bottom:16px">' : '')
+    + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--g400);margin-bottom:10px">Comments ('+(post.commentCount||0)+')</div>'
+    + '<div id="postModalComments"><div style="text-align:center;padding:20px;color:var(--g400);font-size:12px">Loading comments...</div></div>';
+
+  modal.style.display = 'flex';
+
+  db.collection('posts').doc(postId).collection('comments').orderBy('createdAt','asc').get()
+    .then(function(snap){
+      var cd = document.getElementById('postModalComments');
+      if (!snap.docs.length) {
+        cd.innerHTML = '<div style="color:var(--g400);font-size:12px;padding:8px 0">No comments yet.</div>';
+        return;
+      }
+      cd.innerHTML = snap.docs.map(function(doc){
+        var d = doc.data();
+        var ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
+        return '<div id="cm-'+doc.id+'" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0f0;align-items:flex-start">'
+          + '<div style="width:28px;height:28px;background:#f0f0f0;border:1px solid #e0e0e0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'
+          + htmlEsc(((d.userName||'?')[0]).toUpperCase())+'</div>'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:11px;font-weight:700;margin-bottom:2px">'+htmlEsc(d.userName||'-')+'</div>'
+          + '<div style="font-size:12px;line-height:1.5;color:#3d3d3d">'+htmlEsc(d.text||'')+'</div>'
+          + '<div style="font-size:9px;color:var(--g400);margin-top:3px">'+ts+' &nbsp;·&nbsp; <span style="color:#dc2626">&#x2665;</span> '+(d.likes||0)+'</div>'
+          + '</div>'
+          + '<button class="del" style="flex-shrink:0;font-size:9px" onclick="deleteCommentFromModal(''+postId+'',''+doc.id+'')">Delete</button>'
+          + '</div>';
+      }).join('');
+    })
+    .catch(function(e){
+      var cd = document.getElementById('postModalComments');
+      if(cd) cd.innerHTML = '<div style="color:#c00;font-size:12px;padding:8px">Failed: '+htmlEsc(e.message)+'</div>';
+    });
+}
+
+function closePostModal() {
+  var m = document.getElementById('postDetailModal');
+  if (m) m.style.display = 'none';
+}
+
+function deleteCommentFromModal(postId, commentId) {
+  if (!confirm('Delete this comment?')) return;
+  db.collection('posts').doc(postId).collection('comments').doc(commentId).delete()
+    .then(function(){
+      db.collection('posts').doc(postId).update({ comments: firebase.firestore.FieldValue.increment(-1) }).catch(function(){});
+      var el = document.getElementById('cm-'+commentId);
+      if (el) { el.style.opacity='0.35'; el.style.pointerEvents='none'; }
+      // Sync count in allPosts
+      var p = allPosts.find(function(x){ return x.id===postId; });
+      if (p) p.commentCount = Math.max(0,(p.commentCount||1)-1);
+      renderPosts(document.getElementById('postSearch').value);
+    })
+    .catch(function(e){ alert('Delete failed: '+e.message); });
+}
+
 
 </script>
 </body>

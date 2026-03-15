@@ -2785,6 +2785,10 @@ function FeedCard(_ref5) {
               userId: currentUser.uid,
               userName: currentUser.displayName || 'User',
               userAvatar: ((_ref7 = currentUser.displayName || currentUser.email) === null || _ref7 === void 0 || (_ref7 = _ref7[0]) === null || _ref7 === void 0 ? void 0 : _ref7.toUpperCase()) || 'U',
+              userAvatarUrl: localStorage.getItem('avatar_' + currentUser.uid) || null,
+              likes: 0,
+              likedBy: [],
+              postId: post.id,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
           case 3:
@@ -2919,32 +2923,53 @@ function FeedCard(_ref5) {
   })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Report"))), showComments && /*#__PURE__*/React.createElement("div", {
     className: "comments-section"
   }, loadingComments && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--gray-400)',
-      padding: '4px 0'
-    }
+    style: { fontSize: 11, color: 'var(--gray-400)', padding: '4px 0' }
   }, "Loading comments..."), comments.map(function (c) {
     var _c$createdAt;
+    var cLikedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
+    var cLiked = currentUser ? cLikedBy.includes(currentUser.uid) : false;
+    var isOwnComment = currentUser && c.userId === currentUser.uid;
+    function handleCommentLike() {
+      if (!currentUser) return;
+      var newLikedBy = cLiked ? cLikedBy.filter(function(id){return id!==currentUser.uid;}) : cLikedBy.concat([currentUser.uid]);
+      var newLikes = Math.max(0,(c.likes||0)+(cLiked?-1:1));
+      setComments(function(prev){return prev.map(function(x){return x.id===c.id?Object.assign({},x,{likedBy:newLikedBy,likes:newLikes}):x;});});
+      if(typeof db!=='undefined') db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
+        likes:(typeof firebase!=='undefined'?firebase.firestore.FieldValue.increment(cLiked?-1:1):newLikes),
+        likedBy:(typeof firebase!=='undefined'?(cLiked?firebase.firestore.FieldValue.arrayRemove(currentUser.uid):firebase.firestore.FieldValue.arrayUnion(currentUser.uid)):newLikedBy)
+      }).catch(function(e){console.error(e);});
+    }
     return /*#__PURE__*/React.createElement("div", {
       key: c.id,
       className: "comment-item"
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-avatar"
-    }, c.userAvatar), /*#__PURE__*/React.createElement("div", {
+    }, c.userAvatarUrl
+      ? /*#__PURE__*/React.createElement("img", {src:c.userAvatarUrl, style:{width:'100%',height:'100%',objectFit:'cover',borderRadius:0}, alt:""})
+      : c.userAvatar
+    ), /*#__PURE__*/React.createElement("div", {
       className: "comment-body"
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-user"
     }, c.userName), /*#__PURE__*/React.createElement("div", {
       className: "comment-text"
     }, c.text), /*#__PURE__*/React.createElement("div", {
-      className: "comment-time"
-    }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined, {
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }) : 'Just now')));
+      style:{display:'flex',alignItems:'center',gap:12,marginTop:4}
+    },
+      /*#__PURE__*/React.createElement("div", {
+        className:"comment-time"
+      }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now'),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: handleCommentLike,
+        style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:10,color:cLiked?'var(--black)':'var(--gray-400)',fontWeight:600,padding:0,fontFamily:'var(--font)'}
+      }, /*#__PURE__*/React.createElement(HeartIcon, {filled:cLiked}), /*#__PURE__*/React.createElement("span",null, c.likes||0)),
+      !isOwnComment && /*#__PURE__*/React.createElement("button", {
+        onClick: function(){if(typeof window.openReportModal==='function') window.openReportModal(Object.assign({},c,{text:c.text,user:c.userName,isComment:true,postId:post.id,commentId:c.id}));},
+        style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.6}
+      }, /*#__PURE__*/React.createElement("svg",{width:10,height:10,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
+          /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9'})
+        ), "Report")
+    )));
   }), comments.length === 0 && !loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
@@ -2971,6 +2996,16 @@ function FeedCard(_ref5) {
   }, sendingComment ? '…' : 'Send'))));
 }
 
+/* ── Global formatTime (used by UserPostsPage outside App scope) ── */
+function _globalFormatTime(date) {
+  var now = new Date();
+  var diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' hr ago';
+  return Math.floor(diff / 86400) + ' day ago';
+}
+
 /* ── USER ALL POSTS PAGE ── */
 function UserPostsPage(_ref_upp) {
   var user = _ref_upp.user, onBack = _ref_upp.onBack;
@@ -2987,7 +3022,7 @@ function UserPostsPage(_ref_upp) {
     if (ts && ts.toDate) {
       var dt = ts.toDate();
       sortTs = dt.getTime();
-      timeStr = formatTime ? formatTime(dt) : dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      timeStr = _globalFormatTime(dt);
     }
     return Object.assign({}, data, { id: d.id, time: timeStr, _sortTs: sortTs });
   }
@@ -3079,6 +3114,167 @@ function UserPostsPage(_ref_upp) {
                     style: { margin: '8px 16px', width: 'calc(100% - 32px)' }
                   }, 'Load more')
                 : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '\u2014 All posts loaded \u2014')
+            )
+    )
+  );
+}
+
+/* ── USER ALL COMMENTS PAGE ── */
+function UserCommentsPage(_ref_ucp) {
+  var user = _ref_ucp.user, onBack = _ref_ucp.onBack;
+  var COMMENTS_PER_PAGE = 10;
+  var _sc1 = useState([]),   _sc1a = _slicedToArray(_sc1, 2), allComments = _sc1a[0], setAllComments = _sc1a[1];
+  var _sc2 = useState(0),    _sc2a = _slicedToArray(_sc2, 2), page = _sc2a[0],       setPage = _sc2a[1];
+  var _sc3 = useState(true), _sc3a = _slicedToArray(_sc3, 2), loading = _sc3a[0],    setLoading = _sc3a[1];
+
+  useEffect(function() {
+    if (!user) return;
+    setLoading(true);
+    // Query all posts, then collect comments by this user (no composite index needed)
+    db.collection('posts').get()
+      .then(function(postsSnap) {
+        var promises = postsSnap.docs.map(function(postDoc) {
+          return db.collection('posts').doc(postDoc.id).collection('comments')
+            .where('userId', '==', user.uid)
+            .get()
+            .then(function(commSnap) {
+              var postData = postDoc.data();
+              return commSnap.docs.map(function(cd) {
+                var data = cd.data();
+                var ts = data.createdAt;
+                var sortTs = 0, timeStr = '';
+                if (ts && ts.toDate) {
+                  var dt = ts.toDate();
+                  sortTs = dt.getTime();
+                  timeStr = _globalFormatTime(dt);
+                }
+                return Object.assign({}, data, {
+                  id: cd.id,
+                  postId: postDoc.id,
+                  postText: postData.text || '',
+                  postUser: postData.user || '',
+                  timeStr: timeStr,
+                  _sortTs: sortTs
+                });
+              });
+            });
+        });
+        return Promise.all(promises);
+      })
+      .then(function(arrays) {
+        var flat = [].concat.apply([], arrays);
+        flat.sort(function(a, b) { return b._sortTs - a._sortTs; });
+        setAllComments(flat);
+        setLoading(false);
+      })
+      .catch(function(e) { console.error('[UserCommentsPage]', e); setLoading(false); });
+  }, [user && user.uid]);
+
+  function handleCommentLike(commentId, postId) {
+    var comment = allComments.find(function(c) { return c.id === commentId; });
+    if (!comment) return;
+    var likedBy = Array.isArray(comment.likedBy) ? comment.likedBy : [];
+    var hasLiked = likedBy.includes(user.uid);
+    var newLikedBy = hasLiked ? likedBy.filter(function(id){return id!==user.uid;}) : likedBy.concat([user.uid]);
+    var newLikes = Math.max(0, (comment.likes||0) + (hasLiked?-1:1));
+    setAllComments(function(prev) {
+      return prev.map(function(c) {
+        return c.id === commentId ? Object.assign({}, c, {likedBy: newLikedBy, likes: newLikes}) : c;
+      });
+    });
+    db.collection('posts').doc(postId).collection('comments').doc(commentId).update({
+      likes: firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1),
+      likedBy: hasLiked ? firebase.firestore.FieldValue.arrayRemove(user.uid) : firebase.firestore.FieldValue.arrayUnion(user.uid)
+    }).catch(function(e) { console.error(e); });
+  }
+
+  var displayName = (user && (user.displayName || user.email)) || 'User';
+  var avatarUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('avatar_' + (user && user.uid)) : null;
+  var avatarLetter = displayName[0].toUpperCase();
+  var visibleComments = allComments.slice(0, (page + 1) * COMMENTS_PER_PAGE);
+  var hasMore = allComments.length > visibleComments.length;
+
+  return /*#__PURE__*/React.createElement('div', { className: 'app-container' },
+
+    /* nav */
+    /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
+      /*#__PURE__*/React.createElement('button', { className: 'history-nav-back', onClick: onBack },
+        /*#__PURE__*/React.createElement('svg', { width: 14, height: 14, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+          /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2.5, d: 'M15 19l-7-7 7-7' })
+        ), 'Back'
+      ),
+      /*#__PURE__*/React.createElement('span', { className: 'history-nav-title' }, 'My Comments')
+    ),
+
+    /* dark banner */
+    /*#__PURE__*/React.createElement('div', { className: 'history-chart-section' },
+      /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Comment History'),
+      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
+        /*#__PURE__*/React.createElement('div', null,
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, loading ? '—' : allComments.length),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Total Comments')
+        ),
+        /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 15, fontWeight: 700 } }, displayName)
+        )
+      )
+    ),
+
+    /* comment list */
+    /*#__PURE__*/React.createElement('div', { style: { paddingBottom: 80 } },
+      loading
+        ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
+        : allComments.length === 0
+          ? /*#__PURE__*/React.createElement('div', { className: 'empty-state', style: { paddingTop: 40 } },
+              /*#__PURE__*/React.createElement('h3', null, 'No comments yet'),
+              /*#__PURE__*/React.createElement('p', null, 'Start joining conversations in the feed')
+            )
+          : /*#__PURE__*/React.createElement('div', null,
+              visibleComments.map(function(c) {
+                var cLikedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
+                var cLiked = cLikedBy.includes(user.uid);
+                return /*#__PURE__*/React.createElement('div', {
+                  key: c.id,
+                  style: { borderBottom: '1px solid var(--gray-100)', padding: '14px 16px' }
+                },
+                  /* context: which post this was on */
+                  c.postText && /*#__PURE__*/React.createElement('div', {
+                    style: { fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 8, fontWeight: 600 }
+                  }, 'On post: ', /*#__PURE__*/React.createElement('span', { style: { fontWeight: 400, textTransform: 'none' } },
+                    c.postText.slice(0, 60) + (c.postText.length > 60 ? '…' : '')
+                  )),
+                  /* comment card with avatar */
+                  /*#__PURE__*/React.createElement('div', { className: 'comment-item', style: { marginBottom: 0 } },
+                    /*#__PURE__*/React.createElement('div', { className: 'comment-avatar' },
+                      avatarUrl
+                        ? /*#__PURE__*/React.createElement('img', { src: avatarUrl, style: { width: '100%', height: '100%', objectFit: 'cover' }, alt: '' })
+                        : avatarLetter
+                    ),
+                    /*#__PURE__*/React.createElement('div', { className: 'comment-body' },
+                      /*#__PURE__*/React.createElement('div', { className: 'comment-user' }, displayName),
+                      /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, c.text),
+                      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 } },
+                        /*#__PURE__*/React.createElement('div', { className: 'comment-time' }, c.timeStr),
+                        /*#__PURE__*/React.createElement('button', {
+                          onClick: function() { handleCommentLike(c.id, c.postId); },
+                          style: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: cLiked ? 'var(--black)' : 'var(--gray-400)', fontWeight: 600, padding: 0, fontFamily: 'var(--font)' }
+                        },
+                          /*#__PURE__*/React.createElement(HeartIcon, { filled: cLiked }),
+                          /*#__PURE__*/React.createElement('span', null, c.likes || 0)
+                        )
+                      )
+                    )
+                  )
+                );
+              }),
+              hasMore
+                ? /*#__PURE__*/React.createElement('button', {
+                    className: 'view-all-posts-btn',
+                    onClick: function() { setPage(function(p) { return p + 1; }); },
+                    style: { margin: '8px 16px', width: 'calc(100% - 32px)' }
+                  }, 'Load more')
+                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All comments loaded —')
             )
     )
   );
@@ -4581,6 +4777,10 @@ function MainApp(_ref16) {
     _useStateAllPostsArr = _slicedToArray(_useStateAllPosts, 2),
     showAllPosts = _useStateAllPostsArr[0],
     setShowAllPosts = _useStateAllPostsArr[1];
+  var _useStateAllComments = useState(false),
+    _useStateAllCommentsArr = _slicedToArray(_useStateAllComments, 2),
+    showAllComments = _useStateAllCommentsArr[0],
+    setShowAllComments = _useStateAllCommentsArr[1];
   var _useState71 = useState(function () {
       // Pre-load from cache so user sees content instantly while Firestore syncs
       try {
@@ -5781,6 +5981,10 @@ function MainApp(_ref16) {
     user: user,
     onBack: function onBack() { return setShowAllPosts(false); }
   });
+  if (showAllComments) return /*#__PURE__*/React.createElement(UserCommentsPage, {
+    user: user,
+    onBack: function onBack() { return setShowAllComments(false); }
+  });
   var renderHome = function renderHome() {
     if (selectedHabit) {
       var habit = habits.find(function (h) {
@@ -6293,7 +6497,11 @@ function MainApp(_ref16) {
     }), myPosts.length > 3 && /*#__PURE__*/React.createElement("button", {
       className: "view-all-posts-btn",
       onClick: function onClick() { return setShowAllPosts(true); }
-    }, "View all posts (", myPosts.length, ")  →"), myPosts.length === 0 && /*#__PURE__*/React.createElement("div", {
+    }, "View all posts (", myPosts.length, ")  →"), /*#__PURE__*/React.createElement("button", {
+      className: "view-all-posts-btn",
+      style: { marginTop: 8, background: 'var(--gray-800)' },
+      onClick: function onClick() { return setShowAllComments(true); }
+    }, "View all comments  →"), myPosts.length === 0 && /*#__PURE__*/React.createElement("div", {
       className: "empty-state",
       style: {
         paddingTop: 32
