@@ -564,13 +564,13 @@
         /* ── VIEW ALL POSTS / USER POSTS PAGE ── */
         .view-all-posts-btn {
             display:block; width:100%; margin-top:12px;
-            padding:11px 16px; background:var(--white);
-            border:1px solid var(--gray-200); color:var(--gray-600);
+            padding:12px 16px; background:var(--black);
+            border:none; color:var(--white);
             font-size:11px; font-weight:700; text-transform:uppercase;
             letter-spacing:.8px; cursor:pointer; font-family:var(--font);
             transition:.15s; text-align:center;
         }
-        .view-all-posts-btn:hover { border-color:var(--black); color:var(--black); background:var(--gray-50); }
+        .view-all-posts-btn:hover { opacity:.85; }
         .load-more-posts-btn {
             display:block; width:100%; padding:12px 16px;
             background:var(--black); color:var(--white);
@@ -2909,7 +2909,6 @@ function FeedCard(_ref5) {
     style: { background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4, padding:"0 2px" },
     onClick: function onClick(e) {
       e.stopPropagation();
-      if (currentUser && post.userId && post.userId === currentUser.uid) return;
       if (typeof window.openReportModal === "function") window.openReportModal(post);
     }
   }, /*#__PURE__*/React.createElement("svg", {
@@ -2976,16 +2975,22 @@ function FeedCard(_ref5) {
 function UserPostsPage(_ref_upp) {
   var user = _ref_upp.user, onBack = _ref_upp.onBack;
   var POSTS_PER_PAGE = 10;
-  var _useStateP1 = useState([]), postsState = _slicedToArray(_useStateP1, 2),
-    posts = postsState[0], setPosts = postsState[1];
-  var _useStateP2 = useState(null), lastDocState = _slicedToArray(_useStateP2, 2),
-    lastDoc = lastDocState[0], setLastDoc = lastDocState[1];
-  var _useStateP3 = useState(true), loadingState = _slicedToArray(_useStateP3, 2),
-    loading = loadingState[0], setLoading = loadingState[1];
-  var _useStateP4 = useState(false), loadingMoreState = _slicedToArray(_useStateP4, 2),
-    loadingMore = loadingMoreState[0], setLoadingMore = loadingMoreState[1];
-  var _useStateP5 = useState(true), hasMoreState = _slicedToArray(_useStateP5, 2),
-    hasMore = hasMoreState[0], setHasMore = hasMoreState[1];
+  var _sp1 = useState([]),   _sp1a = _slicedToArray(_sp1, 2), posts = _sp1a[0], setPosts = _sp1a[1];
+  var _sp2 = useState(null), _sp2a = _slicedToArray(_sp2, 2), lastDoc = _sp2a[0], setLastDoc = _sp2a[1];
+  var _sp3 = useState(true), _sp3a = _slicedToArray(_sp3, 2), loading = _sp3a[0], setLoading = _sp3a[1];
+  var _sp4 = useState(false),_sp4a = _slicedToArray(_sp4, 2), loadingMore = _sp4a[0], setLoadingMore = _sp4a[1];
+  var _sp5 = useState(false),_sp5a = _slicedToArray(_sp5, 2), hasMore = _sp5a[0], setHasMore = _sp5a[1];
+
+  function parsePost(d) {
+    var data = d.data();
+    var ts = data.createdAt;
+    var dateStr = '';
+    if (ts && ts.toDate) {
+      var dt = ts.toDate();
+      dateStr = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    return Object.assign({}, data, { id: d.id, timeStr: dateStr });
+  }
 
   useEffect(function() {
     if (!user) return;
@@ -2996,20 +3001,15 @@ function UserPostsPage(_ref_upp) {
       .limit(POSTS_PER_PAGE)
       .get()
       .then(function(snap) {
-        var docs = snap.docs.map(function(d) {
-          var data = d.data();
-          return Object.assign({}, data, { id: d.id,
-            time: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : '' });
-        });
-        setPosts(docs);
+        setPosts(snap.docs.map(parsePost));
         setLastDoc(snap.docs[snap.docs.length - 1] || null);
         setHasMore(snap.docs.length === POSTS_PER_PAGE);
         setLoading(false);
       })
       .catch(function(e) { console.error(e); setLoading(false); });
-  }, [user]);
+  }, [user && user.uid]);
 
-  var loadMore = function() {
+  function loadMore() {
     if (!lastDoc || loadingMore) return;
     setLoadingMore(true);
     db.collection('posts')
@@ -3019,74 +3019,113 @@ function UserPostsPage(_ref_upp) {
       .limit(POSTS_PER_PAGE)
       .get()
       .then(function(snap) {
-        var docs = snap.docs.map(function(d) {
-          var data = d.data();
-          return Object.assign({}, data, { id: d.id,
-            time: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : '' });
-        });
-        setPosts(function(prev) { return prev.concat(docs); });
+        setPosts(function(prev) { return prev.concat(snap.docs.map(parsePost)); });
         setLastDoc(snap.docs[snap.docs.length - 1] || null);
         setHasMore(snap.docs.length === POSTS_PER_PAGE);
         setLoadingMore(false);
       })
       .catch(function(e) { console.error(e); setLoadingMore(false); });
-  };
+  }
+
+  function deletePost(id) {
+    if (!window.confirm('Delete this post?')) return;
+    db.collection('posts').doc(id).delete()
+      .then(function() { setPosts(function(prev) { return prev.filter(function(x) { return x.id !== id; }); }); })
+      .catch(function(e) { alert('Delete failed: ' + e.message); });
+  }
 
   var displayName = (user && (user.displayName || user.email)) || 'User';
-  var avatarLetter = displayName[0].toUpperCase();
 
-  return /*#__PURE__*/React.createElement('div', { className: 'user-posts-page' },
-    /*#__PURE__*/React.createElement('div', { className: 'user-posts-nav' },
+  return /*#__PURE__*/React.createElement('div', { className: 'history-page' },
+
+    /* ── nav bar (same as HistoryPage) ── */
+    /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
       /*#__PURE__*/React.createElement('button', { className: 'history-nav-back', onClick: onBack },
-        /*#__PURE__*/React.createElement('svg', { width: 16, height: 16, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+        /*#__PURE__*/React.createElement('svg', { width: 14, height: 14, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
           /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2.5, d: 'M15 19l-7-7 7-7' })
         ), 'Back'
       ),
-      /*#__PURE__*/React.createElement('span', { className: 'history-nav-title' }, 'All My Posts')
+      /*#__PURE__*/React.createElement('span', { className: 'history-nav-title' }, 'My Posts')
     ),
-    loading
-      ? /*#__PURE__*/React.createElement('div', { style: { padding: '40px 20px', textAlign: 'center', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
-      : posts.length === 0
-        ? /*#__PURE__*/React.createElement('div', { className: 'empty-state', style: { paddingTop: 60 } },
-            /*#__PURE__*/React.createElement('h3', null, 'No posts yet'),
-            /*#__PURE__*/React.createElement('p', null, 'Share your first post from your profile')
-          )
-        : /*#__PURE__*/React.createElement('div', { style: { padding: '0 0 40px' } },
-            posts.map(function(p) {
-              return /*#__PURE__*/React.createElement('div', { key: p.id, className: 'my-post-item', style: { margin: '0 16px 12px', borderBottom: '1px solid var(--gray-100)' } },
-                /*#__PURE__*/React.createElement('div', { className: 'my-post-header' },
-                  /*#__PURE__*/React.createElement('span', { className: 'my-post-time' }, p.time),
-                  /*#__PURE__*/React.createElement('button', {
-                    className: 'my-post-delete',
-                    onClick: function() {
-                      if (!window.confirm('Delete this post?')) return;
-                      db.collection('posts').doc(p.id).delete()
-                        .then(function() { setPosts(function(prev) { return prev.filter(function(x) { return x.id !== p.id; }); }); })
-                        .catch(function(e) { alert('Delete failed: ' + e.message); });
-                    }
-                  }, 'Delete')
-                ),
-                p.text && /*#__PURE__*/React.createElement('div', { className: 'my-post-body' }, p.text),
-                p.mediaUrl && /*#__PURE__*/React.createElement('div', { className: 'my-post-media' },
-                  p.hasImage
-                    ? /*#__PURE__*/React.createElement('img', { src: p.mediaUrl, alt: 'post' })
-                    : /*#__PURE__*/React.createElement('video', { src: p.mediaUrl, controls: true, playsInline: true, preload: 'metadata', style: { width: '100%', height: 180, objectFit: 'contain', display: 'block', background: '#000' } })
-                ),
-                /*#__PURE__*/React.createElement('div', { className: 'my-post-actions' },
-                  /*#__PURE__*/React.createElement('div', { className: 'feed-action' }, /*#__PURE__*/React.createElement(HeartIcon, { filled: false }), /*#__PURE__*/React.createElement('span', null, p.likes || 0)),
-                  /*#__PURE__*/React.createElement('div', { className: 'feed-action' }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement('span', null, p.comments || 0))
-                )
-              );
-            }),
-            hasMore && /*#__PURE__*/React.createElement('div', { style: { padding: '16px 16px 0', textAlign: 'center' } },
-              /*#__PURE__*/React.createElement('button', {
-                className: 'load-more-posts-btn',
-                onClick: loadMore,
-                disabled: loadingMore
-              }, loadingMore ? 'Loading…' : 'Load more')
-            ),
-            !hasMore && posts.length > 0 && /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', fontSize: 11, color: 'var(--gray-400)', paddingTop: 16, textTransform: 'uppercase', letterSpacing: 1 } }, 'All posts loaded')
-          )
+
+    /* ── dark header banner ── */
+    /*#__PURE__*/React.createElement('div', { className: 'history-chart-section' },
+      /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Post History'),
+      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
+        /*#__PURE__*/React.createElement('div', null,
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, posts.length),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Posts Loaded')
+        ),
+        /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 15, fontWeight: 700 } }, displayName)
+        )
+      )
+    ),
+
+    /* ── posts list ── */
+    /*#__PURE__*/React.createElement('div', { className: 'archive-list-section' },
+      loading
+        ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
+        : posts.length === 0
+          ? /*#__PURE__*/React.createElement('div', { className: 'empty-state', style: { paddingTop: 40 } },
+              /*#__PURE__*/React.createElement('h3', null, 'No posts yet'),
+              /*#__PURE__*/React.createElement('p', null, 'Share your first post from your profile')
+            )
+          : /*#__PURE__*/React.createElement('div', null,
+              /*#__PURE__*/React.createElement('div', { className: 'archive-list-header' },
+                /*#__PURE__*/React.createElement('span', { className: 'archive-count-badge' }, posts.length, ' posts')
+              ),
+              posts.map(function(p) {
+                var preview = (p.text || '').slice(0, 100) + ((p.text || '').length > 100 ? '…' : '');
+                return /*#__PURE__*/React.createElement('div', { key: p.id, className: 'archive-item' },
+                  /*#__PURE__*/React.createElement('div', { className: 'archive-item-top' },
+                    /*#__PURE__*/React.createElement('div', { className: 'archive-item-left' },
+                      preview
+                        ? /*#__PURE__*/React.createElement('div', { className: 'archive-item-name' }, preview)
+                        : /*#__PURE__*/React.createElement('div', { className: 'archive-item-name', style: { color: 'var(--gray-400)', fontStyle: 'italic' } }, '(media only)'),
+                      /*#__PURE__*/React.createElement('div', { className: 'archive-item-range' }, p.timeStr),
+                      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', gap: 14, marginTop: 8 } },
+                        /*#__PURE__*/React.createElement('span', { style: { fontSize: 11, color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: 4 } },
+                          /*#__PURE__*/React.createElement('svg', { width: 12, height: 12, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+                            /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' })
+                          ), p.likes || 0
+                        ),
+                        /*#__PURE__*/React.createElement('span', { style: { fontSize: 11, color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: 4 } },
+                          /*#__PURE__*/React.createElement('svg', { width: 12, height: 12, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+                            /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' })
+                          ), p.comments || 0
+                        )
+                      )
+                    ),
+                    p.mediaUrl && /*#__PURE__*/React.createElement('div', { style: { width: 52, height: 52, flexShrink: 0, background: 'var(--gray-100)', overflow: 'hidden', border: '1px solid var(--gray-200)' } },
+                      p.hasImage
+                        ? /*#__PURE__*/React.createElement('img', { src: p.mediaUrl, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover' } })
+                        : /*#__PURE__*/React.createElement('div', { style: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' } }, '▶')
+                    )
+                  ),
+                  /*#__PURE__*/React.createElement('div', { className: 'archive-prog-bar' },
+                    /*#__PURE__*/React.createElement('div', { className: 'archive-prog-fill', style: { width: '100%', background: 'var(--gray-300)' } })
+                  ),
+                  /*#__PURE__*/React.createElement('div', { style: { padding: '8px 16px 10px', display: 'flex', justifyContent: 'flex-end' } },
+                    /*#__PURE__*/React.createElement('button', {
+                      onClick: function() { deletePost(p.id); },
+                      style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font)' }
+                    }, 'Delete')
+                  )
+                );
+              }),
+
+              /* Load more / end */
+              hasMore
+                ? /*#__PURE__*/React.createElement('button', {
+                    onClick: loadMore,
+                    disabled: loadingMore,
+                    style: { display: 'block', width: '100%', marginTop: 16, padding: '13px 0', background: 'var(--black)', color: 'var(--white)', border: 'none', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, cursor: loadingMore ? 'not-allowed' : 'pointer', opacity: loadingMore ? .6 : 1, fontFamily: 'var(--font)' }
+                  }, loadingMore ? 'Loading…' : 'Load more')
+                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 20, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All posts loaded —')
+            )
+    )
   );
 }
 
