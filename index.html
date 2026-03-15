@@ -7298,4 +7298,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.error('[Report] Error:', e);
       onSuccess(); // show success to user anyway
     }
+    // Write to Firestore
+    if (typeof db !== 'undefined' && db) {
+      db.collection('reports').add(reportDoc)
+        .then(function() { onSuccess(); })
+        .catch(function(e) { onError(e); });
+    } else {
+      // Demo mode — no Firebase
+      setTimeout(onSuccess, 600);
+    }
+  };
 
+})();
+</script>
+
+</body>
+</html>
