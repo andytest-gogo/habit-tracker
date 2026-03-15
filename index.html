@@ -2975,21 +2975,21 @@ function FeedCard(_ref5) {
 function UserPostsPage(_ref_upp) {
   var user = _ref_upp.user, onBack = _ref_upp.onBack;
   var POSTS_PER_PAGE = 10;
-  var _sp1 = useState([]),   _sp1a = _slicedToArray(_sp1, 2), posts = _sp1a[0], setPosts = _sp1a[1];
-  var _sp2 = useState(null), _sp2a = _slicedToArray(_sp2, 2), lastDoc = _sp2a[0], setLastDoc = _sp2a[1];
-  var _sp3 = useState(true), _sp3a = _slicedToArray(_sp3, 2), loading = _sp3a[0], setLoading = _sp3a[1];
-  var _sp4 = useState(false),_sp4a = _slicedToArray(_sp4, 2), loadingMore = _sp4a[0], setLoadingMore = _sp4a[1];
-  var _sp5 = useState(false),_sp5a = _slicedToArray(_sp5, 2), hasMore = _sp5a[0], setHasMore = _sp5a[1];
+  var _sp1 = useState([]),   _sp1a = _slicedToArray(_sp1, 2), allPosts = _sp1a[0], setAllPosts = _sp1a[1];
+  var _sp2 = useState(0),    _sp2a = _slicedToArray(_sp2, 2), page = _sp2a[0],     setPage = _sp2a[1];
+  var _sp3 = useState(true), _sp3a = _slicedToArray(_sp3, 2), loading = _sp3a[0],  setLoading = _sp3a[1];
 
   function parsePost(d) {
     var data = d.data();
     var ts = data.createdAt;
-    var dateStr = '';
+    var timeStr = '';
+    var sortTs = 0;
     if (ts && ts.toDate) {
       var dt = ts.toDate();
-      dateStr = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      sortTs = dt.getTime();
+      timeStr = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
-    return Object.assign({}, data, { id: d.id, timeStr: dateStr });
+    return Object.assign({}, data, { id: d.id, timeStr: timeStr, _sortTs: sortTs });
   }
 
   useEffect(function() {
@@ -2997,53 +2997,35 @@ function UserPostsPage(_ref_upp) {
     setLoading(true);
     db.collection('posts')
       .where('userId', '==', user.uid)
-      .orderBy('createdAt', 'desc')
-      .limit(POSTS_PER_PAGE)
       .get()
       .then(function(snap) {
-        setPosts(snap.docs.map(parsePost));
-        setLastDoc(snap.docs[snap.docs.length - 1] || null);
-        setHasMore(snap.docs.length === POSTS_PER_PAGE);
+        var docs = snap.docs.map(parsePost);
+        docs.sort(function(a, b) { return b._sortTs - a._sortTs; });
+        setAllPosts(docs);
         setLoading(false);
       })
-      .catch(function(e) { console.error(e); setLoading(false); });
+      .catch(function(e) {
+        console.error('[UserPostsPage] error:', e);
+        setLoading(false);
+      });
   }, [user && user.uid]);
 
-  function loadMore() {
-    if (!lastDoc || loadingMore) return;
-    setLoadingMore(true);
-    db.collection('posts')
-      .where('userId', '==', user.uid)
-      .orderBy('createdAt', 'desc')
-      .startAfter(lastDoc)
-      .limit(POSTS_PER_PAGE)
-      .get()
-      .then(function(snap) {
-        setPosts(function(prev) { return prev.concat(snap.docs.map(parsePost)); });
-        setLastDoc(snap.docs[snap.docs.length - 1] || null);
-        setHasMore(snap.docs.length === POSTS_PER_PAGE);
-        setLoadingMore(false);
-      })
-      .catch(function(e) { console.error(e); setLoadingMore(false); });
-  }
-
-  function deletePost(id) {
+  function handleDelete(id) {
     if (!window.confirm('Delete this post?')) return;
     db.collection('posts').doc(id).delete()
-      .then(function() { setPosts(function(prev) { return prev.filter(function(x) { return x.id !== id; }); }); })
+      .then(function() { setAllPosts(function(prev) { return prev.filter(function(x) { return x.id !== id; }); }); })
       .catch(function(e) { alert('Delete failed: ' + e.message); });
   }
 
+  var visiblePosts = allPosts.slice(0, (page + 1) * POSTS_PER_PAGE);
+  var hasMore = allPosts.length > visiblePosts.length;
   var displayName = (user && (user.displayName || user.email)) || 'User';
 
   function renderCard(p) {
     return /*#__PURE__*/React.createElement('div', { key: p.id, className: 'my-post-item' },
       /*#__PURE__*/React.createElement('div', { className: 'my-post-header' },
         /*#__PURE__*/React.createElement('span', { className: 'my-post-time' }, p.timeStr),
-        /*#__PURE__*/React.createElement('button', {
-          className: 'my-post-delete',
-          onClick: function() { deletePost(p.id); }
-        }, 'Delete')
+        /*#__PURE__*/React.createElement('button', { className: 'my-post-delete', onClick: function() { handleDelete(p.id); } }, 'Delete')
       ),
       p.text && /*#__PURE__*/React.createElement('div', { className: 'my-post-body' }, p.text),
       p.mediaUrl && /*#__PURE__*/React.createElement('div', { className: 'my-post-media' },
@@ -3078,8 +3060,8 @@ function UserPostsPage(_ref_upp) {
       /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Post History'),
       /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
         /*#__PURE__*/React.createElement('div', null,
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, posts.length),
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, loading ? 'Loading…' : 'Total Posts')
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, loading ? '—' : allPosts.length),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Total Posts')
         ),
         /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
           /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
@@ -3090,20 +3072,19 @@ function UserPostsPage(_ref_upp) {
     /*#__PURE__*/React.createElement('div', { style: { padding: '16px 16px 80px' } },
       loading
         ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
-        : posts.length === 0
+        : allPosts.length === 0
           ? /*#__PURE__*/React.createElement('div', { className: 'empty-state', style: { paddingTop: 40 } },
               /*#__PURE__*/React.createElement('h3', null, 'No posts yet'),
               /*#__PURE__*/React.createElement('p', null, 'Share your first post from your profile')
             )
           : /*#__PURE__*/React.createElement('div', null,
-              posts.map(renderCard),
+              visiblePosts.map(renderCard),
               hasMore
                 ? /*#__PURE__*/React.createElement('button', {
                     className: 'view-all-posts-btn',
-                    onClick: loadMore,
-                    disabled: loadingMore,
-                    style: { marginTop: 8, opacity: loadingMore ? .6 : 1 }
-                  }, loadingMore ? 'Loading…' : 'Load more')
+                    onClick: function() { setPage(function(p) { return p + 1; }); },
+                    style: { marginTop: 8 }
+                  }, 'Load more')
                 : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All posts loaded —')
             )
     )
