@@ -1785,14 +1785,17 @@ function renderReports(){
     var contentId = isComment
       ? (r.commentId ? r.commentId.slice(0,8)+'...' : '-')
       : (r.postId ? r.postId.slice(0,8)+'...' : '-');
+    var delPostId = htmlEsc(r.postId || '');
+    var delCommentId = htmlEsc(r.commentId || '');
+    var delReportId = htmlEsc(r.id || '');
     var deleteBtn = '';
     if (r.postId) {
       if (isComment && r.commentId) {
         deleteBtn = '<button class="del" style="background:#dc2626;color:#fff;border-color:#dc2626;margin-right:3px;font-size:9px" '
-          + 'onclick="deleteReportedComment(''+r.postId+'',''+r.commentId+'',''+r.id+'')" title="Delete this comment">Del Comment</button>';
+          + 'onclick="deleteReportedComment(this)" data-pid="'+delPostId+'" data-cid="'+delCommentId+'" data-rid="'+delReportId+'">Del Comment</button>';
       } else {
         deleteBtn = '<button class="del" style="background:#dc2626;color:#fff;border-color:#dc2626;margin-right:3px;font-size:9px" '
-          + 'onclick="deleteReportedPost(''+r.postId+'',''+r.id+'')" title="Delete this post">Del Post</button>';
+          + 'onclick="deleteReportedPost(this)" data-pid="'+delPostId+'" data-rid="'+delReportId+'">Del Post</button>';
       }
     }
     var actionBtns = deleteBtn;
@@ -1971,8 +1974,11 @@ function setReportStatus(reportId, newStatus){
 }
 
 /* ─── Delete reported POST directly from Reports page ─── */
-function deleteReportedPost(postId, reportId) {
+function deleteReportedPost(btn) {
+  var postId = btn.getAttribute('data-pid');
+  var reportId = btn.getAttribute('data-rid');
   if (!confirm('Delete this post? This removes it for all users.')) return;
+  btn.disabled = true; btn.textContent = 'Deleting...';
   db.collection('posts').doc(postId).delete().then(function() {
     db.collection('reports').doc(reportId).update({
       status: 'reviewed',
@@ -1984,13 +1990,16 @@ function deleteReportedPost(postId, reportId) {
     if (r) r.status = 'reviewed';
     updateReportsBadge(); renderReportStats(); renderReports();
     renderPosts(document.getElementById('postSearch').value);
-    alert('Post deleted successfully.');
-  }).catch(function(e){ alert('Delete failed: ' + e.message); });
+  }).catch(function(e){ btn.disabled=false; btn.textContent='Del Post'; alert('Delete failed: ' + e.message); });
 }
 
 /* ─── Delete reported COMMENT directly from Reports page ─── */
-function deleteReportedComment(postId, commentId, reportId) {
+function deleteReportedComment(btn) {
+  var postId = btn.getAttribute('data-pid');
+  var commentId = btn.getAttribute('data-cid');
+  var reportId = btn.getAttribute('data-rid');
   if (!confirm('Delete this comment?')) return;
+  btn.disabled = true; btn.textContent = 'Deleting...';
   db.collection('posts').doc(postId).collection('comments').doc(commentId).delete().then(function() {
     db.collection('posts').doc(postId).update({
       comments: firebase.firestore.FieldValue.increment(-1)
@@ -2003,8 +2012,7 @@ function deleteReportedComment(postId, commentId, reportId) {
     var r = allReports.find(function(x){ return x.id === reportId; });
     if (r) r.status = 'reviewed';
     updateReportsBadge(); renderReportStats(); renderReports();
-    alert('Comment deleted successfully.');
-  }).catch(function(e){ alert('Delete failed: ' + e.message); });
+  }).catch(function(e){ btn.disabled=false; btn.textContent='Del Comment'; alert('Delete failed: ' + e.message); });
 }
 
 /* ─── Post detail modal: view post + all comments with delete ─── */

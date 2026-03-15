@@ -2954,19 +2954,22 @@ function FeedCard(_ref5) {
     }, c.userName), /*#__PURE__*/React.createElement("div", {
       className: "comment-text"
     }, c.text), /*#__PURE__*/React.createElement("div", {
-      style:{display:'flex',alignItems:'center',gap:12,marginTop:4}
+      style:{display:'flex',alignItems:'center',gap:10,marginTop:5}
     },
       /*#__PURE__*/React.createElement("div", {
-        className:"comment-time"
+        className:"comment-time",
+        style:{flex:1}
       }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now'),
       /*#__PURE__*/React.createElement("button", {
         onClick: handleCommentLike,
         style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:10,color:cLiked?'var(--black)':'var(--gray-400)',fontWeight:600,padding:0,fontFamily:'var(--font)'}
-      }, /*#__PURE__*/React.createElement(HeartIcon, {filled:cLiked}), /*#__PURE__*/React.createElement("span",null, c.likes||0)),
+      }, /*#__PURE__*/React.createElement("svg",{width:12,height:12,fill:cLiked?'currentColor':'none',viewBox:'0 0 24 24',stroke:'currentColor',strokeWidth:2},
+           /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',d:'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'})
+         ), /*#__PURE__*/React.createElement("span",null, c.likes||0)),
       !isOwnComment && /*#__PURE__*/React.createElement("button", {
         onClick: function(){if(typeof window.openReportModal==='function') window.openReportModal(Object.assign({},c,{text:c.text,user:c.userName,isComment:true,postId:post.id,commentId:c.id}));},
-        style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.6}
-      }, /*#__PURE__*/React.createElement("svg",{width:10,height:10,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
+        style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.55,marginLeft:'auto'}
+      }, /*#__PURE__*/React.createElement("svg",{width:11,height:11,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
           /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9'})
         ), "Report")
     )));
@@ -3260,7 +3263,9 @@ function UserCommentsPage(_ref_ucp) {
                           onClick: function() { handleCommentLike(c.id, c.postId); },
                           style: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: cLiked ? 'var(--black)' : 'var(--gray-400)', fontWeight: 600, padding: 0, fontFamily: 'var(--font)' }
                         },
-                          /*#__PURE__*/React.createElement(HeartIcon, { filled: cLiked }),
+                          /*#__PURE__*/React.createElement('svg', {width:12,height:12,fill:cLiked?'currentColor':'none',viewBox:'0 0 24 24',stroke:'currentColor',strokeWidth:2},
+                            /*#__PURE__*/React.createElement('path', {strokeLinecap:'round',strokeLinejoin:'round',d:'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'})
+                          ),
                           /*#__PURE__*/React.createElement('span', null, c.likes || 0)
                         )
                       )
