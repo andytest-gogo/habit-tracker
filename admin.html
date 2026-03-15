@@ -1799,14 +1799,15 @@ function renderReports(){
       }
     }
     var actionBtns = deleteBtn;
+    var rid = r.id;
     if (r.status === 'pending') {
       actionBtns += '<button class="del" style="background:#059669;color:#fff;border-color:#059669;margin-right:3px;font-size:9px" '
-        + 'onclick="setReportStatus(''+r.id+'','reviewed')">OK</button>'
+        + 'onclick="setReportStatus(\'' + rid + '\',\'reviewed\')">OK</button>'
         + '<button class="del" style="color:var(--g500);font-size:9px" '
-        + 'onclick="setReportStatus(''+r.id+'','dismissed')">Dismiss</button>';
+        + 'onclick="setReportStatus(\'' + rid + '\',\'dismissed\')">Dismiss</button>';
     } else {
       actionBtns += '<button class="del" style="font-size:9px" '
-        + 'onclick="setReportStatus(''+r.id+'','pending')">Reopen</button>';
+        + 'onclick="setReportStatus(\'' + rid + '\',\'pending\')">Reopen</button>';
     }
     return '<tr>'
       + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
@@ -1823,41 +1824,6 @@ function renderReports(){
   }).join('');
 }
 
-  tb.innerHTML = list.map(function(r){
-    var reasonLabel  = REASON_LABELS[r.reason] || r.reason || '—';
-    var statusStyle  = STATUS_STYLE[r.status] || '';
-    var statusLabel  = (r.status || 'pending').charAt(0).toUpperCase() + (r.status||'pending').slice(1);
-    var timeStr      = r.reportedAtDate ? r.reportedAtDate.toLocaleString('en-US',{month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-    var postPreview  = htmlEsc((r.postText||'(no text)').slice(0,80)) + ((r.postText||'').length>80?'…':'');
-    var reportedUser = htmlEsc(r.reportedUserName || r.reportedUserId || '—');
-    var postIdShort  = r.postId ? r.postId.slice(0,10)+'…' : '—';
-
-    // Action buttons depending on status
-    var actionBtns = '';
-    if (r.status === 'pending') {
-      actionBtns =
-        '<button class="del" style="background:#059669;color:#fff;border-color:#059669;margin-right:4px" '
-        + 'onclick="setReportStatus(\''+r.id+'\',\'reviewed\')" title="Mark as reviewed — post has been actioned">✓ Reviewed</button>'
-        + '<button class="del" style="color:var(--g500)" '
-        + 'onclick="setReportStatus(\''+r.id+'\',\'dismissed\')" title="Dismiss — no violation found">✗ Dismiss</button>';
-    } else {
-      actionBtns =
-        '<button class="del" onclick="setReportStatus(\''+r.id+'\',\'pending\')" title="Move back to pending">↩ Reopen</button>';
-    }
-
-    return '<tr>'
-      + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
-      + '<div><strong style="font-size:12px">' + reportedUser + '</strong>'
-      + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono)">' + htmlEsc(r.reportedUserId||'').slice(0,16) + '</div></div></div></td>'
-      + '<td><div class="ptxt" title="' + htmlEsc(r.postText||'') + '">' + postPreview + '</div>'
-      + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono);margin-top:2px">ID: ' + htmlEsc(postIdShort) + '</div></td>'
-      + '<td style="font-size:11px">' + reasonLabel + '</td>'
-      + '<td><span class="badge" style="' + statusStyle + '">' + statusLabel + '</span></td>'
-      + '<td style="font-size:10px;color:var(--g400)">' + timeStr + '</td>'
-      + '<td>' + actionBtns + '</td>'
-      + '</tr>';
-  }).join('');
-}
 
 /* ══════════════════════════════════════════
    ORPHANED USERNAMES SCANNER
@@ -2066,7 +2032,7 @@ function openPostModal(postId) {
           + '<div style="font-size:12px;line-height:1.5;color:#3d3d3d">'+htmlEsc(d.text||'')+'</div>'
           + '<div style="font-size:9px;color:var(--g400);margin-top:3px">'+ts+' &nbsp;·&nbsp; <span style="color:#dc2626">&#x2665;</span> '+(d.likes||0)+'</div>'
           + '</div>'
-          + '<button class="del" style="flex-shrink:0;font-size:9px" onclick="deleteCommentFromModal(''+postId+'',''+doc.id+'')">Delete</button>'
+          + '<button class="del" style="flex-shrink:0;font-size:9px" onclick="deleteCommentFromModal(\\\'' + postId + '\\\',\\\'' + doc.id + '\\\')" >Delete</button>'
           + '</div>';
       }).join('');
     })
