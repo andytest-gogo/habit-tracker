@@ -463,7 +463,7 @@
         .feed-action-report:hover { opacity:1; color:#dc2626 !important; }
 
         /* ── REPORT POST MODAL ── */
-        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:9000; display:flex; align-items:flex-end; justify-content:center; }
+        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:10003; display:flex; align-items:flex-end; justify-content:center; }
         .report-box { background:var(--white); width:100%; max-width:480px; border-top:3px solid #dc2626; animation:lmSlideUp .25s cubic-bezier(.4,0,.2,1); }
         .report-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--gray-100); }
         .report-header-title { font-family:var(--din); font-size:14px; font-weight:800; color:#dc2626; text-transform:uppercase; letter-spacing:.5px; }
@@ -3036,9 +3036,36 @@ function UserPostsPage(_ref_upp) {
 
   var displayName = (user && (user.displayName || user.email)) || 'User';
 
-  return /*#__PURE__*/React.createElement('div', { className: 'history-page' },
+  function renderCard(p) {
+    return /*#__PURE__*/React.createElement('div', { key: p.id, className: 'my-post-item' },
+      /*#__PURE__*/React.createElement('div', { className: 'my-post-header' },
+        /*#__PURE__*/React.createElement('span', { className: 'my-post-time' }, p.timeStr),
+        /*#__PURE__*/React.createElement('button', {
+          className: 'my-post-delete',
+          onClick: function() { deletePost(p.id); }
+        }, 'Delete')
+      ),
+      p.text && /*#__PURE__*/React.createElement('div', { className: 'my-post-body' }, p.text),
+      p.mediaUrl && /*#__PURE__*/React.createElement('div', { className: 'my-post-media' },
+        p.hasImage
+          ? /*#__PURE__*/React.createElement('img', { src: p.mediaUrl, alt: 'post' })
+          : /*#__PURE__*/React.createElement('video', { src: p.mediaUrl, controls: true, playsInline: true, preload: 'metadata',
+              style: { width: '100%', height: 180, objectFit: 'contain', display: 'block', background: '#000' } })
+      ),
+      /*#__PURE__*/React.createElement('div', { className: 'my-post-actions' },
+        /*#__PURE__*/React.createElement('div', { className: 'feed-action' },
+          /*#__PURE__*/React.createElement(HeartIcon, { filled: false }),
+          /*#__PURE__*/React.createElement('span', null, p.likes || 0)
+        ),
+        /*#__PURE__*/React.createElement('div', { className: 'feed-action' },
+          /*#__PURE__*/React.createElement(ChatIcon, null),
+          /*#__PURE__*/React.createElement('span', null, p.comments || 0)
+        )
+      )
+    );
+  }
 
-    /* ── nav bar (same as HistoryPage) ── */
+  return /*#__PURE__*/React.createElement('div', { className: 'app-container' },
     /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
       /*#__PURE__*/React.createElement('button', { className: 'history-nav-back', onClick: onBack },
         /*#__PURE__*/React.createElement('svg', { width: 14, height: 14, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
@@ -3047,24 +3074,20 @@ function UserPostsPage(_ref_upp) {
       ),
       /*#__PURE__*/React.createElement('span', { className: 'history-nav-title' }, 'My Posts')
     ),
-
-    /* ── dark header banner ── */
     /*#__PURE__*/React.createElement('div', { className: 'history-chart-section' },
       /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Post History'),
       /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
         /*#__PURE__*/React.createElement('div', null,
           /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, posts.length),
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Posts Loaded')
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, loading ? 'Loading…' : 'Total Posts')
         ),
         /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
           /*#__PURE__*/React.createElement('div', { style: { fontSize: 15, fontWeight: 700 } }, displayName)
         )
       )
     ),
-
-    /* ── posts list ── */
-    /*#__PURE__*/React.createElement('div', { className: 'archive-list-section' },
+    /*#__PURE__*/React.createElement('div', { style: { padding: '16px 16px 80px' } },
       loading
         ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
         : posts.length === 0
@@ -3073,57 +3096,15 @@ function UserPostsPage(_ref_upp) {
               /*#__PURE__*/React.createElement('p', null, 'Share your first post from your profile')
             )
           : /*#__PURE__*/React.createElement('div', null,
-              /*#__PURE__*/React.createElement('div', { className: 'archive-list-header' },
-                /*#__PURE__*/React.createElement('span', { className: 'archive-count-badge' }, posts.length, ' posts')
-              ),
-              posts.map(function(p) {
-                var preview = (p.text || '').slice(0, 100) + ((p.text || '').length > 100 ? '…' : '');
-                return /*#__PURE__*/React.createElement('div', { key: p.id, className: 'archive-item' },
-                  /*#__PURE__*/React.createElement('div', { className: 'archive-item-top' },
-                    /*#__PURE__*/React.createElement('div', { className: 'archive-item-left' },
-                      preview
-                        ? /*#__PURE__*/React.createElement('div', { className: 'archive-item-name' }, preview)
-                        : /*#__PURE__*/React.createElement('div', { className: 'archive-item-name', style: { color: 'var(--gray-400)', fontStyle: 'italic' } }, '(media only)'),
-                      /*#__PURE__*/React.createElement('div', { className: 'archive-item-range' }, p.timeStr),
-                      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', gap: 14, marginTop: 8 } },
-                        /*#__PURE__*/React.createElement('span', { style: { fontSize: 11, color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: 4 } },
-                          /*#__PURE__*/React.createElement('svg', { width: 12, height: 12, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
-                            /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' })
-                          ), p.likes || 0
-                        ),
-                        /*#__PURE__*/React.createElement('span', { style: { fontSize: 11, color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: 4 } },
-                          /*#__PURE__*/React.createElement('svg', { width: 12, height: 12, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
-                            /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' })
-                          ), p.comments || 0
-                        )
-                      )
-                    ),
-                    p.mediaUrl && /*#__PURE__*/React.createElement('div', { style: { width: 52, height: 52, flexShrink: 0, background: 'var(--gray-100)', overflow: 'hidden', border: '1px solid var(--gray-200)' } },
-                      p.hasImage
-                        ? /*#__PURE__*/React.createElement('img', { src: p.mediaUrl, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover' } })
-                        : /*#__PURE__*/React.createElement('div', { style: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' } }, '▶')
-                    )
-                  ),
-                  /*#__PURE__*/React.createElement('div', { className: 'archive-prog-bar' },
-                    /*#__PURE__*/React.createElement('div', { className: 'archive-prog-fill', style: { width: '100%', background: 'var(--gray-300)' } })
-                  ),
-                  /*#__PURE__*/React.createElement('div', { style: { padding: '8px 16px 10px', display: 'flex', justifyContent: 'flex-end' } },
-                    /*#__PURE__*/React.createElement('button', {
-                      onClick: function() { deletePost(p.id); },
-                      style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font)' }
-                    }, 'Delete')
-                  )
-                );
-              }),
-
-              /* Load more / end */
+              posts.map(renderCard),
               hasMore
                 ? /*#__PURE__*/React.createElement('button', {
+                    className: 'view-all-posts-btn',
                     onClick: loadMore,
                     disabled: loadingMore,
-                    style: { display: 'block', width: '100%', marginTop: 16, padding: '13px 0', background: 'var(--black)', color: 'var(--white)', border: 'none', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, cursor: loadingMore ? 'not-allowed' : 'pointer', opacity: loadingMore ? .6 : 1, fontFamily: 'var(--font)' }
+                    style: { marginTop: 8, opacity: loadingMore ? .6 : 1 }
                   }, loadingMore ? 'Loading…' : 'Load more')
-                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 20, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All posts loaded —')
+                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All posts loaded —')
             )
     )
   );
