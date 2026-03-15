@@ -147,7 +147,7 @@
         .percentile-bar-fill { height:100%; background:var(--black); transition:width 1s cubic-bezier(.4,0,.2,1); }
 
         /* archive list */
-        .archive-list-section { padding:20px; background:var(--white); }
+        .archive-list-section { padding:20px; padding-bottom:40px; background:var(--white); }
         .archive-list-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
         .archive-count-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--gray-400); }
         .archive-item {
@@ -4361,7 +4361,7 @@ function HistoryPage(_ref15) {
       className: "archive-tag"
     }, h.durLabel)));
   }), hasMore && /*#__PURE__*/React.createElement("div", {
-    style: { padding: '16px 20px 0', textAlign: 'center' }
+    style: { padding: '16px 0 0', textAlign: 'center' }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function() { setVisibleCount(function(c) { return c + 10; }); },
     style: {
@@ -4381,9 +4381,10 @@ function HistoryPage(_ref15) {
       justifyContent: 'center',
       gap: 8
     }
-  }, "Load More (", sorted.length - visibleCount, " remaining)"))), /*#__PURE__*/React.createElement("div", {
+  }, "Load More (", sorted.length - visibleCount, " remaining)")), /*#__PURE__*/React.createElement("div", {
     style: {
-      height: 40
+      height: 40,
+      background: 'var(--white)'
     }
   })));
 }
