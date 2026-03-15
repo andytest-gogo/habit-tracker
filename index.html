@@ -186,12 +186,6 @@
         .comment-user { font-size:11px; font-weight:700; color:var(--black); margin-bottom:2px; }
         .comment-text { font-size:12px; color:var(--gray-700); line-height:1.5; }
         .comment-time { font-size:9px; color:var(--gray-400); margin-top:2px; text-transform:uppercase; letter-spacing:.4px; }
-        .comment-actions { display:flex; gap:6px; margin-top:4px; }
-        .comment-action-btn { background:none; border:none; cursor:pointer; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:2px 6px; font-family:var(--font); border:1px solid transparent; transition:.15s; }
-        .comment-delete-btn { color:var(--gray-400); }
-        .comment-delete-btn:hover { color:#dc2626; border-color:#dc2626; }
-        .comment-report-btn { color:var(--gray-400); }
-        .comment-report-btn:hover { color:#d97706; border-color:#d97706; }
         .comment-input-row { display:flex; gap:8px; margin-top:8px; }
         .comment-input { flex:1; padding:8px 10px; border:1px solid var(--gray-200); font-size:12px; font-family:var(--font); outline:none; background:var(--white); color:var(--black); border-radius:0; }
         .comment-input:focus { border-color:var(--black); }
@@ -2912,9 +2906,6 @@ function FeedCard(_ref5) {
     }
   }, "Loading comments..."), comments.map(function (c) {
     var _c$createdAt;
-    var isOwner = currentUser && currentUser.uid === c.userId;
-    var isPostOwner = currentUser && currentUser.uid === post.userId;
-    var canDelete = isOwner || isPostOwner;
     return /*#__PURE__*/React.createElement("div", {
       key: c.id,
       className: "comment-item"
@@ -2927,53 +2918,13 @@ function FeedCard(_ref5) {
     }, c.userName), /*#__PURE__*/React.createElement("div", {
       className: "comment-text"
     }, c.text), /*#__PURE__*/React.createElement("div", {
-      style: { display:'flex', alignItems:'center', gap:8 }
-    }, /*#__PURE__*/React.createElement("div", {
       className: "comment-time"
     }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined, {
       month: 'numeric',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }) : 'Just now'), canDelete && /*#__PURE__*/React.createElement("button", {
-      className: "comment-action-btn comment-delete-btn",
-      title: "Delete comment",
-      onClick: function onClick() {
-        if (!window.confirm('Delete this comment?')) return;
-        if (!isFirebaseConfigured) {
-          setComments(function(prev) { return prev.filter(function(x) { return x.id !== c.id; }); });
-          return;
-        }
-        db.collection('posts').doc(post.id).collection('comments').doc(c.id).delete()
-          .then(function() {
-            setComments(function(prev) { return prev.filter(function(x) { return x.id !== c.id; }); });
-            db.collection('posts').doc(post.id).update({
-              comments: firebase.firestore.FieldValue.increment(-1)
-            }).catch(function(){});
-          })
-          .catch(function(e) { alert('Delete failed: ' + e.message); });
-      }
-    }, "✕ Delete"), !isOwner && currentUser && /*#__PURE__*/React.createElement("button", {
-      className: "comment-action-btn comment-report-btn",
-      title: "Report this comment",
-      onClick: function onClick() {
-        if (!window.confirm('Report this comment as inappropriate?')) return;
-        if (!isFirebaseConfigured) { alert('Reported (demo mode)'); return; }
-        db.collection('reports').add({
-          type:             'comment',
-          commentId:        c.id,
-          postText:         (c.text || '').slice(0, 500),
-          postId:           post.id,
-          reportedUserId:   c.userId || '',
-          reportedUserName: c.userName || '',
-          reporterUid:      currentUser.uid,
-          reason:           'inappropriate',
-          status:           'pending',
-          reportedAt:       firebase.firestore.FieldValue.serverTimestamp()
-        }).then(function() { alert('Comment reported. Our team will review it.'); })
-          .catch(function(e) { alert('Report failed: ' + e.message); });
-      }
-    }, "⚑ Report"))));
+    }) : 'Just now')));
   }), comments.length === 0 && !loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
@@ -4558,22 +4509,6 @@ function MainApp(_ref16) {
     _useState88 = _slicedToArray(_useState87, 2),
     myPosts = _useState88[0],
     setMyPosts = _useState88[1];
-  var _useState_mc = useState([]),
-    _useState_mc2 = _slicedToArray(_useState_mc, 2),
-    myComments = _useState_mc2[0],
-    setMyComments = _useState_mc2[1];
-  var _useState_pv = useState('main'), // 'main' | 'all-posts' | 'all-comments'
-    _useState_pv2 = _slicedToArray(_useState_pv, 2),
-    profileView = _useState_pv2[0],
-    setProfileView = _useState_pv2[1];
-  var _useState_mp = useState(1),
-    _useState_mp2 = _slicedToArray(_useState_mp, 2),
-    myPostsPage = _useState_mp2[0],
-    setMyPostsPage = _useState_mp2[1];
-  var _useState_mcp = useState(1),
-    _useState_mcp2 = _slicedToArray(_useState_mcp, 2),
-    myCommentsPage = _useState_mcp2[0],
-    setMyCommentsPage = _useState_mcp2[1];
   var _useState89 = useState(''),
     _useState90 = _slicedToArray(_useState89, 2),
     postText = _useState90[0],
@@ -5085,27 +5020,6 @@ function MainApp(_ref16) {
       return _ref23.apply(this, arguments);
     };
   }();
-  // ── 載入我的留言 ──
-  useEffect(function () {
-    if (!isFirebaseConfigured) return;
-    // Query all posts, then get comments by current user
-    // We use a collectionGroup query if available, otherwise fetch per post
-    db.collectionGroup('comments').where('userId', '==', user.uid).orderBy('createdAt', 'desc').limit(100).get()
-      .then(function(snap) {
-        var comments = snap.docs.map(function(d) {
-          var data = d.data();
-          // postId is the parent doc id
-          var postId = d.ref.parent.parent ? d.ref.parent.parent.id : '';
-          var createdAt = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : null;
-          return Object.assign({ id: d.id, postId: postId }, data, {
-            timeStr: createdAt ? createdAt.toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Just now'
-          });
-        });
-        setMyComments(comments);
-      })
-      .catch(function(e) { console.warn('loadMyComments failed:', e.message); });
-  }, [user]);
-
   function formatTime(date) {
     var now = new Date();
     var diff = Math.floor((now - date) / 1000);
@@ -6225,7 +6139,7 @@ function MainApp(_ref16) {
       className: "my-posts-section"
     }, myPosts.length > 0 && /*#__PURE__*/React.createElement("div", {
       className: "section-title"
-    }, "My Posts"), myPosts.slice(0, 3).map(function (p) {
+    }, "My Posts"), myPosts.map(function (p) {
       return /*#__PURE__*/React.createElement("div", {
         key: p.id,
         className: "my-post-item"
@@ -6321,135 +6235,13 @@ function MainApp(_ref16) {
       strokeLinejoin: "round",
       strokeWidth: 1.5,
       d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-    })), /*#__PURE__*/React.createElement("h3", null, "No posts yet"), /*#__PURE__*/React.createElement("p", null, "Share your first post and start your habit journey"))),
-    myPosts.length > 3 && /*#__PURE__*/React.createElement("button", {
-      onClick: function onClick() { setProfileView('all-posts'); setMyPostsPage(1); },
-      style: { display:'block', width:'100%', marginTop:10, padding:'9px 0', background:'none', border:'1px solid var(--gray-200)', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, cursor:'pointer', color:'var(--gray-500)', fontFamily:'var(--font)' }
-    }, "View All Posts (", myPosts.length, ")"),
-
-    /*#__PURE__*/React.createElement("div", {
-      style: { marginTop: 24, borderTop: '1px solid var(--gray-100)', paddingTop: 20 }
-    },
-      /*#__PURE__*/React.createElement("div", { className: "section-title" }, "My Comments"),
-      myComments.slice(0, 3).map(function(c) {
-        return /*#__PURE__*/React.createElement("div", {
-          key: c.id,
-          style: { borderBottom: '1px solid var(--gray-100)', padding: '10px 0' }
-        },
-          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-500)', marginBottom: 4 } }, c.timeStr),
-          /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: 'var(--black)', marginBottom: 6 } }, c.text),
-          /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', fontFamily: 'var(--mono)' } }, "Post: ", (c.postId || '').slice(0, 12), "…"),
-          /*#__PURE__*/React.createElement("button", {
-            style: { marginTop: 6, padding: '3px 10px', background: 'none', border: '1px solid var(--gray-200)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, cursor: 'pointer', color: '#dc2626', borderColor: '#dc2626', fontFamily: 'var(--font)' },
-            onClick: function onClick() {
-              if (!window.confirm('Delete this comment?')) return;
-              if (!isFirebaseConfigured) { setMyComments(function(prev){ return prev.filter(function(x){ return x.id !== c.id; }); }); return; }
-              db.collection('posts').doc(c.postId).collection('comments').doc(c.id).delete()
-                .then(function() {
-                  setMyComments(function(prev){ return prev.filter(function(x){ return x.id !== c.id; }); });
-                  db.collection('posts').doc(c.postId).update({ comments: firebase.firestore.FieldValue.increment(-1) }).catch(function(){});
-                })
-                .catch(function(e) { alert('Delete failed: ' + e.message); });
-            }
-          }, "Delete")
-        );
-      }),
-      myComments.length === 0 && /*#__PURE__*/React.createElement("div", {
-        style: { fontSize: 12, color: 'var(--gray-400)', padding: '12px 0' }
-      }, "No comments yet."),
-      myComments.length > 3 && /*#__PURE__*/React.createElement("button", {
-        onClick: function onClick() { setProfileView('all-comments'); setMyCommentsPage(1); },
-        style: { display: 'block', width: '100%', marginTop: 10, padding: '9px 0', background: 'none', border: '1px solid var(--gray-200)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', color: 'var(--gray-500)', fontFamily: 'var(--font)' }
-      }, "View All Comments (", myComments.length, ")")
-    )),
-
-    profileView === 'all-posts' && /*#__PURE__*/React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'var(--white)', zIndex: 200, overflowY: 'auto' } },
-      /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px 12px', borderBottom: '1px solid var(--gray-100)', position: 'sticky', top: 0, background: 'var(--white)', zIndex: 1 } },
-        /*#__PURE__*/React.createElement("button", { onClick: function onClick() { setProfileView('main'); }, style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--gray-500)', fontFamily: 'var(--font)', display: 'flex', alignItems: 'center', gap: 4 } }, "← Back"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 700 } }, "All My Posts")
-      ),
-      /*#__PURE__*/React.createElement("div", { style: { padding: '0 20px 40px' } },
-        myPosts.slice(0, myPostsPage * 10).map(function(p) {
-          return /*#__PURE__*/React.createElement("div", {
-            key: p.id,
-            className: "my-post-item"
-          }, /*#__PURE__*/React.createElement("div", { className: "my-post-header" },
-            /*#__PURE__*/React.createElement("span", { className: "my-post-time" }, p.time),
-            /*#__PURE__*/React.createElement("button", {
-              className: "my-post-delete",
-              onClick: _asyncToGenerator(_regenerator().m(function _callee_ap() {
-                var _t_ap;
-                return _regenerator().w(function(_ctx_ap) {
-                  while(1) switch(_ctx_ap.p = _ctx_ap.n) {
-                    case 0:
-                      if (!isFirebaseConfigured) { _ctx_ap.n = 5; break; }
-                      _ctx_ap.p = 1; _ctx_ap.n = 2;
-                      return db.collection('posts').doc(p.id).delete();
-                    case 2: _ctx_ap.n = 4; break;
-                    case 3: _ctx_ap.p = 3; _t_ap = _ctx_ap.v; alert('Delete failed: ' + _t_ap.message);
-                    case 4: _ctx_ap.n = 6; break;
-                    case 5:
-                      setMyPosts(function(prev){ return prev.filter(function(x){ return x.id !== p.id; }); });
-                      setFeedPosts(function(prev){ return prev.filter(function(x){ return x.id !== p.id; }); });
-                    case 6: return _ctx_ap.a(2);
-                  }
-                }, _callee_ap, null, [[1,3]]);
-              }))
-            }, "Delete")
-          ),
-          p.text && /*#__PURE__*/React.createElement("div", { className: "my-post-body" }, p.text),
-          p.mediaUrl && /*#__PURE__*/React.createElement("div", { className: "my-post-media" },
-            p.hasImage
-              ? /*#__PURE__*/React.createElement("img", { src: p.mediaUrl, alt: "post" })
-              : /*#__PURE__*/React.createElement("video", { src: p.mediaUrl, controls: true, playsInline: true, preload: "metadata", style: { width: '100%', height: 180, objectFit: 'contain', display: 'block', background: '#000' } })
-          ),
-          /*#__PURE__*/React.createElement("div", { className: "my-post-actions" },
-            /*#__PURE__*/React.createElement("div", { className: "feed-action" }, /*#__PURE__*/React.createElement(HeartIcon, { filled: false }), /*#__PURE__*/React.createElement("span", null, p.likes)),
-            /*#__PURE__*/React.createElement("div", { className: "feed-action" }, /*#__PURE__*/React.createElement(ChatIcon, null), /*#__PURE__*/React.createElement("span", null, p.comments))
-          ));
-        }),
-        myPostsPage * 10 < myPosts.length && /*#__PURE__*/React.createElement("button", {
-          onClick: function onClick() { setMyPostsPage(function(n){ return n + 1; }); },
-          style: { display: 'block', width: '100%', marginTop: 16, padding: '12px 0', background: 'none', border: '1px solid var(--gray-200)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', color: 'var(--gray-500)', fontFamily: 'var(--font)' }
-        }, "Load More")
-      )
-    ),
-
-    profileView === 'all-comments' && /*#__PURE__*/React.createElement("div", { style: { position: 'fixed', inset: 0, background: 'var(--white)', zIndex: 200, overflowY: 'auto' } },
-      /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px 12px', borderBottom: '1px solid var(--gray-100)', position: 'sticky', top: 0, background: 'var(--white)', zIndex: 1 } },
-        /*#__PURE__*/React.createElement("button", { onClick: function onClick() { setProfileView('main'); }, style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--gray-500)', fontFamily: 'var(--font)', display: 'flex', alignItems: 'center', gap: 4 } }, "← Back"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 700 } }, "All My Comments")
-      ),
-      /*#__PURE__*/React.createElement("div", { style: { padding: '0 20px 40px' } },
-        myComments.slice(0, myCommentsPage * 10).map(function(c) {
-          return /*#__PURE__*/React.createElement("div", {
-            key: c.id,
-            style: { borderBottom: '1px solid var(--gray-100)', padding: '12px 0' }
-          },
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-500)', marginBottom: 4 } }, c.timeStr),
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: 'var(--black)', marginBottom: 6 } }, c.text),
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', fontFamily: 'var(--mono)', marginBottom: 6 } }, "Post: ", (c.postId || '').slice(0, 14), "…"),
-            /*#__PURE__*/React.createElement("button", {
-              style: { padding: '4px 12px', background: 'none', border: '1px solid #dc2626', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, cursor: 'pointer', color: '#dc2626', fontFamily: 'var(--font)' },
-              onClick: function onClick() {
-                if (!window.confirm('Delete this comment?')) return;
-                if (!isFirebaseConfigured) { setMyComments(function(prev){ return prev.filter(function(x){ return x.id !== c.id; }); }); return; }
-                db.collection('posts').doc(c.postId).collection('comments').doc(c.id).delete()
-                  .then(function() {
-                    setMyComments(function(prev){ return prev.filter(function(x){ return x.id !== c.id; }); });
-                    db.collection('posts').doc(c.postId).update({ comments: firebase.firestore.FieldValue.increment(-1) }).catch(function(){});
-                  })
-                  .catch(function(e) { alert('Delete failed: ' + e.message); });
-              }
-            }, "Delete")
-          );
-        }),
-        myCommentsPage * 10 < myComments.length && /*#__PURE__*/React.createElement("button", {
-          onClick: function onClick() { setMyCommentsPage(function(n){ return n + 1; }); },
-          style: { display: 'block', width: '100%', marginTop: 16, padding: '12px 0', background: 'none', border: '1px solid var(--gray-200)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', color: 'var(--gray-500)', fontFamily: 'var(--font)' }
-        }, "Load More")
-      )
-    )), /*#__PURE__*/React.createElement("div", {
+    })), /*#__PURE__*/React.createElement("h3", null, "No posts yet"), /*#__PURE__*/React.createElement("p", null, "Share your first post and start your habit journey"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        margin: '24px 0 0',
+        borderTop: '1px solid var(--gray-100)',
+        paddingTop: 20
+      }
+    }, /*#__PURE__*/React.createElement("div", {
       className: "section-title",
       style: {
         marginBottom: 10
@@ -6794,6 +6586,22 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             banner.remove();
             localStorage.setItem('pwa-installed', '1');
         };
+    }
+
+    /* 4. iOS Safari install hint (iOS does not support beforeinstallprompt) */
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isIOS && !isInStandalone && !localStorage.getItem('ios-hint-shown')) {
+        setTimeout(() => {
+            const hint = document.createElement('div');
+            hint.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);max-width:340px;width:calc(100% - 32px);background:#0a0a0a;color:#fff;padding:14px 16px;font-size:12px;line-height:1.6;z-index:500;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.3)';
+            hint.innerHTML = `
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 Add to iPhone Home Screen</div>
+                <div style="opacity:.75">Tap the <strong style="opacity:1">Share button ↑</strong> below → Select "Add to Home Screen" to use like an app</div>
+                <button onclick="this.parentElement.remove();localStorage.setItem('ios-hint-shown','1')" style="margin-top:10px;background:white;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">Got it</button>
+            `;
+            document.body.appendChild(hint);
+        }, 3000);
     }
 
     /* 5. Push notification request — CONTEXTUAL: triggered after user completes first habit,
@@ -7506,19 +7314,4 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.error('[Report] Error:', e);
       onSuccess(); // show success to user anyway
     }
-    // Write to Firestore
-    if (typeof db !== 'undefined' && db) {
-      db.collection('reports').add(reportDoc)
-        .then(function() { onSuccess(); })
-        .catch(function(e) { onError(e); });
-    } else {
-      // Demo mode — no Firebase
-      setTimeout(onSuccess, 600);
-    }
-  };
 
-})();
-</script>
-
-</body>
-</html>
