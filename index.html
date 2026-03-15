@@ -2959,13 +2959,15 @@ function FeedCard(_ref5) {
       onClick: function onClick() {
         if (!window.confirm('Report this comment as inappropriate?')) return;
         if (!isFirebaseConfigured) { alert('Reported (demo mode)'); return; }
-        db.collection('comment_reports').add({
+        db.collection('reports').add({
+          type:             'comment',
           commentId:        c.id,
-          commentText:      (c.text || '').slice(0, 500),
+          postText:         (c.text || '').slice(0, 500),
           postId:           post.id,
           reportedUserId:   c.userId || '',
           reportedUserName: c.userName || '',
           reporterUid:      currentUser.uid,
+          reason:           'inappropriate',
           status:           'pending',
           reportedAt:       firebase.firestore.FieldValue.serverTimestamp()
         }).then(function() { alert('Comment reported. Our team will review it.'); })
