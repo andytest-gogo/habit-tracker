@@ -2933,13 +2933,19 @@ function FeedCard(_ref5) {
     function handleCommentLike() {
       if (!currentUser) return;
       if (isOwnComment) return; // Cannot like your own comment
-      var newLikedBy = cLiked ? cLikedBy.filter(function(id){return id!==currentUser.uid;}) : cLikedBy.concat([currentUser.uid]);
-      var newLikes = Math.max(0,(c.likes||0)+(cLiked?-1:1));
-      setComments(function(prev){return prev.map(function(x){return x.id===c.id?Object.assign({},x,{likedBy:newLikedBy,likes:newLikes}):x;});});
-      if(typeof db!=='undefined') db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
-        likes:(typeof firebase!=='undefined'?firebase.firestore.FieldValue.increment(cLiked?-1:1):newLikes),
-        likedBy:(typeof firebase!=='undefined'?(cLiked?firebase.firestore.FieldValue.arrayRemove(currentUser.uid):firebase.firestore.FieldValue.arrayUnion(currentUser.uid)):newLikedBy)
-      }).catch(function(e){console.error(e);});
+      // Do NOT do optimistic local state update here.
+      // The onSnapshot listener already keeps `comments` in sync with Firestore,
+      // so calling setComments() optimistically and then having the snapshot arrive
+      // causes the like count to flash +1 and immediately revert.
+      // Just write directly to Firestore and let onSnapshot drive the UI.
+      if (typeof db !== 'undefined' && typeof firebase !== 'undefined') {
+        db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
+          likes: firebase.firestore.FieldValue.increment(cLiked ? -1 : 1),
+          likedBy: cLiked
+            ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+            : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+        }).catch(function(e){ console.error(e); });
+      }
     }
     return /*#__PURE__*/React.createElement("div", {
       key: c.id,
