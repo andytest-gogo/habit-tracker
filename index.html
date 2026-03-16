@@ -2895,6 +2895,7 @@ function FeedCard(_ref5) {
   }, /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat(post.liked ? ' liked' : ''),
     onClick: function onClick() {
+      if (currentUser && post.userId && post.userId === currentUser.uid) return;
       return onLike && onLike(post.id);
     }
   }, /*#__PURE__*/React.createElement(HeartIcon, {
@@ -2931,6 +2932,7 @@ function FeedCard(_ref5) {
     var isOwnComment = currentUser && c.userId === currentUser.uid;
     function handleCommentLike() {
       if (!currentUser) return;
+      if (isOwnComment) return; // Cannot like your own comment
       var newLikedBy = cLiked ? cLikedBy.filter(function(id){return id!==currentUser.uid;}) : cLikedBy.concat([currentUser.uid]);
       var newLikes = Math.max(0,(c.likes||0)+(cLiked?-1:1));
       setComments(function(prev){return prev.map(function(x){return x.id===c.id?Object.assign({},x,{likedBy:newLikedBy,likes:newLikes}):x;});});
@@ -3176,6 +3178,8 @@ function UserCommentsPage(_ref_ucp) {
   function handleCommentLike(commentId, postId) {
     var comment = allComments.find(function(c) { return c.id === commentId; });
     if (!comment) return;
+    // Cannot like your own comment
+    if (comment.userId && user.uid && comment.userId === user.uid) return;
     var likedBy = Array.isArray(comment.likedBy) ? comment.likedBy : [];
     var hasLiked = likedBy.includes(user.uid);
     var newLikedBy = hasLiked ? likedBy.filter(function(id){return id!==user.uid;}) : likedBy.concat([user.uid]);
@@ -5401,6 +5405,10 @@ function MainApp(_ref16) {
             }
             return _context8.a(2);
           case 2:
+            // Block self-like: users cannot like their own posts
+            if (post.userId && user.uid && post.userId === user.uid) {
+              return _context8.a(2);
+            }
             likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
             hasLiked = likedBy.includes(user.uid); // Optimistic UI update immediately
             setFeedPosts(function (prev) {
@@ -7585,7 +7593,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
 
     var reportDoc = {
-      postId:          _post.id   || '',
+      postId:          _post.postId || _post.id   || '',
       postText:        (_post.text || '').slice(0, 500),
       reportedUserName: _post.user || _post.displayName || '',
       reportedUserId:  _post.userId || '',
@@ -7596,6 +7604,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
                          ? firebase.firestore.FieldValue.serverTimestamp()
                          : new Date().toISOString()
     };
+    // If reporting a comment, include commentId and isComment flag
+    if (_post.isComment && _post.commentId) {
+      reportDoc.commentId = _post.commentId;
+      reportDoc.isComment = true;
+    }
 
     function onSuccess() {
       document.getElementById('reportStep1').style.display = 'none';
