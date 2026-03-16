@@ -5968,6 +5968,17 @@ function MainApp(_ref16) {
                 rSnap.docs.forEach(function(d) { rBatch.delete(d.ref); });
                 return rBatch.commit();
               }).catch(function() {});
+            // Delete username reservation so others can re-register the same name.
+            // Read displayName_lower from the users doc (most reliable source of the key).
+            db.collection('users').doc(uid).get()
+              .then(function(uSnap) {
+                var usernameKey = (uSnap.exists && uSnap.data().displayName_lower)
+                  ? uSnap.data().displayName_lower
+                  : (user.displayName || '').trim().toLowerCase().replace(/\s+/g, '_');
+                if (usernameKey) {
+                  return db.collection('usernames').doc(usernameKey).delete();
+                }
+              }).catch(function() {});
             return db.collection('users').doc(uid).delete();
           case 34:
             _context13.n = 36;
