@@ -2747,16 +2747,25 @@ function FeedCard(_ref5) {
   useEffect(function () {
     if (!showComments || !isFirebaseConfigured || !post.id) return;
     setLoadingComments(true);
-    var unsub = db.collection('posts').doc(post.id).collection('comments').orderBy('createdAt', 'asc').onSnapshot(function (snap) {
-      setComments(snap.docs.map(function (d) {
-        return _objectSpread({
-          id: d.id
-        }, d.data());
-      }));
-      setLoadingComments(false);
-    }, function () {
-      return setLoadingComments(false);
-    });
+    var unsub = db.collection('posts').doc(post.id).collection('comments').orderBy('createdAt', 'asc').onSnapshot(
+      { includeMetadataChanges: true },
+      function (snap) {
+        // Only update UI from server-confirmed data.
+        // Ignore pending-write snapshots — these cause the like count to flash
+        // from the old value to the new value and back if the write is rejected
+        // by Firestore security rules.
+        if (snap.metadata.hasPendingWrites) return;
+        setComments(snap.docs.map(function (d) {
+          return _objectSpread({
+            id: d.id
+          }, d.data());
+        }));
+        setLoadingComments(false);
+      },
+      function () {
+        return setLoadingComments(false);
+      }
+    );
     return function () {
       return unsub();
     };
@@ -2933,18 +2942,38 @@ function FeedCard(_ref5) {
     function handleCommentLike() {
       if (!currentUser) return;
       if (isOwnComment) return; // Cannot like your own comment
-      // Do NOT do optimistic local state update here.
-      // The onSnapshot listener already keeps `comments` in sync with Firestore,
-      // so calling setComments() optimistically and then having the snapshot arrive
-      // causes the like count to flash +1 and immediately revert.
-      // Just write directly to Firestore and let onSnapshot drive the UI.
+      // Optimistic UI update so the button feels instant.
+      // onSnapshot is set to { includeMetadataChanges: true } and skips
+      // hasPendingWrites frames, so only the server-confirmed value will
+      // overwrite our optimistic state — no flash.
+      // If Firestore rejects the write, we revert in the .catch() below.
+      var newLikedBy = cLiked
+        ? cLikedBy.filter(function(id){ return id !== currentUser.uid; })
+        : cLikedBy.concat([currentUser.uid]);
+      var newLikes = Math.max(0, (c.likes || 0) + (cLiked ? -1 : 1));
+      // Snapshot the previous values for rollback
+      var prevLikedBy = cLikedBy;
+      var prevLikes = c.likes || 0;
+      setComments(function(prev){
+        return prev.map(function(x){
+          return x.id === c.id ? Object.assign({}, x, { likedBy: newLikedBy, likes: newLikes }) : x;
+        });
+      });
       if (typeof db !== 'undefined' && typeof firebase !== 'undefined') {
         db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
           likes: firebase.firestore.FieldValue.increment(cLiked ? -1 : 1),
           likedBy: cLiked
             ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
             : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-        }).catch(function(e){ console.error(e); });
+        }).catch(function(e){
+          console.error('[commentLike] write failed, reverting:', e);
+          // Revert optimistic update on failure
+          setComments(function(prev){
+            return prev.map(function(x){
+              return x.id === c.id ? Object.assign({}, x, { likedBy: prevLikedBy, likes: prevLikes }) : x;
+            });
+          });
+        });
       }
     }
     return /*#__PURE__*/React.createElement("div", {
