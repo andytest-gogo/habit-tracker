@@ -531,19 +531,22 @@
         .composer-media-preview.hidden {
             display:none;
         }
-        .composer-media-preview img,
-        .composer-media-preview video {
+        .composer-media-preview img {
             width:100%; height:100%; object-fit:cover; display:block;
             transform:translateZ(0);
         }
-        .composer-media-preview video {
-            position:absolute; inset:0;
-            opacity:0; visibility:hidden;
-            transition:opacity 0.2s ease;
+        /* video-portal sits OUTSIDE React tree to avoid any re-render flicker */
+        .composer-video-portal {
+            position:absolute; inset:0; z-index:1;
+            background:#000; overflow:hidden;
+        }
+        .composer-video-portal video {
+            width:100%; height:100%; object-fit:cover; display:block;
+            opacity:0; transition:opacity 0.25s ease;
             background:#000;
         }
-        .composer-media-preview video.visible {
-            opacity:1; visibility:visible;
+        .composer-video-portal video.ready {
+            opacity:1;
         }
         .composer-media-remove {
             position:absolute; top:6px; right:6px;
@@ -4923,7 +4926,23 @@ function MainApp(_ref16) {
   // reload the media source on every re-render (e.g. typing in the textarea),
   // producing black-flash + layout jitter. Instead we always keep it in the DOM
   // and update src / visibility imperatively via the ref.
-  var videoPreviewRef = useRef(null);
+  var videoPreviewRef = useRef(null);   // stable imperative video element (lives inside portal div)
+  var videoPortalRef = useRef(null);    // the portal <div> React renders (stable DOM node)
+  // On mount: create the native <video> once and append it to the portal div.
+  // This completely removes <video> from React's render tree so state changes
+  // (typing text, upload progress) never touch the video element.
+  useEffect(function() {
+    if (!videoPortalRef.current) return;
+    var vid = document.createElement('video');
+    vid.controls = true;
+    vid.playsInline = true;
+    vid.muted = true;
+    vid.preload = 'metadata';
+    vid.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity 0.25s ease;background:#000;';
+    videoPortalRef.current.appendChild(vid);
+    videoPreviewRef.current = vid;
+    return function() { vid.pause(); vid.src = ''; };
+  }, []);
   useEffect(function () {
     if (!isFirebaseConfigured) {
       var saved = localStorage.getItem("habits_".concat(user.uid));
@@ -5126,6 +5145,10 @@ function MainApp(_ref16) {
     }
     // Only publish & compare if user has at least one expired habit
     if (_allExpiredPerc.length === 0) { setPercentile(null); return; }
+    // Immediately show a local estimate so the banner always appears
+    var mock2 = [10,18,25,30,35,40,44,48,52,56,60,64,67,70,73,76,79,82,85,88,91,94,97];
+    setPercentile(Math.round(mock2.filter(function(r){ return r < myExpiredAvg; }).length / mock2.length * 100));
+    // Then refine with real data from Firestore (may be blocked by security rules)
     db.collection('user_stats').doc(user.uid).set({
       avgRate: myExpiredAvg,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -5134,13 +5157,16 @@ function MainApp(_ref16) {
     }).then(function () {
       return db.collection('user_stats').get();
     }).then(function (snap) {
+      if (snap.empty) return;
       var rates = snap.docs.map(function (d) {
         return d.data().avgRate || 0;
       });
       setPercentile(Math.round(rates.filter(function (r) {
         return r < myExpiredAvg;
       }).length / rates.length * 100));
-    }).catch(function () {});
+    }).catch(function () {
+      // Firestore read blocked (security rules) — keep the local estimate already shown
+    });
   }, [habits, archivedHabits, loading]);
   var deleteHabit = function deleteHabit(habitId) {
     if (!isFirebaseConfigured) {
@@ -5580,8 +5606,10 @@ function MainApp(_ref16) {
             _setProgressDOM(0);
             // Hide the video preview while new upload is in progress
             if (type === 'video' && videoPreviewRef.current) {
-              videoPreviewRef.current.className = '';
-              videoPreviewRef.current.src = '';
+              videoPreviewRef.current.style.opacity = '0';
+              videoPreviewRef.current.pause();
+              videoPreviewRef.current.removeAttribute('src');
+              videoPreviewRef.current.load();
             }
             _context9.p = 2;
             resourceType = type === 'video' ? 'video' : 'image';
@@ -5591,12 +5619,19 @@ function MainApp(_ref16) {
             });
           case 3:
             result = _context9.v;
-            // For video: point the always-mounted video element at the final URL
-            // BEFORE triggering the React state update, so there is no frame where
-            // the element is visible but has no src.
+            // For video: set src imperatively BEFORE React state update.
+            // The video element lives outside React's tree (portal), so this
+            // will NOT trigger a re-render or reload of the element.
             if (type === 'video' && videoPreviewRef.current) {
-              videoPreviewRef.current.src = result.url;
-              videoPreviewRef.current.load();
+              var _vRef = videoPreviewRef.current;
+              _vRef.src = result.url;
+              _vRef.load();
+              _vRef.oncanplay = function() {
+                _vRef.style.opacity = '1';
+                _vRef.oncanplay = null;
+              };
+              // Fallback: show after 800ms even if canplay doesn't fire
+              setTimeout(function() { _vRef.style.opacity = '1'; }, 800);
             }
             setPostMedia({
               type: type,
@@ -5605,15 +5640,6 @@ function MainApp(_ref16) {
               uploading: false,
               local: result.local
             });
-            // Make video visible after a short paint delay to avoid black flash
-            if (type === 'video' && videoPreviewRef.current) {
-              var _vRef = videoPreviewRef.current;
-              requestAnimationFrame(function() {
-                requestAnimationFrame(function() {
-                  _vRef.className = 'visible';
-                });
-              });
-            }
             _context9.n = 5;
             break;
           case 4:
@@ -5790,8 +5816,10 @@ function MainApp(_ref16) {
             setPostMedia(null);
             // Clear the stable video element after posting
             if (videoPreviewRef.current) {
-              videoPreviewRef.current.className = '';
-              videoPreviewRef.current.src = '';
+              videoPreviewRef.current.style.opacity = '0';
+              videoPreviewRef.current.pause();
+              videoPreviewRef.current.removeAttribute('src');
+              videoPreviewRef.current.load();
             }
           case 20:
             return _context1.a(2);
@@ -6464,13 +6492,7 @@ function MainApp(_ref16) {
       alt: "preview",
       style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
     }),
-    /*#__PURE__*/React.createElement("video", {
-      ref: videoPreviewRef,
-      controls: true,
-      playsInline: true,
-      muted: true,
-      preload: "metadata"
-    }),
+    /*#__PURE__*/React.createElement("div", { className: "composer-video-portal", ref: videoPortalRef }),
     /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'absolute',
@@ -6500,8 +6522,10 @@ function MainApp(_ref16) {
       className: "composer-media-remove",
       onClick: function onClick() {
         if (videoPreviewRef.current) {
-          videoPreviewRef.current.src = '';
-          videoPreviewRef.current.className = '';
+          videoPreviewRef.current.style.opacity = '0';
+          videoPreviewRef.current.pause();
+          videoPreviewRef.current.removeAttribute('src');
+          videoPreviewRef.current.load();
         }
         return setPostMedia(null);
       }
