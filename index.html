@@ -524,11 +524,14 @@
         .composer-media-preview {
             position:relative; margin:0 16px 12px;
             border:1px solid var(--gray-100); overflow:hidden;
-            height:200px; background:#000; flex-shrink:0;
+            height:200px; background:var(--gray-100); flex-shrink:0;
+            transform:translateZ(0); will-change:transform;
+            contain:layout style paint;
         }
         .composer-media-preview img,
         .composer-media-preview video {
             width:100%; height:100%; object-fit:cover; display:block;
+            transform:translateZ(0);
         }
         .composer-media-remove {
             position:absolute; top:6px; right:6px;
@@ -5566,8 +5569,8 @@ function MainApp(_ref16) {
             _setProgressDOM(0);
             // Hide the video preview while new upload is in progress
             if (type === 'video' && videoPreviewRef.current) {
+              videoPreviewRef.current.style.opacity = '0'; videoPreviewRef.current.style.visibility = 'hidden';
               videoPreviewRef.current.src = '';
-              videoPreviewRef.current.style.display = 'none';
             }
             _context9.p = 2;
             resourceType = type === 'video' ? 'video' : 'image';
@@ -5588,7 +5591,7 @@ function MainApp(_ref16) {
             // final URL and make it visible. This avoids a React-driven remount.
             if (type === 'video' && videoPreviewRef.current) {
               videoPreviewRef.current.src = result.url;
-              videoPreviewRef.current.style.display = 'block';
+              videoPreviewRef.current.style.opacity = '1'; videoPreviewRef.current.style.visibility = 'visible';
             }
             _context9.n = 5;
             break;
@@ -5767,7 +5770,7 @@ function MainApp(_ref16) {
             // Clear the stable video element after posting
             if (videoPreviewRef.current) {
               videoPreviewRef.current.src = '';
-              videoPreviewRef.current.style.display = 'none';
+              videoPreviewRef.current.style.opacity = '0'; videoPreviewRef.current.style.visibility = 'hidden';
             }
           case 20:
             return _context1.a(2);
@@ -6444,10 +6447,13 @@ function MainApp(_ref16) {
       ref: videoPreviewRef,
       controls: true,
       playsInline: true,
+      muted: true,
       preload: "metadata",
       style: {
-        width: '100%', height: '100%', objectFit: 'cover', display: 'none',
-        background: '#000', position: 'absolute', inset: 0
+        width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+        background: 'transparent', position: 'absolute', inset: 0,
+        opacity: 0, visibility: 'hidden', transition: 'opacity 0.15s',
+        transform: 'translateZ(0)'
       }
     }),
     postMedia.uploading ? /*#__PURE__*/React.createElement("div", {
@@ -6476,7 +6482,7 @@ function MainApp(_ref16) {
       onClick: function onClick() {
         if (videoPreviewRef.current) {
           videoPreviewRef.current.src = '';
-          videoPreviewRef.current.style.display = 'none';
+          videoPreviewRef.current.style.opacity = '0'; videoPreviewRef.current.style.visibility = 'hidden';
         }
         return setPostMedia(null);
       }
