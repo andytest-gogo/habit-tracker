@@ -528,10 +528,22 @@
             transform:translateZ(0); will-change:transform;
             contain:layout style paint;
         }
+        .composer-media-preview.hidden {
+            display:none;
+        }
         .composer-media-preview img,
         .composer-media-preview video {
             width:100%; height:100%; object-fit:cover; display:block;
             transform:translateZ(0);
+        }
+        .composer-media-preview video {
+            position:absolute; inset:0;
+            opacity:0; visibility:hidden;
+            transition:opacity 0.15s;
+            background:transparent;
+        }
+        .composer-media-preview video.visible {
+            opacity:1; visibility:visible;
         }
         .composer-media-remove {
             position:absolute; top:6px; right:6px;
@@ -5569,7 +5581,7 @@ function MainApp(_ref16) {
             _setProgressDOM(0);
             // Hide the video preview while new upload is in progress
             if (type === 'video' && videoPreviewRef.current) {
-              videoPreviewRef.current.style.opacity = '0'; videoPreviewRef.current.style.visibility = 'hidden';
+              videoPreviewRef.current.className = '';
               videoPreviewRef.current.src = '';
             }
             _context9.p = 2;
@@ -5591,7 +5603,7 @@ function MainApp(_ref16) {
             // final URL and make it visible. This avoids a React-driven remount.
             if (type === 'video' && videoPreviewRef.current) {
               videoPreviewRef.current.src = result.url;
-              videoPreviewRef.current.style.opacity = '1'; videoPreviewRef.current.style.visibility = 'visible';
+              videoPreviewRef.current.className = 'visible';
             }
             _context9.n = 5;
             break;
@@ -5769,8 +5781,8 @@ function MainApp(_ref16) {
             setPostMedia(null);
             // Clear the stable video element after posting
             if (videoPreviewRef.current) {
+              videoPreviewRef.current.className = '';
               videoPreviewRef.current.src = '';
-              videoPreviewRef.current.style.opacity = '0'; videoPreviewRef.current.style.visibility = 'hidden';
             }
           case 20:
             return _context1.a(2);
@@ -6435,28 +6447,22 @@ function MainApp(_ref16) {
       onChange: function onChange(e) {
         return setPostText(e.target.value);
       }
-    }), postMedia && /*#__PURE__*/React.createElement("div", {
-      className: "composer-media-preview"
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "composer-media-preview" + (!postMedia ? " hidden" : "")
     },
-    postMedia.type === 'image' ? /*#__PURE__*/React.createElement("img", {
-      src: postMedia.url,
+    /*#__PURE__*/React.createElement("img", {
+      src: (postMedia && postMedia.type === 'image') ? postMedia.url : '',
       alt: "preview",
-      style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' }
-    }) : null,
+      style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none' }
+    }),
     /*#__PURE__*/React.createElement("video", {
       ref: videoPreviewRef,
       controls: true,
       playsInline: true,
       muted: true,
-      preload: "metadata",
-      style: {
-        width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-        background: 'transparent', position: 'absolute', inset: 0,
-        opacity: 0, visibility: 'hidden', transition: 'opacity 0.15s',
-        transform: 'translateZ(0)'
-      }
+      preload: "metadata"
     }),
-    postMedia.uploading ? /*#__PURE__*/React.createElement("div", {
+    postMedia && postMedia.uploading ? /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'absolute',
         inset: 0,
@@ -6477,16 +6483,16 @@ function MainApp(_ref16) {
     }, /*#__PURE__*/React.createElement("div", {
       ref: progressBarRef,
       style: { width: '0%', height: '100%', background: 'white', transition: 'width 0.25s' }
-    }))) : /*#__PURE__*/React.createElement("button", {
+    }))) : (postMedia && !postMedia.uploading ? /*#__PURE__*/React.createElement("button", {
       className: "composer-media-remove",
       onClick: function onClick() {
         if (videoPreviewRef.current) {
           videoPreviewRef.current.src = '';
-          videoPreviewRef.current.style.opacity = '0'; videoPreviewRef.current.style.visibility = 'hidden';
+          videoPreviewRef.current.className = '';
         }
         return setPostMedia(null);
       }
-    }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    }, "✕") : null)), /*#__PURE__*/React.createElement("div", {
       className: "composer-toolbar"
     }, /*#__PURE__*/React.createElement("div", {
       className: "composer-media-btns"
