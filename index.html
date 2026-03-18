@@ -524,7 +524,7 @@
         .composer-media-preview {
             position:relative; margin:0 16px 12px;
             border:1px solid var(--gray-100); overflow:hidden;
-            height:200px; background:var(--gray-100); flex-shrink:0;
+            height:200px; background:var(--gray-900); flex-shrink:0;
             transform:translateZ(0); will-change:transform;
             contain:layout style paint;
         }
@@ -539,8 +539,8 @@
         .composer-media-preview video {
             position:absolute; inset:0;
             opacity:0; visibility:hidden;
-            transition:opacity 0.15s;
-            background:transparent;
+            transition:opacity 0.2s ease;
+            background:#000;
         }
         .composer-media-preview video.visible {
             opacity:1; visibility:visible;
@@ -4479,7 +4479,6 @@ function HistoryPage(_ref15) {
   var highCount = sorted.filter(function (h) {
     return (h.finalRate || 0) >= 70;
   }).length;
-  var allRates = [].concat(_toConsumableArray(expiredRates), _toConsumableArray(activeRates));
   return /*#__PURE__*/React.createElement("div", {
     className: "app-container",
     style: {
@@ -4661,13 +4660,15 @@ function HistoryPage(_ref15) {
       whiteSpace: 'nowrap',
       textOverflow: 'ellipsis'
     }
-  }, bestHabit.name)))))), percentile !== null && allRates.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, bestHabit.name)))))), percentile !== null && expiredRates.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "history-percentile"
   }, /*#__PURE__*/React.createElement("div", {
     className: "percentile-big"
   }, percentile, /*#__PURE__*/React.createElement("span", null, "%")), /*#__PURE__*/React.createElement("div", {
     className: "percentile-text"
   }, /*#__PURE__*/React.createElement("strong", null, "Better than ", percentile, "% of all users"), /*#__PURE__*/React.createElement("small", null, percentile >= 90 ? 'Top tier performer 🔥' : percentile >= 70 ? 'Above average — great work 💪' : percentile >= 50 ? 'Solid consistency, keep it up ↑' : 'Every habit counts — keep going ✦'), /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 3 }
+  }, "Based on expired habits avg: ", expiredAvg, "%"), /*#__PURE__*/React.createElement("div", {
     className: "percentile-bar-wrap"
   }, /*#__PURE__*/React.createElement("div", {
     className: "percentile-bar-track"
@@ -5099,36 +5100,34 @@ function MainApp(_ref16) {
 
   // Auto-archive removed: expired habits are now filtered at display layer only
 
-  // Percentile computation
+  // Percentile computation — uses expiredAvg (completed habits only) for fair comparison
   useEffect(function () {
     if (loading) return;
-    var expiredRates = archivedHabits.map(function (h) {
-      return h.finalRate || 0;
-    });
     var _percToday = toISODay();
-    var activeRates = habits.filter(function(h) {
-      var _pe = parseTimeRange(h.timeRange).end;
-      return !_pe || _pe >= _percToday;
-    }).map(function (h) {
-      return calcCompletionRate(h);
-    });
-    var _expiredForPerc = habits.filter(function(h) {
+    // Collect all expired rates (from habits collection + archivedHabits legacy)
+    var _expiredFromHabits = habits.filter(function(h) {
       var _pe2 = parseTimeRange(h.timeRange).end;
       return _pe2 && _pe2 < _percToday;
     }).map(function(h){ return h.finalRate || calcCompletionRate(h); });
-    var all = [].concat(_toConsumableArray(_expiredForPerc), _toConsumableArray(expiredRates), _toConsumableArray(activeRates));
-    var myAvg = all.length ? Math.round(all.reduce(function (s, r) {
-      return s + r;
-    }, 0) / all.length) : 0;
+    var _expiredFromArchive = archivedHabits.map(function (h) { return h.finalRate || 0; });
+    // Merge, deduplicate by using the same logic as HistoryPage
+    var _seenPerc = new Set();
+    var _allExpiredPerc = [];
+    habits.filter(function(h){ var _e=parseTimeRange(h.timeRange).end; return _e && _e < _percToday; }).forEach(function(h){ _seenPerc.add(h.id); _allExpiredPerc.push(h.finalRate || calcCompletionRate(h)); });
+    archivedHabits.filter(function(h){ return !_seenPerc.has(h.id); }).forEach(function(h){ _allExpiredPerc.push(h.finalRate || 0); });
+    // myExpiredAvg = average of expired habits only (same as expiredAvg shown in HistoryPage)
+    var myExpiredAvg = _allExpiredPerc.length ? Math.round(_allExpiredPerc.reduce(function(s,r){ return s+r; }, 0) / _allExpiredPerc.length) : 0;
     if (!isFirebaseConfigured) {
       var mock = [15, 22, 28, 35, 40, 45, 50, 54, 58, 62, 65, 68, 70, 73, 75, 78, 80, 82, 84, 86, 88, 90, 92, 95];
-      setPercentile(Math.round(mock.filter(function (r) {
-        return r < myAvg;
+      setPercentile(_allExpiredPerc.length === 0 ? null : Math.round(mock.filter(function (r) {
+        return r < myExpiredAvg;
       }).length / mock.length * 100));
       return;
     }
+    // Only publish & compare if user has at least one expired habit
+    if (_allExpiredPerc.length === 0) { setPercentile(null); return; }
     db.collection('user_stats').doc(user.uid).set({
-      avgRate: myAvg,
+      avgRate: myExpiredAvg,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, {
       merge: true
@@ -5139,7 +5138,7 @@ function MainApp(_ref16) {
         return d.data().avgRate || 0;
       });
       setPercentile(Math.round(rates.filter(function (r) {
-        return r < myAvg;
+        return r < myExpiredAvg;
       }).length / rates.length * 100));
     }).catch(function () {});
   }, [habits, archivedHabits, loading]);
@@ -5592,6 +5591,13 @@ function MainApp(_ref16) {
             });
           case 3:
             result = _context9.v;
+            // For video: point the always-mounted video element at the final URL
+            // BEFORE triggering the React state update, so there is no frame where
+            // the element is visible but has no src.
+            if (type === 'video' && videoPreviewRef.current) {
+              videoPreviewRef.current.src = result.url;
+              videoPreviewRef.current.load();
+            }
             setPostMedia({
               type: type,
               url: result.url,
@@ -5599,11 +5605,14 @@ function MainApp(_ref16) {
               uploading: false,
               local: result.local
             });
-            // For video: imperatively point the always-mounted video element at the
-            // final URL and make it visible. This avoids a React-driven remount.
+            // Make video visible after a short paint delay to avoid black flash
             if (type === 'video' && videoPreviewRef.current) {
-              videoPreviewRef.current.src = result.url;
-              videoPreviewRef.current.className = 'visible';
+              var _vRef = videoPreviewRef.current;
+              requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                  _vRef.className = 'visible';
+                });
+              });
             }
             _context9.n = 5;
             break;
@@ -6453,7 +6462,7 @@ function MainApp(_ref16) {
     /*#__PURE__*/React.createElement("img", {
       src: (postMedia && postMedia.type === 'image') ? postMedia.url : '',
       alt: "preview",
-      style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none' }
+      style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
     }),
     /*#__PURE__*/React.createElement("video", {
       ref: videoPreviewRef,
@@ -6462,7 +6471,7 @@ function MainApp(_ref16) {
       muted: true,
       preload: "metadata"
     }),
-    postMedia && postMedia.uploading ? /*#__PURE__*/React.createElement("div", {
+    /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'absolute',
         inset: 0,
@@ -6471,7 +6480,10 @@ function MainApp(_ref16) {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10
+        gap: 10,
+        opacity: (postMedia && postMedia.uploading) ? 1 : 0,
+        pointerEvents: (postMedia && postMedia.uploading) ? 'auto' : 'none',
+        transition: 'opacity 0.25s ease'
       }
     },
     /*#__PURE__*/React.createElement("div", {
@@ -6483,7 +6495,8 @@ function MainApp(_ref16) {
     }, /*#__PURE__*/React.createElement("div", {
       ref: progressBarRef,
       style: { width: '0%', height: '100%', background: 'white', transition: 'width 0.25s' }
-    }))) : (postMedia && !postMedia.uploading ? /*#__PURE__*/React.createElement("button", {
+    }))),
+    (postMedia && !postMedia.uploading) ? /*#__PURE__*/React.createElement("button", {
       className: "composer-media-remove",
       onClick: function onClick() {
         if (videoPreviewRef.current) {
@@ -6492,7 +6505,7 @@ function MainApp(_ref16) {
         }
         return setPostMedia(null);
       }
-    }, "✕") : null)), /*#__PURE__*/React.createElement("div", {
+    }, "✕") : null), /*#__PURE__*/React.createElement("div", {
       className: "composer-toolbar"
     }, /*#__PURE__*/React.createElement("div", {
       className: "composer-media-btns"
