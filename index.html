@@ -541,12 +541,12 @@
             background:#111; overflow:hidden;
         }
         .composer-video-portal video {
-            width:100%; height:100%; object-fit:contain; display:block;
-            opacity:1; transition:opacity 0.3s ease;
+            width:100%; height:100%; object-fit:contain;
             background:#111;
         }
-        .composer-video-portal video.ready {
-            opacity:1;
+        .composer-video-portal canvas {
+            width:100%; height:100%; object-fit:contain; display:block;
+            background:#111;
         }
         /* Upload progress overlay sits above video */
         .composer-upload-overlay {
@@ -4550,40 +4550,72 @@ function HistoryPage(_ref15) {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "active-now-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: { position:'relative', flexShrink:0, width:64, height:64 }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width:64, height:64, style:{ transform:'rotate(-90deg)' }
-  }, /*#__PURE__*/React.createElement("circle", {
-    cx:32, cy:32, r:26, fill:"none",
-    stroke:"rgba(255,255,255,0.08)", strokeWidth:7
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx:32, cy:32, r:26, fill:"none",
-    stroke:"#94a3b8", strokeWidth:7,
-    strokeDasharray: (activeAvg/100 * 2*Math.PI*26) + " " + (2*Math.PI*26),
-    strokeLinecap:"butt",
-    style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
-  })), /*#__PURE__*/React.createElement("div", {
-    style:{ position:'absolute', top:'50%', left:'50%',
-      transform:'translate(-50%,-50%)', textAlign:'center',
-      width:'100%', lineHeight:1 }
-  }, /*#__PURE__*/React.createElement("div", {
-    style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#94a3b8', lineHeight:1 }
-  }, activeAvg, "%"), /*#__PURE__*/React.createElement("div", {
-    style:{ fontSize:8, opacity:.5, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#94a3b8' }
-  }, "NOW"))), /*#__PURE__*/React.createElement("div", {
-    className: "active-now-info"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "active-now-label"
-  }, "Active Now"), /*#__PURE__*/React.createElement("div", {
-    style:{ display:'flex', alignItems:'baseline', gap:4 }
-  }, /*#__PURE__*/React.createElement("div", {
-    style:{ fontSize:28, fontWeight:700, fontFamily:'var(--din)', lineHeight:1, color:'#94a3b8' }
-  }, activeAvg), /*#__PURE__*/React.createElement("div", {
-    style:{ fontSize:16, fontWeight:700, fontFamily:'var(--din)', opacity:.7, color:'#94a3b8' }
-  }, "%")), /*#__PURE__*/React.createElement("div", {
-    style:{ fontSize:11, opacity:.55, marginTop:3 }
-  }, activeRates.length, " habit", activeRates.length !== 1 ? 's' : '', " in progress"))), /*#__PURE__*/React.createElement("div", {
+  }, percentile !== null && expiredRates.length > 0 ? [
+    /*#__PURE__*/React.createElement("div", {
+      key:"pct-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width:64, height:64, style:{ transform:'rotate(-90deg)' }
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx:32, cy:32, r:26, fill:"none", stroke:"rgba(255,255,255,0.08)", strokeWidth:7
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx:32, cy:32, r:26, fill:"none", stroke:"#ffffff", strokeWidth:7,
+      strokeDasharray: (percentile/100 * 2*Math.PI*26) + " " + (2*Math.PI*26),
+      strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
+    })), /*#__PURE__*/React.createElement("div", {
+      style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+        textAlign:'center', width:'100%', lineHeight:1 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:13, fontWeight:700, fontFamily:'var(--din)', color:'#fff', lineHeight:1 }
+    }, percentile, "%"), /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:7, opacity:.55, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#fff' }
+    }, "RANK"))),
+    /*#__PURE__*/React.createElement("div", {
+      key:"pct-info", className:"active-now-info"
+    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Your Ranking"),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:14, fontWeight:700, fontFamily:'var(--din)', lineHeight:1.3, color:'#fff', marginBottom:4 }
+    }, "Better than ", percentile, "% of all users"),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:11, opacity:.55, marginTop:2 }
+    }, percentile >= 90 ? 'Top tier! \U0001f525' : percentile >= 70 ? 'Above avg \U0001f4aa' : percentile >= 50 ? 'Solid \u2191' : 'Keep going \u2726'),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ marginTop:7, height:2, background:'rgba(255,255,255,.12)', width:'100%', overflow:'hidden' }
+    }, /*#__PURE__*/React.createElement("div", {
+      style:{ height:'100%', background:'#fff', width:percentile+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
+    })))
+  ] : [
+    /*#__PURE__*/React.createElement("div", {
+      key:"anow-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width:64, height:64, style:{ transform:'rotate(-90deg)' }
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx:32, cy:32, r:26, fill:"none", stroke:"rgba(255,255,255,0.08)", strokeWidth:7
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx:32, cy:32, r:26, fill:"none", stroke:"#94a3b8", strokeWidth:7,
+      strokeDasharray: (activeAvg/100 * 2*Math.PI*26) + " " + (2*Math.PI*26),
+      strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
+    })), /*#__PURE__*/React.createElement("div", {
+      style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+        textAlign:'center', width:'100%', lineHeight:1 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#94a3b8', lineHeight:1 }
+    }, activeAvg, "%"), /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:8, opacity:.5, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#94a3b8' }
+    }, "NOW"))),
+    /*#__PURE__*/React.createElement("div", {
+      key:"anow-info", className:"active-now-info"
+    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Active Now"),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ display:'flex', alignItems:'baseline', gap:4 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:28, fontWeight:700, fontFamily:'var(--din)', lineHeight:1, color:'#94a3b8' }
+    }, activeAvg), /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:16, fontWeight:700, fontFamily:'var(--din)', opacity:.7, color:'#94a3b8' }
+    }, "%")),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:11, opacity:.55, marginTop:3 }
+    }, activeRates.length, " habit", activeRates.length !== 1 ? 's' : '', " in progress"))
+  ]), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 0,
@@ -4685,7 +4717,7 @@ function HistoryPage(_ref15) {
       whiteSpace: 'nowrap',
       textOverflow: 'ellipsis'
     }
-  }, bestHabit.name)))))), percentile !== null && expiredRates.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, bestHabit.name)))))), false && /*#__PURE__*/React.createElement("div", {
     className: "history-percentile"
   }, /*#__PURE__*/React.createElement("div", {
     className: "percentile-big"
@@ -4955,14 +4987,73 @@ function MainApp(_ref16) {
   // (typing text, upload progress) never touch the video element.
   useEffect(function() {
     if (!videoPortalRef.current) return;
+    var portal = videoPortalRef.current;
+
+    // Hidden native video (used only when user presses play)
     var vid = document.createElement('video');
     vid.controls = true;
     vid.playsInline = true;
     vid.muted = false;
     vid.preload = 'metadata';
-    vid.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;opacity:1;transition:opacity 0.3s ease;background:#111;';
-    videoPortalRef.current.appendChild(vid);
+    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;';
+    portal.appendChild(vid);
     videoPreviewRef.current = vid;
+
+    // Thumbnail canvas (captures first frame)
+    var canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;';
+    portal.appendChild(canvas);
+
+    // Play button overlay
+    var playBtn = document.createElement('div');
+    playBtn.id = 'composer-video-play-overlay';
+    playBtn.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.28);';
+    playBtn.innerHTML = '<div style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 16px rgba(0,0,0,0.35);"><svg width=22 height=22 viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg></div>';
+    playBtn.addEventListener('click', function() {
+      playBtn.style.display = 'none';
+      canvas.style.display = 'none';
+      vid.style.display = 'block';
+      vid.play().catch(function(){});
+    });
+    // When video ends, go back to thumbnail view
+    vid.addEventListener('ended', function() {
+      vid.style.display = 'none';
+      canvas.style.display = 'block';
+      playBtn.style.display = 'flex';
+    });
+    portal.appendChild(playBtn);
+
+    // Helper: capture thumbnail from video first frame
+    portal._showVideoReady = function(src) {
+      vid.style.display = 'none';
+      canvas.style.display = 'none';
+      playBtn.style.display = 'none';
+      vid.src = src;
+      vid.load();
+      vid.addEventListener('loadeddata', function onld() {
+        vid.removeEventListener('loadeddata', onld);
+        // Seek to first frame and draw to canvas
+        var tmpV = document.createElement('video');
+        tmpV.src = src;
+        tmpV.muted = true;
+        tmpV.playsInline = true;
+        tmpV.preload = 'metadata';
+        tmpV.addEventListener('loadeddata', function() {
+          tmpV.currentTime = 0.5;
+        });
+        tmpV.addEventListener('seeked', function() {
+          canvas.width  = tmpV.videoWidth  || 640;
+          canvas.height = tmpV.videoHeight || 360;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(tmpV, 0, 0, canvas.width, canvas.height);
+          canvas.style.display = 'block';
+          playBtn.style.display = 'flex';
+          tmpV.src = '';
+        });
+        tmpV.load();
+      }, { once: true });
+    };
+
     return function() { vid.pause(); vid.src = ''; };
   }, []);
   useEffect(function () {
@@ -5571,17 +5662,32 @@ function MainApp(_ref16) {
   var uploadProgressRef = useRef(0);
   var progressBarRef   = useRef(null);
   var progressLabelRef = useRef(null);
+  var _progressTimer = null;
   function _setProgressDOM(pct) {
     uploadProgressRef.current = pct;
+    // Smooth simulated progress: after XHR reaches ~90%, crawl to 99 while Cloudinary processes
+    if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+    if (pct >= 90 && pct < 100) {
+      var _displayed = pct;
+      _progressTimer = setInterval(function() {
+        _displayed = Math.min(99, _displayed + 0.4);
+        if (progressBarRef.current) progressBarRef.current.style.width = _displayed + '%';
+        if (progressLabelRef.current) progressLabelRef.current.textContent = 'Processing\u2026 ' + Math.round(_displayed) + '%';
+        if (_displayed >= 99) { clearInterval(_progressTimer); _progressTimer = null; }
+      }, 120);
+    }
     if (progressBarRef.current)   progressBarRef.current.style.width   = pct + '%';
-    if (progressLabelRef.current) progressLabelRef.current.textContent = 'Uploading ' + pct + '%';
+    if (progressLabelRef.current) progressLabelRef.current.textContent = pct >= 100 ? 'Done!' : pct >= 90 ? 'Processing\u2026 ' + pct + '%' : 'Uploading ' + pct + '%';
     // Show/hide overlay
     var overlay = document.getElementById('composer-upload-overlay');
     if (overlay) {
       if (pct < 100) {
         overlay.classList.remove('hidden');
       } else {
-        setTimeout(function(){ overlay.classList.add('hidden'); }, 400);
+        if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+        if (progressBarRef.current) progressBarRef.current.style.width = '100%';
+        if (progressLabelRef.current) progressLabelRef.current.textContent = 'Done!';
+        setTimeout(function(){ overlay.classList.add('hidden'); }, 600);
       }
     }
   }
@@ -5639,11 +5745,19 @@ function MainApp(_ref16) {
             var _ov = document.getElementById('composer-upload-overlay');
             if (_ov) _ov.classList.remove('hidden');
             // Clear video preview while new upload is in progress
-            if (type === 'video' && videoPreviewRef.current) {
-              videoPreviewRef.current.style.opacity = '0';
-              videoPreviewRef.current.pause();
-              videoPreviewRef.current.removeAttribute('src');
-              videoPreviewRef.current.load();
+            if (type === 'video') {
+              if (videoPreviewRef.current) {
+                videoPreviewRef.current.pause();
+                videoPreviewRef.current.style.display = 'none';
+                videoPreviewRef.current.removeAttribute('src');
+                videoPreviewRef.current.load();
+              }
+              if (videoPortalRef.current) {
+                var _pOv = videoPortalRef.current.querySelector('#composer-video-play-overlay');
+                var _cv  = videoPortalRef.current.querySelector('canvas');
+                if (_pOv) _pOv.style.display = 'none';
+                if (_cv)  _cv.style.display  = 'none';
+              }
             }
             _context9.p = 2;
             resourceType = type === 'video' ? 'video' : 'image';
@@ -5656,12 +5770,13 @@ function MainApp(_ref16) {
             // For video: set src imperatively BEFORE React state update.
             // The video element lives outside React's tree (portal), so this
             // will NOT trigger a re-render or reload of the element.
-            if (type === 'video' && videoPreviewRef.current) {
+            if (type === 'video' && videoPortalRef.current && videoPortalRef.current._showVideoReady) {
+              videoPortalRef.current._showVideoReady(result.url);
+            } else if (type === 'video' && videoPreviewRef.current) {
               var _vRef = videoPreviewRef.current;
               _vRef.src = result.url;
               _vRef.load();
-              _vRef.style.opacity = '1';
-              _vRef.oncanplay = null;
+              _vRef.style.display = 'block';
             }
             setPostMedia({
               type: type,
@@ -6545,10 +6660,16 @@ function MainApp(_ref16) {
         var _rmOv = document.getElementById('composer-upload-overlay');
         if (_rmOv) _rmOv.classList.add('hidden');
         if (videoPreviewRef.current) {
-          videoPreviewRef.current.style.opacity = '0';
           videoPreviewRef.current.pause();
+          videoPreviewRef.current.style.display = 'none';
           videoPreviewRef.current.removeAttribute('src');
           videoPreviewRef.current.load();
+        }
+        if (videoPortalRef.current) {
+          var _playOv = videoPortalRef.current.querySelector('#composer-video-play-overlay');
+          var _cvs    = videoPortalRef.current.querySelector('canvas');
+          if (_playOv) _playOv.style.display = 'none';
+          if (_cvs)    _cvs.style.display    = 'none';
         }
         return setPostMedia(null);
       }
