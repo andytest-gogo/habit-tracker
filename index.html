@@ -538,15 +538,37 @@
         /* video-portal sits OUTSIDE React tree to avoid any re-render flicker */
         .composer-video-portal {
             position:absolute; inset:0; z-index:1;
-            background:#000; overflow:hidden;
+            background:#111; overflow:hidden;
         }
         .composer-video-portal video {
-            width:100%; height:100%; object-fit:cover; display:block;
-            opacity:0; transition:opacity 0.25s ease;
-            background:#000;
+            width:100%; height:100%; object-fit:contain; display:block;
+            opacity:1; transition:opacity 0.3s ease;
+            background:#111;
         }
         .composer-video-portal video.ready {
             opacity:1;
+        }
+        /* Upload progress overlay sits above video */
+        .composer-upload-overlay {
+            position:absolute; inset:0; z-index:10;
+            background:rgba(0,0,0,0.72);
+            display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:12px;
+            transition:opacity 0.25s ease;
+        }
+        .composer-upload-overlay.hidden { opacity:0; pointer-events:none; }
+        .composer-upload-label {
+            font-size:12px; color:#fff; font-weight:700;
+            letter-spacing:1px; text-transform:uppercase;
+        }
+        .composer-upload-track {
+            width:65%; height:5px; background:rgba(255,255,255,0.2);
+            border-radius:3px; overflow:hidden;
+        }
+        .composer-upload-fill {
+            height:100%; background:#fff; border-radius:3px;
+            transition:width 0.2s ease;
+            width:0%;
         }
         .composer-media-remove {
             position:absolute; top:6px; right:6px;
@@ -4936,9 +4958,9 @@ function MainApp(_ref16) {
     var vid = document.createElement('video');
     vid.controls = true;
     vid.playsInline = true;
-    vid.muted = true;
+    vid.muted = false;
     vid.preload = 'metadata';
-    vid.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity 0.25s ease;background:#000;';
+    vid.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;opacity:1;transition:opacity 0.3s ease;background:#111;';
     videoPortalRef.current.appendChild(vid);
     videoPreviewRef.current = vid;
     return function() { vid.pause(); vid.src = ''; };
@@ -5553,6 +5575,15 @@ function MainApp(_ref16) {
     uploadProgressRef.current = pct;
     if (progressBarRef.current)   progressBarRef.current.style.width   = pct + '%';
     if (progressLabelRef.current) progressLabelRef.current.textContent = 'Uploading ' + pct + '%';
+    // Show/hide overlay
+    var overlay = document.getElementById('composer-upload-overlay');
+    if (overlay) {
+      if (pct < 100) {
+        overlay.classList.remove('hidden');
+      } else {
+        setTimeout(function(){ overlay.classList.add('hidden'); }, 400);
+      }
+    }
   }
   var _useState105 = useState(function () {
       return localStorage.getItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid)) || null;
@@ -5603,8 +5634,11 @@ function MainApp(_ref16) {
               uploading: true
             });
             setUploadingMedia(true);
-            _setProgressDOM(0);
-            // Hide the video preview while new upload is in progress
+            _setProgressDOM(1);
+            // Show upload overlay immediately
+            var _ov = document.getElementById('composer-upload-overlay');
+            if (_ov) _ov.classList.remove('hidden');
+            // Clear video preview while new upload is in progress
             if (type === 'video' && videoPreviewRef.current) {
               videoPreviewRef.current.style.opacity = '0';
               videoPreviewRef.current.pause();
@@ -5626,12 +5660,8 @@ function MainApp(_ref16) {
               var _vRef = videoPreviewRef.current;
               _vRef.src = result.url;
               _vRef.load();
-              _vRef.oncanplay = function() {
-                _vRef.style.opacity = '1';
-                _vRef.oncanplay = null;
-              };
-              // Fallback: show after 800ms even if canplay doesn't fire
-              setTimeout(function() { _vRef.style.opacity = '1'; }, 800);
+              _vRef.style.opacity = '1';
+              _vRef.oncanplay = null;
             }
             setPostMedia({
               type: type,
@@ -5815,6 +5845,8 @@ function MainApp(_ref16) {
             setPostText('');
             setPostMedia(null);
             // Clear the stable video element after posting
+            var _postOv = document.getElementById('composer-upload-overlay');
+            if (_postOv) _postOv.classList.add('hidden');
             if (videoPreviewRef.current) {
               videoPreviewRef.current.style.opacity = '0';
               videoPreviewRef.current.pause();
@@ -6494,33 +6526,24 @@ function MainApp(_ref16) {
     }),
     /*#__PURE__*/React.createElement("div", { className: "composer-video-portal", ref: videoPortalRef }),
     /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(0,0,0,0.65)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        opacity: (postMedia && postMedia.uploading) ? 1 : 0,
-        pointerEvents: (postMedia && postMedia.uploading) ? 'auto' : 'none',
-        transition: 'opacity 0.25s ease'
-      }
+      id: "composer-upload-overlay",
+      className: "composer-upload-overlay hidden"
     },
     /*#__PURE__*/React.createElement("div", {
       ref: progressLabelRef,
-      style: { fontSize: 12, color: 'white', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }
+      className: "composer-upload-label"
     }, "Uploading 0%"),
     /*#__PURE__*/React.createElement("div", {
-      style: { width: '60%', height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2, overflow: 'hidden' }
+      className: "composer-upload-track"
     }, /*#__PURE__*/React.createElement("div", {
       ref: progressBarRef,
-      style: { width: '0%', height: '100%', background: 'white', transition: 'width 0.25s' }
+      className: "composer-upload-fill"
     }))),
     (postMedia && !postMedia.uploading) ? /*#__PURE__*/React.createElement("button", {
       className: "composer-media-remove",
       onClick: function onClick() {
+        var _rmOv = document.getElementById('composer-upload-overlay');
+        if (_rmOv) _rmOv.classList.add('hidden');
         if (videoPreviewRef.current) {
           videoPreviewRef.current.style.opacity = '0';
           videoPreviewRef.current.pause();
