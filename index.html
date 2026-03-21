@@ -540,12 +540,16 @@
             position:absolute; inset:0; z-index:1;
             background:#111; overflow:hidden;
         }
+        .composer-video-portal.hidden-portal {
+            display:none;
+        }
         .composer-video-portal video {
             width:100%; height:100%; object-fit:contain;
             background:#111;
         }
         .composer-video-portal canvas {
-            width:100%; height:100%; object-fit:contain; display:block;
+            position:absolute; inset:0;
+            width:100%; height:100%; object-fit:contain; display:none;
             background:#111;
         }
         /* Upload progress overlay sits above video */
@@ -994,7 +998,7 @@
                 <p>You have the right to <strong>access, correct, delete, or export</strong> your data at any time — use the tools below or Profile → Delete Account.<br>
                 <strong>EU/EEA:</strong> Lodge a complaint with your national DPA if needed.<br>
                 <strong>US (CA, VA, CO, CT, TX, OR, MT):</strong> Right to know, correct, delete, and opt out of data sales (we do not sell data).<br>
-                Contact: <strong><a href="/cdn-cgi/l/email-protection#b5fdd0d4d9c1ddfdd4d7dcc1e1c7d4d6ded0c7f5d2d8d4dcd99bd6dad8"><span class="__cf_email__" data-cfemail="88c0ede9e4fce0c0e9eae1fcdcfae9ebe3edfac8efe5e9e1e4a6ebe7e5">[email&#160;protected]</span></a></strong> — we respond within 30 days (45 days for CCPA).</p>
+                Contact: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — we respond within 30 days (45 days for CCPA).</p>
             </div>
 
             <!-- GDPR Art.20 Data Portability — functional export -->
@@ -1720,7 +1724,7 @@ function _checkQuotaFS() {
             _context17.n = 1;
             break;
           }
-          throw new Error("\u6A94\u6848\u592A\u5927\uFF01".concat(isVideo ? '影片' : '圖片', "\u4E0A\u9650 ").concat(maxMB, " MB\uFF0C\u6B64\u6A94\u6848\u7D04 ").concat(fileMB.toFixed(1), " MB"));
+          throw new Error("File too large! ".concat(isVideo ? 'Video' : 'Image', " size limit is ").concat(maxMB, " MB (this file: ~").concat(fileMB.toFixed(1), " MB)."));
         case 1:
           _context17.n = 2;
           return fetchQuotaDoc(uid);
@@ -1734,19 +1738,19 @@ function _checkQuotaFS() {
             _context17.n = 3;
             break;
           }
-          throw new Error("\u4ECA\u65E5\u5716\u7247\u4E0A\u50B3\u5DF2\u9054\u4E0A\u9650 ".concat(UPLOAD_LIMITS.DAILY_IMAGE_COUNT, " \u5F35\uFF0C\u660E\u5929\u518D\u8A66\uFF01"));
+          throw new Error("Daily photo upload limit reached (".concat(UPLOAD_LIMITS.DAILY_IMAGE_COUNT, " photos/day). Please try again tomorrow."));
         case 3:
           if (!(isVideo && dailyVideos >= UPLOAD_LIMITS.DAILY_VIDEO_COUNT)) {
             _context17.n = 4;
             break;
           }
-          throw new Error("\u4ECA\u65E5\u5F71\u7247\u4E0A\u50B3\u5DF2\u9054\u4E0A\u9650 ".concat(UPLOAD_LIMITS.DAILY_VIDEO_COUNT, " \u652F\uFF0C\u660E\u5929\u518D\u8A66\uFF01"));
+          throw new Error("Daily video upload limit reached (".concat(UPLOAD_LIMITS.DAILY_VIDEO_COUNT, " videos/day). Please try again tomorrow."));
         case 4:
           if (!(monthlyMB + fileMB > UPLOAD_LIMITS.MONTHLY_TOTAL_MB)) {
             _context17.n = 5;
             break;
           }
-          throw new Error("\u672C\u6708\u4E0A\u50B3\u6D41\u91CF\u5DF2\u9054\u4E0A\u9650 ".concat(UPLOAD_LIMITS.MONTHLY_TOTAL_MB, " MB\uFF0C\u4E0B\u6708\u91CD\u7F6E\uFF01"));
+          throw new Error("Monthly upload quota reached (".concat(UPLOAD_LIMITS.MONTHLY_TOTAL_MB, " MB/month). Resets next month."));
         case 5:
           return _context17.a(2, {
             dailyImages: dailyImages,
@@ -1870,18 +1874,13 @@ function _uploadToCloudinary() {
           return compressImage(file);
         case 3:
           uploadFile = _context20.v;
-          console.log("[Upload] \u5716\u7247\u58D3\u7E2E: ".concat((file.size / 1024 / 1024).toFixed(2), "MB \u2192 ").concat((uploadFile.size / 1024 / 1024).toFixed(2), "MB"));
+          console.log("[Upload] Image compressed: ".concat((file.size/1024/1024).toFixed(2), "MB → ").concat((uploadFile.size/1024/1024).toFixed(2), "MB"));
         case 4:
           finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
           url = "https://api.cloudinary.com/v1_1/".concat(CLOUDINARY_CLOUD_NAME, "/").concat(resourceType, "/upload");
           formData = new FormData();
           formData.append('file', uploadFile);
           formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-          // For videos: request auto quality + auto format to reduce processing time
-          if (isVideo) {
-            formData.append('quality', 'auto:low');
-            formData.append('eager_async', 'true');
-          }
           return _context20.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', url);
@@ -2874,7 +2873,7 @@ function FeedCard(_ref5) {
             _context3.p = 7;
             _t3 = _context3.v;
             if (_t3.code === 'permission-denied' || _t3.message && _t3.message.toLowerCase().includes('permission')) {
-              alert('留言失敗：Firestore 安全規則尚未設定留言寫入權限。\n請到 Firebase Console → Firestore → Rules，加入 comments subcollection 的寫入規則。\n\n詳細規則範本請見 README 或聯絡管理員。');
+              alert('Comment failed: Firestore rules do not allow comment writes. Please add the comments subcollection write rule in Firebase Console → Firestore → Rules.');
             } else {
               alert('Comment failed: ' + _t3.message);
             }
@@ -5025,6 +5024,7 @@ function MainApp(_ref16) {
       vid.style.display = 'none';
       canvas.style.display = 'block';
       playBtn.style.display = 'flex';
+      vid.currentTime = 0;
     });
     portal.appendChild(playBtn);
 
@@ -5034,71 +5034,61 @@ function MainApp(_ref16) {
       canvas.style.display = 'none';
       playBtn.style.display = 'none';
 
-      // Pre-load the main video element (for playback later)
+      // Load main video element (used for playback when user presses play)
       vid.src = src;
       vid.load();
 
-      // Use a separate tmpV purely for thumbnail capture
+      // Separate element purely for thumbnail capture — never inserted into DOM
       var tmpV = document.createElement('video');
       tmpV.muted = true;
       tmpV.playsInline = true;
       tmpV.preload = 'metadata';
-      // Required for blob: URLs on some browsers to allow canvas drawImage
-      tmpV.crossOrigin = 'anonymous';
+      // Do NOT set crossOrigin — blob: URLs break seeked event when crossOrigin is set
 
-      var thumbnailDone = false;
-      function showPlayBtn() {
-        if (thumbnailDone) return;
-        thumbnailDone = true;
-        // Always show the play button even if thumbnail failed
+      var done = false;
+      var fallbackTimer = setTimeout(function() {
+        if (!done) drawAndShow(false);
+      }, 5000);
+
+      function drawAndShow(success) {
+        if (done) return;
+        done = true;
+        clearTimeout(fallbackTimer);
+        if (success) {
+          try {
+            canvas.width  = tmpV.videoWidth  || 640;
+            canvas.height = tmpV.videoHeight || 360;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(tmpV, 0, 0, canvas.width, canvas.height);
+          } catch(e) { success = false; }
+        }
+        if (!success) {
+          canvas.width = 640; canvas.height = 360;
+          var ctx2 = canvas.getContext('2d');
+          ctx2.fillStyle = '#1a1a1a';
+          ctx2.fillRect(0, 0, 640, 360);
+          // Draw a subtle play triangle so user knows it's ready
+          ctx2.fillStyle = 'rgba(255,255,255,0.15)';
+          ctx2.beginPath();
+          ctx2.arc(320, 180, 36, 0, Math.PI * 2);
+          ctx2.fill();
+          ctx2.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx2.beginPath();
+          ctx2.moveTo(310, 162); ctx2.lineTo(310, 198); ctx2.lineTo(340, 180);
+          ctx2.closePath();
+          ctx2.fill();
+        }
         canvas.style.display = 'block';
         playBtn.style.display = 'flex';
         tmpV.src = '';
       }
 
-      // Timeout fallback: if thumbnail capture stalls, just show play button
-      var fallbackTimer = setTimeout(function() {
-        if (!thumbnailDone) {
-          // Draw black frame with play icon indication
-          canvas.width  = 640;
-          canvas.height = 360;
-          var ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#111';
-          ctx.fillRect(0, 0, 640, 360);
-          showPlayBtn();
-        }
-      }, 4000);
-
       tmpV.addEventListener('loadedmetadata', function() {
-        // Seek slightly in to avoid blank first frame on some encodings
-        tmpV.currentTime = Math.min(0.5, tmpV.duration * 0.1 || 0);
+        // Seek to 5% of duration (or 0.5s) to get a real frame
+        tmpV.currentTime = Math.min(0.5, (tmpV.duration || 10) * 0.05);
       });
-
-      tmpV.addEventListener('seeked', function() {
-        clearTimeout(fallbackTimer);
-        try {
-          canvas.width  = tmpV.videoWidth  || 640;
-          canvas.height = tmpV.videoHeight || 360;
-          var ctx = canvas.getContext('2d');
-          ctx.drawImage(tmpV, 0, 0, canvas.width, canvas.height);
-        } catch(e) {
-          // drawImage failed (e.g. cross-origin), draw dark bg
-          canvas.width = 640; canvas.height = 360;
-          var ctx2 = canvas.getContext('2d');
-          ctx2.fillStyle = '#111';
-          ctx2.fillRect(0, 0, 640, 360);
-        }
-        showPlayBtn();
-      });
-
-      tmpV.addEventListener('error', function() {
-        clearTimeout(fallbackTimer);
-        canvas.width = 640; canvas.height = 360;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0, 0, 640, 360);
-        showPlayBtn();
-      });
+      tmpV.addEventListener('seeked', function() { drawAndShow(true); });
+      tmpV.addEventListener('error',  function() { drawAndShow(false); });
 
       tmpV.src = src;
       tmpV.load();
@@ -5936,7 +5926,7 @@ function MainApp(_ref16) {
             var _postLimitKey = 'postLimit_' + user.uid + '_' + _today;
             var _dailyCount = parseInt(localStorage.getItem(_postLimitKey) || '0', 10);
             if (_dailyCount >= 5) {
-              alert('您今日已達發文上限（每日最多 5 篇），請明天再試。');
+              alert('Daily post limit reached (max 5 posts/day). Please try again tomorrow.');
               return _context1.a(2);
             }
             // ── 發文冷卻時間：至少間隔 3 分鐘 ──
@@ -5948,7 +5938,7 @@ function MainApp(_ref16) {
               var _remaining = 180 - _elapsed;
               var _mins = Math.floor(_remaining / 60);
               var _secs = _remaining % 60;
-              alert('\u767C\u6587\u9593\u9694\u592A\u77ED\uFF01\u8ACB\u518D\u7B49 ' + (_mins > 0 ? _mins + ' \u5206 ' : '') + _secs + ' \u79D2\u5F8C\u518D\u767C\u6587\u3002');
+              alert('Please wait ' + (_mins > 0 ? _mins + 'm ' : '') + _secs + 's before posting again.');
               return _context1.a(2);
             }
           case 13:
@@ -6289,12 +6279,12 @@ function MainApp(_ref16) {
             _t17 = _context13.v;
             setDeleteStep(2);
             errMap = {
-              'auth/wrong-password': '密碼錯誤，請再試一次',
-              'auth/invalid-credential': '密碼錯誤，請再試一次',
-              'auth/too-many-requests': '嘗試次數過多，請稍後再試',
-              'auth/requires-recent-login': '請重新登入後再試'
+              'auth/wrong-password': 'Incorrect password. Please try again.',
+              'auth/invalid-credential': 'Incorrect password. Please try again.',
+              'auth/too-many-requests': 'Too many attempts. Please try again later.',
+              'auth/requires-recent-login': 'Please sign in again to continue.'
             };
-            setDeleteError(errMap[_t17.code] || '刪除失敗：' + _t17.message);
+            setDeleteError(errMap[_t17.code] || 'Deletion failed: ' + _t17.message);
           case 39:
             return _context13.a(2);
         }
@@ -6689,7 +6679,7 @@ function MainApp(_ref16) {
       alt: "preview",
       style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
     }),
-    /*#__PURE__*/React.createElement("div", { className: "composer-video-portal", ref: videoPortalRef }),
+    /*#__PURE__*/React.createElement("div", { className: "composer-video-portal" + ((postMedia && postMedia.type === "image") ? " hidden-portal" : ""), ref: videoPortalRef }),
     /*#__PURE__*/React.createElement("div", {
       id: "composer-upload-overlay",
       className: "composer-upload-overlay hidden"
