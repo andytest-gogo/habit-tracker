@@ -4678,39 +4678,7 @@ function HistoryPage(_ref15) {
     }, /*#__PURE__*/React.createElement("div", {
       style:{ height:'100%', background:'#60a5fa', width:percentile+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
     })))
-  ] : [
-    /*#__PURE__*/React.createElement("div", {
-      key:"anow-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
-    }, /*#__PURE__*/React.createElement("svg", {
-      width:64, height:64, style:{ transform:'rotate(-90deg)' }
-    }, /*#__PURE__*/React.createElement("circle", {
-      cx:32, cy:32, r:26, fill:"none", stroke:"rgba(255,255,255,0.08)", strokeWidth:7
-    }), /*#__PURE__*/React.createElement("circle", {
-      cx:32, cy:32, r:26, fill:"none", stroke:"#94a3b8", strokeWidth:7,
-      strokeDasharray: (activeAvg/100 * 2*Math.PI*26) + " " + (2*Math.PI*26),
-      strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
-    })), /*#__PURE__*/React.createElement("div", {
-      style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
-        textAlign:'center', width:'100%', lineHeight:1 }
-    }, /*#__PURE__*/React.createElement("div", {
-      style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#94a3b8', lineHeight:1 }
-    }, activeAvg, "%"), /*#__PURE__*/React.createElement("div", {
-      style:{ fontSize:8, opacity:.5, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#94a3b8' }
-    }, "NOW"))),
-    /*#__PURE__*/React.createElement("div", {
-      key:"anow-info", className:"active-now-info"
-    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Active Now"),
-    /*#__PURE__*/React.createElement("div", {
-      style:{ display:'flex', alignItems:'baseline', gap:4 }
-    }, /*#__PURE__*/React.createElement("div", {
-      style:{ fontSize:28, fontWeight:700, fontFamily:'var(--din)', lineHeight:1, color:'#94a3b8' }
-    }, activeAvg), /*#__PURE__*/React.createElement("div", {
-      style:{ fontSize:16, fontWeight:700, fontFamily:'var(--din)', opacity:.7, color:'#94a3b8' }
-    }, "%")),
-    /*#__PURE__*/React.createElement("div", {
-      style:{ fontSize:11, opacity:.55, marginTop:3 }
-    }, activeRates.length, " habit", activeRates.length !== 1 ? 's' : '', " in progress"))
-  ]), /*#__PURE__*/React.createElement("div", {
+  ] : null), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 0,
@@ -6195,233 +6163,118 @@ function MainApp(_ref16) {
   };
 
   /* ── 刪除帳號 — 清除所有用戶資料後刪除 Firebase Auth 帳號 ── */
-  var handleDeleteAccount = /*#__PURE__*/function () {
-    var _ref30 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
-      var uid, provider, credential, habitsSnap, batch1, postsSnap, _iterator, _step, _loop, allPosts, _iterator2, _step2, _loop2, archiveSnap, batchArch, errMap, _t11, _t12, _t13, _t14, _t15, _t16, _t17;
-      return _regenerator().w(function (_context13) {
-        while (1) switch (_context13.p = _context13.n) {
-          case 0:
-            if (isFirebaseConfigured) {
-              _context13.n = 1;
-              break;
-            }
-            localStorage.removeItem('demoUser');
-            onLogout();
-            return _context13.a(2);
-          case 1:
-            setDeleteStep(3);
-            setDeleteError('');
-            _context13.p = 2;
-            uid = user.uid; // Step 1: 重新驗證（Firebase 刪帳需要近期登入）
-            if (!isGoogleUser()) {
-              _context13.n = 4;
-              break;
-            }
-            // Google OAuth 用戶：使用 Google popup 重新驗證
-            provider = new firebase.auth.GoogleAuthProvider();
-            _context13.n = 3;
-            return auth.currentUser.reauthenticateWithPopup(provider);
-          case 3:
-            _context13.n = 5;
-            break;
-          case 4:
-            // Email/Password 用戶：使用密碼重新驗證
-            credential = firebase.auth.EmailAuthProvider.credential(user.email, deletePassword);
-            _context13.n = 5;
-            return auth.currentUser.reauthenticateWithCredential(credential);
-          case 5:
-            _context13.n = 6;
-            return db.collection('habits').where('userId', '==', uid).get();
-          case 6:
-            habitsSnap = _context13.v;
-            batch1 = db.batch();
-            habitsSnap.docs.forEach(function (d) {
-              return batch1.delete(d.ref);
-            });
-            if (!habitsSnap.docs.length) {
-              _context13.n = 7;
-              break;
-            }
-            _context13.n = 7;
-            return batch1.commit();
-          case 7:
-            _context13.n = 8;
-            return db.collection('posts').where('userId', '==', uid).get();
-          case 8:
-            postsSnap = _context13.v;
-            _iterator = _createForOfIteratorHelper(postsSnap.docs);
-            _context13.p = 9;
-            _loop = /*#__PURE__*/_regenerator().m(function _loop() {
-              var postDoc, commentsSnap, batchC;
-              return _regenerator().w(function (_context11) {
-                while (1) switch (_context11.n) {
-                  case 0:
-                    postDoc = _step.value;
-                    _context11.n = 1;
-                    return postDoc.ref.collection('comments').get();
-                  case 1:
-                    commentsSnap = _context11.v;
-                    batchC = db.batch();
-                    commentsSnap.docs.forEach(function (d) {
-                      return batchC.delete(d.ref);
-                    });
-                    if (!commentsSnap.docs.length) {
-                      _context11.n = 2;
-                      break;
-                    }
-                    _context11.n = 2;
-                    return batchC.commit();
-                  case 2:
-                    _context11.n = 3;
-                    return postDoc.ref.delete();
-                  case 3:
-                    return _context11.a(2);
-                }
-              }, _loop);
-            });
-            _iterator.s();
-          case 10:
-            if ((_step = _iterator.n()).done) {
-              _context13.n = 12;
-              break;
-            }
-            return _context13.d(_regeneratorValues(_loop()), 11);
-          case 11:
-            _context13.n = 10;
-            break;
-          case 12:
-            _context13.n = 14;
-            break;
-          case 13:
-            _context13.p = 13;
-            _t11 = _context13.v;
-            _iterator.e(_t11);
-          case 14:
-            _context13.p = 14;
-            _iterator.f();
-            return _context13.f(14);
-          case 15:
-            _context13.n = 16;
-            // Use collectionGroup to find all comments by this user across all posts
-            // Much faster than iterating all posts, and avoids permission issues
-            return db.collectionGroup('comments').where('userId', '==', uid).get()
-              .catch(function() { return { docs: [] }; }); // ignore if collectionGroup not enabled
-          case 16:
-            allPosts = _context13.v; // reusing var name — actually myCommentsSnap
-            if (allPosts.docs && allPosts.docs.length) {
-              var cgBatch = db.batch();
-              allPosts.docs.forEach(function(d) { cgBatch.delete(d.ref); });
-              cgBatch.commit().catch(function() {});
-            }
-          case 23:
-            _context13.p = 23;
-            _context13.n = 24;
-            return db.collection('archived_habits').where('userId', '==', uid).get();
-          case 24:
-            archiveSnap = _context13.v;
-            batchArch = db.batch();
-            archiveSnap.docs.forEach(function (d) {
-              return batchArch.delete(d.ref);
-            });
-            if (!archiveSnap.docs.length) {
-              _context13.n = 25;
-              break;
-            }
-            _context13.n = 25;
-            return batchArch.commit();
-          case 25:
-            _context13.n = 27;
-            break;
-          case 26:
-            _context13.p = 26;
-            _t13 = _context13.v;
-          case 27:
-            _context13.p = 27;
-            _context13.n = 28;
-            return db.collection('user_stats').doc(uid).delete();
-          case 28:
-            _context13.n = 30;
-            break;
-          case 29:
-            _context13.p = 29;
-            _t14 = _context13.v;
-          case 30:
-            _context13.p = 30;
-            _context13.n = 31;
-            return db.collection('upload_quotas').doc(uid).delete();
-          case 31:
-            _context13.n = 33;
-            break;
-          case 32:
-            _context13.p = 32;
-            _t15 = _context13.v;
-          case 33:
-            _context13.p = 33;
-            _context13.n = 34;
-            // GDPR Art.17: also delete reports submitted BY this user (reporterUid)
-            // Runs fire-and-forget; failure is swallowed so it doesn't block account deletion.
-            db.collection('reports').where('reporterUid', '==', uid).get()
-              .then(function(rSnap) {
-                if (rSnap.empty) return;
-                var rBatch = db.batch();
-                rSnap.docs.forEach(function(d) { rBatch.delete(d.ref); });
-                return rBatch.commit();
-              }).catch(function() {});
-            // Delete username reservation so others can re-register the same name.
-            // Read displayName_lower from the users doc (most reliable source of the key).
-            db.collection('users').doc(uid).get()
-              .then(function(uSnap) {
-                var usernameKey = (uSnap.exists && uSnap.data().displayName_lower)
-                  ? uSnap.data().displayName_lower
-                  : (user.displayName || '').trim().toLowerCase().replace(/\s+/g, '_');
-                if (usernameKey) {
-                  return db.collection('usernames').doc(usernameKey).delete();
-                }
-              }).catch(function() {});
-            return db.collection('users').doc(uid).delete();
-          case 34:
-            _context13.n = 36;
-            break;
-          case 35:
-            _context13.p = 35;
-            _t16 = _context13.v;
-          case 36:
-            // 清除 localStorage
-            localStorage.removeItem('demoUser');
-            localStorage.removeItem('pwa-installed');
-            localStorage.removeItem('notif-asked');
-            localStorage.removeItem('ios-hint-shown');
-            localStorage.removeItem('avatar_' + uid);
-            localStorage.removeItem('ht-age-confirmed');
-            localStorage.removeItem('ht-age-confirmed-year');
-            localStorage.removeItem('ht-gdpr-choice');
+  var handleDeleteAccount = function handleDeleteAccount() {
+    if (!isFirebaseConfigured) {
+      localStorage.removeItem('demoUser');
+      onLogout();
+      return;
+    }
+    setDeleteStep(3);
+    setDeleteError('');
+    var uid = user.uid;
 
-            // Step 3: 刪除 Firebase Auth 帳號（最後執行）
-            _context13.n = 37;
-            return auth.currentUser.delete();
-          case 37:
-            _context13.n = 39;
-            break;
-          case 38:
-            _context13.p = 38;
-            _t17 = _context13.v;
-            setDeleteStep(2);
-            errMap = {
-              'auth/wrong-password': 'Incorrect password. Please try again.',
-              'auth/invalid-credential': 'Incorrect password. Please try again.',
-              'auth/too-many-requests': 'Too many attempts. Please try again later.',
-              'auth/requires-recent-login': 'Please sign in again to continue.'
-            };
-            setDeleteError(errMap[_t17.code] || 'Deletion failed: ' + _t17.message);
-          case 39:
-            return _context13.a(2);
-        }
-      }, _callee11, null, [[33, 35], [30, 32], [27, 29], [23, 26], [17, 21, 22, 23], [9, 13, 14, 15], [2, 38]]);
-    }));
-    return function handleDeleteAccount() {
-      return _ref30.apply(this, arguments);
-    };
-  }();
+    // Step 1: Re-authenticate
+    var reauth = isGoogleUser()
+      ? auth.currentUser.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider())
+      : auth.currentUser.reauthenticateWithCredential(
+          firebase.auth.EmailAuthProvider.credential(user.email, deletePassword)
+        );
+
+    reauth
+      // Step 2a: Delete habits
+      .then(function() {
+        return db.collection('habits').where('userId', '==', uid).get();
+      })
+      .then(function(snap) {
+        if (!snap.docs.length) return;
+        var b = db.batch();
+        snap.docs.forEach(function(d) { b.delete(d.ref); });
+        return b.commit();
+      })
+      // Step 2b: Delete own posts + their comments
+      .then(function() {
+        return db.collection('posts').where('userId', '==', uid).get();
+      })
+      .then(function(postsSnap) {
+        var promises = postsSnap.docs.map(function(postDoc) {
+          return postDoc.ref.collection('comments').get().then(function(cs) {
+            if (!cs.docs.length) return postDoc.ref.delete();
+            var b = db.batch();
+            cs.docs.forEach(function(d) { b.delete(d.ref); });
+            return b.commit().then(function() { return postDoc.ref.delete(); });
+          });
+        });
+        return Promise.all(promises);
+      })
+      // Step 2c: Delete own comments on other people's posts
+      .then(function() {
+        return db.collectionGroup('comments').where('userId', '==', uid).get()
+          .catch(function() { return { docs: [] }; });
+      })
+      .then(function(cgSnap) {
+        if (!cgSnap.docs || !cgSnap.docs.length) return;
+        var b = db.batch();
+        cgSnap.docs.forEach(function(d) { b.delete(d.ref); });
+        return b.commit().catch(function() {});
+      })
+      // Step 2d: Delete archived habits
+      .then(function() {
+        return db.collection('archived_habits').where('userId', '==', uid).get();
+      })
+      .then(function(snap) {
+        if (!snap.docs.length) return;
+        var b = db.batch();
+        snap.docs.forEach(function(d) { b.delete(d.ref); });
+        return b.commit();
+      })
+      // Step 2e: Delete user_stats, upload_quotas, reports (fire-and-forget)
+      .then(function() {
+        db.collection('user_stats').doc(uid).delete().catch(function() {});
+        db.collection('upload_quotas').doc(uid).delete().catch(function() {});
+        db.collection('reports').where('reporterUid', '==', uid).get()
+          .then(function(snap) {
+            if (snap.empty) return;
+            var b = db.batch();
+            snap.docs.forEach(function(d) { b.delete(d.ref); });
+            return b.commit();
+          }).catch(function() {});
+      })
+      // Step 2f: Delete username reservation
+      .then(function() {
+        return db.collection('users').doc(uid).get().then(function(uSnap) {
+          var key = (uSnap.exists && uSnap.data().displayName_lower)
+            ? uSnap.data().displayName_lower
+            : (user.displayName || '').trim().toLowerCase().replace(/\s+/g, '_');
+          if (key) return db.collection('usernames').doc(key).delete().catch(function() {});
+        }).catch(function() {});
+      })
+      // Step 2g: Delete users doc
+      .then(function() {
+        return db.collection('users').doc(uid).delete();
+      })
+      // Step 3: Clear localStorage
+      .then(function() {
+        ['demoUser','pwa-installed','notif-asked','ios-hint-shown',
+         'avatar_'+uid,'ht-age-confirmed','ht-age-confirmed-year','ht-gdpr-choice']
+          .forEach(function(k) { localStorage.removeItem(k); });
+      })
+      // Step 4: Delete Firebase Auth account (last)
+      .then(function() {
+        return auth.currentUser.delete();
+      })
+      // Step 5: Done — onLogout called automatically by auth state listener
+      .catch(function(err) {
+        setDeleteStep(2);
+        var errMap = {
+          'auth/wrong-password':      'Incorrect password. Please try again.',
+          'auth/invalid-credential':  'Incorrect password. Please try again.',
+          'auth/too-many-requests':   'Too many attempts. Please try again later.',
+          'auth/requires-recent-login': 'Please sign in again to continue.'
+        };
+        setDeleteError(errMap[err.code] || 'Deletion failed: ' + err.message);
+      });
+  };
+
   if (loading) return /*#__PURE__*/React.createElement("div", {
     className: "app-container"
   }, /*#__PURE__*/React.createElement("div", {
