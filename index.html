@@ -1877,6 +1877,11 @@ function _uploadToCloudinary() {
           formData = new FormData();
           formData.append('file', uploadFile);
           formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+          // For videos: request auto quality + auto format to reduce processing time
+          if (isVideo) {
+            formData.append('quality', 'auto:low');
+            formData.append('eager_async', 'true');
+          }
           return _context20.a(2, new Promise(function (resolve, reject) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', url);
@@ -5028,30 +5033,75 @@ function MainApp(_ref16) {
       vid.style.display = 'none';
       canvas.style.display = 'none';
       playBtn.style.display = 'none';
+
+      // Pre-load the main video element (for playback later)
       vid.src = src;
       vid.load();
-      vid.addEventListener('loadeddata', function onld() {
-        vid.removeEventListener('loadeddata', onld);
-        // Seek to first frame and draw to canvas
-        var tmpV = document.createElement('video');
-        tmpV.src = src;
-        tmpV.muted = true;
-        tmpV.playsInline = true;
-        tmpV.preload = 'metadata';
-        tmpV.addEventListener('loadeddata', function() {
-          tmpV.currentTime = 0.5;
-        });
-        tmpV.addEventListener('seeked', function() {
+
+      // Use a separate tmpV purely for thumbnail capture
+      var tmpV = document.createElement('video');
+      tmpV.muted = true;
+      tmpV.playsInline = true;
+      tmpV.preload = 'metadata';
+      // Required for blob: URLs on some browsers to allow canvas drawImage
+      tmpV.crossOrigin = 'anonymous';
+
+      var thumbnailDone = false;
+      function showPlayBtn() {
+        if (thumbnailDone) return;
+        thumbnailDone = true;
+        // Always show the play button even if thumbnail failed
+        canvas.style.display = 'block';
+        playBtn.style.display = 'flex';
+        tmpV.src = '';
+      }
+
+      // Timeout fallback: if thumbnail capture stalls, just show play button
+      var fallbackTimer = setTimeout(function() {
+        if (!thumbnailDone) {
+          // Draw black frame with play icon indication
+          canvas.width  = 640;
+          canvas.height = 360;
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#111';
+          ctx.fillRect(0, 0, 640, 360);
+          showPlayBtn();
+        }
+      }, 4000);
+
+      tmpV.addEventListener('loadedmetadata', function() {
+        // Seek slightly in to avoid blank first frame on some encodings
+        tmpV.currentTime = Math.min(0.5, tmpV.duration * 0.1 || 0);
+      });
+
+      tmpV.addEventListener('seeked', function() {
+        clearTimeout(fallbackTimer);
+        try {
           canvas.width  = tmpV.videoWidth  || 640;
           canvas.height = tmpV.videoHeight || 360;
           var ctx = canvas.getContext('2d');
           ctx.drawImage(tmpV, 0, 0, canvas.width, canvas.height);
-          canvas.style.display = 'block';
-          playBtn.style.display = 'flex';
-          tmpV.src = '';
-        });
-        tmpV.load();
-      }, { once: true });
+        } catch(e) {
+          // drawImage failed (e.g. cross-origin), draw dark bg
+          canvas.width = 640; canvas.height = 360;
+          var ctx2 = canvas.getContext('2d');
+          ctx2.fillStyle = '#111';
+          ctx2.fillRect(0, 0, 640, 360);
+        }
+        showPlayBtn();
+      });
+
+      tmpV.addEventListener('error', function() {
+        clearTimeout(fallbackTimer);
+        canvas.width = 640; canvas.height = 360;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, 640, 360);
+        showPlayBtn();
+      });
+
+      tmpV.src = src;
+      tmpV.load();
     };
 
     return function() { vid.pause(); vid.src = ''; };
