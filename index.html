@@ -2851,7 +2851,8 @@ function FeedCard(_ref5) {
           case 3:
             _context3.n = 4;
             return db.collection('posts').doc(post.id).update({
-              comments: firebase.firestore.FieldValue.increment(1)
+              comments: firebase.firestore.FieldValue.increment(1),
+            commentCount: firebase.firestore.FieldValue.increment(1)
             });
           case 4:
             _context3.n = 6;
@@ -3080,7 +3081,10 @@ function FeedCard(_ref5) {
             db.collection('posts').doc(post.id).collection('comments').doc(c.id).delete()
               .then(function() {
                 setComments(function(prev) { return prev.filter(function(x){ return x.id !== c.id; }); });
-                db.collection('posts').doc(post.id).update({ commentCount: firebase.firestore.FieldValue.increment(-1) }).catch(function(){});
+                db.collection('posts').doc(post.id).update({
+                  commentCount: firebase.firestore.FieldValue.increment(-1),
+                  comments: firebase.firestore.FieldValue.increment(-1)
+                }).catch(function(){});
               })
               .catch(function(err) { alert('Delete failed: ' + err.message); });
           }
@@ -3330,7 +3334,8 @@ function UserCommentsPage(_ref_ucp) {
       db.collection('posts').doc(postId).collection('comments').doc(commentId).delete()
         .then(function() {
           db.collection('posts').doc(postId).update({
-            commentCount: firebase.firestore.FieldValue.increment(-1)
+            commentCount: firebase.firestore.FieldValue.increment(-1),
+            comments: firebase.firestore.FieldValue.increment(-1)
           }).catch(function(){});
         })
         .catch(function(err) { alert('Delete failed: ' + err.message); });
@@ -6470,7 +6475,9 @@ function MainApp(_ref16) {
       // Update comment count in feed posts
       setFeedPosts(function(prev) { return prev.map(function(p) {
         if (p.id !== postId) return p;
-        return Object.assign({}, p, { commentCount: Math.max(0, (p.commentCount || 1) - 1) });
+        var cur = typeof p.commentCount === 'number' ? p.commentCount
+                  : typeof p.comments === 'number' ? p.comments : 0;
+        return Object.assign({}, p, { commentCount: Math.max(0, cur - 1), comments: Math.max(0, cur - 1) });
       }); });
     }
   });
