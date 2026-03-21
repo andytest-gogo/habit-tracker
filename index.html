@@ -5064,121 +5064,164 @@ function MainApp(_ref16) {
     if (!videoPortalRef.current) return;
     var portal = videoPortalRef.current;
 
-    // Hidden native video (used only when user presses play)
+    // ── Playback video (shown when user clicks play) ──
     var vid = document.createElement('video');
     vid.controls = true;
     vid.playsInline = true;
     vid.muted = false;
-    vid.preload = 'metadata';
-    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;';
+    vid.preload = 'none';
+    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;z-index:2;';
     portal.appendChild(vid);
     videoPreviewRef.current = vid;
 
-    // Thumbnail canvas (captures first frame)
-    var canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;';
-    portal.appendChild(canvas);
+    // ── Thumbnail image (shown before playback) ──
+    // Using <img> instead of <canvas> so we can use object-fit:cover via CSS
+    var thumbImg = document.createElement('img');
+    thumbImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#111;z-index:1;';
+    thumbImg.alt = '';
+    portal.appendChild(thumbImg);
 
-    // Play button overlay — large centered circle like a video player
+    // ── Play button ──
     var playBtn = document.createElement('div');
     playBtn.id = 'composer-video-play-overlay';
-    playBtn.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;cursor:pointer;background:transparent;transition:background .2s;';
-    playBtn.innerHTML = '<div style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.93);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,0.45);transition:transform .15s,box-shadow .15s;"><svg width=28 height=28 viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg></div>';
+    playBtn.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:3;';
+    playBtn.innerHTML = '<div style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.93);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,0.5);transition:transform .15s,opacity .15s;"><svg width=28 height=28 viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg></div>';
     playBtn.addEventListener('mouseenter', function() {
-      playBtn.style.background = 'rgba(0,0,0,0.12)';
       var inner = playBtn.querySelector('div');
-      if (inner) { inner.style.transform = 'scale(1.08)'; inner.style.boxShadow = '0 6px 28px rgba(0,0,0,0.55)'; }
+      if (inner) inner.style.transform = 'scale(1.1)';
     });
     playBtn.addEventListener('mouseleave', function() {
-      playBtn.style.background = 'transparent';
       var inner = playBtn.querySelector('div');
-      if (inner) { inner.style.transform = 'scale(1)'; inner.style.boxShadow = '0 4px 24px rgba(0,0,0,0.45)'; }
+      if (inner) inner.style.transform = 'scale(1)';
     });
     playBtn.addEventListener('click', function() {
       playBtn.style.display = 'none';
-      canvas.style.display = 'none';
+      thumbImg.style.display = 'none';
       vid.style.display = 'block';
       vid.play().catch(function(){});
     });
-    // When video ends, go back to thumbnail view
     vid.addEventListener('ended', function() {
       vid.style.display = 'none';
-      canvas.style.display = 'block';
-      playBtn.style.display = 'flex';
       vid.currentTime = 0;
+      thumbImg.style.display = 'block';
+      playBtn.style.display = 'flex';
     });
     portal.appendChild(playBtn);
 
-    // ── Thumbnail helper ──
-    // _captureThumbnail(blobUrl): called immediately when user picks a video file.
-    // Grabs a frame from the LOCAL blob URL (always works), stores it on canvas.
-    // Does NOT show canvas yet — waits for _revealThumbnail() after upload completes.
-    portal._captureThumbnail = function(blobUrl) {
-      canvas.style.display = 'none';
-      playBtn.style.display = 'none';
-      portal._thumbnailReady = false;
+    // ── New thumbnail approach: use OffscreenCanvas + play/pause ──
+    // Works on all browsers. We play the video muted for one frame then pause.
+    function captureThumbnailFromBlob(blobUrl, onDone) {
+      var t = document.createElement('video');
+      t.muted = true;
+      t.playsInline = true;
+      t.preload = 'auto';
+      t.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
+      document.body.appendChild(t);
 
-      var tmpV = document.createElement('video');
-      tmpV.muted = true;
-      tmpV.playsInline = true;
-      tmpV.preload = 'metadata';
+      var captured = false;
+      var cleanup = function() {
+        try { document.body.removeChild(t); } catch(e) {}
+        t.src = '';
+      };
 
-      function drawFrame(success) {
-        if (success) {
-          try {
-            canvas.width  = tmpV.videoWidth  || 640;
-            canvas.height = tmpV.videoHeight || 360;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(tmpV, 0, 0, canvas.width, canvas.height);
-            portal._thumbnailReady = true;
-          } catch(e) { success = false; }
-        }
-        if (!success) {
-          canvas.width = 640; canvas.height = 360;
-          var ctx2 = canvas.getContext('2d');
-          ctx2.fillStyle = '#1a1a1a';
-          ctx2.fillRect(0, 0, 640, 360);
-          portal._thumbnailReady = true;
-        }
-        tmpV.src = '';
-        // If upload already finished before thumbnail was ready, reveal now
-        if (portal._pendingRevealUrl) {
-          portal._revealThumbnail(portal._pendingRevealUrl);
-          portal._pendingRevealUrl = null;
+      function grabFrame() {
+        if (captured) return;
+        if (!t.videoWidth || !t.videoHeight) { onDone(null); cleanup(); return; }
+        var offscreen = document.createElement('canvas');
+        offscreen.width  = t.videoWidth;
+        offscreen.height = t.videoHeight;
+        try {
+          offscreen.getContext('2d').drawImage(t, 0, 0);
+          var dataUrl = offscreen.toDataURL('image/jpeg', 0.85);
+          captured = true;
+          t.pause();
+          cleanup();
+          onDone(dataUrl);
+        } catch(e) {
+          cleanup();
+          onDone(null);
         }
       }
 
-      var fallback = setTimeout(function() { drawFrame(false); }, 4000);
-      tmpV.addEventListener('loadedmetadata', function() {
-        tmpV.currentTime = Math.min(0.75, (tmpV.duration || 10) * 0.05);
+      // Method 1: timeupdate fires reliably on all browsers when playing
+      t.addEventListener('timeupdate', function ontu() {
+        if (t.currentTime > 0) {
+          t.removeEventListener('timeupdate', ontu);
+          grabFrame();
+        }
       });
-      tmpV.addEventListener('seeked', function() { clearTimeout(fallback); drawFrame(true); });
-      tmpV.addEventListener('error',  function() { clearTimeout(fallback); drawFrame(false); });
-      tmpV.src = blobUrl;
-      tmpV.load();
+
+      // Method 2: seeked fallback (for browsers where play() is blocked)
+      t.addEventListener('loadedmetadata', function() {
+        t.currentTime = Math.min(0.5, t.duration * 0.05 || 0.1);
+      });
+      t.addEventListener('seeked', function onSeeked() {
+        if (captured) return;
+        t.removeEventListener('seeked', onSeeked);
+        grabFrame();
+      });
+
+      t.addEventListener('error', function() { cleanup(); onDone(null); });
+
+      // Safety fallback
+      var safetyTimer = setTimeout(function() {
+        if (!captured) { cleanup(); onDone(null); }
+      }, 6000);
+      t.addEventListener('canplay', function() { clearTimeout(safetyTimer); });
+
+      t.src = blobUrl;
+      t.load();
+      // Try to play (muted autoplay allowed in all browsers)
+      var playPromise = t.play();
+      if (playPromise) playPromise.catch(function() {
+        // play() blocked (e.g. policy) — seeked fallback will handle it
+      });
+    }
+
+    // ── Portal API ──
+    portal._thumbnailDataUrl = null;
+    portal._pendingFinalUrl  = null;
+
+    portal._captureThumbnail = function(blobUrl) {
+      portal._thumbnailDataUrl = null;
+      portal._pendingFinalUrl  = null;
+      thumbImg.style.display   = 'none';
+      playBtn.style.display    = 'none';
+
+      captureThumbnailFromBlob(blobUrl, function(dataUrl) {
+        portal._thumbnailDataUrl = dataUrl || 'none';
+        // If upload already finished, reveal immediately
+        if (portal._pendingFinalUrl) {
+          portal._revealThumbnail(portal._pendingFinalUrl);
+          portal._pendingFinalUrl = null;
+        }
+      });
     };
 
-    // _revealThumbnail(finalUrl): called after upload completes.
-    // Sets the video src to the final URL, then shows the thumbnail + play button.
     portal._revealThumbnail = function(finalUrl) {
-      // If thumbnail not captured yet, queue it
-      if (!portal._thumbnailReady) {
-        portal._pendingRevealUrl = finalUrl;
+      // Queue if thumbnail not ready yet
+      if (!portal._thumbnailDataUrl) {
+        portal._pendingFinalUrl = finalUrl;
         return;
       }
+      // Set playback source
       vid.src = finalUrl;
-      vid.load();
       vid.style.display = 'none';
-      canvas.style.display = 'block';
-      playBtn.style.display = 'flex';
+      // Show thumbnail image
+      if (portal._thumbnailDataUrl !== 'none') {
+        thumbImg.src = portal._thumbnailDataUrl;
+      } else {
+        // No thumbnail — show dark bg
+        thumbImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        thumbImg.style.background = '#1a1a1a';
+      }
+      thumbImg.style.display = 'block';
+      playBtn.style.display  = 'flex';
     };
 
-    // Legacy: _showVideoReady kept for fallback compatibility
-    portal._showVideoReady = function(src) {
-      portal._revealThumbnail(src);
-    };
+    portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
 
-    return function() { vid.pause(); vid.src = ''; };
+    return function() { vid.pause(); vid.src = ''; thumbImg.src = ''; };
   }, []);
   useEffect(function () {
     if (!isFirebaseConfigured) {
@@ -5892,11 +5935,13 @@ function MainApp(_ref16) {
                 videoPreviewRef.current.load();
               }
               if (videoPortalRef.current) {
-                var _pOv = videoPortalRef.current.querySelector('#composer-video-play-overlay');
-                var _cv  = videoPortalRef.current.querySelector('canvas');
-                if (_pOv) _pOv.style.display = 'none';
-                if (_cv)  _cv.style.display  = 'none';
-                // Capture thumbnail from local file NOW — runs while upload is in progress
+                var _pOv  = videoPortalRef.current.querySelector('#composer-video-play-overlay');
+                var _cv   = videoPortalRef.current.querySelector('canvas');
+                var _tImg = videoPortalRef.current.querySelector('img');
+                if (_pOv)  _pOv.style.display  = 'none';
+                if (_cv)   _cv.style.display   = 'none';
+                if (_tImg) { _tImg.style.display = 'none'; _tImg.src = ''; }
+                // Start thumbnail capture from local blob in parallel with upload
                 if (videoPortalRef.current._captureThumbnail) {
                   videoPortalRef.current._captureThumbnail(localUrl);
                 }
@@ -6823,8 +6868,12 @@ function MainApp(_ref16) {
         if (videoPortalRef.current) {
           var _playOv = videoPortalRef.current.querySelector('#composer-video-play-overlay');
           var _cvs    = videoPortalRef.current.querySelector('canvas');
+          var _tImg   = videoPortalRef.current.querySelector('img');
           if (_playOv) _playOv.style.display = 'none';
           if (_cvs)    _cvs.style.display    = 'none';
+          if (_tImg)   { _tImg.style.display = 'none'; _tImg.src = ''; }
+          videoPortalRef.current._thumbnailDataUrl = null;
+          videoPortalRef.current._pendingFinalUrl  = null;
         }
         return setPostMedia(null);
       }
