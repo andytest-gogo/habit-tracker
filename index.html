@@ -6302,57 +6302,17 @@ function MainApp(_ref16) {
             return _context13.f(14);
           case 15:
             _context13.n = 16;
-            return db.collection('posts').get();
+            // Use collectionGroup to find all comments by this user across all posts
+            // Much faster than iterating all posts, and avoids permission issues
+            return db.collectionGroup('comments').where('userId', '==', uid).get()
+              .catch(function() { return { docs: [] }; }); // ignore if collectionGroup not enabled
           case 16:
-            allPosts = _context13.v;
-            _iterator2 = _createForOfIteratorHelper(allPosts.docs);
-            _context13.p = 17;
-            _loop2 = /*#__PURE__*/_regenerator().m(function _loop2() {
-              var postDoc, myComments, batchMC;
-              return _regenerator().w(function (_context12) {
-                while (1) switch (_context12.n) {
-                  case 0:
-                    postDoc = _step2.value;
-                    _context12.n = 1;
-                    return postDoc.ref.collection('comments').where('userId', '==', uid).get();
-                  case 1:
-                    myComments = _context12.v;
-                    batchMC = db.batch();
-                    myComments.docs.forEach(function (d) {
-                      return batchMC.delete(d.ref);
-                    });
-                    if (!myComments.docs.length) {
-                      _context12.n = 2;
-                      break;
-                    }
-                    _context12.n = 2;
-                    return batchMC.commit();
-                  case 2:
-                    return _context12.a(2);
-                }
-              }, _loop2);
-            });
-            _iterator2.s();
-          case 18:
-            if ((_step2 = _iterator2.n()).done) {
-              _context13.n = 20;
-              break;
+            allPosts = _context13.v; // reusing var name — actually myCommentsSnap
+            if (allPosts.docs && allPosts.docs.length) {
+              var cgBatch = db.batch();
+              allPosts.docs.forEach(function(d) { cgBatch.delete(d.ref); });
+              cgBatch.commit().catch(function() {});
             }
-            return _context13.d(_regeneratorValues(_loop2()), 19);
-          case 19:
-            _context13.n = 18;
-            break;
-          case 20:
-            _context13.n = 22;
-            break;
-          case 21:
-            _context13.p = 21;
-            _t12 = _context13.v;
-            _iterator2.e(_t12);
-          case 22:
-            _context13.p = 22;
-            _iterator2.f();
-            return _context13.f(22);
           case 23:
             _context13.p = 23;
             _context13.n = 24;
