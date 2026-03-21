@@ -998,7 +998,7 @@
                 <p>You have the right to <strong>access, correct, delete, or export</strong> your data at any time — use the tools below or Profile → Delete Account.<br>
                 <strong>EU/EEA:</strong> Lodge a complaint with your national DPA if needed.<br>
                 <strong>US (CA, VA, CO, CT, TX, OR, MT):</strong> Right to know, correct, delete, and opt out of data sales (we do not sell data).<br>
-                Contact: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — we respond within 30 days (45 days for CCPA).</p>
+                Contact: <strong><a href="/cdn-cgi/l/email-protection#5f173a3e332b37173e3d362b0b2d3e3c343a2d1f38323e3633713c3032"><span class="__cf_email__" data-cfemail="6c24090d001804240d0e0518381e0d0f07091e2c0b010d0500420f0301">[email&#160;protected]</span></a></strong> — we respond within 30 days (45 days for CCPA).</p>
             </div>
 
             <!-- GDPR Art.20 Data Portability — functional export -->
@@ -1036,7 +1036,7 @@
 </div>
 
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js" crossorigin="anonymous"></script>
 <!-- React -->
@@ -2767,7 +2767,9 @@ function FeedCard(_ref5) {
   var post = _ref5.post,
     currentUser = _ref5.currentUser,
     onLike = _ref5.onLike,
-    onReport = _ref5.onReport;
+    onReport = _ref5.onReport,
+    onDelete = _ref5.onDelete;
+  var isOwner = !!(currentUser && post.userId && currentUser.uid === post.userId);
   var _useState17 = useState(false),
     _useState18 = _slicedToArray(_useState17, 2),
     showComments = _useState18[0],
@@ -2976,7 +2978,23 @@ function FeedCard(_ref5) {
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap:"round", strokeLinejoin:"round", strokeWidth:2,
     d:"M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"
-  })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Report"))), showComments && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Report"))),
+  isOwner && onDelete && /*#__PURE__*/React.createElement("button", {
+    className: "feed-action feed-action-delete",
+    title: "Delete this post",
+    "aria-label": "Delete this post",
+    style: { background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4, padding:"0 2px", marginLeft:"auto", color:"var(--gray-400)" },
+    onClick: function onClick(e) {
+      e.stopPropagation();
+      if (window.confirm("Delete this post? This cannot be undone.")) onDelete(post.id);
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width:"14", height:"14", fill:"none", viewBox:"0 0 24 24", stroke:"currentColor"
+  }, /*#__PURE__*/React.createElement("path", {
+    strokeLinecap:"round", strokeLinejoin:"round", strokeWidth:2,
+    d:"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+  })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Delete"))),
+  showComments && /*#__PURE__*/React.createElement("div", {
     className: "comments-section"
   }, loadingComments && /*#__PURE__*/React.createElement("div", {
     style: { fontSize: 11, color: 'var(--gray-400)', padding: '4px 0' }
@@ -3054,7 +3072,23 @@ function FeedCard(_ref5) {
         style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.55,marginLeft:'auto'}
       }, /*#__PURE__*/React.createElement("svg",{width:11,height:11,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
           /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9'})
-        ), "Report")
+        ), "Report"),
+      isOwnComment && /*#__PURE__*/React.createElement("button", {
+        onClick: function(e) {
+          e.stopPropagation();
+          if (window.confirm("Delete this comment? This cannot be undone.")) {
+            db.collection('posts').doc(post.id).collection('comments').doc(c.id).delete()
+              .then(function() {
+                setComments(function(prev) { return prev.filter(function(x){ return x.id !== c.id; }); });
+                db.collection('posts').doc(post.id).update({ commentCount: firebase.firestore.FieldValue.increment(-1) }).catch(function(){});
+              })
+              .catch(function(err) { alert('Delete failed: ' + err.message); });
+          }
+        },
+        style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.7,marginLeft:'auto'}
+      }, /*#__PURE__*/React.createElement("svg",{width:11,height:11,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
+          /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'})
+        ), "Delete")
     )));
   }), comments.length === 0 && !loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3094,7 +3128,7 @@ function _globalFormatTime(date) {
 
 /* ── USER ALL POSTS PAGE ── */
 function UserPostsPage(_ref_upp) {
-  var user = _ref_upp.user, onBack = _ref_upp.onBack;
+  var user = _ref_upp.user, onBack = _ref_upp.onBack, onPostDeleted = _ref_upp.onPostDeleted;
   var POSTS_PER_PAGE = 10;
   var _sp1 = useState([]),   _sp1a = _slicedToArray(_sp1, 2), allPosts = _sp1a[0], setAllPosts = _sp1a[1];
   var _sp2 = useState(0),    _sp2a = _slicedToArray(_sp2, 2), page = _sp2a[0],     setPage = _sp2a[1];
@@ -3147,6 +3181,18 @@ function UserPostsPage(_ref_upp) {
     }
   }
 
+  function handleDeleteInPage(postId) {
+    if (!user) return;
+    if (!window.confirm('Delete this post? This cannot be undone.')) return;
+    setAllPosts(function(prev) { return prev.filter(function(p){ return p.id !== postId; }); });
+    if (isFirebaseConfigured) {
+      db.collection('posts').doc(postId).delete().catch(function(err) {
+        alert('Delete failed: ' + err.message);
+      });
+    }
+    if (onPostDeleted) onPostDeleted(postId);
+  }
+
   var visiblePosts = allPosts.slice(0, (page + 1) * POSTS_PER_PAGE);
   var hasMore = allPosts.length > visiblePosts.length;
   var displayName = (user && (user.displayName || user.email)) || 'User';
@@ -3190,7 +3236,8 @@ function UserPostsPage(_ref_upp) {
                   post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
                   currentUser: user,
                   onLike: handleLikeInPage,
-                  onReport: null
+                  onReport: null,
+                  onDelete: handleDeleteInPage
                 });
               }),
               hasMore
@@ -3207,7 +3254,7 @@ function UserPostsPage(_ref_upp) {
 
 /* ── USER ALL COMMENTS PAGE ── */
 function UserCommentsPage(_ref_ucp) {
-  var user = _ref_ucp.user, onBack = _ref_ucp.onBack;
+  var user = _ref_ucp.user, onBack = _ref_ucp.onBack, onCommentDeleted = _ref_ucp.onCommentDeleted;
   var COMMENTS_PER_PAGE = 10;
   var _sc1 = useState([]),   _sc1a = _slicedToArray(_sc1, 2), allComments = _sc1a[0], setAllComments = _sc1a[1];
   var _sc2 = useState(0),    _sc2a = _slicedToArray(_sc2, 2), page = _sc2a[0],       setPage = _sc2a[1];
@@ -3274,6 +3321,21 @@ function UserCommentsPage(_ref_ucp) {
       likes: firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1),
       likedBy: hasLiked ? firebase.firestore.FieldValue.arrayRemove(user.uid) : firebase.firestore.FieldValue.arrayUnion(user.uid)
     }).catch(function(e) { console.error(e); });
+  }
+
+  function handleDeleteComment(commentId, postId) {
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return;
+    setAllComments(function(prev) { return prev.filter(function(c){ return c.id !== commentId; }); });
+    if (isFirebaseConfigured) {
+      db.collection('posts').doc(postId).collection('comments').doc(commentId).delete()
+        .then(function() {
+          db.collection('posts').doc(postId).update({
+            commentCount: firebase.firestore.FieldValue.increment(-1)
+          }).catch(function(){});
+        })
+        .catch(function(err) { alert('Delete failed: ' + err.message); });
+    }
+    if (onCommentDeleted) onCommentDeleted(commentId, postId);
   }
 
   var displayName = (user && (user.displayName || user.email)) || 'User';
@@ -3352,6 +3414,15 @@ function UserCommentsPage(_ref_ucp) {
                             /*#__PURE__*/React.createElement('path', {strokeLinecap:'round',strokeLinejoin:'round',d:'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'})
                           ),
                           /*#__PURE__*/React.createElement('span', null, c.likes || 0)
+                        ),
+                        /*#__PURE__*/React.createElement('button', {
+                          onClick: function() { handleDeleteComment(c.id, c.postId); },
+                          style: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--gray-400)', fontWeight: 600, padding: 0, fontFamily: 'var(--font)', marginLeft: 'auto', opacity: .7 }
+                        },
+                          /*#__PURE__*/React.createElement('svg', {width:11,height:11,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
+                            /*#__PURE__*/React.createElement('path', {strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'})
+                          ),
+                          /*#__PURE__*/React.createElement('span', null, 'Delete')
                         )
                       )
                     )
@@ -5691,6 +5762,21 @@ function MainApp(_ref16) {
       return _ref24.apply(this, arguments);
     };
   }();
+
+  /* ── Delete post (own posts only) — syncs feed + myPosts + Firestore ── */
+  var handleDeletePost = function handleDeletePost(postId) {
+    if (!user) return;
+    // Optimistic UI: remove from both states immediately
+    setFeedPosts(function(prev) { return prev.filter(function(p){ return p.id !== postId; }); });
+    setMyPosts(function(prev)  { return prev.filter(function(p){ return p.id !== postId; }); });
+    if (isFirebaseConfigured) {
+      db.collection('posts').doc(postId).delete()
+        .catch(function(err) {
+          alert('Failed to delete post: ' + err.message);
+          // Re-fetch to restore if delete failed (rare)
+        });
+    }
+  };
   var _useState101 = useState(false),
     _useState102 = _slicedToArray(_useState101, 2),
     uploadingMedia = _useState102[0],
@@ -6309,11 +6395,22 @@ function MainApp(_ref16) {
   });
   if (showAllPosts) return /*#__PURE__*/React.createElement(UserPostsPage, {
     user: user,
-    onBack: function onBack() { return setShowAllPosts(false); }
+    onBack: function onBack() { return setShowAllPosts(false); },
+    onPostDeleted: function(postId) {
+      setFeedPosts(function(prev) { return prev.filter(function(p){ return p.id !== postId; }); });
+      setMyPosts(function(prev)  { return prev.filter(function(p){ return p.id !== postId; }); });
+    }
   });
   if (showAllComments) return /*#__PURE__*/React.createElement(UserCommentsPage, {
     user: user,
-    onBack: function onBack() { return setShowAllComments(false); }
+    onBack: function onBack() { return setShowAllComments(false); },
+    onCommentDeleted: function(commentId, postId) {
+      // Update comment count in feed posts
+      setFeedPosts(function(prev) { return prev.map(function(p) {
+        if (p.id !== postId) return p;
+        return Object.assign({}, p, { commentCount: Math.max(0, (p.commentCount || 1) - 1) });
+      }); });
+    }
   });
   var renderHome = function renderHome() {
     if (selectedHabit) {
@@ -6575,7 +6672,8 @@ function MainApp(_ref16) {
         onLike: handleLikeFeed,
         onReport: function onReport(post) {
           if (typeof window.openReportModal === 'function') window.openReportModal(post);
-        }
+        },
+        onDelete: handleDeletePost
       });
     }), feedPosts.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -6587,9 +6685,9 @@ function MainApp(_ref16) {
       disabled: feedLoadingMore,
       style: {
         padding: '10px 28px',
-        background: 'var(--white)',
-        border: '1.5px solid var(--gray-300)',
-        color: 'var(--gray-700)',
+        background: feedLoadingMore ? 'var(--gray-400)' : 'var(--black)',
+        border: 'none',
+        color: 'var(--white)',
         fontSize: 13,
         fontWeight: 600,
         fontFamily: 'var(--font)',
@@ -6801,7 +6899,8 @@ function MainApp(_ref16) {
         post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
         currentUser: user,
         onLike: handleLikeFeed,
-        onReport: null
+        onReport: null,
+        onDelete: handleDeletePost
       });
     }), myPosts.length > 3 && /*#__PURE__*/React.createElement("button", {
       className: "view-all-posts-btn",
@@ -7916,13 +8015,4 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
 
     // Write report to Firestore
-    if (typeof firebase !== 'undefined' && firebase.firestore) {
-      db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);
-    } else {
-      // Fallback: no Firebase configured, just show success
-      onSuccess();
-    }
-  };
-
-})();
-</script>
+   
