@@ -6180,97 +6180,151 @@ function MainApp(_ref16) {
           firebase.auth.EmailAuthProvider.credential(user.email, deletePassword)
         );
 
-    reauth
+    var errMap = {
+      'auth/wrong-password':        'Incorrect password. Please try again.',
+      'auth/invalid-credential':    'Incorrect password. Please try again.',
+      'auth/too-many-requests':     'Too many attempts. Please try again later.',
+      'auth/requires-recent-login': 'Please sign in again to continue.'
+    };
+
+    /* ── 核心：先 reauth，成功後才進行資料刪除 ── */
+    reauth.catch(function(err) {
+      /* Reauth 本身失敗（密碼錯誤等）→ 直接顯示錯誤，不繼續 */
+      setDeleteStep(2);
+      setDeleteError(errMap[err.code] || 'Authentication failed: ' + err.message);
+      return Promise.reject({ __handled: true });
+    })
+
       // Step 2a: Delete habits
       .then(function() {
-        return db.collection('habits').where('userId', '==', uid).get();
+        return db.collection('habits').where('userId', '==', uid).get()
+          .catch(function() { return { docs: [] }; });
       })
       .then(function(snap) {
-        if (!snap.docs.length) return;
+        if (!snap.docs || !snap.docs.length) return;
         var b = db.batch();
         snap.docs.forEach(function(d) { b.delete(d.ref); });
-        return b.commit();
+        return b.commit().catch(function() {});
       })
-      // Step 2b: Delete own posts + their comments
+
+      // Step 2b: Delete own posts + their subcollection comments
       .then(function() {
-        return db.collection('posts').where('userId', '==', uid).get();
+        return db.collection('posts').where('userId', '==', uid).get()
+          .catch(function() { return { docs: [] }; });
       })
       .then(function(postsSnap) {
+        if (!postsSnap.docs || !postsSnap.docs.length) return;
         var promises = postsSnap.docs.map(function(postDoc) {
-          return postDoc.ref.collection('comments').get().then(function(cs) {
-            if (!cs.docs.length) return postDoc.ref.delete();
-            var b = db.batch();
-            cs.docs.forEach(function(d) { b.delete(d.ref); });
-            return b.commit().then(function() { return postDoc.ref.delete(); });
-          });
+          return postDoc.ref.collection('comments').get()
+            .then(function(cs) {
+              var b = db.batch();
+              if (cs.docs && cs.docs.length) {
+                cs.docs.forEach(function(d) { b.delete(d.ref); });
+              }
+              b.delete(postDoc.ref);
+              return b.commit();
+            })
+            .catch(function() {
+              /* 子留言刪不掉時，至少刪貼文本身 */
+              return postDoc.ref.delete().catch(function() {});
+            });
         });
         return Promise.all(promises);
       })
-      // Step 2c: Delete own comments on other people's posts
+
+      // Step 2c: Delete own comments on OTHER people's posts (collectionGroup)
       .then(function() {
         return db.collectionGroup('comments').where('userId', '==', uid).get()
-          .catch(function() { return { docs: [] }; });
+          .catch(function(e) {
+            console.warn('[DeleteAccount] collectionGroup comments query failed (missing index?):', e.message);
+            return { docs: [] };
+          });
       })
       .then(function(cgSnap) {
         if (!cgSnap.docs || !cgSnap.docs.length) return;
-        var b = db.batch();
-        cgSnap.docs.forEach(function(d) { b.delete(d.ref); });
-        return b.commit().catch(function() {});
+        /* Batch delete in chunks of 400 to stay under Firestore 500-op limit */
+        var chunks = [];
+        for (var i = 0; i < cgSnap.docs.length; i += 400) {
+          chunks.push(cgSnap.docs.slice(i, i + 400));
+        }
+        return chunks.reduce(function(chain, chunk) {
+          return chain.then(function() {
+            var b = db.batch();
+            chunk.forEach(function(d) { b.delete(d.ref); });
+            return b.commit().catch(function() {});
+          });
+        }, Promise.resolve());
       })
+
       // Step 2d: Delete archived habits
       .then(function() {
-        return db.collection('archived_habits').where('userId', '==', uid).get();
+        return db.collection('archived_habits').where('userId', '==', uid).get()
+          .catch(function() { return { docs: [] }; });
       })
       .then(function(snap) {
-        if (!snap.docs.length) return;
+        if (!snap.docs || !snap.docs.length) return;
         var b = db.batch();
         snap.docs.forEach(function(d) { b.delete(d.ref); });
-        return b.commit();
+        return b.commit().catch(function() {});
       })
+
       // Step 2e: Delete user_stats, upload_quotas, reports (fire-and-forget)
       .then(function() {
         db.collection('user_stats').doc(uid).delete().catch(function() {});
         db.collection('upload_quotas').doc(uid).delete().catch(function() {});
         db.collection('reports').where('reporterUid', '==', uid).get()
           .then(function(snap) {
-            if (snap.empty) return;
+            if (!snap || snap.empty) return;
+            var b = db.batch();
+            snap.docs.forEach(function(d) { b.delete(d.ref); });
+            return b.commit();
+          }).catch(function() {});
+        /* Also clean up liked_posts if exists */
+        db.collection('liked_posts').where('userId', '==', uid).get()
+          .then(function(snap) {
+            if (!snap || snap.empty) return;
             var b = db.batch();
             snap.docs.forEach(function(d) { b.delete(d.ref); });
             return b.commit();
           }).catch(function() {});
       })
+
       // Step 2f: Delete username reservation
       .then(function() {
-        return db.collection('users').doc(uid).get().then(function(uSnap) {
-          var key = (uSnap.exists && uSnap.data().displayName_lower)
-            ? uSnap.data().displayName_lower
-            : (user.displayName || '').trim().toLowerCase().replace(/\s+/g, '_');
-          if (key) return db.collection('usernames').doc(key).delete().catch(function() {});
-        }).catch(function() {});
+        return db.collection('users').doc(uid).get()
+          .then(function(uSnap) {
+            var key = (uSnap.exists && uSnap.data().displayName_lower)
+              ? uSnap.data().displayName_lower
+              : (user.displayName || '').trim().toLowerCase().replace(/\s+/g, '_');
+            if (key) return db.collection('usernames').doc(key).delete().catch(function() {});
+          }).catch(function() {});
       })
+
       // Step 2g: Delete users doc
       .then(function() {
-        return db.collection('users').doc(uid).delete();
+        return db.collection('users').doc(uid).delete().catch(function() {});
       })
+
       // Step 3: Clear localStorage
       .then(function() {
         ['demoUser','pwa-installed','notif-asked','ios-hint-shown',
          'avatar_'+uid,'ht-age-confirmed','ht-age-confirmed-year','ht-gdpr-choice']
-          .forEach(function(k) { localStorage.removeItem(k); });
+          .forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
       })
-      // Step 4: Delete Firebase Auth account (last)
+
+      // Step 4: Delete Firebase Auth account — 無論 Firestore 是否完全清乾淨，都必須執行
       .then(function() {
         return auth.currentUser.delete();
       })
-      // Step 5: Done — onLogout called automatically by auth state listener
+
+      // Step 5: Done — auth state listener 會自動觸發 onLogout() 並跳回登入畫面
       .catch(function(err) {
+        if (err && err.__handled) return; /* reauth 錯誤已處理，不重複顯示 */
+        /* Firestore cleanup 部分失敗，但 Auth 帳號可能仍然刪成功 → 
+           若 currentUser 已不存在表示刪除成功，直接 logout */
+        if (!auth.currentUser) return;
+        /* Auth 刪除也失敗 → 顯示錯誤 */
         setDeleteStep(2);
-        var errMap = {
-          'auth/wrong-password':      'Incorrect password. Please try again.',
-          'auth/invalid-credential':  'Incorrect password. Please try again.',
-          'auth/too-many-requests':   'Too many attempts. Please try again later.',
-          'auth/requires-recent-login': 'Please sign in again to continue.'
-        };
         setDeleteError(errMap[err.code] || 'Deletion failed: ' + err.message);
       });
   };
