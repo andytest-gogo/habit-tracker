@@ -6233,6 +6233,7 @@ function MainApp(_ref16) {
       })
 
       // Step 2c: Delete own comments on OTHER people's posts (collectionGroup)
+      //          同時更新每篇父貼文的留言計數器
       .then(function() {
         return db.collectionGroup('comments').where('userId', '==', uid).get()
           .catch(function(e) {
@@ -6242,18 +6243,53 @@ function MainApp(_ref16) {
       })
       .then(function(cgSnap) {
         if (!cgSnap.docs || !cgSnap.docs.length) return;
-        /* Batch delete in chunks of 400 to stay under Firestore 500-op limit */
+
+        /* 統計每篇父貼文被刪幾則留言，用來更新計數器 */
+        var postCountMap = {};  // { postId: count }
+        cgSnap.docs.forEach(function(d) {
+          /* comment 路徑結構：posts/{postId}/comments/{commentId}
+             d.ref.parent.parent 就是該篇貼文的 DocumentReference */
+          var postRef = d.ref.parent.parent;
+          if (!postRef) return;
+          postCountMap[postRef.id] = postCountMap[postRef.id] || { ref: postRef, count: 0 };
+          postCountMap[postRef.id].count += 1;
+        });
+
+        /* 批次刪除留言（每批 400 筆） */
         var chunks = [];
         for (var i = 0; i < cgSnap.docs.length; i += 400) {
           chunks.push(cgSnap.docs.slice(i, i + 400));
         }
-        return chunks.reduce(function(chain, chunk) {
+        var deleteChain = chunks.reduce(function(chain, chunk) {
           return chain.then(function() {
             var b = db.batch();
             chunk.forEach(function(d) { b.delete(d.ref); });
             return b.commit().catch(function() {});
           });
         }, Promise.resolve());
+
+        /* 刪除完成後，更新各父貼文的留言計數器 */
+        return deleteChain.then(function() {
+          var updatePromises = Object.keys(postCountMap).map(function(postId) {
+            var entry = postCountMap[postId];
+            return entry.ref.update({
+              commentCount: firebase.firestore.FieldValue.increment(-entry.count),
+              comments:     firebase.firestore.FieldValue.increment(-entry.count)
+            })
+            /* 更新完後檢查是否變負數，若是則歸零 */
+            .then(function() {
+              return entry.ref.get().then(function(snap) {
+                if (!snap.exists) return;
+                var d = snap.data();
+                var cc = typeof d.commentCount === 'number' ? d.commentCount
+                       : (typeof d.comments === 'number' ? d.comments : 0);
+                if (cc < 0) return entry.ref.update({ commentCount: 0, comments: 0 });
+              }).catch(function() {});
+            })
+            .catch(function() {});
+          });
+          return Promise.all(updatePromises);
+        });
       })
 
       // Step 2d: Delete archived habits
