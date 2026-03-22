@@ -513,7 +513,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null
         &amp;&amp; request.auth.token.admin == true
-        &amp;&amp; request.auth.token.email == 'andy19920818@gmail.com';
+        &amp;&amp; request.auth.token.email == '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="462728223f777f7f74767e777e06212b272f2a6825292b">[email&#160;protected]</a>';
     }
 
     // ── Users collection ─────────────────────────────────────────
@@ -670,7 +670,7 @@ service cloud.firestore {
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -1968,7 +1968,8 @@ function deleteReportedComment(btn) {
   btn.disabled = true; btn.textContent = 'Deleting...';
   db.collection('posts').doc(postId).collection('comments').doc(commentId).delete().then(function() {
     db.collection('posts').doc(postId).update({
-      comments: firebase.firestore.FieldValue.increment(-1)
+      comments: firebase.firestore.FieldValue.increment(-1),
+      commentCount: firebase.firestore.FieldValue.increment(-1)
     }).catch(function(){});
     db.collection('reports').doc(reportId).update({
       status: 'reviewed',
@@ -2051,18 +2052,20 @@ function deleteCommentFromModal(postId, commentId) {
   if (!confirm('Delete this comment?')) return;
   db.collection('posts').doc(postId).collection('comments').doc(commentId).delete()
     .then(function(){
-      db.collection('posts').doc(postId).update({ comments: firebase.firestore.FieldValue.increment(-1) }).catch(function(){});
+      // Update both fields to keep counts in sync
+      db.collection('posts').doc(postId).update({
+        comments: firebase.firestore.FieldValue.increment(-1),
+        commentCount: firebase.firestore.FieldValue.increment(-1)
+      }).catch(function(){});
+      // Grey out deleted comment in modal UI
       var el = document.getElementById('cm-'+commentId);
       if (el) { el.style.opacity='0.35'; el.style.pointerEvents='none'; }
-      // Sync count in allPosts
+      // Sync count in allPosts cache so table reflects change immediately
       var p = allPosts.find(function(x){ return x.id===postId; });
-      if (p) p.commentCount = Math.max(0,(p.commentCount||1)-1);
-      renderPosts(document.getElementById('postSearch').value);
+      if (p) {
+        p.commentCount = Math.max(0, (p.commentCount || 0) - 1);
+        p.comments     = Math.max(0, (p.comments     || 0) - 1);
+      }
     })
-    .catch(function(e){ alert('Delete failed: '+e.message); });
+    .catch(function(e){ alert('Delete failed: ' + e.message); });
 }
-
-
-</script>
-</body>
-</html>
