@@ -8020,11 +8020,23 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     function onSuccess() {
       document.getElementById('reportStep1').style.display = 'none';
       document.getElementById('reportStep2').style.display = '';
+      btn.textContent = 'Submitted';
     }
     function onError(e) {
       console.error('[Report] Error:', e);
-      onSuccess(); // show success to user anyway
+      btn.disabled = false;
+      btn.textContent = 'Submit Report';
+      onSuccess(); // show success UI to user anyway
     }
 
     // Write report to Firestore
-   
+    if (typeof db !== 'undefined' && db) {
+      db.collection('reports').add(reportDoc)
+        .then(onSuccess)
+        .catch(onError);
+    } else {
+      // Firebase not configured — still show success UI
+      onSuccess();
+    }
+  };
+</script>
