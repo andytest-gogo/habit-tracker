@@ -5109,122 +5109,52 @@ function MainApp(_ref16) {
     });
     portal.appendChild(playBtn);
 
-    // ── New thumbnail approach: use OffscreenCanvas + play/pause ──
-    // Works on all browsers. We play the video muted for one frame then pause.
-    function captureThumbnailFromBlob(blobUrl, onDone) {
-      var t = document.createElement('video');
-      t.muted = true;
-      t.playsInline = true;
-      t.preload = 'auto';
-      t.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
-      document.body.appendChild(t);
-
-      var captured = false;
-      var cleanup = function() {
-        try { document.body.removeChild(t); } catch(e) {}
-        t.src = '';
-      };
-
-      function grabFrame() {
-        if (captured) return;
-        if (!t.videoWidth || !t.videoHeight) { onDone(null); cleanup(); return; }
-        var offscreen = document.createElement('canvas');
-        offscreen.width  = t.videoWidth;
-        offscreen.height = t.videoHeight;
-        try {
-          offscreen.getContext('2d').drawImage(t, 0, 0);
-          var dataUrl = offscreen.toDataURL('image/jpeg', 0.85);
-          captured = true;
-          t.pause();
-          cleanup();
-          onDone(dataUrl);
-        } catch(e) {
-          cleanup();
-          onDone(null);
-        }
-      }
-
-      // Method 1: timeupdate fires reliably on all browsers when playing
-      t.addEventListener('timeupdate', function ontu() {
-        if (t.currentTime > 0) {
-          t.removeEventListener('timeupdate', ontu);
-          grabFrame();
-        }
-      });
-
-      // Method 2: seeked fallback (for browsers where play() is blocked)
-      t.addEventListener('loadedmetadata', function() {
-        t.currentTime = Math.min(0.5, t.duration * 0.05 || 0.1);
-      });
-      t.addEventListener('seeked', function onSeeked() {
-        if (captured) return;
-        t.removeEventListener('seeked', onSeeked);
-        grabFrame();
-      });
-
-      t.addEventListener('error', function() { cleanup(); onDone(null); });
-
-      // Safety fallback
-      var safetyTimer = setTimeout(function() {
-        if (!captured) { cleanup(); onDone(null); }
-      }, 6000);
-      t.addEventListener('canplay', function() { clearTimeout(safetyTimer); });
-
-      t.src = blobUrl;
-      t.load();
-      // Try to play (muted autoplay allowed in all browsers)
-      var playPromise = t.play();
-      if (playPromise) playPromise.catch(function() {
-        // play() blocked (e.g. policy) — seeked fallback will handle it
-      });
-    }
-
     // ── Portal API ──
-    portal._thumbnailDataUrl = null;
-    portal._pendingFinalUrl  = null;
+    // Simple & reliable: skip thumbnail capture entirely.
+    // Show the video element directly with preload=metadata so the browser
+    // renders the first frame automatically — works on all browsers/formats.
 
     portal._captureThumbnail = function(blobUrl) {
-      portal._thumbnailDataUrl = null;
-      portal._pendingFinalUrl  = null;
-      thumbImg.style.display   = 'none';
-      playBtn.style.display    = 'none';
-
-      captureThumbnailFromBlob(blobUrl, function(dataUrl) {
-        portal._thumbnailDataUrl = dataUrl || 'none';
-        // If upload already finished, reveal immediately
-        if (portal._pendingFinalUrl) {
-          portal._revealThumbnail(portal._pendingFinalUrl);
-          portal._pendingFinalUrl = null;
-        }
+      // During upload: show the local blob directly so user sees the video immediately
+      thumbImg.style.display = 'none';
+      playBtn.style.display  = 'none';
+      vid.src     = blobUrl;
+      vid.preload = 'metadata';
+      vid.style.display = 'block';
+      vid.controls = false;
+      vid.load();
+      // Seek slightly so first frame renders (not black)
+      vid.addEventListener('loadedmetadata', function onMeta() {
+        vid.removeEventListener('loadedmetadata', onMeta);
+        vid.currentTime = 0.1;
       });
+      vid.addEventListener('seeked', function onSeeked() {
+        vid.removeEventListener('seeked', onSeeked);
+        vid.style.display = 'none'; // hide until upload done
+        playBtn.style.display = 'none';
+      });
+      portal._localBlobUrl = blobUrl;
     };
 
     portal._revealThumbnail = function(finalUrl) {
-      // Queue if thumbnail not ready yet
-      if (!portal._thumbnailDataUrl) {
-        portal._pendingFinalUrl = finalUrl;
-        return;
+      // Upload done: switch src to final Cloudinary URL
+      // Pause & clear blob first to avoid memory leak
+      vid.pause();
+      if (portal._localBlobUrl) {
+        try { URL.revokeObjectURL(portal._localBlobUrl); } catch(e) {}
+        portal._localBlobUrl = null;
       }
-      // Set playback source
-      vid.src = finalUrl;
-      // Show thumbnail image if we captured one, otherwise show video directly
-      if (portal._thumbnailDataUrl !== 'none') {
-        thumbImg.src = portal._thumbnailDataUrl;
-        thumbImg.style.display = 'block';
-        vid.style.display = 'none';
-      } else {
-        // Thumbnail capture failed — show video element directly so user can interact
-        vid.style.display = 'block';
-        vid.controls = false;
-        thumbImg.style.display = 'none';
-        // Seek to first frame so it's not black
-        vid.preload = 'metadata';
-        vid.addEventListener('loadedmetadata', function seekFirst() {
-          vid.removeEventListener('loadedmetadata', seekFirst);
-          vid.currentTime = 0.1;
-        });
-        vid.load();
-      }
+      vid.src     = finalUrl;
+      vid.preload = 'metadata';
+      vid.controls = false;
+      vid.style.display = 'block';
+      thumbImg.style.display = 'none';
+      vid.load();
+      // Seek to first frame so it's not black
+      vid.addEventListener('loadedmetadata', function onMeta2() {
+        vid.removeEventListener('loadedmetadata', onMeta2);
+        vid.currentTime = 0.1;
+      });
       playBtn.style.display = 'flex';
     };
 
@@ -8039,4 +7969,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       onSuccess();
     }
   };
+
+})(); // ← close IIFE
 </script>
