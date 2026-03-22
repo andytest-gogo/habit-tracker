@@ -5110,52 +5110,122 @@ function MainApp(_ref16) {
     portal.appendChild(playBtn);
 
     // ── Portal API ──
-    // Simple & reliable: skip thumbnail capture entirely.
-    // Show the video element directly with preload=metadata so the browser
-    // renders the first frame automatically — works on all browsers/formats.
+    // Strategy: use a hidden <video> to grab a frame via Canvas → show as <img> thumbnail.
+    // This is the most reliable cross-browser approach:
+    // - No dependency on loadedmetadata / seeked events firing on the main vid element
+    // - thumbImg is always visible; vid only shown when user clicks play
+    // - Works for blob URLs (during upload) and remote URLs (after upload)
+
+    function grabFrameAsImg(srcUrl, onDone) {
+      var tmp = document.createElement('video');
+      tmp.muted = true;
+      tmp.playsInline = true;
+      tmp.preload = 'metadata';
+      tmp.crossOrigin = 'anonymous';
+      tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;';
+      document.body.appendChild(tmp);
+
+      var done = false;
+      function finish(dataUrl) {
+        if (done) return;
+        done = true;
+        tmp.pause();
+        try { document.body.removeChild(tmp); } catch(e) {}
+        tmp.src = '';
+        onDone(dataUrl);
+      }
+
+      function drawFrame() {
+        if (tmp.videoWidth && tmp.videoHeight) {
+          var cv = document.createElement('canvas');
+          cv.width = tmp.videoWidth;
+          cv.height = tmp.videoHeight;
+          try {
+            cv.getContext('2d').drawImage(tmp, 0, 0);
+            finish(cv.toDataURL('image/jpeg', 0.8));
+            return;
+          } catch(e) {}
+        }
+        finish(null); // fallback: no frame
+      }
+
+      tmp.addEventListener('seeked', drawFrame);
+      tmp.addEventListener('error', function() { finish(null); });
+      // Safety timeout — if nothing fires in 8s, give up
+      var t = setTimeout(function() { finish(null); }, 8000);
+      tmp.addEventListener('loadedmetadata', function() {
+        clearTimeout(t);
+        tmp.currentTime = 0.5; // seek to 0.5s to get a real frame
+      });
+
+      tmp.src = srcUrl;
+      tmp.load();
+    }
+
+    portal._localBlobUrl  = null;
+    portal._finalUrl      = null;
 
     portal._captureThumbnail = function(blobUrl) {
-      // During upload: show the local blob directly so user sees the video immediately
+      portal._localBlobUrl = blobUrl;
+      portal._finalUrl     = null;
+      // Reset UI while grabbing frame
+      thumbImg.src = '';
       thumbImg.style.display = 'none';
       playBtn.style.display  = 'none';
-      vid.src     = blobUrl;
-      vid.preload = 'metadata';
-      vid.style.display = 'block';
-      vid.controls = false;
-      vid.load();
-      // Seek slightly so first frame renders (not black)
-      vid.addEventListener('loadedmetadata', function onMeta() {
-        vid.removeEventListener('loadedmetadata', onMeta);
-        vid.currentTime = 0.1;
+      vid.style.display      = 'none';
+
+      grabFrameAsImg(blobUrl, function(dataUrl) {
+        if (dataUrl) {
+          thumbImg.src = dataUrl;
+          thumbImg.style.display = 'block';
+        } else {
+          // Frame grab failed — show video directly as fallback
+          vid.src = blobUrl;
+          vid.preload = 'metadata';
+          vid.controls = false;
+          vid.style.display = 'block';
+        }
+        // If upload already finished before frame was grabbed, switch to final URL now
+        if (portal._finalUrl) {
+          portal._revealThumbnail(portal._finalUrl);
+        }
       });
-      vid.addEventListener('seeked', function onSeeked() {
-        vid.removeEventListener('seeked', onSeeked);
-        vid.style.display = 'none'; // hide until upload done
-        playBtn.style.display = 'none';
-      });
-      portal._localBlobUrl = blobUrl;
     };
 
     portal._revealThumbnail = function(finalUrl) {
-      // Upload done: switch src to final Cloudinary URL
-      // Pause & clear blob first to avoid memory leak
-      vid.pause();
+      portal._finalUrl = finalUrl;
+      // Free the blob URL
       if (portal._localBlobUrl) {
         try { URL.revokeObjectURL(portal._localBlobUrl); } catch(e) {}
         portal._localBlobUrl = null;
       }
-      vid.src     = finalUrl;
-      vid.preload = 'metadata';
-      vid.controls = false;
-      vid.style.display = 'block';
-      thumbImg.style.display = 'none';
-      vid.load();
-      // Seek to first frame so it's not black
-      vid.addEventListener('loadedmetadata', function onMeta2() {
-        vid.removeEventListener('loadedmetadata', onMeta2);
-        vid.currentTime = 0.1;
+      // Set the playback src on the hidden vid (won't load until user clicks play)
+      vid.src      = finalUrl;
+      vid.preload  = 'none';
+      vid.controls = true;
+      vid.style.display = 'none';
+
+      // If we already have a thumbnail showing, just update the playback src and show play btn
+      if (thumbImg.src && thumbImg.style.display !== 'none') {
+        playBtn.style.display = 'flex';
+        return;
+      }
+
+      // No thumbnail yet — grab a frame from the final URL
+      grabFrameAsImg(finalUrl, function(dataUrl) {
+        if (dataUrl) {
+          thumbImg.src = dataUrl;
+          thumbImg.style.display = 'block';
+          vid.style.display = 'none';
+        } else {
+          // Frame grab failed — show video directly
+          vid.preload = 'metadata';
+          vid.controls = false;
+          vid.style.display = 'block';
+          thumbImg.style.display = 'none';
+        }
+        playBtn.style.display = 'flex';
       });
-      playBtn.style.display = 'flex';
     };
 
     portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
