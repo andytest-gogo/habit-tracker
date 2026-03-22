@@ -2351,6 +2351,7 @@ function AuthPage(_ref2) {
           case 1:
             _context.p = 1;
             _context.n = 2;
+            _registering = true; // block onAuthStateChanged from calling signOut
             return auth.signInWithEmailAndPassword(email, password);
           case 2:
             r = _context.v;
@@ -2368,6 +2369,7 @@ function AuthPage(_ref2) {
             startCooldown();
             setError('');
           case 4:
+            _registering = false; // allow signOut now
             _context.n = 5;
             return auth.signOut();
           case 5:
@@ -2376,6 +2378,7 @@ function AuthPage(_ref2) {
           case 6:
             _context.p = 6;
             _t = _context.v;
+            _registering = false; // always reset on error
             setError(firebaseErrMsg(_t.code) || _t.message);
           case 7:
             return _context.a(2);
@@ -2488,13 +2491,22 @@ function AuthPage(_ref2) {
             console.warn('[signup] Firestore write failed:', fsErr.message);
           }
 
-          // 6. Send verification email
-          await _r.user.sendEmailVerification({
-            url: window.location.origin + window.location.pathname,
-            handleCodeInApp: false
-          });
+          // 6. Send verification email — must happen while user token is still valid.
+          // We temporarily set _registering = true to block onAuthStateChanged from
+          // calling signOut() before sendEmailVerification finishes.
+          _registering = true;
+          try {
+            await _r.user.sendEmailVerification({
+              url: window.location.origin + window.location.pathname,
+              handleCodeInApp: false
+            });
+            console.log('[signup] Verification email sent to:', email);
+          } catch (emailErr) {
+            // Log but don't block — account is created, user can use Resend
+            console.error('[signup] sendEmailVerification failed:', emailErr.code, emailErr.message);
+          }
 
-          // 7. Sign out — AFTER Firestore write and verification email are done
+          // 7. Sign out — AFTER verification email is sent
           _registering = false;
           await auth.signOut();
 
