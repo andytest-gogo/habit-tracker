@@ -5137,77 +5137,100 @@ function MainApp(_ref16) {
 
     portal._localBlobUrl = null;
 
+    // Helper: seek video to first frame and pause ONLY after a frame is actually painted.
+    // Uses requestAnimationFrame inside the seeked handler to ensure the browser has
+    // composited the frame before we pause — this is the fix for the black-screen bug.
+    function _seekAndFreeze(vidEl, url, onReady) {
+      // Clean up any previous listeners to avoid stacking
+      vidEl._sfCleanup && vidEl._sfCleanup();
+
+      var done = false;
+      var safetyTimer = null;
+
+      function finish() {
+        if (done) return;
+        done = true;
+        clearTimeout(safetyTimer);
+        vidEl.removeEventListener('loadedmetadata', onMeta);
+        vidEl.removeEventListener('seeked', onSeeked);
+        vidEl.removeEventListener('timeupdate', onTimeUpdate);
+        // Double-RAF: wait for browser to paint the decoded frame, THEN pause.
+        // Without this, pause() can happen before the GPU flushes the frame → black.
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            vidEl.pause();
+            if (onReady) onReady();
+          });
+        });
+      }
+
+      function onMeta() {
+        // Seek into the video slightly; browsers need a non-zero time to decode a frame
+        vidEl.currentTime = 0.001;
+      }
+      function onSeeked() {
+        // Some browsers fire 'seeked' before the frame is painted — use RAF to be sure
+        finish();
+      }
+      // 'timeupdate' fires after actual decode; acts as a backup for stubborn browsers
+      function onTimeUpdate() {
+        if (vidEl.currentTime > 0) finish();
+      }
+
+      vidEl.addEventListener('loadedmetadata', onMeta);
+      vidEl.addEventListener('seeked', onSeeked);
+      vidEl.addEventListener('timeupdate', onTimeUpdate);
+
+      // Expose cleanup so next call can cancel in-flight listeners
+      vidEl._sfCleanup = function() {
+        done = true;
+        clearTimeout(safetyTimer);
+        vidEl.removeEventListener('loadedmetadata', onMeta);
+        vidEl.removeEventListener('seeked', onSeeked);
+        vidEl.removeEventListener('timeupdate', onTimeUpdate);
+      };
+
+      // Safety: show play button even if all events fail (e.g. codec unsupported)
+      safetyTimer = setTimeout(function() {
+        if (!done) { done = true; if (onReady) onReady(); }
+      }, 4000);
+
+      vidEl.src     = url;
+      vidEl.preload = 'auto';   // 'auto' lets the browser decode frames, unlike 'metadata'
+      vidEl.muted   = true;
+      vidEl.controls = false;
+      vidEl.style.display = 'block';
+      vidEl.load();
+      // Start playing silently so the browser actually decodes frames
+      // (some browsers won't decode until play() is called, even with preload=auto)
+      vidEl.play().catch(function(){});
+    }
+
     portal._captureThumbnail = function(blobUrl) {
       portal._localBlobUrl = blobUrl;
       thumbImg.style.display = 'none';
       playBtn.style.display  = 'none';
 
-      // Show video with local blob so first frame is visible during upload
-      vid.src      = blobUrl;
-      vid.preload  = 'metadata';
-      vid.controls = false;
-      vid.muted    = true;
-      vid.style.display = 'block';
-      vid.load();
-
-      // Seek to first frame once metadata loaded
-      function onMeta() {
-        vid.removeEventListener('loadedmetadata', onMeta);
-        vid.currentTime = 0.1;
-      }
-      function onSeeked() {
-        vid.removeEventListener('seeked', onSeeked);
-        // First frame rendered — pause and show play button
-        vid.pause();
+      _seekAndFreeze(vid, blobUrl, function() {
         playBtn.style.display = 'flex';
-      }
-      vid.addEventListener('loadedmetadata', onMeta);
-      vid.addEventListener('seeked', onSeeked);
-
-      // Safety: even if events don't fire, show play button after 3s
-      setTimeout(function() {
-        if (playBtn.style.display === 'none') {
-          playBtn.style.display = 'flex';
-        }
-      }, 3000);
+      });
     };
 
     portal._revealThumbnail = function(finalUrl) {
-      // Free blob URL
-      if (portal._localBlobUrl) {
-        try { URL.revokeObjectURL(portal._localBlobUrl); } catch(e) {}
-        portal._localBlobUrl = null;
-      }
+      // Keep blob URL alive until the new src is loaded, then revoke
+      var blobToRevoke = portal._localBlobUrl;
+      portal._localBlobUrl = null;
 
-      // Swap to final Cloudinary URL
-      vid.pause();
-      vid.src      = finalUrl;
-      vid.preload  = 'metadata';
-      vid.controls = false;
-      vid.muted    = true;
-      vid.style.display = 'block';
       thumbImg.style.display = 'none';
       playBtn.style.display  = 'none';
-      vid.load();
 
-      function onMeta2() {
-        vid.removeEventListener('loadedmetadata', onMeta2);
-        vid.currentTime = 0.1;
-      }
-      function onSeeked2() {
-        vid.removeEventListener('seeked', onSeeked2);
-        vid.pause();
-        playBtn.style.display = 'flex';
-      }
-      vid.addEventListener('loadedmetadata', onMeta2);
-      vid.addEventListener('seeked', onSeeked2);
-
-      // Safety fallback
-      setTimeout(function() {
-        if (playBtn.style.display === 'none') {
-          playBtn.style.display = 'flex';
+      _seekAndFreeze(vid, finalUrl, function() {
+        // Now safe to free the blob — new src is fully loaded
+        if (blobToRevoke) {
+          try { URL.revokeObjectURL(blobToRevoke); } catch(e) {}
         }
-      }, 3000);
+        playBtn.style.display = 'flex';
+      });
     };
 
     portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
