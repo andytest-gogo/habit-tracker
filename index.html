@@ -584,6 +584,7 @@
             width:24px; height:24px; background:rgba(0,0,0,.6); color:white;
             border:none; cursor:pointer; font-size:14px; display:flex;
             align-items:center; justify-content:center; font-weight:700;
+            z-index:10;
         }
         .composer-toolbar {
             display:flex; align-items:center; justify-content:space-between;
@@ -5087,137 +5088,97 @@ function MainApp(_ref16) {
     // the composer-media-preview box.  The anchor is a plain div that
     // React never re-renders children into (no JSX children), so React
     // will never clear what we put here.
-    portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;';
+    portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;pointer-events:auto;';
     anchor.appendChild(portal);
     videoPortalRef.current = portal;
 
     if (portal._initialized) return;
     portal._initialized = true;
 
-    // ── Thumbnail <img> — shown as static first-frame preview ──
-    var thumbImg = document.createElement('img');
-    thumbImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#111;z-index:1;';
-    thumbImg.alt = '';
-    portal.appendChild(thumbImg);
+    // ── Simple, bulletproof video preview ──
+    // One <video> element. Show it visible during upload (local blob).
+    // After upload swap src to Cloudinary URL.
+    // Use the 'seeked' event + currentTime trick to freeze on first frame.
+    // Play button overlaid on top.
 
-    // ── Play button overlay ──
+    var vid = document.createElement('video');
+    vid.playsInline  = true;
+    vid.muted        = true;
+    vid.controls     = false;
+    vid.preload      = 'auto';
+    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#111;z-index:1;display:none;';
+    portal.appendChild(vid);
+    videoPreviewRef.current = vid;
+
+    // Play button on top of frozen video
     var playBtn = document.createElement('div');
     playBtn.id = 'composer-video-play-overlay';
     playBtn.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:3;';
     playBtn.innerHTML = '<div style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.93);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,0.5);"><svg width=28 height=28 viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg></div>';
     portal.appendChild(playBtn);
 
-    // ── Playback <video> — hidden until play button is clicked ──
-    var vid = document.createElement('video');
-    vid.playsInline = true;
-    vid.controls   = true;
-    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;z-index:2;';
-    portal.appendChild(vid);
-    videoPreviewRef.current = vid;
-
     playBtn.addEventListener('click', function() {
-      playBtn.style.display  = 'none';
-      thumbImg.style.display = 'none';
-      vid.muted      = false;
+      playBtn.style.display = 'none';
+      vid.muted    = false;
+      vid.controls = true;
       vid.currentTime = 0;
       vid.style.display = 'block';
       vid.play().catch(function(){});
     });
+
     vid.addEventListener('ended', function() {
-      vid.style.display = 'none';
-      if (thumbImg.getAttribute('data-has-frame') === '1') {
-        thumbImg.style.display = 'block';
-      }
-      playBtn.style.display = 'flex';
+      vid.controls = false;
+      vid.muted    = true;
+      _freezeOnFirstFrame(vid, function() {
+        playBtn.style.display = 'flex';
+      });
     });
+
+    // Freeze video on first visible frame.
+    // Wait for canplay → play() → first timeupdate with currentTime>0 → pause.
+    function _freezeOnFirstFrame(videoEl, onReady) {
+      videoEl.muted    = true;
+      videoEl.controls = false;
+      videoEl.style.display = 'block';
+      var done = false;
+
+      function finish() {
+        if (done) return;
+        done = true;
+        videoEl.removeEventListener('timeupdate', onTU);
+        videoEl.removeEventListener('canplay',    onCanPlay);
+        clearTimeout(fallback);
+        videoEl.pause();
+        if (onReady) onReady();
+      }
+
+      function onTU() {
+        if (videoEl.currentTime > 0) finish();
+      }
+
+      function onCanPlay() {
+        videoEl.removeEventListener('canplay', onCanPlay);
+        videoEl.play().catch(function() { finish(); });
+      }
+
+      var fallback = setTimeout(finish, 5000);
+
+      videoEl.addEventListener('canplay',    onCanPlay);
+      videoEl.addEventListener('timeupdate', onTU);
+    }
 
     portal._localBlobUrl = null;
 
-    // ── Core thumbnail extractor ──
-    // Uses a SEPARATE offscreen video element so we never touch the playback vid.
-    // Approach: load src, play() muted, on first timeupdate (guarantees currentTime>0)
-    // draw to canvas, convert to data URL, show as <img>.
-    function grabFirstFrame(src, crossOriginAttr, onDone) {
-      var tmp = document.createElement('video');
-      tmp.muted       = true;
-      tmp.playsInline = true;
-      tmp.preload     = 'auto';
-      if (crossOriginAttr) tmp.crossOrigin = crossOriginAttr;
-      // Must be in DOM with real dimensions for browser to decode frames.
-      // opacity:0.01 keeps it invisible but non-zero so browser doesn't skip decode.
-      // clip to viewport edge so it doesn't cause scroll.
-      tmp.style.cssText = 'position:fixed;left:0;top:0;width:320px;height:180px;opacity:0.01;pointer-events:none;z-index:-1;clip-path:inset(0 0 0 0);';
-      document.body.appendChild(tmp);
-
-      var done = false;
-      var timer = setTimeout(function() {
-        if (done) return;
-        done = true;
-        cleanup();
-        onDone(null);
-      }, 8000);
-
-      function cleanup() {
-        tmp.pause();
-        tmp.removeEventListener('timeupdate', onTimeUpdate);
-        tmp.removeEventListener('error', onError);
-        try { document.body.removeChild(tmp); } catch(e) {}
-      }
-
-      function onTimeUpdate() {
-        if (done || tmp.currentTime <= 0 || tmp.videoWidth === 0) return;
-        done = true;
-        clearTimeout(timer);
-        // Give browser one more frame to paint before we draw
-        requestAnimationFrame(function() {
-          var canvas = document.createElement('canvas');
-          canvas.width  = tmp.videoWidth;
-          canvas.height = tmp.videoHeight;
-          try {
-            canvas.getContext('2d').drawImage(tmp, 0, 0);
-            var url = canvas.toDataURL('image/jpeg', 0.85);
-            cleanup();
-            onDone(url && url.length > 2000 ? url : null);
-          } catch(e) {
-            // CORS tainted — fall back to null (play button will still show)
-            cleanup();
-            onDone(null);
-          }
-        });
-      }
-
-      function onError() {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        cleanup();
-        onDone(null);
-      }
-
-      tmp.addEventListener('timeupdate', onTimeUpdate);
-      tmp.addEventListener('error', onError);
-      tmp.src = src;
-      tmp.load();
-      tmp.play().catch(function(){});
-    }
-
     portal._captureThumbnail = function(blobUrl) {
       portal._localBlobUrl = blobUrl;
-      thumbImg.setAttribute('data-has-frame', '0');
-      thumbImg.style.display = 'none';
-      playBtn.style.display  = 'none';
-      vid.style.display      = 'none';
-
-      grabFirstFrame(blobUrl, null, function(dataUrl) {
-        // Always set up vid for playback regardless of thumbnail success
-        vid.src     = blobUrl;
-        vid.preload = 'metadata';
-        vid.muted   = false;
-        if (dataUrl) {
-          thumbImg.src = dataUrl;
-          thumbImg.setAttribute('data-has-frame', '1');
-          thumbImg.style.display = 'block';
-        }
+      playBtn.style.display = 'none';
+      vid.src     = blobUrl;
+      vid.preload = 'auto';
+      vid.muted   = true;
+      vid.controls = false;
+      vid.currentTime = 0;
+      vid.load();
+      _freezeOnFirstFrame(vid, function() {
         playBtn.style.display = 'flex';
       });
     };
@@ -5225,34 +5186,26 @@ function MainApp(_ref16) {
     portal._revealThumbnail = function(finalUrl) {
       var blobToRevoke = portal._localBlobUrl;
       portal._localBlobUrl = null;
-      thumbImg.setAttribute('data-has-frame', '0');
-      thumbImg.style.display = 'none';
-      playBtn.style.display  = 'none';
-      vid.style.display      = 'none';
+      playBtn.style.display = 'none';
 
-      // Free blob only after new src grab is done.
-      // First try with crossOrigin (for canvas draw). If CORS blocks it, retry without
-      // crossOrigin — we won't get a thumbnail dataUrl but play button will still show.
-      grabFirstFrame(finalUrl, 'anonymous', function(dataUrl) {
-        if (blobToRevoke) { try { URL.revokeObjectURL(blobToRevoke); } catch(e){} }
-        // Always set up vid for playback
-        vid.pause();
-        vid.src     = finalUrl;
-        vid.preload = 'metadata';
-        vid.muted   = false;
-        if (dataUrl) {
-          thumbImg.src = dataUrl;
-          thumbImg.setAttribute('data-has-frame', '1');
-          thumbImg.style.display = 'block';
-        }
-        // play button always shows — even if thumbnail failed, user can still tap play
+      vid.pause();
+      vid.src     = finalUrl;
+      vid.preload = 'auto';
+      vid.muted   = true;
+      vid.controls = false;
+      vid.currentTime = 0;
+      vid.load();
+
+      if (blobToRevoke) { try { URL.revokeObjectURL(blobToRevoke); } catch(e){} }
+
+      _freezeOnFirstFrame(vid, function() {
         playBtn.style.display = 'flex';
       });
     };
 
     portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
 
-    return function() { vid.pause(); vid.src = ''; thumbImg.src = ''; };
+    return function() { vid.pause(); vid.src = ''; };
   }, []);
 
   // Re-attach the global portal to the anchor on every render.
@@ -5262,7 +5215,7 @@ function MainApp(_ref16) {
     var anchor = document.getElementById('composer-video-anchor');
     var portal = document.getElementById('global-video-portal');
     if (anchor && portal && portal.parentNode !== anchor) {
-      portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;';
+      portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;pointer-events:auto;';
       anchor.appendChild(portal);
       videoPortalRef.current = portal;
     }
