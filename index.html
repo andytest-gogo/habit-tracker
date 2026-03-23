@@ -890,6 +890,9 @@
 <a href="#main-content" class="skip-link">Skip to main content</a>
 <div id="main-content" role="main"></div>
 
+<!-- ── VIDEO PREVIEW PORTAL (lives OUTSIDE React tree — never touched by reconciler) ── -->
+<div id="global-video-portal" style="display:none;position:absolute;pointer-events:none;"></div>
+
 <!-- ── AGE GATE (Enhanced: birth year verification + accessibility) ── -->
 <div id="ageGateOverlay" class="age-gate-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ageGateTitle" aria-describedby="ageGateDesc">
     <div class="age-gate-box">
@@ -5072,14 +5075,24 @@ function MainApp(_ref16) {
   // reload the media source on every re-render (e.g. typing in the textarea),
   // producing black-flash + layout jitter. Instead we always keep it in the DOM
   // and update src / visibility imperatively via the ref.
-  var videoPreviewRef = useRef(null);   // stable imperative video element (lives inside portal div)
-  var videoPortalRef = useRef(null);    // the portal <div> React renders (stable DOM node)
-  // On mount: create the native <video> once and append it to the portal div.
-  // This completely removes <video> from React's render tree so state changes
-  // (typing text, upload progress) never touch the video element.
+  var videoPreviewRef = useRef(null);   // stable imperative video element
+  var videoPortalRef = useRef(null);    // ref points to global-video-portal node
   useEffect(function() {
-    if (!videoPortalRef.current) return;
-    var portal = videoPortalRef.current;
+    // Wait until the anchor div exists in the DOM
+    var anchor = document.getElementById('composer-video-anchor');
+    var portal = document.getElementById('global-video-portal');
+    if (!anchor || !portal) return;
+
+    // Move the global portal INTO the anchor so it sits inside
+    // the composer-media-preview box.  The anchor is a plain div that
+    // React never re-renders children into (no JSX children), so React
+    // will never clear what we put here.
+    portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;';
+    anchor.appendChild(portal);
+    videoPortalRef.current = portal;
+
+    if (portal._initialized) return;
+    portal._initialized = true;
 
     // ── Playback video (shown when user clicks play) ──
     var vid = document.createElement('video');
@@ -5114,16 +5127,21 @@ function MainApp(_ref16) {
     playBtn.addEventListener('click', function() {
       playBtn.style.display = 'none';
       thumbImg.style.display = 'none';
+      // Reset to start and enable controls for full playback
       vid.muted    = false;
+      vid.volume   = 1;
       vid.controls = true;
-      vid.style.display = 'block';
+      vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#111;z-index:2;';
       vid.currentTime = 0;
       vid.play().catch(function(){});
     });
     vid.addEventListener('ended', function() {
       vid.style.display = 'none';
       vid.currentTime = 0;
-      thumbImg.style.display = 'block';
+      // Show thumb if available, else just show play button over black
+      if (thumbImg.src && thumbImg.src !== window.location.href) {
+        thumbImg.style.display = 'block';
+      }
       playBtn.style.display = 'flex';
     });
     portal.appendChild(playBtn);
@@ -5137,100 +5155,173 @@ function MainApp(_ref16) {
 
     portal._localBlobUrl = null;
 
-    // Helper: seek video to first frame and pause ONLY after a frame is actually painted.
-    // Uses requestAnimationFrame inside the seeked handler to ensure the browser has
-    // composited the frame before we pause — this is the fix for the black-screen bug.
-    function _seekAndFreeze(vidEl, url, onReady) {
-      // Clean up any previous listeners to avoid stacking
-      vidEl._sfCleanup && vidEl._sfCleanup();
+    // ── Canvas thumbnail extractor ──
+    // This is the ONLY reliable cross-browser way to get a video first frame:
+    // play() the video muted, grab the first painted frame via canvas.drawImage(),
+    // then immediately pause and show the canvas bitmap as a static <img>.
+    // This avoids ALL seek/pause/black-frame race conditions.
+    var thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width  = 640;
+    thumbCanvas.height = 360;
 
-      var done = false;
-      var safetyTimer = null;
+    function _extractFirstFrame(videoEl, onDone) {
+      var ctx = thumbCanvas.getContext('2d');
+      var captured = false;
+      var rafId = null;
 
-      function finish() {
-        if (done) return;
-        done = true;
+      function tryCapture() {
+        if (captured) return;
+        if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+          // Frame is available — draw it
+          thumbCanvas.width  = videoEl.videoWidth  || 640;
+          thumbCanvas.height = videoEl.videoHeight || 360;
+          try {
+            ctx.drawImage(videoEl, 0, 0, thumbCanvas.width, thumbCanvas.height);
+            var dataUrl = thumbCanvas.toDataURL('image/jpeg', 0.85);
+            // Verify it's not a blank frame (all-black canvas has a characteristic signature)
+            if (dataUrl && dataUrl.length > 5000) {
+              captured = true;
+              videoEl.pause();
+              if (onDone) onDone(dataUrl);
+              return;
+            }
+          } catch(e) {}
+        }
+        rafId = requestAnimationFrame(tryCapture);
+      }
+
+      // Start silent playback so browser decodes frames
+      videoEl.muted    = true;
+      videoEl.volume   = 0;
+      videoEl.currentTime = 0;
+      videoEl.play().catch(function(){});
+      rafId = requestAnimationFrame(tryCapture);
+
+      // Safety: if capture never succeeds after 5s, just show play button
+      var safetyTimer = setTimeout(function() {
+        captured = true;
+        if (rafId) cancelAnimationFrame(rafId);
+        videoEl.pause();
+        if (onDone) onDone(null);
+      }, 5000);
+
+      // Cancel safety timer if we succeed first
+      var origOnDone = onDone;
+      onDone = function(result) {
         clearTimeout(safetyTimer);
-        vidEl.removeEventListener('loadedmetadata', onMeta);
-        vidEl.removeEventListener('seeked', onSeeked);
-        vidEl.removeEventListener('timeupdate', onTimeUpdate);
-        // Double-RAF: wait for browser to paint the decoded frame, THEN pause.
-        // Without this, pause() can happen before the GPU flushes the frame → black.
-        requestAnimationFrame(function() {
-          requestAnimationFrame(function() {
-            vidEl.pause();
-            if (onReady) onReady();
-          });
-        });
-      }
-
-      function onMeta() {
-        // Seek into the video slightly; browsers need a non-zero time to decode a frame
-        vidEl.currentTime = 0.001;
-      }
-      function onSeeked() {
-        // Some browsers fire 'seeked' before the frame is painted — use RAF to be sure
-        finish();
-      }
-      // 'timeupdate' fires after actual decode; acts as a backup for stubborn browsers
-      function onTimeUpdate() {
-        if (vidEl.currentTime > 0) finish();
-      }
-
-      vidEl.addEventListener('loadedmetadata', onMeta);
-      vidEl.addEventListener('seeked', onSeeked);
-      vidEl.addEventListener('timeupdate', onTimeUpdate);
-
-      // Expose cleanup so next call can cancel in-flight listeners
-      vidEl._sfCleanup = function() {
-        done = true;
-        clearTimeout(safetyTimer);
-        vidEl.removeEventListener('loadedmetadata', onMeta);
-        vidEl.removeEventListener('seeked', onSeeked);
-        vidEl.removeEventListener('timeupdate', onTimeUpdate);
+        if (rafId) cancelAnimationFrame(rafId);
+        if (origOnDone) origOnDone(result);
       };
-
-      // Safety: show play button even if all events fail (e.g. codec unsupported)
-      safetyTimer = setTimeout(function() {
-        if (!done) { done = true; if (onReady) onReady(); }
-      }, 4000);
-
-      vidEl.src     = url;
-      vidEl.preload = 'auto';   // 'auto' lets the browser decode frames, unlike 'metadata'
-      vidEl.muted   = true;
-      vidEl.controls = false;
-      vidEl.style.display = 'block';
-      vidEl.load();
-      // Start playing silently so the browser actually decodes frames
-      // (some browsers won't decode until play() is called, even with preload=auto)
-      vidEl.play().catch(function(){});
     }
+
+    portal._localBlobUrl = null;
 
     portal._captureThumbnail = function(blobUrl) {
       portal._localBlobUrl = blobUrl;
       thumbImg.style.display = 'none';
       playBtn.style.display  = 'none';
+      vid.style.display = 'none';
 
-      _seekAndFreeze(vid, blobUrl, function() {
+      // Load blob into a TEMPORARY hidden video just for frame extraction
+      var extractVid = document.createElement('video');
+      extractVid.muted     = true;
+      extractVid.playsInline = true;
+      extractVid.preload   = 'auto';
+      extractVid.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;';
+      document.body.appendChild(extractVid);
+
+      extractVid.onloadeddata = function() {
+        _extractFirstFrame(extractVid, function(dataUrl) {
+          document.body.removeChild(extractVid);
+          if (dataUrl) {
+            thumbImg.src = dataUrl;
+            thumbImg.style.display = 'block';
+          }
+          // Configure the main vid element for playback (but keep it hidden until play is clicked)
+          vid.src      = blobUrl;
+          vid.preload  = 'metadata';
+          vid.muted    = false;
+          vid.controls = false;
+          vid.style.display = 'none';
+          playBtn.style.display = 'flex';
+        });
+      };
+      extractVid.onerror = function() {
+        try { document.body.removeChild(extractVid); } catch(e){}
+        vid.src = blobUrl;
+        vid.style.display = 'none';
         playBtn.style.display = 'flex';
-      });
+      };
+      extractVid.src = blobUrl;
+      extractVid.load();
     };
 
     portal._revealThumbnail = function(finalUrl) {
-      // Keep blob URL alive until the new src is loaded, then revoke
       var blobToRevoke = portal._localBlobUrl;
       portal._localBlobUrl = null;
-
       thumbImg.style.display = 'none';
       playBtn.style.display  = 'none';
+      vid.style.display = 'none';
 
-      _seekAndFreeze(vid, finalUrl, function() {
-        // Now safe to free the blob — new src is fully loaded
-        if (blobToRevoke) {
-          try { URL.revokeObjectURL(blobToRevoke); } catch(e) {}
-        }
+      // For the final Cloudinary URL we use the main vid element directly as a
+      // visible thumbnail — no canvas needed, no CORS issues.
+      // Strategy: play() muted with preload=auto, grab first frame via RAF,
+      // then pause and show the video element frozen on that frame.
+      vid.pause();
+      vid.removeAttribute('src');
+      vid.load();
+
+      if (blobToRevoke) { try { URL.revokeObjectURL(blobToRevoke); } catch(e){} }
+
+      vid.muted      = true;
+      vid.volume     = 0;
+      vid.playsInline = true;
+      vid.preload    = 'auto';
+      vid.controls   = false;
+      vid.style.display = 'none';
+
+      var captured = false;
+      var rafId = null;
+      var safetyTimer = null;
+
+      function freeze() {
+        if (captured) return;
+        captured = true;
+        if (rafId) cancelAnimationFrame(rafId);
+        clearTimeout(safetyTimer);
+        vid.pause();
+        // Show the video element frozen on the first frame
+        vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#111;z-index:1;';
         playBtn.style.display = 'flex';
-      });
+        // Restore normal controls for when user clicks play
+        vid.muted    = false;
+        vid.volume   = 1;
+        vid.controls = false;  // play button overlay handles this
+      }
+
+      function checkFrame() {
+        if (captured) return;
+        if (vid.readyState >= 2 && vid.videoWidth > 0 && vid.currentTime > 0) {
+          freeze();
+          return;
+        }
+        rafId = requestAnimationFrame(checkFrame);
+      }
+
+      vid.onloadeddata = function() {
+        vid.play().catch(function(){});
+        rafId = requestAnimationFrame(checkFrame);
+      };
+      vid.onerror = function() {
+        clearTimeout(safetyTimer);
+        vid.style.display = 'none';
+        playBtn.style.display = 'flex';
+      };
+      safetyTimer = setTimeout(function() {
+        if (!captured) { captured = true; if (rafId) cancelAnimationFrame(rafId); vid.pause(); vid.style.display = 'none'; playBtn.style.display = 'flex'; }
+      }, 6000);
+      vid.src = finalUrl;
+      vid.load();
     };
 
     portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
@@ -5239,6 +5330,24 @@ function MainApp(_ref16) {
 
     return function() { vid.pause(); vid.src = ''; thumbImg.src = ''; };
   }, []);
+
+  // Re-attach the global portal to the anchor on every render.
+  // This handles the case where the profile page unmounts/remounts (tab switching),
+  // which would detach the portal from the anchor DOM node.
+  useEffect(function() {
+    var anchor = document.getElementById('composer-video-anchor');
+    var portal = document.getElementById('global-video-portal');
+    if (anchor && portal && portal.parentNode !== anchor) {
+      portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;';
+      anchor.appendChild(portal);
+      videoPortalRef.current = portal;
+    }
+    // Sync visibility: hide portal when no video media selected
+    if (portal) {
+      var isVideo = postMedia && postMedia.type === 'video';
+      portal.style.display = isVideo ? 'block' : 'none';
+    }
+  });
   useEffect(function () {
     if (!isFirebaseConfigured) {
       var saved = localStorage.getItem("habits_".concat(user.uid));
@@ -6792,7 +6901,10 @@ function MainApp(_ref16) {
       alt: "preview",
       style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
     }),
-    /*#__PURE__*/React.createElement("div", { className: "composer-video-portal" + ((postMedia && postMedia.type === "image") ? " hidden-portal" : ""), ref: videoPortalRef }),
+    /*#__PURE__*/React.createElement("div", { 
+      id: "composer-video-anchor",
+      style: { position: 'absolute', inset: 0, zIndex: 1, display: (postMedia && postMedia.type === 'image') ? 'none' : 'block' }
+    }),
     /*#__PURE__*/React.createElement("div", {
       id: "composer-upload-overlay",
       className: "composer-upload-overlay hidden"
@@ -6814,7 +6926,7 @@ function MainApp(_ref16) {
         if (_rmOv) _rmOv.classList.add('hidden');
         if (videoPreviewRef.current) {
           videoPreviewRef.current.pause();
-          videoPreviewRef.current.style.display = 'none';
+          videoPreviewRef.current.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;z-index:2;';
           videoPreviewRef.current.removeAttribute('src');
           videoPreviewRef.current.load();
         }
@@ -6827,6 +6939,7 @@ function MainApp(_ref16) {
           if (_tImg)   { _tImg.style.display = 'none'; _tImg.src = ''; }
           videoPortalRef.current._thumbnailDataUrl = null;
           videoPortalRef.current._pendingFinalUrl  = null;
+          videoPortalRef.current._localBlobUrl     = null;
         }
         return setPostMedia(null);
       }
