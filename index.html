@@ -5092,6 +5092,7 @@ function MainApp(_ref16) {
 
     if (portal._initialized) return;
     portal._initialized = true;
+    console.log('[VID] Portal initializing, anchor=', anchor, 'portal=', portal);
 
     // ── Video element (always in DOM, real size) ──
     // Key insight: the video MUST be visible with real dimensions for the browser
@@ -5122,19 +5123,19 @@ function MainApp(_ref16) {
     portal._finalUrl     = null;
     portal._capturing    = false;
 
-    // ── Frame capture: show vid, play muted, grab frame on seeked ──
-    // vid must be VISIBLE (display:block, real size in DOM) for decode to work.
+    // ── Frame capture ──
     function _showAndCapture(src, onDone) {
+      console.log('[VID] _showAndCapture START', src.slice(0,60));
       portal._capturing = true;
       playBtn.style.display = 'none';
       cvs.style.display     = 'none';
 
-      // Show the video element so browser decodes it
       vid.style.display = 'block';
       vid.muted         = true;
       vid.controls      = false;
       vid.src           = src;
       vid.load();
+      console.log('[VID] vid.load() called, readyState=', vid.readyState, 'videoWidth=', vid.videoWidth);
 
       var done = false;
 
@@ -5146,14 +5147,14 @@ function MainApp(_ref16) {
         vid.removeEventListener('seeked',         onSeeked);
         vid.removeEventListener('loadedmetadata', onMeta);
         vid.removeEventListener('error',          onErr);
-        // Draw current frame to canvas
+        console.log('[VID] finish() called, videoWidth=', vid.videoWidth, 'currentTime=', vid.currentTime, 'readyState=', vid.readyState);
         try {
-          cvs.width  = vid.videoWidth  || cvs.offsetWidth  || 640;
-          cvs.height = vid.videoHeight || cvs.offsetHeight || 360;
+          cvs.width  = vid.videoWidth  || 640;
+          cvs.height = vid.videoHeight || 360;
           cvs.getContext('2d').drawImage(vid, 0, 0, cvs.width, cvs.height);
           cvs.style.display = 'block';
-        } catch(e) {}
-        // Hide video element (canvas shows the frozen frame)
+          console.log('[VID] canvas drawn OK', cvs.width, 'x', cvs.height);
+        } catch(e) { console.error('[VID] canvas draw FAILED', e); }
         vid.pause();
         vid.style.display = 'none';
         if (onDone) onDone();
@@ -5161,14 +5162,24 @@ function MainApp(_ref16) {
 
       function onMeta() {
         vid.removeEventListener('loadedmetadata', onMeta);
-        // Seek slightly in to avoid potential black frame at t=0
-        vid.currentTime = Math.min(0.5, (vid.duration || 10) * 0.05);
+        var seekTo = Math.min(0.5, (vid.duration || 10) * 0.05);
+        console.log('[VID] loadedmetadata fired, duration=', vid.duration, 'seeking to', seekTo, 'videoWidth=', vid.videoWidth);
+        vid.currentTime = seekTo;
       }
 
-      function onSeeked() { finish(); }
-      function onErr()    { finish(); }  // even on error, show play button
+      function onSeeked() {
+        console.log('[VID] seeked fired, currentTime=', vid.currentTime, 'videoWidth=', vid.videoWidth);
+        finish();
+      }
+      function onErr(e) {
+        console.error('[VID] video error', vid.error, e);
+        finish();
+      }
 
-      var fallback = setTimeout(finish, 6000);
+      var fallback = setTimeout(function() {
+        console.warn('[VID] FALLBACK timeout hit after 6s — no seeked/loadedmetadata fired!');
+        finish();
+      }, 6000);
 
       vid.addEventListener('loadedmetadata', onMeta);
       vid.addEventListener('seeked',         onSeeked);
@@ -5198,10 +5209,11 @@ function MainApp(_ref16) {
     });
 
     portal._captureThumbnail = function(blobUrl) {
+      console.log('[VID] _captureThumbnail called', blobUrl.slice(0,40));
       portal._localBlobUrl = blobUrl;
       portal._finalUrl     = null;
       _showAndCapture(blobUrl, function() {
-        // If _revealThumbnail already called while we were capturing, switch to final URL
+        console.log('[VID] _captureThumbnail done, _finalUrl=', portal._finalUrl);
         if (portal._finalUrl) {
           var btr = portal._localBlobUrl;
           portal._localBlobUrl = null;
@@ -5216,9 +5228,9 @@ function MainApp(_ref16) {
     };
 
     portal._revealThumbnail = function(finalUrl) {
+      console.log('[VID] _revealThumbnail called, _capturing=', portal._capturing, finalUrl.slice(0,60));
       portal._finalUrl = finalUrl;
       if (!portal._capturing) {
-        // Capture already done — re-capture from final URL
         var btr = portal._localBlobUrl;
         portal._localBlobUrl = null;
         _showAndCapture(finalUrl, function() {
@@ -5226,7 +5238,6 @@ function MainApp(_ref16) {
           playBtn.style.display = 'flex';
         });
       }
-      // else: _captureThumbnail callback will see _finalUrl set and handle it
     };
 
     portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
