@@ -5119,11 +5119,27 @@ function MainApp(_ref16) {
 
     playBtn.addEventListener('click', function() {
       playBtn.style.display = 'none';
-      vid.muted    = false;
-      vid.controls = true;
-      vid.currentTime = 0;
-      vid.style.display = 'block';
-      vid.play().catch(function(){});
+      // If a final Cloudinary URL is stored (blob was used for thumbnail), swap to it now
+      var finalSrc = vid.dataset.finalSrc;
+      if (finalSrc && vid.src !== finalSrc) {
+        vid.src = finalSrc;
+        vid.dataset.finalSrc = '';
+        vid.load();
+        vid.muted    = false;
+        vid.controls = true;
+        vid.style.display = 'block';
+        vid.addEventListener('canplay', function onCP() {
+          vid.removeEventListener('canplay', onCP);
+          vid.currentTime = 0;
+          vid.play().catch(function(){});
+        });
+      } else {
+        vid.muted    = false;
+        vid.controls = true;
+        vid.currentTime = 0;
+        vid.style.display = 'block';
+        vid.play().catch(function(){});
+      }
     });
 
     vid.addEventListener('ended', function() {
@@ -5168,9 +5184,12 @@ function MainApp(_ref16) {
     }
 
     portal._localBlobUrl = null;
+    portal._finalUrl = null;
+    portal._thumbnailReady = false;
 
     portal._captureThumbnail = function(blobUrl) {
       portal._localBlobUrl = blobUrl;
+      portal._thumbnailReady = false;
       playBtn.style.display = 'none';
       vid.src     = blobUrl;
       vid.preload = 'auto';
@@ -5179,28 +5198,49 @@ function MainApp(_ref16) {
       vid.currentTime = 0;
       vid.load();
       _freezeOnFirstFrame(vid, function() {
+        portal._thumbnailReady = true;
         playBtn.style.display = 'flex';
+        // If final URL already arrived while we were capturing, store for playback and revoke blob
+        if (portal._finalUrl) {
+          vid.dataset.finalSrc = portal._finalUrl;
+          var blobToRevoke = portal._localBlobUrl;
+          portal._localBlobUrl = null;
+          if (blobToRevoke) { try { URL.revokeObjectURL(blobToRevoke); } catch(e){} }
+        }
       });
     };
 
     portal._revealThumbnail = function(finalUrl) {
-      var blobToRevoke = portal._localBlobUrl;
-      portal._localBlobUrl = null;
-      playBtn.style.display = 'none';
-
-      vid.pause();
-      vid.src     = finalUrl;
-      vid.preload = 'auto';
-      vid.muted   = true;
-      vid.controls = false;
-      vid.currentTime = 0;
-      vid.load();
-
-      if (blobToRevoke) { try { URL.revokeObjectURL(blobToRevoke); } catch(e){} }
-
-      _freezeOnFirstFrame(vid, function() {
+      portal._finalUrl = finalUrl;
+      // Store the final URL for playback on click, but keep blob thumbnail visible.
+      // Only revoke blob AFTER thumbnail is ready; if not ready yet, wait.
+      if (portal._thumbnailReady) {
+        // Thumbnail already showing — just store final URL for playback, revoke blob
+        vid.dataset.finalSrc = finalUrl;
+        var blobToRevoke = portal._localBlobUrl;
+        portal._localBlobUrl = null;
+        if (blobToRevoke) { try { URL.revokeObjectURL(blobToRevoke); } catch(e){} }
+        // Ensure the video and play button are visible
+        vid.style.display = 'block';
         playBtn.style.display = 'flex';
-      });
+      } else {
+        // Thumbnail not yet ready (very fast upload) — do full load from Cloudinary
+        var blobToRevoke2 = portal._localBlobUrl;
+        portal._localBlobUrl = null;
+        playBtn.style.display = 'none';
+        vid.pause();
+        vid.src     = finalUrl;
+        vid.preload = 'auto';
+        vid.muted   = true;
+        vid.controls = false;
+        vid.currentTime = 0;
+        vid.load();
+        if (blobToRevoke2) { try { URL.revokeObjectURL(blobToRevoke2); } catch(e){} }
+        _freezeOnFirstFrame(vid, function() {
+          portal._thumbnailReady = true;
+          playBtn.style.display = 'flex';
+        });
+      }
     };
 
     portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
@@ -6156,7 +6196,15 @@ function MainApp(_ref16) {
               videoPreviewRef.current.style.opacity = '0';
               videoPreviewRef.current.pause();
               videoPreviewRef.current.removeAttribute('src');
+              videoPreviewRef.current.dataset.finalSrc = '';
               videoPreviewRef.current.load();
+            }
+            if (videoPortalRef.current) {
+              videoPortalRef.current._finalUrl       = null;
+              videoPortalRef.current._thumbnailReady = false;
+              videoPortalRef.current._localBlobUrl   = null;
+              var _pBtn = videoPortalRef.current.querySelector('#composer-video-play-overlay');
+              if (_pBtn) _pBtn.style.display = 'none';
             }
           case 20:
             return _context1.a(2);
@@ -6817,6 +6865,8 @@ function MainApp(_ref16) {
           videoPortalRef.current._thumbnailDataUrl = null;
           videoPortalRef.current._pendingFinalUrl  = null;
           videoPortalRef.current._localBlobUrl     = null;
+          videoPortalRef.current._finalUrl         = null;
+          videoPortalRef.current._thumbnailReady   = false;
         }
         return setPostMedia(null);
       }
