@@ -889,9 +889,6 @@
 <a href="#main-content" class="skip-link">Skip to main content</a>
 <div id="main-content" role="main"></div>
 
-<!-- ── VIDEO PREVIEW PORTAL (lives OUTSIDE React tree — never touched by reconciler) ── -->
-<div id="global-video-portal" style="display:none;position:absolute;pointer-events:none;"></div>
-
 <!-- ── AGE GATE (Enhanced: birth year verification + accessibility) ── -->
 <div id="ageGateOverlay" class="age-gate-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ageGateTitle" aria-describedby="ageGateDesc">
     <div class="age-gate-box">
@@ -5074,206 +5071,102 @@ function MainApp(_ref16) {
   // reload the media source on every re-render (e.g. typing in the textarea),
   // producing black-flash + layout jitter. Instead we always keep it in the DOM
   // and update src / visibility imperatively via the ref.
-  var videoPreviewRef = useRef(null);   // stable imperative video element
-  var videoPortalRef = useRef(null);    // ref points to global-video-portal node
-  useEffect(function() {
-    // Wait until the anchor div exists in the DOM
-    var anchor = document.getElementById('composer-video-anchor');
-    var portal = document.getElementById('global-video-portal');
-    if (!anchor || !portal) return;
+  var videoPreviewRef = useRef(null);   // kept for remove-button compat
+  var videoPortalRef = useRef(null);    // kept for upload-handler compat
 
-    // Move the global portal INTO the anchor so it sits inside
-    // the composer-media-preview box.  The anchor is a plain div that
-    // React never re-renders children into (no JSX children), so React
-    // will never clear what we put here.
-    portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;pointer-events:auto;';
-    anchor.appendChild(portal);
-    videoPortalRef.current = portal;
+  // Simple video thumbnail state — no portal, no imperative DOM, no useEffect
+  var _useState_vthumb = useState(null);
+  var _useState_vthumb2 = _slicedToArray(_useState_vthumb, 2);
+  var videoThumb = _useState_vthumb2[0];        // dataURL or null
+  var setVideoThumb = _useState_vthumb2[1];
 
-    if (portal._initialized) return;
-    portal._initialized = true;
-    console.log('[VID] Portal initializing, anchor=', anchor, 'portal=', portal);
+  var _useState_vfinal = useState(null);
+  var _useState_vfinal2 = _slicedToArray(_useState_vfinal, 2);
+  var videoFinalUrl = _useState_vfinal2[0];     // Cloudinary URL for playback
+  var setVideoFinalUrl = _useState_vfinal2[1];
 
-    // ── Video element (always in DOM, real size) ──
-    // Key insight: the video MUST be visible with real dimensions for the browser
-    // to decode frames. We keep it inside the portal (which is 200px tall) so
-    // the browser always decodes it properly.
-    var vid = document.createElement('video');
-    vid.playsInline = true;
-    vid.muted       = true;
-    vid.controls    = false;
-    vid.preload     = 'auto';
-    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#111;z-index:1;display:none;';
-    portal.appendChild(vid);
-    videoPreviewRef.current = vid;
+  var _useState_vplaying = useState(false);
+  var _useState_vplaying2 = _slicedToArray(_useState_vplaying, 2);
+  var videoPlaying = _useState_vplaying2[0];
+  var setVideoPlaying = _useState_vplaying2[1];
 
-    // ── Canvas for frozen first-frame thumbnail ──
-    var cvs = document.createElement('canvas');
-    cvs.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:none;z-index:2;background:#111;';
-    portal.appendChild(cvs);
+  // Attach portal API shim so upload handler (videoPortalRef.current._captureThumbnail etc.)
+  // still works without changes.
+  var _vidPortalShim = useRef({});
+  videoPortalRef.current = _vidPortalShim.current;
 
-    // ── Play button ──
-    var playBtn = document.createElement('div');
-    playBtn.id = 'composer-video-play-overlay';
-    playBtn.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:3;';
-    playBtn.innerHTML = '<div style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.93);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,0.5);"><svg width=28 height=28 viewBox="0 0 24 24" fill="#111"><path d="M8 5v14l11-7z"/></svg></div>';
-    portal.appendChild(playBtn);
+  // Function to extract first frame from a video src into a dataURL
+  // Uses a hidden <video> that IS in the DOM with real size via a ref
+  var _thumbVidRef = useRef(null);
 
-    portal._localBlobUrl = null;
-    portal._finalUrl     = null;
-    portal._capturing    = false;
-
-    // ── Frame capture ──
-    function _showAndCapture(src, onDone) {
-      console.log('[VID] _showAndCapture START', src.slice(0,60));
-      portal._capturing = true;
-      playBtn.style.display = 'none';
-      cvs.style.display     = 'none';
-
-      vid.style.display = 'block';
-      vid.muted         = true;
-      vid.controls      = false;
-      vid.src           = src;
-      vid.load();
-      console.log('[VID] vid.load() called, readyState=', vid.readyState, 'videoWidth=', vid.videoWidth);
-
-      var done = false;
-
-      function finish() {
-        if (done) return;
-        done = true;
-        portal._capturing = false;
-        clearTimeout(fallback);
-        vid.removeEventListener('seeked',         onSeeked);
-        vid.removeEventListener('loadedmetadata', onMeta);
-        vid.removeEventListener('error',          onErr);
-        console.log('[VID] finish() called, videoWidth=', vid.videoWidth, 'currentTime=', vid.currentTime, 'readyState=', vid.readyState);
-        try {
-          cvs.width  = vid.videoWidth  || 640;
-          cvs.height = vid.videoHeight || 360;
-          cvs.getContext('2d').drawImage(vid, 0, 0, cvs.width, cvs.height);
-          cvs.style.display = 'block';
-          console.log('[VID] canvas drawn OK', cvs.width, 'x', cvs.height);
-        } catch(e) { console.error('[VID] canvas draw FAILED', e); }
-        vid.pause();
-        vid.style.display = 'none';
-        if (onDone) onDone();
-      }
-
-      function onMeta() {
-        vid.removeEventListener('loadedmetadata', onMeta);
-        var seekTo = Math.min(0.5, (vid.duration || 10) * 0.05);
-        console.log('[VID] loadedmetadata fired, duration=', vid.duration, 'seeking to', seekTo, 'videoWidth=', vid.videoWidth);
-        vid.currentTime = seekTo;
-      }
-
-      function onSeeked() {
-        console.log('[VID] seeked fired, currentTime=', vid.currentTime, 'videoWidth=', vid.videoWidth);
-        finish();
-      }
-      function onErr(e) {
-        console.error('[VID] video error', vid.error, e);
-        finish();
-      }
-
-      var fallback = setTimeout(function() {
-        console.warn('[VID] FALLBACK timeout hit after 6s — no seeked/loadedmetadata fired!');
-        finish();
-      }, 6000);
-
-      vid.addEventListener('loadedmetadata', onMeta);
-      vid.addEventListener('seeked',         onSeeked);
-      vid.addEventListener('error',          onErr);
+  function _extractFrame(src, onDone) {
+    var tv = _thumbVidRef.current;
+    if (!tv) { onDone(null); return; }
+    var done = false;
+    function finish() {
+      if (done) return; done = true;
+      clearTimeout(t);
+      tv.removeEventListener('seeked', onSeeked);
+      tv.removeEventListener('loadedmetadata', onMeta);
+      tv.removeEventListener('error', onErr);
+      try {
+        var c = document.createElement('canvas');
+        c.width = tv.videoWidth || 640; c.height = tv.videoHeight || 360;
+        c.getContext('2d').drawImage(tv, 0, 0, c.width, c.height);
+        var url = c.toDataURL('image/jpeg', 0.85);
+        onDone(url.length > 2000 ? url : null);
+      } catch(e) { onDone(null); }
+      tv.pause(); tv.src = '';
     }
+    function onMeta() { tv.removeEventListener('loadedmetadata', onMeta); tv.currentTime = Math.min(0.5, (tv.duration||10)*0.05); }
+    function onSeeked() { finish(); }
+    function onErr() { finish(); }
+    var t = setTimeout(finish, 8000);
+    tv.addEventListener('loadedmetadata', onMeta);
+    tv.addEventListener('seeked', onSeeked);
+    tv.addEventListener('error', onErr);
+    tv.src = src; tv.load();
+  }
 
-    // Play button click → switch to interactive playback mode
-    playBtn.addEventListener('click', function() {
-      playBtn.style.display = 'none';
-      cvs.style.display     = 'none';
-      var src = portal._finalUrl || portal._localBlobUrl || vid.src;
-      vid.muted    = false;
-      vid.controls = true;
-      vid.style.display = 'block';
-      // If src changed since we captured (Cloudinary vs blob), update it
-      if (src && vid.src !== src) { vid.src = src; vid.load(); }
-      vid.currentTime = 0;
-      vid.play().catch(function(){});
+  // Wire up the shim methods that the upload handler calls
+  _vidPortalShim.current._captureThumbnail = function(blobUrl) {
+    _vidPortalShim.current._blobUrl = blobUrl;
+    _vidPortalShim.current._capturing = true;
+    setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
+    _extractFrame(blobUrl, function(dataUrl) {
+      _vidPortalShim.current._capturing = false;
+      setVideoThumb(dataUrl);
+      if (_vidPortalShim.current._pendingFinalUrl) {
+        var fu = _vidPortalShim.current._pendingFinalUrl;
+        _vidPortalShim.current._pendingFinalUrl = null;
+        setVideoFinalUrl(fu);
+        try { URL.revokeObjectURL(_vidPortalShim.current._blobUrl); } catch(e) {}
+      }
     });
+  };
 
-    vid.addEventListener('ended', function() {
-      vid.controls  = false;
-      vid.muted     = true;
-      vid.style.display = 'none';
-      cvs.style.display = 'block';
-      playBtn.style.display = 'flex';
-    });
-
-    portal._captureThumbnail = function(blobUrl) {
-      console.log('[VID] _captureThumbnail called', blobUrl.slice(0,40));
-      portal._localBlobUrl = blobUrl;
-      portal._finalUrl     = null;
-      _showAndCapture(blobUrl, function() {
-        console.log('[VID] _captureThumbnail done, _finalUrl=', portal._finalUrl);
-        if (portal._finalUrl) {
-          var btr = portal._localBlobUrl;
-          portal._localBlobUrl = null;
-          _showAndCapture(portal._finalUrl, function() {
-            if (btr) try { URL.revokeObjectURL(btr); } catch(e) {}
-            playBtn.style.display = 'flex';
-          });
-        } else {
-          playBtn.style.display = 'flex';
-        }
-      });
-    };
-
-    portal._revealThumbnail = function(finalUrl) {
-      console.log('[VID] _revealThumbnail called, _capturing=', portal._capturing, finalUrl.slice(0,60));
-      portal._finalUrl = finalUrl;
-      if (!portal._capturing) {
-        var btr = portal._localBlobUrl;
-        portal._localBlobUrl = null;
-        _showAndCapture(finalUrl, function() {
-          if (btr) try { URL.revokeObjectURL(btr); } catch(e) {}
-          playBtn.style.display = 'flex';
-        });
-      }
-    };
-
-    portal._showVideoReady = function(src) { portal._revealThumbnail(src); };
-
-    portal._reset = function() {
-      vid.pause();
-      vid.src = '';
-      vid.style.display = 'none';
-      cvs.style.display = 'none';
-      playBtn.style.display = 'none';
-      try { cvs.getContext('2d').clearRect(0, 0, cvs.width, cvs.height); } catch(e) {}
-      portal._localBlobUrl = null;
-      portal._finalUrl     = null;
-      portal._capturing    = false;
-    };
-
-    return function() { vid.pause(); vid.src = ''; };
-  }, []);
-
-  // Re-attach the global portal to the anchor on every render.
-  // This handles the case where the profile page unmounts/remounts (tab switching),
-  // which would detach the portal from the anchor DOM node.
-  useEffect(function() {
-    var anchor = document.getElementById('composer-video-anchor');
-    var portal = document.getElementById('global-video-portal');
-    if (anchor && portal && portal.parentNode !== anchor) {
-      portal.style.cssText = 'position:absolute;inset:0;z-index:1;background:#111;overflow:hidden;display:block;pointer-events:auto;';
-      anchor.appendChild(portal);
-      videoPortalRef.current = portal;
+  _vidPortalShim.current._revealThumbnail = function(finalUrl) {
+    setVideoFinalUrl(finalUrl);
+    if (_vidPortalShim.current._capturing) {
+      _vidPortalShim.current._pendingFinalUrl = finalUrl;
+    } else {
+      try { URL.revokeObjectURL(_vidPortalShim.current._blobUrl); } catch(e) {}
     }
-    // Sync visibility: hide portal when no video media selected
-    if (portal) {
-      var isVideo = postMedia && postMedia.type === 'video';
-      portal.style.display = isVideo ? 'block' : 'none';
-    }
-  });
+  };
+
+  _vidPortalShim.current._showVideoReady = function(src) {
+    _vidPortalShim.current._revealThumbnail(src);
+  };
+
+  _vidPortalShim.current._reset = function() {
+    setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
+    _vidPortalShim.current._blobUrl = null;
+    _vidPortalShim.current._capturing = false;
+    _vidPortalShim.current._pendingFinalUrl = null;
+  };
+
+
+
   useEffect(function () {
     if (!isFirebaseConfigured) {
       var saved = localStorage.getItem("habits_".concat(user.uid));
@@ -6824,9 +6717,47 @@ function MainApp(_ref16) {
       alt: "preview",
       style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
     }),
-    /*#__PURE__*/React.createElement("div", { 
+    (postMedia && postMedia.type === 'video') ? /*#__PURE__*/React.createElement("div", {
+      style: { position: 'absolute', inset: 0, background: '#111', zIndex: 1 }
+    },
+      // Hidden video used ONLY for frame extraction — rendered in DOM so browser decodes it
+      /*#__PURE__*/React.createElement("video", {
+        ref: _thumbVidRef,
+        muted: true,
+        playsInline: true,
+        preload: "auto",
+        style: { position: 'absolute', width: '100%', height: '100%', opacity: 0, pointerEvents: 'none', zIndex: 0 }
+      }),
+      // Thumbnail image (first frame)
+      videoThumb ? /*#__PURE__*/React.createElement("img", {
+        src: videoThumb,
+        alt: "",
+        style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', background: '#111', zIndex: 1 }
+      }) : null,
+      // Play button overlay
+      !videoPlaying ? /*#__PURE__*/React.createElement("div", {
+        style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 3 },
+        onClick: function() {
+          setVideoPlaying(true);
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: { width: 64, height: 64, borderRadius: '50%', background: 'rgba(255,255,255,0.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.5)' }
+      }, /*#__PURE__*/React.createElement("svg", { width: 28, height: 28, viewBox: "0 0 24 24", fill: "#111" },
+        /*#__PURE__*/React.createElement("path", { d: "M8 5v14l11-7z" })
+      ))) : null,
+      // Actual video player (shown when play is clicked)
+      videoPlaying ? /*#__PURE__*/React.createElement("video", {
+        src: videoFinalUrl || (_vidPortalShim.current._blobUrl) || '',
+        controls: true,
+        autoPlay: true,
+        playsInline: true,
+        style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#111', zIndex: 2 },
+        onEnded: function() { setVideoPlaying(false); }
+      }) : null
+    ) : null,
+    /*#__PURE__*/React.createElement("div", {
       id: "composer-video-anchor",
-      style: { position: 'absolute', inset: 0, zIndex: 1, display: (postMedia && postMedia.type === 'image') ? 'none' : 'block' }
+      style: { display: 'none' }
     }),
     /*#__PURE__*/React.createElement("div", {
       id: "composer-upload-overlay",
@@ -6848,24 +6779,12 @@ function MainApp(_ref16) {
         var _rmOv = document.getElementById('composer-upload-overlay');
         if (_rmOv) _rmOv.classList.add('hidden');
         if (videoPreviewRef.current) {
-          videoPreviewRef.current.pause();
-          videoPreviewRef.current.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;background:#111;z-index:2;';
-          videoPreviewRef.current.removeAttribute('src');
-          videoPreviewRef.current.load();
+          videoPreviewRef.current.pause && videoPreviewRef.current.pause();
         }
-        if (videoPortalRef.current) {
-          if (typeof videoPortalRef.current._reset === 'function') {
-            videoPortalRef.current._reset();
-          } else {
-            var _playOv = videoPortalRef.current.querySelector('#composer-video-play-overlay');
-            if (_playOv) _playOv.style.display = 'none';
-          }
-          videoPortalRef.current._thumbnailDataUrl = null;
-          videoPortalRef.current._pendingFinalUrl  = null;
-          videoPortalRef.current._localBlobUrl     = null;
-          videoPortalRef.current._finalUrl         = null;
-          videoPortalRef.current._thumbnailReady   = false;
+        if (videoPortalRef.current && typeof videoPortalRef.current._reset === 'function') {
+          videoPortalRef.current._reset();
         }
+        setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
         return setPostMedia(null);
       }
     }, "✕") : null), /*#__PURE__*/React.createElement("div", {
