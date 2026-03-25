@@ -32,6 +32,7 @@
                     https://identitytoolkit.googleapis.com
                     https://securetoken.googleapis.com
                     https://api.cloudinary.com
+                    https://api.anthropic.com
                     https://umami-psi-opal.vercel.app;
         media-src   'self' blob:
                     https://res.cloudinary.com;
@@ -461,6 +462,62 @@
         .feed-actions { padding:10px 14px; border-top:1px solid var(--gray-50); display:flex; gap:18px; align-items:center; }
         .feed-action-report { margin-left:auto; opacity:.45; transition:.15s; }
         .feed-action-report:hover { opacity:1; color:#dc2626 !important; }
+
+        /* ── INSIGHTS PAGE ── */
+        .insights-page { padding:20px; padding-bottom:100px; }
+        .insights-section { margin-bottom:28px; }
+        .insights-section-title { font-family:var(--din); font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:1.2px; color:var(--gray-500); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+        .insights-section-title::after { content:''; flex:1; height:1px; background:var(--gray-100); }
+        .ai-card { background:var(--black); color:var(--white); padding:18px 20px; margin-bottom:10px; }
+        .ai-card-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+        .ai-card-icon { font-size:20px; }
+        .ai-card-title { font-family:var(--din); font-size:16px; font-weight:800; letter-spacing:.5px; }
+        .ai-card-sub { font-size:10px; opacity:.5; text-transform:uppercase; letter-spacing:1px; }
+        .ai-analyze-btn { width:100%; padding:12px; background:var(--white); color:var(--black); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; cursor:pointer; font-family:var(--font); transition:.15s; }
+        .ai-analyze-btn:hover { opacity:.85; }
+        .ai-analyze-btn:disabled { opacity:.4; cursor:not-allowed; }
+        .ai-result { margin-top:14px; font-size:13px; line-height:1.8; opacity:.92; white-space:pre-wrap; border-top:1px solid rgba(255,255,255,.12); padding-top:14px; }
+        .ai-thinking { display:flex; align-items:center; gap:8px; font-size:12px; opacity:.6; margin-top:12px; }
+        .ai-dot { width:6px; height:6px; background:var(--white); border-radius:50%; animation:aiPulse 1.2s infinite; }
+        .ai-dot:nth-child(2){ animation-delay:.2s; } .ai-dot:nth-child(3){ animation-delay:.4s; }
+        @keyframes aiPulse { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+        .chart-card { background:var(--white); border:1px solid var(--gray-200); padding:16px; margin-bottom:10px; }
+        .chart-card-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-500); margin-bottom:12px; }
+        .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+        .stat-mini { background:var(--gray-50); border:1px solid var(--gray-100); padding:12px; text-align:center; }
+        .stat-mini-val { font-family:var(--din); font-size:26px; font-weight:800; line-height:1; }
+        .stat-mini-lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--gray-400); margin-top:4px; }
+        .best-time-bar { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .best-time-label { font-size:10px; font-weight:600; color:var(--gray-600); width:70px; flex-shrink:0; }
+        .best-time-track { flex:1; height:6px; background:var(--gray-100); }
+        .best-time-fill { height:100%; background:var(--black); transition:width .5s cubic-bezier(.4,0,.2,1); }
+        .best-time-pct { font-size:10px; font-weight:700; font-family:var(--din); color:var(--gray-500); width:32px; text-align:right; }
+        .template-grid { display:flex; flex-direction:column; gap:8px; }
+        .template-card { border:1px solid var(--gray-200); padding:14px 16px; cursor:pointer; transition:.15s; background:var(--white); }
+        .template-card:hover { border-color:var(--black); }
+        .template-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px; }
+        .template-card-emoji { font-size:22px; flex-shrink:0; }
+        .template-card-info { flex:1; }
+        .template-card-name { font-size:13px; font-weight:700; margin-bottom:2px; }
+        .template-card-desc { font-size:11px; color:var(--gray-500); line-height:1.5; }
+        .template-card-tags { display:flex; gap:5px; flex-wrap:wrap; }
+        .template-tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:2px 7px; background:var(--gray-100); color:var(--gray-600); }
+        .template-apply-btn { padding:6px 14px; background:var(--black); color:var(--white); border:none; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; cursor:pointer; font-family:var(--font); flex-shrink:0; align-self:center; }
+        .template-apply-btn:hover { opacity:.8; }
+        .template-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:flex-end; justify-content:center; }
+        .template-modal { background:var(--white); width:100%; max-width:480px; max-height:80vh; overflow-y:auto; border-top:3px solid var(--black); padding:20px; }
+        .template-modal-title { font-family:var(--din); font-size:18px; font-weight:800; margin-bottom:4px; }
+        .template-modal-sub { font-size:11px; color:var(--gray-500); margin-bottom:16px; }
+        .template-habit-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--gray-100); }
+        .template-habit-check { width:18px; height:18px; border:2px solid var(--gray-300); flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; }
+        .template-habit-check.checked { background:var(--black); border-color:var(--black); color:var(--white); }
+        .template-habit-name { font-size:13px; font-weight:600; flex:1; }
+        .template-habit-meta { font-size:10px; color:var(--gray-400); }
+        .template-modal-actions { display:flex; gap:8px; margin-top:16px; }
+        .template-confirm-btn { flex:1; padding:12px; background:var(--black); color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; cursor:pointer; font-family:var(--font); }
+        .template-confirm-btn:disabled { opacity:.4; cursor:not-allowed; }
+        .template-cancel-btn { padding:12px 16px; background:none; border:1px solid var(--gray-200); font-size:11px; font-weight:600; cursor:pointer; font-family:var(--font); color:var(--gray-500); }
+        .insights-empty { text-align:center; padding:40px 20px; color:var(--gray-400); font-size:12px; }
 
         /* ── REPORT POST MODAL ── */
         .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:10003; display:flex; align-items:flex-end; justify-content:center; }
@@ -1576,6 +1633,15 @@ var ShareIcon = function ShareIcon() {
   }));
 };
 
+var InsightsIcon = function InsightsIcon() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "22", height: "22", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor"
+  }, /*#__PURE__*/React.createElement("path", {
+    strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 1.8,
+    d: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+  }));
+};
+
 /* ══════════════════════════════════════════════════
    ★ CLOUDINARY Settings — Please fill in your own info ★
    Steps:
@@ -1589,6 +1655,13 @@ var ShareIcon = function ShareIcon() {
 var CLOUDINARY_CLOUD_NAME = 'di21uvipg';
 var CLOUDINARY_UPLOAD_PRESET = 'mxt3i95r';
 var isCloudinaryConfigured = CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' && CLOUDINARY_UPLOAD_PRESET !== 'YOUR_UPLOAD_PRESET';
+
+/* ══════════════════════════════════════════════════
+   ★ Anthropic API Key — AI Habit Coach ★
+   1. Go to https://console.anthropic.com and get your API key
+   2. Replace 'YOUR_ANTHROPIC_API_KEY' below with your key
+   ══════════════════════════════════════════════════ */
+window.ANTHROPIC_API_KEY = 'YOUR_ANTHROPIC_API_KEY';
 
 /* ══════════════════════════════════════════════════
    ★ Upload Quota Settings — 調整這裡的限制數值 ★
@@ -5013,6 +5086,277 @@ function HistoryPage(_ref15) {
   })));
 }
 
+/* ══════════════════════════════════════════════════
+   INSIGHTS PAGE — AI Coach + Charts + Templates
+══════════════════════════════════════════════════ */
+var HABIT_TEMPLATES = [
+  { id: 'morning', emoji: '🌅', name: 'Morning Power Routine', desc: 'The classic high-performer morning stack used by top executives and athletes.', tags: ['Morning','Wellness','Productivity'],
+    habits: [
+      { name: 'Wake up early (6 AM)', category: 'Sleep', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Drink 500ml water', category: 'Health', freqLabel: 'Daily', durLabel: '5 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Morning meditation', category: 'Mindfulness', freqLabel: 'Daily', durLabel: '10 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Cold shower', category: 'Health', freqLabel: 'Daily', durLabel: '5 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Journal 3 gratitudes', category: 'Mindfulness', freqLabel: 'Daily', durLabel: '5 min', dailyTarget: 1, intervalDays: 1 },
+    ]},
+  { id: 'fitness', emoji: '💪', name: 'Fitness Starter Pack', desc: 'Build a consistent workout habit from scratch. Perfect for beginners.', tags: ['Fitness','Health','Strength'],
+    habits: [
+      { name: 'Workout session', category: 'Fitness', freqLabel: '3x/week', durLabel: '45 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Daily steps (8,000+)', category: 'Fitness', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Post-workout stretch', category: 'Fitness', freqLabel: '3x/week', durLabel: '10 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Track protein intake', category: 'Nutrition', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+    ]},
+  { id: 'deepwork', emoji: '🧠', name: 'Deep Work & Focus', desc: "Maximize cognitive output. Inspired by Cal Newport's Deep Work methodology.", tags: ['Productivity','Focus','Career'],
+    habits: [
+      { name: 'Deep work block (no phone)', category: 'Productivity', freqLabel: 'Daily', durLabel: '2 hr', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Read non-fiction 30 min', category: 'Education', freqLabel: 'Daily', durLabel: '30 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'No social media before noon', category: 'Productivity', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Plan tomorrow (evening)', category: 'Productivity', freqLabel: 'Daily', durLabel: '10 min', dailyTarget: 1, intervalDays: 1 },
+    ]},
+  { id: 'sleep', emoji: '😴', name: 'Sleep Optimization', desc: 'Evidence-based sleep hygiene habits for deeper, more restorative sleep.', tags: ['Sleep','Recovery','Health'],
+    habits: [
+      { name: 'No screens 1hr before bed', category: 'Sleep', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Consistent bedtime (10:30 PM)', category: 'Sleep', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Evening walk', category: 'Fitness', freqLabel: 'Daily', durLabel: '20 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'No caffeine after 2 PM', category: 'Nutrition', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+    ]},
+  { id: 'nutrition', emoji: '🥗', name: 'Mindful Nutrition', desc: 'Simple evidence-based eating habits popular in the US wellness community.', tags: ['Nutrition','Health','Wellness'],
+    habits: [
+      { name: 'Vegetables with every meal', category: 'Nutrition', freqLabel: 'Daily', durLabel: '—', dailyTarget: 3, intervalDays: 1 },
+      { name: 'Drink 2L water daily', category: 'Health', freqLabel: 'Daily', durLabel: '—', dailyTarget: 8, intervalDays: 1 },
+      { name: 'No processed sugar', category: 'Nutrition', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Meal prep Sunday', category: 'Nutrition', freqLabel: 'Weekly', durLabel: '1.5 hr', dailyTarget: 1, intervalDays: 7 },
+    ]},
+  { id: 'stress', emoji: '🧘', name: 'Stress & Anxiety Relief', desc: 'Clinically-backed habits to reduce cortisol and improve emotional resilience.', tags: ['Mindfulness','Mental Health','Wellness'],
+    habits: [
+      { name: 'Breathwork (box breathing)', category: 'Mindfulness', freqLabel: 'Daily', durLabel: '5 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Nature walk', category: 'Fitness', freqLabel: 'Daily', durLabel: '20 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Evening meditation', category: 'Mindfulness', freqLabel: 'Daily', durLabel: '10 min', dailyTarget: 1, intervalDays: 1 },
+      { name: 'Limit news to 15 min/day', category: 'Mindfulness', freqLabel: 'Daily', durLabel: '—', dailyTarget: 1, intervalDays: 1 },
+    ]},
+];
+
+function InsightsPage(_ref_ip) {
+  var habits = _ref_ip.habits, archivedHabits = _ref_ip.archivedHabits, user = _ref_ip.user, onAddHabits = _ref_ip.onAddHabits;
+
+  var _aiS = useState('idle'); var aiStatus = _aiS[0], setAiStatus = _aiS[1];
+  var _aiT = useState('');    var aiText   = _aiT[0], setAiText   = _aiT[1];
+  var _tmpl = useState(null); var selTpl   = _tmpl[0], setSelTpl  = _tmpl[1];
+  var _chk  = useState({});   var checked  = _chk[0],  setChecked = _chk[1];
+  var weekRef = useRef(null); var catRef  = useRef(null);
+  var weekInst = useRef(null); var catInst = useRef(null);
+
+  var today = toISODay();
+  var allH  = (habits || []).concat(archivedHabits || []);
+
+  // Stats
+  var bestStreak = (habits||[]).reduce(function(m,h){ return Math.max(m, h.streak||0); }, 0);
+  var active = (habits||[]).filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=today; });
+  var doneCnt = active.filter(function(h){ return ((h.todayCounts||{})[today]||0) >= (h.dailyTarget||1); }).length;
+  var todayRate = active.length ? Math.round(doneCnt/active.length*100) : 0;
+  var totalComp = allH.reduce(function(s,h){ return s+Object.values(h.todayCounts||{}).reduce(function(a,v){ return a+(v||0); },0); },0);
+
+  // Weekly data
+  var wkLabels=[], wkData=[];
+  for(var _i=6;_i>=0;_i--){
+    var _d=new Date(); _d.setDate(_d.getDate()-_i);
+    var _dk=toISODay(_d);
+    wkLabels.push(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][_d.getDay()]);
+    var _da=(habits||[]).filter(function(h){ var _e=parseTimeRange(h.timeRange).end,_s=parseTimeRange(h.timeRange).start; return (!_s||_s<=_dk)&&(!_e||_e>=_dk); });
+    var _dd=_da.filter(function(h){ return ((h.todayCounts||{})[_dk]||0)>=(h.dailyTarget||1); }).length;
+    wkData.push(_da.length?Math.round(_dd/_da.length*100):0);
+  }
+
+  // Category data
+  var catMap={};
+  (habits||[]).forEach(function(h){ catMap[h.category]=(catMap[h.category]||0)+1; });
+  var catLabels=Object.keys(catMap), catData=catLabels.map(function(c){ return catMap[c]; });
+
+  // Time-of-day heuristic
+  var slots=[{l:'Morning',p:0},{l:'Midday',p:0},{l:'Afternoon',p:0},{l:'Evening',p:0}];
+  (habits||[]).forEach(function(h){
+    var r=calcCompletionRate(h), c=(h.category||'').toLowerCase();
+    if(c==='sleep'||c==='mindfulness') slots[0].p+=r;
+    else if(c==='productivity'||c==='education') slots[1].p+=r;
+    else if(c==='fitness'||c==='nutrition') slots[2].p+=r;
+    else slots[3].p+=r;
+  });
+  var mx=Math.max.apply(null,slots.map(function(s){return s.p;}))||1;
+  slots=slots.map(function(s){ return {l:s.l, p:Math.round(s.p/mx*100)}; });
+
+  // Draw charts
+  useEffect(function(){
+    if(typeof Chart==='undefined') return;
+    if(weekRef.current){
+      if(weekInst.current) weekInst.current.destroy();
+      weekInst.current=new Chart(weekRef.current,{
+        type:'bar',
+        data:{ labels:wkLabels, datasets:[{ data:wkData, backgroundColor:wkData.map(function(v){ return v>=70?'#0a0a0a':v>=40?'#737373':'#e0e0e0'; }), borderRadius:2 }] },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{display:false} },
+          scales:{ y:{min:0,max:100,ticks:{callback:function(v){return v+'%';},font:{size:9}},grid:{color:'#f0f0f0'}}, x:{ticks:{font:{size:10}},grid:{display:false}} }
+        }
+      });
+    }
+    if(catRef.current && catLabels.length){
+      if(catInst.current) catInst.current.destroy();
+      var pal=['#0a0a0a','#3d3d3d','#737373','#9a9a9a','#c4c4c4','#e0e0e0'];
+      catInst.current=new Chart(catRef.current,{
+        type:'doughnut',
+        data:{ labels:catLabels, datasets:[{ data:catData, backgroundColor:pal.slice(0,catLabels.length), borderWidth:0 }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom',labels:{font:{size:10},padding:10,boxWidth:10}} }, cutout:'60%' }
+      });
+    }
+    return function(){ if(weekInst.current) weekInst.current.destroy(); if(catInst.current) catInst.current.destroy(); };
+  }, [(habits||[]).length]);
+
+  // AI
+  function doAI(){
+    if(!(habits||[]).length) return;
+    setAiStatus('loading'); setAiText('');
+    var apiKey = window.ANTHROPIC_API_KEY || '';
+    if(!apiKey || apiKey==='YOUR_ANTHROPIC_API_KEY'){ setAiStatus('error'); setAiText('Please set your Anthropic API key in window.ANTHROPIC_API_KEY at the top of the file.'); return; }
+    var summary=(habits||[]).map(function(h){ return h.name+' ('+h.category+', '+calcCompletionRate(h)+'% completion, streak: '+(h.streak||0)+' days)'; }).join('\n');
+    var prompt='You are a supportive habit coach. Analyze these habits and give personalized, actionable advice in 3–4 short paragraphs. Be specific, encouraging, and practical.\n\nUser\'s habits:\n'+summary+'\n\nToday\'s completion: '+todayRate+'%\nBest streak: '+bestStreak+' days\n\nPlain English, conversational tone, no bullet lists.';
+    fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:600, messages:[{role:'user',content:prompt}] })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      var t=data.content&&data.content[0]&&data.content[0].text;
+      if(t){ setAiText(t); setAiStatus('done'); } else { setAiStatus('error'); setAiText('Could not generate advice. Check your API key.'); }
+    }).catch(function(){ setAiStatus('error'); setAiText('Network error. Please try again.'); });
+  }
+
+  // Template
+  function openTpl(tpl){
+    var c={}; tpl.habits.forEach(function(_,i){ c[i]=true; });
+    setChecked(c); setSelTpl(tpl);
+  }
+  function applyTpl(){
+    if(!selTpl) return;
+    selTpl.habits.filter(function(_,i){ return checked[i]; }).forEach(function(h){ onAddHabits(h); });
+    setSelTpl(null);
+  }
+  var checkedCount = Object.values(checked).filter(Boolean).length;
+
+  return /*#__PURE__*/React.createElement("div", {className:"insights-page"},
+
+    /* AI Section */
+    /*#__PURE__*/React.createElement("div", {className:"insights-section"},
+      /*#__PURE__*/React.createElement("div", {className:"insights-section-title"}, "✦ AI Habit Coach"),
+      /*#__PURE__*/React.createElement("div", {className:"ai-card"},
+        /*#__PURE__*/React.createElement("div", {className:"ai-card-header"},
+          /*#__PURE__*/React.createElement("div", {className:"ai-card-icon"}, "🤖"),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", {className:"ai-card-title"}, "Personalized Analysis"),
+            /*#__PURE__*/React.createElement("div", {className:"ai-card-sub"}, "Powered by Claude AI")
+          )
+        ),
+        (!window.ANTHROPIC_API_KEY || window.ANTHROPIC_API_KEY==='YOUR_ANTHROPIC_API_KEY')
+          ? /*#__PURE__*/React.createElement("div", {style:{fontSize:12,opacity:.75,lineHeight:1.7}},
+              "⚠️ Set your Anthropic API key in ", /*#__PURE__*/React.createElement("code",{style:{background:'rgba(255,255,255,.15)',padding:'1px 5px',fontSize:11}},"window.ANTHROPIC_API_KEY"),
+              " at the top of this file to enable AI coaching."
+            )
+          : !(habits||[]).length
+            ? /*#__PURE__*/React.createElement("div",{style:{fontSize:12,opacity:.7}}, "Add some habits first to get AI coaching.")
+            : /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("div",{style:{fontSize:12,opacity:.75,marginBottom:12,lineHeight:1.6}},
+                  "Get personalized insights based on your ", /*#__PURE__*/React.createElement("strong",null,(habits||[]).length), " active habit", (habits||[]).length!==1?'s':'', " and completion patterns."
+                ),
+                /*#__PURE__*/React.createElement("button",{className:"ai-analyze-btn",onClick:doAI,disabled:aiStatus==='loading'},
+                  aiStatus==='loading'?'Analyzing…':aiStatus==='done'?'↻ Re-analyze':'✦ Analyze My Habits'
+                ),
+                aiStatus==='loading' && /*#__PURE__*/React.createElement("div",{className:"ai-thinking"},
+                  /*#__PURE__*/React.createElement("div",{className:"ai-dot"}),
+                  /*#__PURE__*/React.createElement("div",{className:"ai-dot"}),
+                  /*#__PURE__*/React.createElement("div",{className:"ai-dot"}),
+                  "Thinking…"
+                ),
+                aiText ? /*#__PURE__*/React.createElement("div",{className:"ai-result"}, aiText) : null
+              )
+      )
+    ),
+
+    /* Stats & Charts */
+    /*#__PURE__*/React.createElement("div", {className:"insights-section"},
+      /*#__PURE__*/React.createElement("div", {className:"insights-section-title"}, "✦ Your Stats"),
+      /*#__PURE__*/React.createElement("div", {className:"stat-row"},
+        /*#__PURE__*/React.createElement("div",{className:"stat-mini"}, /*#__PURE__*/React.createElement("div",{className:"stat-mini-val"},todayRate+'%'), /*#__PURE__*/React.createElement("div",{className:"stat-mini-lbl"},"Today")),
+        /*#__PURE__*/React.createElement("div",{className:"stat-mini"}, /*#__PURE__*/React.createElement("div",{className:"stat-mini-val"},bestStreak), /*#__PURE__*/React.createElement("div",{className:"stat-mini-lbl"},"Best Streak")),
+        /*#__PURE__*/React.createElement("div",{className:"stat-mini"}, /*#__PURE__*/React.createElement("div",{className:"stat-mini-val"},totalComp), /*#__PURE__*/React.createElement("div",{className:"stat-mini-lbl"},"Total Done"))
+      ),
+      !(habits||[]).length
+        ? /*#__PURE__*/React.createElement("div",{className:"insights-empty"}, "No habit data yet. Start tracking to see your stats!")
+        : /*#__PURE__*/React.createElement(React.Fragment, null,
+            /*#__PURE__*/React.createElement("div",{className:"chart-card"},
+              /*#__PURE__*/React.createElement("div",{className:"chart-card-title"}, "7-Day Completion Rate"),
+              /*#__PURE__*/React.createElement("div",{style:{height:160}}, /*#__PURE__*/React.createElement("canvas",{ref:weekRef}))
+            ),
+            catLabels.length>1 && /*#__PURE__*/React.createElement("div",{className:"chart-card"},
+              /*#__PURE__*/React.createElement("div",{className:"chart-card-title"}, "Habit Category Breakdown"),
+              /*#__PURE__*/React.createElement("div",{style:{height:200}}, /*#__PURE__*/React.createElement("canvas",{ref:catRef}))
+            ),
+            /*#__PURE__*/React.createElement("div",{className:"chart-card"},
+              /*#__PURE__*/React.createElement("div",{className:"chart-card-title"}, "Best Time of Day (estimated)"),
+              slots.map(function(s){
+                return /*#__PURE__*/React.createElement("div",{key:s.l,className:"best-time-bar"},
+                  /*#__PURE__*/React.createElement("div",{className:"best-time-label"},s.l),
+                  /*#__PURE__*/React.createElement("div",{className:"best-time-track"}, /*#__PURE__*/React.createElement("div",{className:"best-time-fill",style:{width:s.p+'%'}})),
+                  /*#__PURE__*/React.createElement("div",{className:"best-time-pct"},s.p+'%')
+                );
+              })
+            )
+          )
+    ),
+
+    /* Template Library */
+    /*#__PURE__*/React.createElement("div", {className:"insights-section"},
+      /*#__PURE__*/React.createElement("div", {className:"insights-section-title"}, "✦ Habit Template Library"),
+      /*#__PURE__*/React.createElement("div", {className:"template-grid"},
+        HABIT_TEMPLATES.map(function(tpl){
+          return /*#__PURE__*/React.createElement("div",{key:tpl.id,className:"template-card"},
+            /*#__PURE__*/React.createElement("div",{className:"template-card-top"},
+              /*#__PURE__*/React.createElement("div",{className:"template-card-emoji"},tpl.emoji),
+              /*#__PURE__*/React.createElement("div",{className:"template-card-info"},
+                /*#__PURE__*/React.createElement("div",{className:"template-card-name"},tpl.name),
+                /*#__PURE__*/React.createElement("div",{className:"template-card-desc"},tpl.desc)
+              ),
+              /*#__PURE__*/React.createElement("button",{className:"template-apply-btn",onClick:function(e){e.stopPropagation();openTpl(tpl);}},"Use")
+            ),
+            /*#__PURE__*/React.createElement("div",{className:"template-card-tags"},
+              tpl.tags.map(function(t){ return /*#__PURE__*/React.createElement("span",{key:t,className:"template-tag"},t); })
+            )
+          );
+        })
+      )
+    ),
+
+    /* Template Modal */
+    selTpl && /*#__PURE__*/React.createElement("div",{className:"template-modal-overlay",onClick:function(e){if(e.target===e.currentTarget)setSelTpl(null);}},
+      /*#__PURE__*/React.createElement("div",{className:"template-modal"},
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:28,marginBottom:8}},selTpl.emoji),
+        /*#__PURE__*/React.createElement("div",{className:"template-modal-title"},selTpl.name),
+        /*#__PURE__*/React.createElement("div",{className:"template-modal-sub"},"Select which habits to add:"),
+        selTpl.habits.map(function(h,i){
+          return /*#__PURE__*/React.createElement("div",{key:i,className:"template-habit-item"},
+            /*#__PURE__*/React.createElement("div",{className:"template-habit-check"+(checked[i]?' checked':''),onClick:function(){setChecked(function(prev){var n=Object.assign({},prev);n[i]=!prev[i];return n;});}},checked[i]?'✓':''),
+            /*#__PURE__*/React.createElement("div",{style:{flex:1}},
+              /*#__PURE__*/React.createElement("div",{className:"template-habit-name"},h.name),
+              /*#__PURE__*/React.createElement("div",{className:"template-habit-meta"},h.category+(h.durLabel&&h.durLabel!=='—'?' · '+h.durLabel:''))
+            )
+          );
+        }),
+        /*#__PURE__*/React.createElement("div",{className:"template-modal-actions"},
+          /*#__PURE__*/React.createElement("button",{className:"template-cancel-btn",onClick:function(){setSelTpl(null);}},"Cancel"),
+          /*#__PURE__*/React.createElement("button",{className:"template-confirm-btn",onClick:applyTpl,disabled:!checkedCount},
+            "Add "+checkedCount+" Habit"+(checkedCount!==1?'s':'')
+          )
+        )
+      )
+    )
+  );
+}
+
 /* ── MAIN APP ── */
 function MainApp(_ref16) {
   var user = _ref16.user,
@@ -7150,7 +7494,10 @@ function MainApp(_ref16) {
     onClick: onLogout
   }, "Sign Out")), /*#__PURE__*/React.createElement("div", {
     className: "content"
-  }, activeTab === 'home' && renderHome(), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile()), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
+  }, activeTab === 'home' && renderHome(), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'insights' && /*#__PURE__*/React.createElement(InsightsPage, {
+    habits: habits, archivedHabits: archivedHabits, user: user,
+    onAddHabits: function(h) { addHabit({ name:h.name, category:h.category, timeRange:'', freqLabel:h.freqLabel||'Daily', durLabel:h.durLabel||'—', dailyTarget:h.dailyTarget||1, intervalDays:h.intervalDays||1 }); }
+  })), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
     onClose: function onClose() {
       return setShowModal(false);
     },
@@ -7184,7 +7531,13 @@ function MainApp(_ref16) {
     onClick: function onClick() {
       return setActiveTab('profile');
     }
-  }, /*#__PURE__*/React.createElement(ProfileIcon, null), /*#__PURE__*/React.createElement("span", null, "Profile"))));
+  }, /*#__PURE__*/React.createElement(ProfileIcon, null), /*#__PURE__*/React.createElement("span", null, "Profile")), /*#__PURE__*/React.createElement("button", {
+    className: "tab-item".concat(activeTab === 'insights' ? ' active' : ''),
+    role: "tab",
+    "aria-selected": activeTab === 'insights',
+    "aria-controls": "main-content",
+    onClick: function onClick() { return setActiveTab('insights'); }
+  }, /*#__PURE__*/React.createElement(InsightsIcon, null), /*#__PURE__*/React.createElement("span", null, "Insights"))));
 }
 
 /* ── ROOT APP ── */
