@@ -2806,6 +2806,37 @@ function FeedCard(_ref5) {
     _useState26 = _slicedToArray(_useState25, 2),
     loadingComments = _useState26[0],
     setLoadingComments = _useState26[1];
+  var _useState27 = useState(false),
+    _useState28 = _slicedToArray(_useState27, 2),
+    showFullPostText = _useState28[0],
+    setShowFullPostText = _useState28[1];
+  // Set of comment IDs that are expanded
+  var _useState29 = useState({}),
+    _useState30 = _slicedToArray(_useState29, 2),
+    expandedComments = _useState30[0],
+    setExpandedComments = _useState30[1];
+
+  // Constants for truncation
+  var POST_LINE_LIMIT = 5;
+  var COMMENT_LINE_LIMIT = 3;
+
+  // Helper: count newlines + estimate wrapped lines
+  function countLines(text) {
+    if (!text) return 0;
+    return text.split('\n').length;
+  }
+  function needsTruncation(text, limit) {
+    if (!text) return false;
+    return countLines(text) > limit || text.length > limit * 60;
+  }
+  function truncateText(text, limit) {
+    var lines = text.split('\n');
+    if (lines.length > limit) {
+      return lines.slice(0, limit).join('\n');
+    }
+    // Truncate by character estimate (60 chars per line)
+    return text.slice(0, limit * 60);
+  }
 
   // Load comments (only when expanded)
   useEffect(function () {
@@ -2945,7 +2976,18 @@ function FeedCard(_ref5) {
     className: "feed-content"
   }, post.text && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
-  }, post.text), post.habit && /*#__PURE__*/React.createElement("span", {
+  }, (function() {
+    var postNeedsTrunc = needsTruncation(post.text, POST_LINE_LIMIT);
+    var displayText = postNeedsTrunc && !showFullPostText ? truncateText(post.text, POST_LINE_LIMIT) : post.text;
+    return [
+      /*#__PURE__*/React.createElement("span", { key: "txt", style: { whiteSpace: 'pre-wrap' } }, displayText),
+      postNeedsTrunc ? /*#__PURE__*/React.createElement("span", {
+        key: "tog",
+        onClick: function(e) { e.stopPropagation(); setShowFullPostText(function(s){ return !s; }); },
+        style: { display: 'block', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700, cursor: 'pointer', marginTop: 4, userSelect: 'none' }
+      }, showFullPostText ? 'Show less ▲' : '... Show more ▼') : null
+    ];
+  })()), post.habit && /*#__PURE__*/React.createElement("span", {
     className: "feed-habit-tag"
   }, post.habit), post.hasImage && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
@@ -3083,7 +3125,19 @@ function FeedCard(_ref5) {
       className: "comment-user"
     }, c.userName), /*#__PURE__*/React.createElement("div", {
       className: "comment-text"
-    }, c.text), /*#__PURE__*/React.createElement("div", {
+    }, (function() {
+      var commentNeedsTrunc = needsTruncation(c.text, COMMENT_LINE_LIMIT);
+      var isExpanded = !!expandedComments[c.id];
+      var displayText = commentNeedsTrunc && !isExpanded ? truncateText(c.text, COMMENT_LINE_LIMIT) : c.text;
+      return [
+        /*#__PURE__*/React.createElement("span", { key: "ctxt", style: { whiteSpace: 'pre-wrap' } }, displayText),
+        commentNeedsTrunc ? /*#__PURE__*/React.createElement("span", {
+          key: "ctog",
+          onClick: function(e) { e.stopPropagation(); setExpandedComments(function(prev){ var n = Object.assign({}, prev); n[c.id] = !prev[c.id]; return n; }); },
+          style: { display: 'block', color: 'var(--gray-500)', fontSize: 10, fontWeight: 700, cursor: 'pointer', marginTop: 3, userSelect: 'none' }
+        }, isExpanded ? 'Show less ▲' : '... Show more ▼') : null
+      ];
+    })()), /*#__PURE__*/React.createElement("div", {
       style:{display:'flex',alignItems:'center',gap:10,marginTop:5}
     },
       /*#__PURE__*/React.createElement("div", {
@@ -3137,17 +3191,25 @@ function FeedCard(_ref5) {
     }
   }, "No comments yet. Be the first!"), currentUser && /*#__PURE__*/React.createElement("div", {
     className: "comment-input-row"
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("textarea", {
     className: "comment-input",
     placeholder: "Add a comment...",
     value: commentText,
+    rows: 1,
+    style: { resize: 'none', overflowY: 'hidden', minHeight: 36, maxHeight: 100 },
     onChange: function onChange(e) {
-      return setCommentText(e.target.value);
+      setCommentText(e.target.value);
+      // Auto-grow
+      e.target.style.height = 'auto';
+      e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
     },
     onKeyDown: function onKeyDown(e) {
-      return e.key === 'Enter' && !e.shiftKey && handleSendComment();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendComment();
+      }
     },
-    maxLength: 200
+    maxLength: 500
   }), /*#__PURE__*/React.createElement("button", {
     className: "comment-send",
     onClick: handleSendComment,
@@ -7971,6 +8033,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       reason:          _reason,
       status:          'pending',
       reporterUid:     reporterUid,
+      mediaUrl:        _post.mediaUrl || '',
+      hasImage:        !!(_post.hasImage),
+      hasVideo:        !!(_post.hasVideo),
+      mediaType:       _post.mediaType || '',
       reportedAt:      (typeof firebase !== 'undefined' && firebase.firestore)
                          ? firebase.firestore.FieldValue.serverTimestamp()
                          : new Date().toISOString()

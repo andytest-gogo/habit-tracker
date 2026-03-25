@@ -1785,6 +1785,26 @@ function renderReports(){
     var contentId = isComment
       ? (r.commentId ? r.commentId.slice(0,8)+'...' : '-')
       : (r.postId ? r.postId.slice(0,8)+'...' : '-');
+    // Build media preview HTML for reported post
+    var mediaPreviewHtml = '';
+    if (!isComment) {
+      if (r.mediaUrl && r.hasVideo) {
+        mediaPreviewHtml = '<div style="margin-top:5px">'
+          + '<video src="'+htmlEsc(r.mediaUrl)+'" controls preload="metadata" style="width:100%;max-height:120px;object-fit:contain;background:#000;display:block"></video>'
+          + '</div>';
+      } else if (r.mediaUrl && (r.hasImage || r.mediaType === 'image')) {
+        mediaPreviewHtml = '<div style="margin-top:5px">'
+          + '<img src="'+htmlEsc(r.mediaUrl)+'" style="width:100%;max-height:120px;object-fit:cover;display:block;border:1px solid #e0e0e0" alt="reported media">'
+          + '</div>';
+      } else if (r.mediaUrl) {
+        // Unknown media type — try image first
+        mediaPreviewHtml = '<div style="margin-top:5px">'
+          + '<img src="'+htmlEsc(r.mediaUrl)+'" style="width:100%;max-height:120px;object-fit:cover;display:block;border:1px solid #e0e0e0" alt="reported media" '
+          + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">'
+          + '<video src="'+htmlEsc(r.mediaUrl)+'" controls preload="metadata" style="display:none;width:100%;max-height:120px;object-fit:contain;background:#000"></video>'
+          + '</div>';
+      }
+    }
     var delPostId = htmlEsc(r.postId || '');
     var delCommentId = htmlEsc(r.commentId || '');
     var delReportId = htmlEsc(r.id || '');
@@ -1813,7 +1833,8 @@ function renderReports(){
       + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
       + '<div><strong style="font-size:12px">'+reportedUser+'</strong>'
       + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono)">'+htmlEsc(r.reportedUserId||'').slice(0,16)+'</div></div></div></td>'
-      + '<td><div class="ptxt" title="'+htmlEsc(r.postText||'')+'">'+contentPreview+'</div>'
+      + '<td style="max-width:220px"><div class="ptxt" title="'+htmlEsc(r.postText||'')+'">'+contentPreview+'</div>'
+      + mediaPreviewHtml
       + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono);margin-top:2px">ID: '+htmlEsc(contentId)+'</div></td>'
       + '<td>'+typeLabel+'</td>'
       + '<td style="font-size:11px">'+reasonLabel+'</td>'
