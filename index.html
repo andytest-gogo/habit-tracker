@@ -6097,7 +6097,8 @@ function MainApp(_ref16) {
               likedBy: [],
               hasImage: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.type) === 'image',
               hasVideo: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.type) === 'video',
-              mediaUrl: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.url) || null
+              mediaUrl: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.url) || null,
+              mediaPublicId: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.publicId) || null
             };
             if (!isFirebaseConfigured) {
               _context1.n = 18;
@@ -6229,6 +6230,22 @@ function MainApp(_ref16) {
       })
       .then(function(postsSnap) {
         if (!postsSnap.docs || !postsSnap.docs.length) return;
+
+        /* ── Collect Cloudinary public_ids and queue for admin deletion ── */
+        var publicIds = [];
+        postsSnap.docs.forEach(function(postDoc) {
+          var d = postDoc.data();
+          if (d.mediaPublicId) publicIds.push({ id: d.mediaPublicId, type: d.hasVideo ? 'video' : 'image' });
+        });
+        if (publicIds.length > 0) {
+          db.collection('pending_cloudinary_deletes').add({
+            userId:    uid,
+            publicIds: publicIds,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            status:    'pending'
+          }).catch(function() {});
+        }
+
         var promises = postsSnap.docs.map(function(postDoc) {
           return postDoc.ref.collection('comments').get()
             .then(function(cs) {

@@ -202,6 +202,11 @@ tr:hover td{background:var(--g50)}
         Cleanup
         <span id="cleanupBadge" style="display:none;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
       </button>
+      <button class="nav-btn" data-page="cloudinary" id="navCloudinary">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Media Cleanup
+        <span id="cloudinaryBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+      </button>
 
     </nav>
     <div class="sb-foot">
@@ -613,6 +618,51 @@ service cloud.firestore {
       </div>
     </div>
 
+    <!-- ══ CLOUDINARY MEDIA CLEANUP PAGE ══ -->
+    <div class="pg" id="pg-cloudinary">
+      <div class="pg-title">Media Cleanup</div>
+      <div class="pg-sub">Cloudinary files pending deletion — queued when users deleted their accounts</div>
+
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Pending</div><div class="stat-val" id="cdPending">—</div><div class="stat-note">Files to delete</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Deleted</div><div class="stat-val" id="cdDeleted" style="color:#059669">—</div><div class="stat-note">Already cleaned</div></div>
+        <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Total Records</div><div class="stat-val" id="cdTotal">—</div><div class="stat-note">All requests</div></div>
+      </div>
+
+      <div class="quota-warn show" id="cdApiWarn" style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;">
+        ⚠️ <strong>Manual step required:</strong> Cloudinary deletion requires your API Secret (cannot be stored in frontend code).
+        Copy the <code style="background:#f5e97a;padding:1px 5px;font-size:11px">public_id</code> values below and delete them directly in
+        <a href="https://console.cloudinary.com" target="_blank" style="color:#7a6000;font-weight:700">Cloudinary Console → Media Library ↗</a>,
+        or use the Cloudinary CLI / Admin API from a secure environment.
+      </div>
+
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Pending Deletion Queue</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="refresh" onclick="loadCloudinaryQueue()">Refresh</button>
+            <button id="cdMarkAllBtn" class="btn-console" onclick="markAllCloudinaryDone()" style="display:none">✓ Mark All as Deleted</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>User ID</th><th>Files (public_id)</th><th>Queued At</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="cdTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
+        <div class="chart-ttl" style="margin-bottom:8px">📋 How to delete files in Cloudinary</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.8">
+          <strong>Option A — Cloudinary Console (easiest):</strong><br>
+          Go to <a href="https://console.cloudinary.com/pm/c-95b84eb0679afd26d1b6c405cee152/media-explorer" target="_blank" style="color:var(--black);font-weight:700">Media Library ↗</a>,
+          search for the <code style="background:#e0e0e0;padding:1px 5px">public_id</code>, select and delete.<br><br>
+          <strong>Option B — Cloudinary CLI:</strong><br>
+          <code style="background:#1e293b;color:#94a3b8;padding:4px 10px;display:inline-block;margin-top:4px">cloudinary uploader destroy &lt;public_id&gt;</code><br><br>
+          After deleting in Cloudinary, click <strong>"Mark as Deleted"</strong> below to update this queue.
+        </p>
+      </div>
+    </div>
+
     <!-- ══ REPORTS PAGE ══ -->
     <div class="pg" id="pg-reports">
       <div class="pg-title">Reports</div>
@@ -908,6 +958,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     document.getElementById('pg-'+btn.dataset.page).classList.add('on');
     // Auto-load cleanup page when navigated to
     if (btn.dataset.page === 'cleanup') loadCleanup();
+    if (btn.dataset.page === 'cloudinary') loadCloudinaryQueue();
   };
 });
 
@@ -2090,6 +2141,177 @@ function deleteCommentFromModal(postId, commentId) {
     })
     .catch(function(e){ alert('Delete failed: ' + e.message); });
 }
+
+/* ═══════════════════════════════════════════════
+   CLOUDINARY MEDIA CLEANUP PAGE
+═══════════════════════════════════════════════ */
+var allCdRecords = [];
+
+function updateCloudinaryBadge() {
+  var pending = allCdRecords.filter(function(r){ return r.status === 'pending'; }).length;
+  var badge = document.getElementById('cloudinaryBadge');
+  if (!badge) return;
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function loadCloudinaryQueue() {
+  var tbody = document.getElementById('cdTbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Loading...</td></tr>';
+
+  db.collection('pending_cloudinary_deletes')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .get()
+    .then(function(snap) {
+      allCdRecords = snap.docs.map(function(d) {
+        return Object.assign({ id: d.id }, d.data());
+      });
+
+      // Update stat counters
+      var pending  = allCdRecords.filter(function(r){ return r.status === 'pending'; }).length;
+      var deleted  = allCdRecords.filter(function(r){ return r.status === 'deleted'; }).length;
+      var elP = document.getElementById('cdPending');
+      var elD = document.getElementById('cdDeleted');
+      var elT = document.getElementById('cdTotal');
+      if (elP) elP.textContent = pending;
+      if (elD) elD.textContent = deleted;
+      if (elT) elT.textContent = allCdRecords.length;
+
+      var markAllBtn = document.getElementById('cdMarkAllBtn');
+      if (markAllBtn) markAllBtn.style.display = pending > 0 ? 'inline-block' : 'none';
+
+      updateCloudinaryBadge();
+
+      if (!allCdRecords.length) {
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="5">No pending deletions 🎉</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = allCdRecords.map(function(r) {
+        var ts = r.createdAt && r.createdAt.toDate
+          ? r.createdAt.toDate().toLocaleString('en-US', { month:'numeric', day:'numeric', year:'2-digit', hour:'2-digit', minute:'2-digit' })
+          : '—';
+        var ids = (r.publicIds || []);
+        var idList = ids.map(function(item) {
+          var pid = typeof item === 'string' ? item : item.id;
+          var type = typeof item === 'object' && item.type ? item.type : 'image';
+          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+            + '<span style="font-size:9px;padding:1px 5px;background:' + (type==='video'?'#dbeafe':'#dcfce7') + ';color:' + (type==='video'?'#1d4ed8':'#166534') + ';font-weight:700;text-transform:uppercase">' + type + '</span>'
+            + '<code style="font-size:10px;color:var(--g800);cursor:pointer;user-select:all" title="Click to copy" onclick="copyText('' + pid + '')">' + pid + '</code>'
+            + '</div>';
+        }).join('');
+
+        var isPending = r.status === 'pending';
+        var statusBadge = isPending
+          ? '<span class="badge" style="background:#fef9c3;color:#92400e">⏳ Pending</span>'
+          : '<span class="badge" style="background:#d1fae5;color:#065f46">✅ Deleted</span>';
+        var actionBtn = isPending
+          ? '<button class="btn-console" onclick="markCloudinaryDone('' + r.id + '')">Mark Deleted</button>'
+          : '<span style="font-size:10px;color:var(--g400)">—</span>';
+
+        return '<tr id="cdr-' + r.id + '">'
+          + '<td><span class="uid-small" title="' + (r.userId||'') + '">' + (r.userId||'—') + '</span></td>'
+          + '<td>' + (idList || '<span style="color:var(--g400);font-size:11px">none</span>') + '</td>'
+          + '<td style="font-size:11px;white-space:nowrap">' + ts + '</td>'
+          + '<td>' + statusBadge + '</td>'
+          + '<td>' + actionBtn + '</td>'
+          + '</tr>';
+      }).join('');
+    })
+    .catch(function(e) {
+      if (tbody) tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Error: ' + htmlEsc(e.message) + '</td></tr>';
+    });
+}
+
+function markCloudinaryDone(docId) {
+  db.collection('pending_cloudinary_deletes').doc(docId).update({
+    status: 'deleted',
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    deletedBy: auth.currentUser ? auth.currentUser.email : 'admin'
+  }).then(function() {
+    var r = allCdRecords.find(function(x){ return x.id === docId; });
+    if (r) r.status = 'deleted';
+
+    var row = document.getElementById('cdr-' + docId);
+    if (row) {
+      var cells = row.querySelectorAll('td');
+      if (cells[3]) cells[3].innerHTML = '<span class="badge" style="background:#d1fae5;color:#065f46">✅ Deleted</span>';
+      if (cells[4]) cells[4].innerHTML = '<span style="font-size:10px;color:var(--g400)">—</span>';
+    }
+
+    // Update counters
+    var pending = allCdRecords.filter(function(x){ return x.status === 'pending'; }).length;
+    var deleted = allCdRecords.filter(function(x){ return x.status === 'deleted'; }).length;
+    var elP = document.getElementById('cdPending');
+    var elD = document.getElementById('cdDeleted');
+    if (elP) elP.textContent = pending;
+    if (elD) elD.textContent = deleted;
+    var markAllBtn = document.getElementById('cdMarkAllBtn');
+    if (markAllBtn) markAllBtn.style.display = pending > 0 ? 'inline-block' : 'none';
+    updateCloudinaryBadge();
+  }).catch(function(e) {
+    alert('Update failed: ' + e.message);
+  });
+}
+
+function markAllCloudinaryDone() {
+  var pending = allCdRecords.filter(function(r){ return r.status === 'pending'; });
+  if (!pending.length) return;
+  if (!confirm('Mark all ' + pending.length + ' pending records as deleted?')) return;
+
+  var batch = db.batch();
+  pending.forEach(function(r) {
+    var ref = db.collection('pending_cloudinary_deletes').doc(r.id);
+    batch.update(ref, {
+      status: 'deleted',
+      deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      deletedBy: auth.currentUser ? auth.currentUser.email : 'admin'
+    });
+    r.status = 'deleted';
+  });
+
+  batch.commit().then(function() {
+    loadCloudinaryQueue();
+  }).catch(function(e) {
+    alert('Batch update failed: ' + e.message);
+  });
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Copied: ' + text);
+  }).catch(function() {
+    // fallback
+    var el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast('Copied!');
+  });
+}
+
+function showToast(msg) {
+  var t = document.getElementById('adminToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'adminToast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0a0a0a;color:#fff;padding:8px 18px;font-size:11px;font-weight:700;letter-spacing:.5px;z-index:9999;opacity:0;transition:opacity .2s';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){ t.style.opacity = '0'; }, 2000);
+}
+
 </script>
 </body>
 </html>
