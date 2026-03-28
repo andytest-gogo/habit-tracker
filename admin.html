@@ -2203,7 +2203,7 @@ function loadCloudinaryQueue() {
           var type = typeof item === 'object' && item.type ? item.type : 'image';
           return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
             + '<span style="font-size:9px;padding:1px 5px;background:' + (type==='video'?'#dbeafe':'#dcfce7') + ';color:' + (type==='video'?'#1d4ed8':'#166534') + ';font-weight:700;text-transform:uppercase">' + type + '</span>'
-            + '<code style="font-size:10px;color:var(--g800);cursor:pointer;user-select:all" title="Click to copy" onclick="copyText('' + pid + '')">' + pid + '</code>'
+            + '<code style="font-size:10px;color:var(--g800);cursor:pointer;user-select:all" title="Click to copy" onclick="copyText(\'' + pid + '\')">' + pid + '</code>'
             + '</div>';
         }).join('');
 
@@ -2212,7 +2212,7 @@ function loadCloudinaryQueue() {
           ? '<span class="badge" style="background:#fef9c3;color:#92400e">⏳ Pending</span>'
           : '<span class="badge" style="background:#d1fae5;color:#065f46">✅ Deleted</span>';
         var actionBtn = isPending
-          ? '<button class="btn-console" onclick="markCloudinaryDone('' + r.id + '')">Mark Deleted</button>'
+          ? '<button class="btn-console" onclick="markCloudinaryDone(\'' + r.id + '\')" >Mark Deleted</button>'
           : '<span style="font-size:10px;color:var(--g400)">—</span>';
 
         return '<tr id="cdr-' + r.id + '">'
