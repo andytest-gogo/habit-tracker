@@ -1,13 +1,14 @@
 {
-  "name": "健康習慣追蹤 Pro",
-  "short_name": "習慣追蹤",
-  "description": "專業健康習慣追蹤社群 App",
+  "id": "/habit-tracker/",
+  "name": "Habit Tracker Pro",
+  "short_name": "HabitTracker",
+  "description": "Build better habits, track your streaks, and grow together with a community.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0a0a0a",
   "orientation": "portrait",
-  "lang": "zh-TW",
+  "lang": "en",
   "categories": ["health", "fitness", "lifestyle"],
   "icons": [
     { "src": "icons/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "maskable any" },
@@ -25,7 +26,7 @@
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "健康習慣追蹤 Pro 主畫面"
+      "label": "Habit Tracker Pro — Home Screen"
     }
   ]
 }
