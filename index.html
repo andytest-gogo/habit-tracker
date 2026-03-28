@@ -1591,25 +1591,25 @@ var CLOUDINARY_UPLOAD_PRESET = 'mxt3i95r';
 var isCloudinaryConfigured = CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' && CLOUDINARY_UPLOAD_PRESET !== 'YOUR_UPLOAD_PRESET';
 
 /* ══════════════════════════════════════════════════
-   ★ Upload Quota Settings — 調整這裡的限制數值 ★
+   ★ Upload Quota Settings — adjust limits here ★
    ══════════════════════════════════════════════════ */
 var UPLOAD_LIMITS = {
   IMAGE_MAX_MB: 2,
-  // 單張圖片上傳上限 (MB)
+  // Max image size per upload (MB)
   VIDEO_MAX_MB: 20,
-  // 單個影片上傳上限 (MB)
+  // Max video size per upload (MB)
   DAILY_IMAGE_COUNT: 5,
-  // 每日最多上傳圖片數
+  // Max images per day
   DAILY_VIDEO_COUNT: 2,
-  // 每日最多上傳影片數
+  // Max videos per day
   MONTHLY_TOTAL_MB: 500,
-  // 每月總流量上限 (MB)，Cloudinary 免費版約 25GB，保守設定
+  // Monthly bandwidth cap (MB). Cloudinary free tier ~25GB; conservative default.
   IMAGE_COMPRESS_MAX_PX: 1280,
-  // 圖片壓縮後最大邊長 (px)
-  IMAGE_COMPRESS_QUALITY: 0.80 // 圖片壓縮品質 (0-1)
+  // Max image dimension after compression (px)
+  IMAGE_COMPRESS_QUALITY: 0.80 // Image compression quality (0-1)
 };
 
-/* ── 圖片壓縮 ── */
+/* ── Image compression ── */
 function compressImage(_x) {
   return _compressImage.apply(this, arguments);
 }
@@ -1640,7 +1640,7 @@ function _compressImage() {
               canvas.height = height;
               canvas.getContext('2d').drawImage(img, 0, 0, width, height);
               canvas.toBlob(function (blob) {
-                // 若壓縮後比原始大，保留原始
+                // If compressed is larger than original, keep original
                 if (blob.size >= file.size) {
                   resolve(file);
                   return;
@@ -1669,7 +1669,7 @@ function getMonthKey() {
   return "".concat(d.getFullYear(), "-").concat(String(d.getMonth() + 1).padStart(2, '0'));
 } // local month
 
-/* ── 取得目前 user uid ── */
+/* ── Get current user UID ── */
 function getCurrentUid() {
   try {
     var _auth;
@@ -1679,11 +1679,11 @@ function getCurrentUid() {
   }
 }
 
-/* ── 從 Firestore 讀取配額文件 ── */
+/* ── Read quota document from Firestore ── */
 function fetchQuotaDoc(_x2) {
   return _fetchQuotaDoc.apply(this, arguments);
 }
-/* ── 檢查配額（上傳前，從 Firestore 讀） ── */
+/* ── Check quota before upload (reads from Firestore) ── */
 function _fetchQuotaDoc() {
   _fetchQuotaDoc = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(uid) {
     var snap, _t19;
@@ -1705,7 +1705,7 @@ function _fetchQuotaDoc() {
         case 3:
           _context16.p = 3;
           _t19 = _context16.v;
-          console.warn('[Quota] 讀取失敗:', _t19);
+          console.warn('[Quota] Read failed:', _t19);
           return _context16.a(2, null);
       }
     }, _callee14, null, [[1, 3]]);
@@ -1715,7 +1715,7 @@ function _fetchQuotaDoc() {
 function checkQuotaFS(_x3, _x4, _x5) {
   return _checkQuotaFS.apply(this, arguments);
 }
-/* ── 上傳成功後寫回 Firestore（用 merge 避免覆蓋） ── */
+/* ── Write back to Firestore after upload (merge to avoid overwrite) ── */
 function _checkQuotaFS() {
   _checkQuotaFS = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15(uid, file, isVideo) {
     var fileMB, maxMB, q, today, month, dailyImages, dailyVideos, monthlyMB;
@@ -1723,7 +1723,7 @@ function _checkQuotaFS() {
       while (1) switch (_context17.n) {
         case 0:
           fileMB = file.size / 1024 / 1024;
-          maxMB = isVideo ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB; // 先檢查單檔大小（不需讀 DB）
+          maxMB = isVideo ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB; // Check single file size first (no DB read needed)
           if (!(fileMB > maxMB)) {
             _context17.n = 1;
             break;
@@ -1734,9 +1734,9 @@ function _checkQuotaFS() {
           return fetchQuotaDoc(uid);
         case 2:
           q = _context17.v;
-          today = getTodayKey(), month = getMonthKey(); // 每日計數（若日期不同代表新的一天，計數歸零）
+          today = getTodayKey(), month = getMonthKey(); // Daily count (reset if date changed)
           dailyImages = ((q === null || q === void 0 ? void 0 : q.dailyDate) === today ? q.dailyImages : 0) || 0;
-          dailyVideos = ((q === null || q === void 0 ? void 0 : q.dailyDate) === today ? q.dailyVideos : 0) || 0; // 每月流量（若月份不同代表新月份，歸零）
+          dailyVideos = ((q === null || q === void 0 ? void 0 : q.dailyDate) === today ? q.dailyVideos : 0) || 0; // Monthly bandwidth (reset if month changed)
           monthlyMB = ((q === null || q === void 0 ? void 0 : q.monthlyMonth) === month ? q.monthlyMB : 0) || 0;
           if (!(!isVideo && dailyImages >= UPLOAD_LIMITS.DAILY_IMAGE_COUNT)) {
             _context17.n = 3;
@@ -1769,7 +1769,7 @@ function _checkQuotaFS() {
 function recordUploadFS(_x6, _x7, _x8, _x9, _x0) {
   return _recordUploadFS.apply(this, arguments);
 }
-/* ── 主上傳函數（含限制 + 壓縮 + Firestore quota） ── */
+/* ── Main upload function (with limits, compression, Firestore quota) ── */
 function _recordUploadFS() {
   _recordUploadFS = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(uid, fileMB, isVideo, userName, userEmail) {
     var today, month, q, dailyImages, dailyVideos, monthlyMB, totalImages, totalVideos, totalMB, newDoc, _t20;
@@ -1798,14 +1798,14 @@ function _recordUploadFS() {
             uid: uid,
             displayName: userName || (q === null || q === void 0 ? void 0 : q.displayName) || '',
             email: userEmail || (q === null || q === void 0 ? void 0 : q.email) || '',
-            // 每日
+            // Daily
             dailyDate: today,
             dailyImages: isVideo ? dailyImages : dailyImages + 1,
             dailyVideos: isVideo ? dailyVideos + 1 : dailyVideos,
-            // 每月
+            // Monthly
             monthlyMonth: month,
             monthlyMB: +(monthlyMB + fileMB).toFixed(3),
-            // 累計總量
+            // Cumulative totals
             totalImages: isVideo ? totalImages : totalImages + 1,
             totalVideos: isVideo ? totalVideos + 1 : totalVideos,
             totalMB: +(totalMB + fileMB).toFixed(3),
@@ -1816,13 +1816,13 @@ function _recordUploadFS() {
             merge: true
           });
         case 4:
-          console.log("[Quota] \u2705 \u5DF2\u5BEB\u5165 Firestore | \u4ECA\u65E5\u5716:".concat(newDoc.dailyImages, "/").concat(UPLOAD_LIMITS.DAILY_IMAGE_COUNT, " \u5F71:").concat(newDoc.dailyVideos, "/").concat(UPLOAD_LIMITS.DAILY_VIDEO_COUNT, " | \u672C\u6708:").concat(newDoc.monthlyMB, "MB"));
+          console.log("[Quota] \u2705 Written to Firestore | Today img:".concat(newDoc.dailyImages, "/").concat(UPLOAD_LIMITS.DAILY_IMAGE_COUNT, " vid:").concat(newDoc.dailyVideos, "/").concat(UPLOAD_LIMITS.DAILY_VIDEO_COUNT, " | | Month:").concat(newDoc.monthlyMB, "MB"));
           _context18.n = 6;
           break;
         case 5:
           _context18.p = 5;
           _t20 = _context18.v;
-          console.warn('[Quota] 寫入失敗:', _t20);
+          console.warn('[Quota] Write failed:', _t20);
         case 6:
           return _context18.a(2);
       }
@@ -1864,11 +1864,11 @@ function _uploadToCloudinary() {
         case 1:
           isVideo = file.type.startsWith('video/') || resourceType === 'video';
           uid = getCurrentUid();
-          currentUser = (_auth2 = auth) === null || _auth2 === void 0 ? void 0 : _auth2.currentUser; // ① 檢查配額（Firestore，跨裝置真實數字）
+          currentUser = (_auth2 = auth) === null || _auth2 === void 0 ? void 0 : _auth2.currentUser; // ① Check quota (Firestore, real cross-device count)
           _context20.n = 2;
           return checkQuotaFS(uid, file, isVideo);
         case 2:
-          // ② 壓縮圖片
+          // ② Compress image
           uploadFile = file;
           if (!(!isVideo && file.type.startsWith('image/'))) {
             _context20.n = 4;
@@ -4645,7 +4645,7 @@ function HistoryPage(_ref15) {
     _useStateHP2 = _slicedToArray(_useStateHP, 2),
     visibleCount = _useStateHP2[0],
     setVisibleCount = _useStateHP2[1];
-  // 合併來源：habits 裡已到期的 + archivedHabits（舊資料相容）
+  // Merge sources: expired habits + archivedHabits (legacy compatibility)
   var _historyToday = toISODay();
   var expiredFromHabits = habits.filter(function(h) {
     var _e = parseTimeRange(h.timeRange).end;
@@ -4653,7 +4653,7 @@ function HistoryPage(_ref15) {
   }).map(function(h) {
     return Object.assign({}, h, { finalRate: h.finalRate || calcCompletionRate(h) });
   });
-  // 合併，以 id 去重（habits 優先，archivedHabits 補舊資料）
+  // Deduplicate by id (habits take priority, archivedHabits fill gaps)
   var seenIds = new Set(expiredFromHabits.map(function(h){ return h.id; }));
   var fromArchived = archivedHabits.filter(function(h){ return !seenIds.has(h.id); });
   var allExpired = expiredFromHabits.concat(fromArchived);
@@ -5024,11 +5024,11 @@ function MainApp(_ref16) {
   var _useState59 = useState(false),
     _useState60 = _slicedToArray(_useState59, 2),
     deleteModal = _useState60[0],
-    setDeleteModal = _useState60[1]; // 刪帳 modal
+    setDeleteModal = _useState60[1]; // Delete account modal
   var _useState61 = useState(1),
     _useState62 = _slicedToArray(_useState61, 2),
     deleteStep = _useState62[0],
-    setDeleteStep = _useState62[1]; // 1=確認 2=輸入密碼 3=刪除中
+    setDeleteStep = _useState62[1]; // 1=confirm 2=enter password 3=deleting
   var _useState63 = useState(''),
     _useState64 = _slicedToArray(_useState63, 2),
     deletePassword = _useState64[0],
@@ -5630,7 +5630,7 @@ function MainApp(_ref16) {
     return sum + calcCompletionRate(h);
   }, 0) / habits.length) : 0;
 
-  // ── Feed tab設定 ──
+  // ── Feed tab setup ──
   var FEED_PAGE_SIZE = 10;
   var _useState95 = useState(null),
     _useState96 = _slicedToArray(_useState95, 2),
@@ -5645,7 +5645,7 @@ function MainApp(_ref16) {
     feedLoadingMore = _useState100[0],
     setFeedLoadingMore = _useState100[1];
 
-  // 把 Firebase doc 轉成 post 物件
+  // Convert Firebase doc to post object
   var docToPost = function docToPost(d) {
     var _data$createdAt, _data$createdAt$toDat;
     var data = d.data();
@@ -5658,7 +5658,7 @@ function MainApp(_ref16) {
     });
   };
 
-  // ── 初次載入前 FEED_PAGE_SIZE 篇 ──
+  // ── Load initial FEED_PAGE_SIZE posts ──
   useEffect(function () {
     if (!isFirebaseConfigured) return;
     var unsub = db.collection('posts').orderBy('createdAt', 'desc').limit(FEED_PAGE_SIZE).onSnapshot(function (snap) {
@@ -5675,7 +5675,7 @@ function MainApp(_ref16) {
     };
   }, [user]);
 
-  // ── 載入更多 ──
+  // ── Load more posts ──
   var handleLoadMore = /*#__PURE__*/function () {
     var _ref23 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7() {
       var snap, morePosts, _t5;
@@ -5696,7 +5696,7 @@ function MainApp(_ref16) {
             snap = _context7.v;
             morePosts = snap.docs.map(docToPost);
             setFeedPosts(function (prev) {
-              // 避免重複
+              // Avoid duplicates
               var existingIds = new Set(prev.map(function (p) {
                 return p.id;
               }));
@@ -5972,7 +5972,7 @@ function MainApp(_ref16) {
           case 4:
             _context9.p = 4;
             _t7 = _context9.v;
-            alert('Upload failed：' + _t7.message);
+            alert('Upload failed: ' + _t7.message);
             setPostMedia(null);
           case 5:
             _context9.p = 5;
@@ -6030,7 +6030,7 @@ function MainApp(_ref16) {
           case 4:
             _context0.p = 4;
             _t8 = _context0.v;
-            alert('AvatarUpload failed：' + _t8.message);
+            alert('Avatar upload failed: ' + _t8.message);
           case 5:
             _context0.p = 5;
             setUploadingAvatar(false);
@@ -6063,7 +6063,7 @@ function MainApp(_ref16) {
             }
             return _context1.a(2);
           case 2:
-            // ── 每日發文限制：最多 5 篇 ──
+            // ── Daily post limit: max 5 posts ──
             var _today = new Date().toISOString().slice(0, 10);
             var _postLimitKey = 'postLimit_' + user.uid + '_' + _today;
             var _dailyCount = parseInt(localStorage.getItem(_postLimitKey) || '0', 10);
@@ -6071,7 +6071,7 @@ function MainApp(_ref16) {
               alert('Daily post limit reached (max 5 posts/day). Please try again tomorrow.');
               return _context1.a(2);
             }
-            // ── 發文冷卻時間：至少間隔 3 分鐘 ──
+            // ── Post cooldown: minimum 3 minutes between posts ──
             var _cooldownKey = 'postCooldown_' + user.uid;
             var _lastPostTime = parseInt(localStorage.getItem(_cooldownKey) || '0', 10);
             var _now = Date.now();
@@ -6133,7 +6133,7 @@ function MainApp(_ref16) {
               return [localPost].concat(_toConsumableArray(prev));
             });
           case 19:
-            // 更新每日發文計數與冷卻時間戳
+            // Update daily post count and cooldown timestamp
             var _todaySave = new Date().toISOString().slice(0, 10);
             var _limitKeySave = 'postLimit_' + user.uid + '_' + _todaySave;
             var _curCount = parseInt(localStorage.getItem(_limitKeySave) || '0', 10);
@@ -6169,7 +6169,7 @@ function MainApp(_ref16) {
     };
   }();
 
-  /* ── 判斷登入方式 ── */
+  /* ── Detect login method ── */
   var isGoogleUser = function isGoogleUser() {
     if (!auth.currentUser) return false;
     return auth.currentUser.providerData.some(function (p) {
@@ -6177,7 +6177,7 @@ function MainApp(_ref16) {
     });
   };
 
-  /* ── 刪除帳號 — 清除所有用戶資料後刪除 Firebase Auth 帳號 ── */
+  /* ── Delete account — clear all user data then delete Firebase Auth account ── */
   var handleDeleteAccount = function handleDeleteAccount() {
     if (!isFirebaseConfigured) {
       localStorage.removeItem('demoUser');
@@ -6202,9 +6202,9 @@ function MainApp(_ref16) {
       'auth/requires-recent-login': 'Please sign in again to continue.'
     };
 
-    /* ── 核心：先 reauth，成功後才進行資料刪除 ── */
+    /* ── Core: reauth first, then delete data only on success ── */
     reauth.catch(function(err) {
-      /* Reauth 本身失敗（密碼錯誤等）→ 直接顯示錯誤，不繼續 */
+      /* Reauth failed (wrong password etc.) → show error, stop here */
       setDeleteStep(2);
       setDeleteError(errMap[err.code] || 'Authentication failed: ' + err.message);
       return Promise.reject({ __handled: true });
@@ -6240,7 +6240,7 @@ function MainApp(_ref16) {
               return b.commit();
             })
             .catch(function() {
-              /* 子留言刪不掉時，至少刪貼文本身 */
+              /* If comment deletion fails, at least delete the post */
               return postDoc.ref.delete().catch(function() {});
             });
         });
@@ -6248,7 +6248,7 @@ function MainApp(_ref16) {
       })
 
       // Step 2c: Delete own comments on OTHER people's posts (collectionGroup)
-      //          同時更新每篇父貼文的留言計數器
+      //          Also update comment count on each parent post
       .then(function() {
         return db.collectionGroup('comments').where('userId', '==', uid).get()
           .catch(function(e) {
@@ -6259,18 +6259,18 @@ function MainApp(_ref16) {
       .then(function(cgSnap) {
         if (!cgSnap.docs || !cgSnap.docs.length) return;
 
-        /* 統計每篇父貼文被刪幾則留言，用來更新計數器 */
+        /* Count deleted comments per post to update counters */
         var postCountMap = {};  // { postId: count }
         cgSnap.docs.forEach(function(d) {
-          /* comment 路徑結構：posts/{postId}/comments/{commentId}
-             d.ref.parent.parent 就是該篇貼文的 DocumentReference */
+          /* Comment path: posts/{postId}/comments/{commentId}
+             d.ref.parent.parent is the parent post DocumentReference */
           var postRef = d.ref.parent.parent;
           if (!postRef) return;
           postCountMap[postRef.id] = postCountMap[postRef.id] || { ref: postRef, count: 0 };
           postCountMap[postRef.id].count += 1;
         });
 
-        /* 批次刪除留言（每批 400 筆） */
+        /* Batch delete comments (400 per batch) */
         var chunks = [];
         for (var i = 0; i < cgSnap.docs.length; i += 400) {
           chunks.push(cgSnap.docs.slice(i, i + 400));
@@ -6283,7 +6283,7 @@ function MainApp(_ref16) {
           });
         }, Promise.resolve());
 
-        /* 刪除完成後，更新各父貼文的留言計數器 */
+        /* Update comment counters on parent posts after deletion */
         return deleteChain.then(function() {
           var updatePromises = Object.keys(postCountMap).map(function(postId) {
             var entry = postCountMap[postId];
@@ -6291,7 +6291,7 @@ function MainApp(_ref16) {
               commentCount: firebase.firestore.FieldValue.increment(-entry.count),
               comments:     firebase.firestore.FieldValue.increment(-entry.count)
             })
-            /* 更新完後檢查是否變負數，若是則歸零 */
+            /* Clamp to 0 if count went negative */
             .then(function() {
               return entry.ref.get().then(function(snap) {
                 if (!snap.exists) return;
@@ -6363,18 +6363,18 @@ function MainApp(_ref16) {
           .forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
       })
 
-      // Step 4: Delete Firebase Auth account — 無論 Firestore 是否完全清乾淨，都必須執行
+      // Step 4: Delete Firebase Auth account — must run regardless of Firestore cleanup result
       .then(function() {
         return auth.currentUser.delete();
       })
 
-      // Step 5: Done — auth state listener 會自動觸發 onLogout() 並跳回登入畫面
+      // Step 5: Done — auth state listener will fire onLogout() and redirect to login
       .catch(function(err) {
-        if (err && err.__handled) return; /* reauth 錯誤已處理，不重複顯示 */
-        /* Firestore cleanup 部分失敗，但 Auth 帳號可能仍然刪成功 → 
-           若 currentUser 已不存在表示刪除成功，直接 logout */
+        if (err && err.__handled) return; /* reauth error already handled */
+        /* Firestore cleanup partially failed, but Auth account may still be deleted → 
+           if currentUser is gone, deletion succeeded — logout directly */
         if (!auth.currentUser) return;
-        /* Auth 刪除也失敗 → 顯示錯誤 */
+        /* Auth deletion also failed → show error */
         setDeleteStep(2);
         setDeleteError(errMap[err.code] || 'Deletion failed: ' + err.message);
       });
@@ -7204,12 +7204,12 @@ function App() {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         var verified = isGoogle || u.emailVerified;
         if (!verified) {
-          // 未驗證的 email 帳號：直接登出，不更新 user state
-          // 但如果正在 registration 流程中（_registering），讓 registration 自己處理 signOut
+          // Unverified email account: sign out immediately, do not update user state
+          // If registration is in progress (_registering), let it handle signOut
           if (!_registering) auth.signOut();
           return;
         }
-        // 已驗證：更新 Firestore 並登入
+        // Verified: update Firestore and sign in
         // First fetch existing doc to avoid overwriting a custom Cloudinary avatar
         // with the Firebase Auth photoURL (e.g. Google profile pic or empty string).
         db.collection('users').doc(u.uid).get().then(function(docSnap) {
