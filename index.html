@@ -5126,6 +5126,7 @@ function MainApp(_ref16) {
     _useState92 = _slicedToArray(_useState91, 2),
     postMedia = _useState92[0],
     setPostMedia = _useState92[1]; // { type:'image'|'video', url, file }
+  var mediaPublicIdRef = useRef(null); // stable ref to avoid React state timing issues
   var fileInputRef = useRef(null);
   var videoInputRef = useRef(null);
   // Stable ref for the video preview element.
@@ -5960,6 +5961,7 @@ function MainApp(_ref16) {
                 videoPortalRef.current._showVideoReady(result.url);
               }
             }
+            mediaPublicIdRef.current = result.publicId || null;
             setPostMedia({
               type: type,
               url: result.url,
@@ -5974,7 +5976,7 @@ function MainApp(_ref16) {
             _context9.p = 4;
             _t7 = _context9.v;
             alert('Upload failed: ' + _t7.message);
-            setPostMedia(null);
+            mediaPublicIdRef.current = null; setPostMedia(null);
           case 5:
             _context9.p = 5;
             setUploadingMedia(false);
@@ -6099,7 +6101,7 @@ function MainApp(_ref16) {
               hasImage: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.type) === 'image',
               hasVideo: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.type) === 'video',
               mediaUrl: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.url) || null,
-              mediaPublicId: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.publicId) || null
+              mediaPublicId: mediaPublicIdRef.current || (postMedia === null || postMedia === void 0 ? void 0 : postMedia.publicId) || null
             };
             if (!isFirebaseConfigured) {
               _context1.n = 18;
@@ -6142,7 +6144,7 @@ function MainApp(_ref16) {
             localStorage.setItem(_limitKeySave, String(_curCount + 1));
             localStorage.setItem('postCooldown_' + user.uid, String(Date.now()));
             setPostText('');
-            setPostMedia(null);
+            mediaPublicIdRef.current = null; setPostMedia(null);
             // Clear the stable video element after posting
             var _postOv = document.getElementById('composer-upload-overlay');
             if (_postOv) _postOv.classList.add('hidden');
@@ -6865,7 +6867,7 @@ function MainApp(_ref16) {
           videoPortalRef.current._reset();
         }
         setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
-        return setPostMedia(null);
+        return mediaPublicIdRef.current = null; setPostMedia(null);
       }
     }, "✕") : null), /*#__PURE__*/React.createElement("div", {
       className: "composer-toolbar"
