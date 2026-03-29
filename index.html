@@ -463,8 +463,8 @@
         .feed-action-report:hover { opacity:1; color:#dc2626 !important; }
 
         /* ── REPORT POST MODAL ── */
-        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:10003; display:flex; align-items:flex-end; justify-content:center; }
-        .report-box { background:var(--white); width:100%; max-width:480px; border-top:3px solid #dc2626; animation:lmSlideUp .25s cubic-bezier(.4,0,.2,1); }
+        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:10003; display:flex; align-items:center; justify-content:center; padding:20px; }
+        .report-box { background:var(--white); width:100%; max-width:480px; border-top:3px solid #dc2626; animation:lmSlideUp .25s cubic-bezier(.4,0,.2,1); max-height:90vh; overflow-y:auto; }
         .report-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--gray-100); }
         .report-header-title { font-family:var(--din); font-size:14px; font-weight:800; color:#dc2626; text-transform:uppercase; letter-spacing:.5px; }
         .report-header-close { background:none; border:none; cursor:pointer; font-size:20px; color:var(--gray-400); line-height:1; padding:4px 8px; min-height:auto; }
@@ -7450,7 +7450,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         privacy: {
             title: 'Privacy Policy',
             html: `
-<p class="legal-modal-meta">Effective: March 7, 2026 &nbsp;·&nbsp; Version 1.2 — Updated for GDPR Art.33/34, US state privacy laws &amp; governing law</p>
+<p class="legal-modal-meta">Effective: March 29, 2026 &nbsp;·&nbsp; Version 1.3 — Section 1 follow relationships removed; Section 7 Cloudinary deletion timeline clarified; Section 10 material-change email notice removed</p>
 <div class="legal-modal-highlight">
   <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
@@ -7464,7 +7464,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>1. What Data We Collect</h3>
 <p><strong>Account data:</strong> Email address and display name (required for login).</p>
 <p><strong>Habit data:</strong> Habit names, schedules, time ranges, and completion logs — the core of what the app stores.</p>
-<p><strong>Community data:</strong> Posts, comments, and follow relationships — only if you choose to participate.</p>
+<p><strong>Community data:</strong> Posts and comments — only if you choose to participate.</p>
 <p><strong>Uploaded media:</strong> Photos and videos you voluntarily upload to posts.</p>
 <p><strong>Anonymous analytics:</strong> Page view counts only, via Umami — no personal data, no cookies, no cross-site tracking. Only loaded after you give consent.</p>
 <p>We do <strong>not</strong> collect location data, financial information, or health/biometric data.</p>
@@ -7509,13 +7509,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <h3>6. Cookies & Analytics</h3>
 <p>We use Firebase Auth cookies (essential — keeps you signed in) and localStorage for app preferences. Umami analytics is cookieless and does not fingerprint users. Umami is only loaded after you consent — if you decline or later withdraw consent, no analytics script is executed.</p>
 <h3>7. Data Retention</h3>
-<p>Your data is retained while your account is active. When you delete your account, all data is permanently erased from Firebase within 30 days and from Cloudinary within 7 days.</p>
+<p>Your data is retained while your account is active. When you delete your account, your Firebase account and habit data are permanently erased immediately. Uploaded media stored on Cloudinary is removed by the administrator on a best-effort basis; we cannot guarantee a specific deletion timeline for Cloudinary data. If you require confirmation that your media has been removed, please contact us at <a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a>.</p>
 <h3>8. Children</h3>
 <p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
 <h3>9. Data Breach Notification</h3>
 <p>In the event of a personal data breach that poses a risk to your rights and freedoms, we will notify the relevant supervisory authority within <strong>72 hours</strong> of becoming aware of the breach, as required by GDPR Art. 33. If the breach is likely to result in high risk to you personally, we will also notify you directly without undue delay, as required by GDPR Art. 34, via the email address associated with your account.</p>
 <h3>10. Changes to This Policy</h3>
-<p>We may update this Privacy Policy from time to time. When we make <strong>material changes</strong> (such as collecting new categories of data or changing how we use your data), we will notify you by email at the address associated with your account at least <strong>14 days</strong> before the changes take effect. Non-material changes (such as clarifications or corrections) will be reflected by updating the version number and effective date above. Continued use of the app after the effective date constitutes acceptance of the updated policy.</p>
+<p>We may update this Privacy Policy from time to time. Changes will be reflected by updating the version number and effective date above. Continued use of the app after the effective date constitutes acceptance of the updated policy.</p>
 <h3>11. Contact</h3>
 <p>For privacy requests: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong><br>We aim to respond within 30 days.</p>`
         },
@@ -7523,7 +7523,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         terms: {
             title: 'Terms of Service',
             html: `
-<p class="legal-modal-meta">Effective: March 7, 2026 &nbsp;·&nbsp; Version 1.2 — Fixed section numbering; governing law &amp; jurisdiction</p>
+<p class="legal-modal-meta">Effective: March 29, 2026 &nbsp;·&nbsp; Version 1.3 — Account suspension changed to deletion; Section 6 simplified for beta; Section 7 AI disclosure added; Section 12 DSA reporter notification removed; Section 13 material-change email notice removed</p>
 <div class="legal-modal-highlight">
   <p><strong>By creating an account or using Habit Tracker Pro, you agree to these Terms.</strong> If you do not agree, please do not use the app.</p>
 </div>
@@ -7544,11 +7544,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <h3>4. User Content</h3>
 <p>You retain ownership of content you create. By submitting content, you grant us a limited license to store and display it solely to operate the app. You are responsible for ensuring your content doesn't violate any laws or third-party rights.</p>
 <h3>5. Community Features</h3>
-<p>Community participation is entirely optional. Your habits are never shared publicly without your action. Be respectful to other users. We may remove content or suspend accounts that violate these Terms.</p>
+<p>Community participation is entirely optional. Your habits are never shared publicly without your action. Be respectful to other users. We may remove content or delete accounts that violate these Terms.</p>
 <h3>6. Free Service</h3>
-<p>Habit Tracker Pro is currently free. We reserve the right to introduce paid features with at least 30 days' notice. We may modify or discontinue features at any time with reasonable notice.</p>
+<p>Habit Tracker Pro is currently free. Features may be added, changed, or removed at any time, particularly during the beta period (see Section 8).</p>
 <h3>7. Intellectual Property</h3>
-<p>All app code, design, and content we create is owned by Habit Tracker Pro. You may not copy, modify, or reverse engineer any part of the app.</p>
+<p>All app code, design, and content we create is owned by Habit Tracker Pro. Some or all of the app's code and design was developed with the assistance of AI tools. You may not copy, modify, or reverse engineer any part of the app.</p>
 <h3>8. Beta Testing Disclaimer</h3>
 <p>Habit Tracker Pro is currently in <strong>public beta</strong>. By using the app during this period, you acknowledge and agree to the following:</p>
 <ul>
@@ -7562,7 +7562,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <h3>9. Disclaimer</h3>
 <p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
 <h3>10. Termination</h3>
-<p>You may delete your account at any time. We may suspend accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
+<p>You may delete your account at any time. We may delete accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
 <h3>11. Governing Law & Jurisdiction</h3>
 <p>These Terms are governed by and construed in accordance with the laws of the <strong>Republic of China (Taiwan)</strong>, without regard to conflict-of-law principles. Any disputes shall be subject to the exclusive jurisdiction of the courts in Taiwan, except where mandatory local consumer protection laws provide otherwise.</p>
 <p><strong>EU users:</strong> You retain all rights under applicable EU consumer protection laws (including EU Directive 2011/83/EU). You may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>. Nothing in these Terms limits your statutory rights as an EU consumer.</p>
@@ -7570,10 +7570,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <p>For all disputes, please contact us first at <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong> — most issues can be resolved quickly.</p>
 <h3>12. Copyright Complaints — DMCA (US) &amp; DSA (EU)</h3>
 <p><strong>US — DMCA Takedown:</strong> If you believe content on this platform infringes your copyright, please send a written notice to <strong>HealthHabitTracker@gmail.com</strong> containing: (a) identification of the copyrighted work; (b) identification of the infringing material and its location; (c) your contact information; (d) a statement of good faith belief; (e) a statement of accuracy under penalty of perjury; and (f) your physical or electronic signature. We will respond within 14 business days.</p>
-<p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days and will inform the reporter of the outcome. Persistent or severe violations may result in account suspension.</p>
+<p><strong>EU — Digital Services Act (DSA) Content Reporting:</strong> EU users can report illegal content or content that violates these Terms using the in-app <strong>Report Post</strong> button. Reports are reviewed by our team. We aim to process reports within 14 days. Persistent or severe violations may result in account deletion.</p>
 <p><strong>Counter-Notice:</strong> If you believe your content was removed in error, contact <strong>HealthHabitTracker@gmail.com</strong> with details and we will review within 14 business days.</p>
 <h3>13. Changes to These Terms</h3>
-<p>We may update these Terms from time to time. For <strong>material changes</strong>, we will notify you by email at least <strong>30 days</strong> before the new Terms take effect. Non-material changes (clarifications, corrections) will be noted by updating the version number and date above. Your continued use of the app after the effective date constitutes acceptance. If you do not agree, you may delete your account before the changes take effect.</p>
+<p>We may update these Terms from time to time. Changes will be noted by updating the version number and date above. Your continued use of the app after the effective date constitutes acceptance. If you do not agree, you may delete your account before the changes take effect.</p>
 <h3>14. Contact</h3>
 <p>Questions about these Terms: <strong><a href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a></strong></p>`
         }
