@@ -694,6 +694,8 @@ service cloud.firestore {
           <option value="other">Other</option>
         </select>
         <button class="refresh" id="reportsRefreshBtn" onclick="loadReports()">Refresh</button>
+        <button class="refresh" style="background:#fef3c7;color:#92400e;border-color:#fbbf24" onclick="purgeReviewedReports(this)" title="Delete all reviewed &amp; dismissed reports from Firestore">🧹 Clear Reviewed</button>
+        <button class="refresh" style="background:#fce7f3;color:#9d174d;border-color:#f9a8d4" onclick="purgeOrphanReports(this)" title="Delete reports whose post no longer exists in Firestore">🗑 Clear Orphan Reports</button>
         <div style="margin-left:auto;font-size:11px;color:var(--g400)" id="reportsCnt"></div>
       </div>
 
@@ -1135,7 +1137,7 @@ function setActFilter(f){
 function buildUsers(){
   var map={};
 
-  // Add users from Firestore users collection (those who have logged in)
+  // Only count users that exist in the Firestore users collection (real verified accounts)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
     var createdAt = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt)) : null;
@@ -1143,17 +1145,14 @@ function buildUsers(){
               habits:[], posts:[], lastSeen:u.lastSeen, createdAt:createdAt};
   });
 
-  // Supplement from habits
+  // Supplement habit/post counts only for users already in the map (don't create ghost entries)
   allHabits.forEach(function(h){
-    if(!h.userId) return;
-    if(!map[h.userId]) map[h.userId]={uid:h.userId,name:'User',email:'',habits:[],posts:[],lastSeen:null,createdAt:null};
+    if(!h.userId || !map[h.userId]) return;
     map[h.userId].habits.push(h);
   });
 
-  // Supplement from posts
   allPosts.forEach(function(p){
-    if(!p.userId) return;
-    if(!map[p.userId]) map[p.userId]={uid:p.userId,name:p.user||'User',email:'',habits:[],posts:[],lastSeen:null,createdAt:null};
+    if(!p.userId || !map[p.userId]) return;
     if(p.user) map[p.userId].name=p.user;
     map[p.userId].posts.push(p);
   });
@@ -2014,47 +2013,121 @@ function setReportStatus(reportId, newStatus){
 /* ─── Delete reported POST directly from Reports page ─── */
 function deleteReportedPost(btn) {
   var postId = btn.getAttribute('data-pid');
-  var reportId = btn.getAttribute('data-rid');
-  if (!confirm('Delete this post? This removes it for all users.')) return;
+  if (!confirm('Delete this post? This removes it for all users and clears ALL related reports.')) return;
   btn.disabled = true; btn.textContent = 'Deleting...';
   db.collection('posts').doc(postId).delete().then(function() {
-    db.collection('reports').doc(reportId).update({
-      status: 'reviewed',
-      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      reviewedBy: auth.currentUser ? auth.currentUser.email : 'admin'
-    }).catch(function(){});
-    allPosts = allPosts.filter(function(p){ return p.id !== postId; });
-    var r = allReports.find(function(x){ return x.id === reportId; });
-    if (r) r.status = 'reviewed';
-    updateReportsBadge(); renderReportStats(); renderReports();
-    renderPosts(document.getElementById('postSearch').value);
-  }).catch(function(e){ btn.disabled=false; btn.textContent='Del Post'; alert('Delete failed: ' + e.message); });
+    // Delete ALL reports for this postId (not just the one clicked)
+    return db.collection('reports').where('postId', '==', postId).get();
+  }).then(function(snap) {
+    var batch = db.batch();
+    snap.docs.forEach(function(doc) { batch.delete(doc.ref); });
+    return batch.commit().then(function() {
+      // Remove from in-memory
+      allPosts = allPosts.filter(function(p){ return p.id !== postId; });
+      allReports = allReports.filter(function(r){ return r.postId !== postId; });
+      updateReportsBadge(); renderReportStats(); renderReports();
+      renderPosts(document.getElementById('postSearch').value);
+    });
+  }).catch(function(e){ btn.disabled=false; btn.textContent='DEL POST'; alert('Delete failed: ' + e.message); });
 }
 
 /* ─── Delete reported COMMENT directly from Reports page ─── */
 function deleteReportedComment(btn) {
   var postId = btn.getAttribute('data-pid');
   var commentId = btn.getAttribute('data-cid');
-  var reportId = btn.getAttribute('data-rid');
-  if (!confirm('Delete this comment?')) return;
+  if (!confirm('Delete this comment? This also clears ALL related reports.')) return;
   btn.disabled = true; btn.textContent = 'Deleting...';
   db.collection('posts').doc(postId).collection('comments').doc(commentId).delete().then(function() {
     db.collection('posts').doc(postId).update({
       comments: firebase.firestore.FieldValue.increment(-1),
       commentCount: firebase.firestore.FieldValue.increment(-1)
     }).catch(function(){});
-    db.collection('reports').doc(reportId).update({
-      status: 'reviewed',
-      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      reviewedBy: auth.currentUser ? auth.currentUser.email : 'admin'
-    }).catch(function(){});
-    var r = allReports.find(function(x){ return x.id === reportId; });
-    if (r) r.status = 'reviewed';
-    updateReportsBadge(); renderReportStats(); renderReports();
+    // Delete ALL reports for this commentId
+    return db.collection('reports').where('commentId', '==', commentId).get();
+  }).then(function(snap) {
+    var batch = db.batch();
+    snap.docs.forEach(function(doc) { batch.delete(doc.ref); });
+    return batch.commit().then(function() {
+      allReports = allReports.filter(function(r){ return r.commentId !== commentId; });
+      updateReportsBadge(); renderReportStats(); renderReports();
+    });
   }).catch(function(e){ btn.disabled=false; btn.textContent='Del Comment'; alert('Delete failed: ' + e.message); });
 }
 
-/* ─── Post detail modal: view post + all comments with delete ─── */
+/* ─── Purge all reviewed + dismissed reports ─── */
+async function purgeReviewedReports(btn) {
+  var count = allReports.filter(function(r){ return r.status === 'reviewed' || r.status === 'dismissed'; }).length;
+  if (!count) { alert('No reviewed or dismissed reports to clear.'); return; }
+  if (!confirm('Permanently delete all ' + count + ' reviewed & dismissed reports from Firestore?\n\nThis cannot be undone.')) return;
+  btn.disabled = true; btn.textContent = 'Clearing...';
+  try {
+    var snap = await db.collection('reports').where('status', 'in', ['reviewed','dismissed']).get();
+    var batches = [];
+    var batch = db.batch(); var batchCount = 0;
+    snap.docs.forEach(function(doc) {
+      batch.delete(doc.ref); batchCount++;
+      if (batchCount === 499) { batches.push(batch.commit()); batch = db.batch(); batchCount = 0; }
+    });
+    if (batchCount > 0) batches.push(batch.commit());
+    await Promise.all(batches);
+    allReports = allReports.filter(function(r){ return r.status !== 'reviewed' && r.status !== 'dismissed'; });
+    updateReportsBadge(); renderReportStats(); renderReports();
+    btn.textContent = '✅ Done (' + snap.size + ' deleted)';
+    setTimeout(function(){ btn.disabled=false; btn.textContent='🧹 Clear Reviewed'; }, 3000);
+  } catch(e) {
+    btn.disabled=false; btn.textContent='🧹 Clear Reviewed';
+    alert('Failed: ' + e.message);
+  }
+}
+
+/* ─── Purge reports whose postId no longer has a matching post ─── */
+async function purgeOrphanReports(btn) {
+  if (!confirm('Scan & delete all reports for posts that no longer exist?\n\nThis cannot be undone.')) return;
+  btn.disabled = true; btn.textContent = 'Scanning...';
+  try {
+    var existingPostIds = {};
+    allPosts.forEach(function(p){ existingPostIds[p.id] = true; });
+    // For posts not in our cached allPosts, verify against Firestore
+    var orphanReports = allReports.filter(function(r){
+      if (!r.postId) return true; // no postId — orphan
+      return !existingPostIds[r.postId];
+    });
+    if (!orphanReports.length) {
+      btn.disabled=false; btn.textContent='🗑 Clear Orphan Reports';
+      alert('No orphan reports found — all reports match existing posts.'); return;
+    }
+    // Double-check against Firestore for any not in our cache
+    var unknownPostIds = [...new Set(orphanReports.map(function(r){ return r.postId; }).filter(Boolean))];
+    var stillExist = {};
+    await Promise.all(unknownPostIds.map(async function(pid) {
+      var doc = await db.collection('posts').doc(pid).get();
+      if (doc.exists) stillExist[pid] = true;
+    }));
+    var toDelete = orphanReports.filter(function(r){ return !r.postId || !stillExist[r.postId]; });
+    if (!toDelete.length) {
+      btn.disabled=false; btn.textContent='🗑 Clear Orphan Reports';
+      alert('No orphan reports found.'); return;
+    }
+    if (!confirm('Found ' + toDelete.length + ' orphan report(s). Delete them now?')) {
+      btn.disabled=false; btn.textContent='🗑 Clear Orphan Reports'; return;
+    }
+    var batch = db.batch(); var bc = 0; var batches = [];
+    toDelete.forEach(function(r) {
+      batch.delete(db.collection('reports').doc(r.id)); bc++;
+      if (bc === 499) { batches.push(batch.commit()); batch = db.batch(); bc = 0; }
+    });
+    if (bc > 0) batches.push(batch.commit());
+    await Promise.all(batches);
+    var deletedIds = new Set(toDelete.map(function(r){ return r.id; }));
+    allReports = allReports.filter(function(r){ return !deletedIds.has(r.id); });
+    updateReportsBadge(); renderReportStats(); renderReports();
+    btn.textContent = '✅ Done (' + toDelete.length + ' deleted)';
+    setTimeout(function(){ btn.disabled=false; btn.textContent='🗑 Clear Orphan Reports'; }, 3000);
+  } catch(e) {
+    btn.disabled=false; btn.textContent='🗑 Clear Orphan Reports';
+    alert('Failed: ' + e.message);
+  }
+}
 function openPostModal(postId) {
   var post = allPosts.find(function(p){ return p.id === postId; });
   if (!post) return;

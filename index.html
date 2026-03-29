@@ -8079,13 +8079,24 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       onSuccess(); // show success UI to user anyway
     }
 
-    // Write report to Firestore
+    // Write report to Firestore — deduplicate: same reporter + same post/comment
     if (typeof db !== 'undefined' && db) {
-      db.collection('reports').add(reportDoc)
-        .then(onSuccess)
-        .catch(onError);
+      var dupQuery = db.collection('reports')
+        .where('reporterUid', '==', reporterUid)
+        .where('postId', '==', reportDoc.postId);
+      if (reportDoc.isComment && reportDoc.commentId) {
+        dupQuery = dupQuery.where('commentId', '==', reportDoc.commentId);
+      }
+      dupQuery.get().then(function(snap) {
+        if (!snap.empty) {
+          onSuccess(); // already reported — silently skip duplicate
+          return;
+        }
+        db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);
+      }).catch(function() {
+        db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);
+      });
     } else {
-      // Firebase not configured — still show success UI
       onSuccess();
     }
   };
