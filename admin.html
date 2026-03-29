@@ -990,6 +990,7 @@ function loadAll(){
 
 var _usersUnsubscribe = null;
 var _initialUsersLoad = true; // skip heavy re-renders on first snapshot (loadAll handles them)
+var _deletedUids = new Set(); // UIDs deleted this session — blocks onSnapshot from re-adding them
 
 
 async function runUsernameMigration() {
@@ -1056,7 +1057,10 @@ function loadUsers(){
     _initialUsersLoad = true;
     _usersUnsubscribe = db.collection('users').onSnapshot(function(snap){
       window.fsUsers = {};
-      snap.docs.forEach(function(d){ window.fsUsers[d.id] = d.data(); });
+      snap.docs.forEach(function(d){
+        if (_deletedUids.has(d.id)) return; // skip UIDs deleted this session
+        window.fsUsers[d.id] = d.data();
+      });
       // Re-build user map
       buildUsers();
       // Always re-render the Users table
@@ -1267,89 +1271,61 @@ function renderUsers(f){
 function deleteUserData(uid, name){
   if(!confirm('Delete ALL Firestore data for "'+name+'"?\n\nThis will remove:\n• All habits\n• All posts (and their comments)\n• Upload quota record\n• User profile (including any duplicate docs with same email)\n• Username reservation\n• All associated reports\n\nNote: You still need to delete the Auth account in Firebase Console.\n\nThis cannot be undone!')) return;
 
-  // Find the email of this user so we can also delete any duplicate users docs
-  var userEmail = '';
-  var userInMap = window.fsUsers && window.fsUsers[uid];
-  if (userInMap) userEmail = userInMap.email || '';
+  // Collect ALL UIDs to delete: the clicked UID + any duplicate docs sharing the same email
+  var userEmail = (window.fsUsers && window.fsUsers[uid] && window.fsUsers[uid].email) || '';
+  var allUidsToDelete = new Set([uid]);
+  if (userEmail && window.fsUsers) {
+    Object.keys(window.fsUsers).forEach(function(k){
+      if ((window.fsUsers[k].email||'').toLowerCase() === userEmail.toLowerCase()) {
+        allUidsToDelete.add(k);
+      }
+    });
+  }
+
+  // ── Register ALL affected UIDs in blacklist IMMEDIATELY (synchronous) ──
+  // onSnapshot fires almost instantly after a Firestore write — we must block
+  // re-insertion BEFORE any async delete starts, not after.
+  // Note: we only blacklist UIDs (not emails), so a future re-registration
+  // with the same email will use a brand-new UID and appear normally.
+  allUidsToDelete.forEach(function(u){ _deletedUids.add(u); });
 
   var tasks = [];
-
-  // Delete habits
-  tasks.push(db.collection('habits').where('userId','==',uid).get().then(function(snap){
-    var b=db.batch();
-    snap.docs.forEach(function(d){b.delete(d.ref);});
-    return snap.docs.length?b.commit():Promise.resolve();
-  }));
-
-  // Delete posts + their comments + reports for each post
-  tasks.push(db.collection('posts').where('userId','==',uid).get().then(function(snap){
-    return Promise.all(snap.docs.map(function(d){
-      var postId = d.id;
-      return Promise.all([
-        d.ref.collection('comments').get().then(function(cs){
-          var b=db.batch();
-          cs.docs.forEach(function(c){b.delete(c.ref);});
-          b.delete(d.ref);
-          return b.commit();
-        }),
-        db.collection('reports').where('postId','==',postId).get().then(function(rs){
-          if(!rs.size) return;
-          var b=db.batch();
-          rs.docs.forEach(function(r){b.delete(r.ref);});
-          return b.commit();
-        }).catch(function(){})
-      ]);
-    }));
-  }));
-
-  // Delete upload quota
-  tasks.push(db.collection('upload_quotas').doc(uid).delete().catch(function(){}));
-
-  // Delete ALL users docs with same email (handles duplicate registrations)
-  // Always delete the primary uid doc; also find others with same email
-  tasks.push((function(){
-    var delDocs = [db.collection('users').doc(uid).delete().catch(function(){})];
-    if (userEmail) {
-      delDocs.push(
-        db.collection('users').where('email','==',userEmail).get().then(function(snap){
-          if(!snap.size) return;
-          var b=db.batch();
-          snap.docs.forEach(function(d){
-            if(d.id !== uid) b.delete(d.ref); // skip the primary uid (already deleted above)
-          });
-          return snap.size > 1 ? b.commit() : Promise.resolve();
-        }).catch(function(){})
-      );
-    }
-    return Promise.all(delDocs);
-  })());
-
-  // Delete username reservation (find by uid)
-  tasks.push(
-    db.collection('usernames').where('uid','==',uid).get().then(function(snap){
+  allUidsToDelete.forEach(function(delUid){
+    // Habits
+    tasks.push(db.collection('habits').where('userId','==',delUid).get().then(function(snap){
       if(!snap.size) return;
-      var b=db.batch();
-      snap.docs.forEach(function(d){b.delete(d.ref);});
-      return b.commit();
-    }).catch(function(){})
-  );
+      var b=db.batch(); snap.docs.forEach(function(d){b.delete(d.ref);}); return b.commit();
+    }));
+    // Posts + comments + reports per post
+    tasks.push(db.collection('posts').where('userId','==',delUid).get().then(function(snap){
+      return Promise.all(snap.docs.map(function(d){
+        var postId=d.id;
+        return Promise.all([
+          d.ref.collection('comments').get().then(function(cs){
+            var b=db.batch(); cs.docs.forEach(function(c){b.delete(c.ref);}); b.delete(d.ref); return b.commit();
+          }),
+          db.collection('reports').where('postId','==',postId).get().then(function(rs){
+            if(!rs.size) return;
+            var b=db.batch(); rs.docs.forEach(function(r){b.delete(r.ref);}); return b.commit();
+          }).catch(function(){})
+        ]);
+      }));
+    }));
+    // Upload quota
+    tasks.push(db.collection('upload_quotas').doc(delUid).delete().catch(function(){}));
+    // Users doc
+    tasks.push(db.collection('users').doc(delUid).delete().catch(function(){}));
+    // Username reservation
+    tasks.push(
+      db.collection('usernames').where('uid','==',delUid).get().then(function(snap){
+        if(!snap.size) return;
+        var b=db.batch(); snap.docs.forEach(function(d){b.delete(d.ref);}); return b.commit();
+      }).catch(function(){})
+    );
+  });
 
   Promise.all(tasks).then(function(){
-    // Remove ALL entries for this uid (and same email) from in-memory allUsers
-    var deletedEmails = new Set();
-    if (userEmail) deletedEmails.add(userEmail.toLowerCase());
-    allUsers = allUsers.filter(function(u){
-      return u.uid !== uid && (!userEmail || (u.email||'').toLowerCase() !== userEmail.toLowerCase());
-    });
-    // Also purge from fsUsers
-    if (window.fsUsers) {
-      Object.keys(window.fsUsers).forEach(function(k){
-        var u = window.fsUsers[k];
-        if(k === uid || (userEmail && (u.email||'').toLowerCase() === userEmail.toLowerCase())){
-          delete window.fsUsers[k];
-        }
-      });
-    }
+    buildUsers();
     renderStats();
     renderUsers(document.getElementById('userSearch').value||'');
     renderPosts(document.getElementById('postSearch').value||'');
