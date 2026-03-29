@@ -1265,33 +1265,95 @@ function renderUsers(f){
 }
 
 function deleteUserData(uid, name){
-  if(!confirm('Delete ALL Firestore data for "'+name+'"?\n\nThis will remove:\n• All habits\n• All posts (and their comments)\n• Upload quota record\n• User profile\n\nNote: You still need to delete the Auth account in Firebase Console.\n\nThis cannot be undone!')) return;
-  var tasks=[];
+  if(!confirm('Delete ALL Firestore data for "'+name+'"?\n\nThis will remove:\n• All habits\n• All posts (and their comments)\n• Upload quota record\n• User profile (including any duplicate docs with same email)\n• Username reservation\n• All associated reports\n\nNote: You still need to delete the Auth account in Firebase Console.\n\nThis cannot be undone!')) return;
+
+  // Find the email of this user so we can also delete any duplicate users docs
+  var userEmail = '';
+  var userInMap = window.fsUsers && window.fsUsers[uid];
+  if (userInMap) userEmail = userInMap.email || '';
+
+  var tasks = [];
+
   // Delete habits
   tasks.push(db.collection('habits').where('userId','==',uid).get().then(function(snap){
     var b=db.batch();
     snap.docs.forEach(function(d){b.delete(d.ref);});
     return snap.docs.length?b.commit():Promise.resolve();
   }));
-  // Delete posts + their comments
+
+  // Delete posts + their comments + reports for each post
   tasks.push(db.collection('posts').where('userId','==',uid).get().then(function(snap){
     return Promise.all(snap.docs.map(function(d){
-      return d.ref.collection('comments').get().then(function(cs){
-        var b=db.batch();
-        cs.docs.forEach(function(c){b.delete(c.ref);});
-        b.delete(d.ref);
-        return b.commit();
-      });
+      var postId = d.id;
+      return Promise.all([
+        d.ref.collection('comments').get().then(function(cs){
+          var b=db.batch();
+          cs.docs.forEach(function(c){b.delete(c.ref);});
+          b.delete(d.ref);
+          return b.commit();
+        }),
+        db.collection('reports').where('postId','==',postId).get().then(function(rs){
+          if(!rs.size) return;
+          var b=db.batch();
+          rs.docs.forEach(function(r){b.delete(r.ref);});
+          return b.commit();
+        }).catch(function(){})
+      ]);
     }));
   }));
+
   // Delete upload quota
   tasks.push(db.collection('upload_quotas').doc(uid).delete().catch(function(){}));
-  // Delete user profile
-  tasks.push(db.collection('users').doc(uid).delete().catch(function(){}));
+
+  // Delete ALL users docs with same email (handles duplicate registrations)
+  // Always delete the primary uid doc; also find others with same email
+  tasks.push((function(){
+    var delDocs = [db.collection('users').doc(uid).delete().catch(function(){})];
+    if (userEmail) {
+      delDocs.push(
+        db.collection('users').where('email','==',userEmail).get().then(function(snap){
+          if(!snap.size) return;
+          var b=db.batch();
+          snap.docs.forEach(function(d){
+            if(d.id !== uid) b.delete(d.ref); // skip the primary uid (already deleted above)
+          });
+          return snap.size > 1 ? b.commit() : Promise.resolve();
+        }).catch(function(){})
+      );
+    }
+    return Promise.all(delDocs);
+  })());
+
+  // Delete username reservation (find by uid)
+  tasks.push(
+    db.collection('usernames').where('uid','==',uid).get().then(function(snap){
+      if(!snap.size) return;
+      var b=db.batch();
+      snap.docs.forEach(function(d){b.delete(d.ref);});
+      return b.commit();
+    }).catch(function(){})
+  );
 
   Promise.all(tasks).then(function(){
-    alert('Done! All Firestore data for "'+name+'" has been deleted.\nRemember to also delete the Auth account in Firebase Console.');
-    loadAll();
+    // Remove ALL entries for this uid (and same email) from in-memory allUsers
+    var deletedEmails = new Set();
+    if (userEmail) deletedEmails.add(userEmail.toLowerCase());
+    allUsers = allUsers.filter(function(u){
+      return u.uid !== uid && (!userEmail || (u.email||'').toLowerCase() !== userEmail.toLowerCase());
+    });
+    // Also purge from fsUsers
+    if (window.fsUsers) {
+      Object.keys(window.fsUsers).forEach(function(k){
+        var u = window.fsUsers[k];
+        if(k === uid || (userEmail && (u.email||'').toLowerCase() === userEmail.toLowerCase())){
+          delete window.fsUsers[k];
+        }
+      });
+    }
+    renderStats();
+    renderUsers(document.getElementById('userSearch').value||'');
+    renderPosts(document.getElementById('postSearch').value||'');
+    alert('Done! All Firestore data for "'+name+'" has been deleted.\nRemember to also delete the Auth account in Firebase Console if it still exists.');
   }).catch(function(e){
     alert('Error: '+e.message);
   });
