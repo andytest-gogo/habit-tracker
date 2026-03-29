@@ -523,8 +523,9 @@ service cloud.firestore {
 
     // ── Users collection ─────────────────────────────────────────
     match /users/{userId} {
-      allow read:  if request.auth != null &amp;&amp; (request.auth.uid == userId || isAdmin());
-      allow write: if request.auth != null &amp;&amp; request.auth.uid == userId;
+      allow read:   if request.auth != null &amp;&amp; (request.auth.uid == userId || isAdmin());
+      allow write:  if request.auth != null &amp;&amp; request.auth.uid == userId;
+      allow delete: if isAdmin();
     }
 
     // ── Habits collection ────────────────────────────────────────
@@ -564,14 +565,14 @@ service cloud.firestore {
       allow create: if request.auth != null
                     &amp;&amp; request.resource.data.uid == request.auth.uid;
       allow delete: if request.auth != null
-                    &amp;&amp; resource.data.uid == request.auth.uid;
+                    &amp;&amp; (resource.data.uid == request.auth.uid || isAdmin());
       allow read:   if isAdmin();
     }
 
     // ── Upload Quotas ────────────────────────────────────────────
     match /upload_quotas/{uid} {
       allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;
-      allow read:        if isAdmin();
+      allow read, write: if isAdmin();
     }
   }
 }</pre>
@@ -1727,7 +1728,18 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     if (remaining === 0) document.getElementById('cleanupAllBtn').style.display = 'none';
   }).catch(function(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Delete Firestore'; }
-    alert('Failed to delete Firestore data: ' + e.message);
+    var msg = e.message || '';
+    if (msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1) {
+      alert('❌ 權限不足，無法刪除。\n\n請先到 Firebase Console → Firestore → Rules\n將以下規則加入後再試：\n\n' +
+        'match /users/{userId} {\n' +
+        '  allow delete: if isAdmin();\n' +
+        '}\n\n' +
+        'match /usernames/{username} {\n' +
+        '  allow delete: if ... || isAdmin();\n' +
+        '}\n\n詳細規則請見 Admin → Security & Rules 頁面。');
+    } else {
+      alert('Failed to delete Firestore data: ' + msg);
+    }
   });
 }
 
