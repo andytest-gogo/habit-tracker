@@ -471,6 +471,34 @@ tr:hover td{background:var(--g50)}
           <tbody id="orphanTbody"><tr class="loading-row"><td colspan="4">Click Scan to check for orphaned username entries</td></tr></tbody>
         </table>
       </div>
+
+      <!-- Orphaned Upload Quota Scanner -->
+      <div class="tbl-card" style="padding:18px;margin-top:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="chart-ttl" style="margin:0">🗂 孤立 Upload Quota 掃描器</div>
+          <div style="display:flex;gap:8px">
+            <button class="refresh" onclick="scanOrphanedQuotas()">Scan</button>
+            <button id="deleteOrphanQuotasBtn" onclick="deleteAllOrphanQuotas()"
+              style="display:none;padding:7px 13px;background:#c00;border:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:#fff;font-family:var(--font)">
+              🗑 Delete All Orphan Quotas
+            </button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--g500);margin-bottom:12px">
+          掃描 <code>upload_quotas</code> collection 中沒有對應 <code>users</code> doc 的孤立記錄。這些記錄通常是帳號刪除後未清除的殘留資料，會佔用統計數字並造成混淆。
+        </div>
+        <div id="orphanQuotaStatus" style="font-size:11px;color:var(--g400);margin-bottom:8px"></div>
+        <table>
+          <thead><tr>
+            <th>User</th>
+            <th>UID</th>
+            <th>Total MB</th>
+            <th>Last Upload</th>
+            <th>Action</th>
+          </tr></thead>
+          <tbody id="orphanQuotaTbody"><tr class="loading-row"><td colspan="5">Click Scan to check for orphaned quota records</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Security & Rules -->
@@ -1521,10 +1549,30 @@ function renderQuota(){
     var lastStr = q.lastUploadDate ? q.lastUploadDate.toLocaleString('en-US') : '—';
     var imgCls = dImg>=QUOTA_LIMITS.DAILY_IMAGE_COUNT ? 'color:#c00;font-weight:700' : '';
     var vidCls = dVid>=QUOTA_LIMITS.DAILY_VIDEO_COUNT ? 'color:#c00;font-weight:700' : '';
-    return '<tr>'+
+
+    // ── Orphan detection: quota record exists but users doc is gone ──
+    var isOrphan = window.fsUsers && Object.keys(window.fsUsers).length > 0 && !window.fsUsers[q.id];
+    var rowStyle = isOrphan ? ' style="opacity:0.62;background:#fff8f0"' : '';
+    var orphanBadge = isOrphan
+      ? ' <span style="display:inline-block;padding:1px 6px;font-size:9px;font-weight:700;'
+        + 'text-transform:uppercase;letter-spacing:.5px;background:#fee2cc;color:#b45309;'
+        + 'border:1px solid #f5b97a;border-radius:2px;vertical-align:middle">已刪除帳號</span>'
+      : '';
+    var orphanNote = isOrphan
+      ? '<div style="font-size:10px;color:#b45309;margin-top:3px">⚠️ Firestore 用戶資料已刪除，此為孤立 quota 記錄</div>'
+      : '';
+    var actionCell = isOrphan
+      ? '<button class="del" style="background:#c00;color:#fff;border-color:#c00" '
+        + 'onclick="deleteOrphanQuota(\''+q.id+'\',\''+htmlEsc(q.displayName||q.id)+'\')">Delete Quota</button>'
+      : '<button class="del" onclick="resetUserDaily(\''+q.id+'\')">Reset Daily</button>';
+
+    return '<tr'+rowStyle+'>'+
       '<td><div class="uc">'+avatarHtml(q.id, q.displayName||q.uid)+
-        '<div><strong>'+htmlEsc(q.displayName||'Unknown')+'</strong>'+
-        '<div class="uid-small">'+htmlEsc(q.email||q.uid||'')+'</div></div></div></td>'+
+        '<div>'+
+          '<strong>'+htmlEsc(q.displayName||'Unknown')+orphanBadge+'</strong>'+
+          '<div class="uid-small">'+htmlEsc(q.email||q.uid||'')+'</div>'+
+          orphanNote+
+        '</div></div></td>'+
       '<td style="font-family:var(--mono);font-size:11px">'+
         '<span style="'+imgCls+'">📷 '+dImg+'/'+QUOTA_LIMITS.DAILY_IMAGE_COUNT+'</span>　'+
         '<span style="'+vidCls+'">🎬 '+dVid+'/'+QUOTA_LIMITS.DAILY_VIDEO_COUNT+'</span></td>'+
@@ -1539,7 +1587,7 @@ function renderQuota(){
       '<td style="font-family:var(--mono);font-size:12px">'+(q.totalVideos||0)+'</td>'+
       '<td style="font-family:var(--mono);font-size:12px;font-weight:700">'+((q.totalMB||0).toFixed(2))+' MB</td>'+
       '<td style="font-size:10px;color:var(--g400)">'+lastStr+'</td>'+
-      '<td><button class="del" onclick="resetUserDaily(\''+q.id+'\')">Reset Daily</button></td>'+
+      '<td>'+actionCell+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -2041,6 +2089,147 @@ async function deleteAllOrphans() {
     setTimeout(function() { btn.style.display = 'none'; }, 1500);
   } catch(e) {
     btn.disabled = false; btn.textContent = '🗑 Delete All Orphans';
+    alert('Batch delete failed: ' + e.message);
+  }
+}
+
+/* ══════════════════════════════════════════
+   ORPHANED UPLOAD QUOTA SCANNER
+   Finds upload_quotas docs with no matching users doc.
+   Strategy 1 (inline badge) is handled in renderQuota().
+   Strategy 3 (scanner + bulk delete) lives here.
+══════════════════════════════════════════ */
+var allOrphanQuotas = [];
+
+async function scanOrphanedQuotas() {
+  var tbody  = document.getElementById('orphanQuotaTbody');
+  var status = document.getElementById('orphanQuotaStatus');
+  var deleteBtn = document.getElementById('deleteOrphanQuotasBtn');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Scanning...</td></tr>';
+  status.textContent = 'Scanning...';
+  deleteBtn.style.display = 'none';
+  allOrphanQuotas = [];
+
+  try {
+    var quotaSnap = await db.collection('upload_quotas').get();
+    var orphans = [];
+
+    var checks = quotaSnap.docs.map(async function(doc) {
+      var data = doc.data();
+      var uid  = doc.id;
+      var userDoc = await db.collection('users').doc(uid).get();
+      if (!userDoc.exists) {
+        var lastAt = data.lastUploadAt && data.lastUploadAt.toDate ? data.lastUploadAt.toDate() : null;
+        orphans.push({
+          uid:         uid,
+          displayName: data.displayName || '—',
+          email:       data.email || '—',
+          totalMB:     data.totalMB || 0,
+          lastUpload:  lastAt,
+        });
+      }
+    });
+
+    await Promise.all(checks);
+    allOrphanQuotas = orphans;
+
+    status.textContent = 'Scanned ' + quotaSnap.docs.length + ' quota record(s) — found ' + orphans.length + ' orphaned';
+
+    if (!orphans.length) {
+      tbody.innerHTML = '<tr class="loading-row"><td colspan="5">✅ No orphaned quota records found</td></tr>';
+      return;
+    }
+
+    deleteBtn.style.display = '';
+    tbody.innerHTML = orphans.map(function(o, i) {
+      var lastStr = o.lastUpload ? o.lastUpload.toLocaleString('en-US') : '—';
+      return '<tr style="background:#fff8f0">'
+        + '<td><strong style="font-size:12px">' + htmlEsc(o.displayName) + '</strong>'
+        + '<div style="font-size:11px;color:var(--g500)">' + htmlEsc(o.email) + '</div></td>'
+        + '<td><span style="font-family:var(--mono);font-size:11px;color:var(--g400)">' + htmlEsc(o.uid) + '</span></td>'
+        + '<td style="font-family:var(--mono);font-size:12px;font-weight:700">' + o.totalMB.toFixed(2) + ' MB</td>'
+        + '<td style="font-size:11px;color:var(--g500)">' + lastStr + '</td>'
+        + '<td><button class="btn-del-fs" id="oqbtn-' + i + '" '
+        +   'onclick="deleteOrphanQuota('' + o.uid + '','' + htmlEsc(o.displayName) + '',' + i + ')">'
+        +   'Delete Quota</button></td>'
+        + '</tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#c00;padding:16px;font-size:12px">Scan failed: ' + htmlEsc(e.message) + '</td></tr>';
+    status.textContent = '⚠️ Scan failed';
+  }
+}
+
+function deleteOrphanQuota(uid, displayName, idx) {
+  // idx is optional — when called from quota table the button doesn't have an id
+  var label = displayName || uid;
+  if (!confirm('Delete orphaned upload_quotas record for "' + label + '"?\n\nUID: ' + uid + '\n\nThis only removes the quota record — the user\'s uploaded files in Cloudinary are NOT affected.')) return;
+
+  // Try to find button — either from scanner table (oqbtn-N) or quota table (no id)
+  var btn = (idx !== undefined) ? document.getElementById('oqbtn-' + idx) : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+
+  db.collection('upload_quotas').doc(uid).delete()
+    .then(function() {
+      if (btn) {
+        btn.textContent = '✓ Deleted';
+        btn.style.borderColor = '#059669';
+        btn.style.color = '#059669';
+      }
+      // Remove from in-memory list & hide delete-all btn if empty
+      allOrphanQuotas = allOrphanQuotas.filter(function(o) { return o.uid !== uid; });
+      if (!allOrphanQuotas.length) {
+        var delAllBtn = document.getElementById('deleteOrphanQuotasBtn');
+        if (delAllBtn) delAllBtn.style.display = 'none';
+      }
+      // Refresh quota page table if it's currently visible
+      if (allQuotas && allQuotas.length) {
+        allQuotas = allQuotas.filter(function(q) { return q.id !== uid; });
+        renderQuota();
+      }
+    })
+    .catch(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Delete Quota'; }
+      alert('Failed to delete quota record: ' + e.message);
+    });
+}
+
+async function deleteAllOrphanQuotas() {
+  if (!allOrphanQuotas.length) return;
+  if (!confirm('Delete ALL ' + allOrphanQuotas.length + ' orphaned quota record(s)?\n\nThis only removes upload_quotas documents — Cloudinary files are NOT deleted.')) return;
+  var btn = document.getElementById('deleteOrphanQuotasBtn');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  try {
+    var BATCH_SIZE = 400;
+    var chunks = [];
+    for (var i = 0; i < allOrphanQuotas.length; i += BATCH_SIZE) {
+      chunks.push(allOrphanQuotas.slice(i, i + BATCH_SIZE));
+    }
+    var promise = Promise.resolve();
+    chunks.forEach(function(chunk) {
+      promise = promise.then(function() {
+        var batch = db.batch();
+        chunk.forEach(function(o) { batch.delete(db.collection('upload_quotas').doc(o.uid)); });
+        return batch.commit();
+      });
+    });
+    await promise;
+    btn.textContent = '✓ All Deleted';
+    btn.style.background = '#059669';
+    document.getElementById('orphanQuotaTbody').innerHTML =
+      '<tr class="loading-row"><td colspan="5">✅ All orphaned quota records deleted</td></tr>';
+    document.getElementById('orphanQuotaStatus').textContent =
+      'Deleted ' + allOrphanQuotas.length + ' orphaned quota record(s)';
+    // Refresh quota table
+    var deletedUids = allOrphanQuotas.map(function(o) { return o.uid; });
+    allOrphanQuotas = [];
+    if (allQuotas && allQuotas.length) {
+      allQuotas = allQuotas.filter(function(q) { return deletedUids.indexOf(q.id) === -1; });
+      renderQuota();
+    }
+    setTimeout(function() { btn.style.display = 'none'; }, 1500);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '🗑 Delete All Orphan Quotas';
     alert('Batch delete failed: ' + e.message);
   }
 }
