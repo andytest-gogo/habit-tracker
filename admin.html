@@ -1563,7 +1563,7 @@ function renderQuota(){
       : '';
     var actionCell = isOrphan
       ? '<button class="del" style="background:#c00;color:#fff;border-color:#c00" '
-        + 'onclick="deleteOrphanQuota(\''+q.id+'\',\''+htmlEsc(q.displayName||q.id)+'\')">Delete Quota</button>'
+        + 'onclick="deleteOrphanQuota(\''+q.id+'\')">Delete Quota</button>'
       : '<button class="del" onclick="resetUserDaily(\''+q.id+'\')">Reset Daily</button>';
 
     return '<tr'+rowStyle+'>'+
@@ -2150,7 +2150,7 @@ async function scanOrphanedQuotas() {
         + '<td style="font-family:var(--mono);font-size:12px;font-weight:700">' + o.totalMB.toFixed(2) + ' MB</td>'
         + '<td style="font-size:11px;color:var(--g500)">' + lastStr + '</td>'
         + '<td><button class="btn-del-fs" id="oqbtn-' + i + '" '
-        +   'onclick="deleteOrphanQuota('' + o.uid + '','' + htmlEsc(o.displayName) + '',' + i + ')">'
+        +   'onclick="deleteOrphanQuota(\'' + o.uid + '\',' + i + ')">'  
         +   'Delete Quota</button></td>'
         + '</tr>';
     }).join('');
@@ -2160,9 +2160,12 @@ async function scanOrphanedQuotas() {
   }
 }
 
-function deleteOrphanQuota(uid, displayName, idx) {
-  // idx is optional — when called from quota table the button doesn't have an id
-  var label = displayName || uid;
+function deleteOrphanQuota(uid, idx) {
+  // idx is optional — when called from quota table (inline badge) it is undefined
+  // When called from scanner table, look up displayName from allOrphanQuotas
+  var label = (idx !== undefined && allOrphanQuotas[idx])
+    ? (allOrphanQuotas[idx].displayName || uid)
+    : uid;
   if (!confirm('Delete orphaned upload_quotas record for "' + label + '"?\n\nUID: ' + uid + '\n\nThis only removes the quota record — the user\'s uploaded files in Cloudinary are NOT affected.')) return;
 
   // Try to find button — either from scanner table (oqbtn-N) or quota table (no id)
