@@ -7358,11 +7358,35 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
     if (isIOS && !isInStandalone && !localStorage.getItem('ios-hint-shown')) {
         setTimeout(() => {
             const hint = document.createElement('div');
+            hint.id = 'ios-pwa-hint';
             hint.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);max-width:340px;width:calc(100% - 32px);background:#0a0a0a;color:#fff;padding:14px 16px;font-size:12px;line-height:1.6;z-index:500;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.3)';
             hint.innerHTML = `
-                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 Add to iPhone Home Screen</div>
-                <div style="opacity:.75">Tap the <strong style="opacity:1">Share button ↑</strong> below → Select "Add to Home Screen" to use like an app</div>
-                <button onclick="this.parentElement.remove();localStorage.setItem('ios-hint-shown','1')" style="margin-top:10px;background:white;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">Got it</button>
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 Add to Home Screen</div>
+                <div id="ios-hint-summary" style="opacity:.75">Tap <strong style="opacity:1">Share ↑</strong> → "Add to Home Screen" to install as an app</div>
+                <div id="ios-hint-steps" style="display:none;text-align:left;opacity:.9;margin-top:8px;">
+                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
+                        <span style="background:rgba(255,255,255,.15);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">1</span>
+                        <span>Tap the <strong>Share</strong> button (↑) at the bottom of Safari</span>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
+                        <span style="background:rgba(255,255,255,.15);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">2</span>
+                        <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:8px;">
+                        <span style="background:rgba(255,255,255,.15);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">3</span>
+                        <span>Tap <strong>"Add"</strong> in the top right corner</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+                    <button id="ios-hint-view-steps" onclick="
+                        var s=document.getElementById('ios-hint-steps');
+                        var sum=document.getElementById('ios-hint-summary');
+                        var btn=document.getElementById('ios-hint-view-steps');
+                        if(s.style.display==='none'){s.style.display='block';sum.style.display='none';btn.textContent='Hide Steps';}
+                        else{s.style.display='none';sum.style.display='block';btn.textContent='View Steps';}
+                    " style="background:#4ade80;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">View Steps</button>
+                    <button onclick="document.getElementById('ios-pwa-hint').remove();localStorage.setItem('ios-hint-shown','1')" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">Dismiss</button>
+                </div>
             `;
             document.body.appendChild(hint);
         }, 3000);
