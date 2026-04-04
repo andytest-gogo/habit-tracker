@@ -6452,23 +6452,7 @@ function MainApp(_ref16) {
         currentDay: currentDay
       });
     }
-    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      className: "home-top"
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "center-add-btn-standalone",
-      onClick: function onClick() {
-        var _todayChk = toISODay();
-        var _activeCnt = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_todayChk; }).length;
-        if (_activeCnt >= 30) {
-          alert('Max 30 active habits. Wait for habits to expire or delete one.');
-          return;
-        }
-        setShowModal(true);
-      },
-      style: {
-        opacity: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? 0.4 : 1; })()
-      }
-    }, /*#__PURE__*/React.createElement(PlusIcon, null))), habits.length > 0 && /*#__PURE__*/React.createElement("div", {
+    return /*#__PURE__*/React.createElement("div", null, habits.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -6591,7 +6575,24 @@ function MainApp(_ref16) {
         d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
       })), "Delete Habit")));
     });
-    }()));
+    }()), /*#__PURE__*/React.createElement("div", {
+      className: "home-top",
+      style: { marginTop: 16, marginBottom: 8 }
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "center-add-btn-standalone",
+      onClick: function onClick() {
+        var _todayChk = toISODay();
+        var _activeCnt = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_todayChk; }).length;
+        if (_activeCnt >= 30) {
+          alert('Max 30 active habits. Wait for habits to expire or delete one.');
+          return;
+        }
+        setShowModal(true);
+      },
+      style: {
+        opacity: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? 0.4 : 1; })()
+      }
+    }, /*#__PURE__*/React.createElement(PlusIcon, null))));
   };
   var renderGroups = function renderGroups() {
     if (selectedGroup) {
