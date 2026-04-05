@@ -6738,7 +6738,12 @@ function MainApp(_ref16) {
       type: "file",
       accept: "image/*",
       style: {
-        display: 'none'
+        opacity: 0,
+        position: 'absolute',
+        width: 0,
+        height: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none'
       },
       onChange: handleAvatarSelect
     })), /*#__PURE__*/React.createElement("div", {
@@ -6851,7 +6856,7 @@ function MainApp(_ref16) {
           videoPortalRef.current._reset();
         }
         setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
-        return mediaPublicIdRef.current = null; setPostMedia(null);
+        mediaPublicIdRef.current = null; setPostMedia(null);
       }
     }, "✕") : null), /*#__PURE__*/React.createElement("div", {
       className: "composer-toolbar"
@@ -6892,7 +6897,12 @@ function MainApp(_ref16) {
       type: "file",
       accept: "image/*",
       style: {
-        display: 'none'
+        opacity: 0,
+        position: 'absolute',
+        width: 0,
+        height: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none'
       },
       onChange: function onChange(e) {
         return handleMediaSelect(e, 'image');
@@ -6902,7 +6912,12 @@ function MainApp(_ref16) {
       type: "file",
       accept: "video/*",
       style: {
-        display: 'none'
+        opacity: 0,
+        position: 'absolute',
+        width: 0,
+        height: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none'
       },
       onChange: function onChange(e) {
         return handleMediaSelect(e, 'video');
