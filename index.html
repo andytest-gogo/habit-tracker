@@ -920,9 +920,9 @@
 <!-- HIDDEN FILE INPUTS for iOS PWA compatibility.
      These are referenced by <label htmlFor="..."> on the Photo/Video/Avatar buttons.
      iOS treats a label tap as a direct user interaction — 100% reliable, no JS needed. -->
-<input id="_mpi_image"  type="file" accept="image/*" style="position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;">
-<input id="_mpi_video"  type="file" accept="video/*" style="position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;">
-<input id="_mpi_avatar" type="file" accept="image/*" style="position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;">
+<input id="_mpi_image"  type="file" accept="image/*" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;z-index:-1;">
+<input id="_mpi_video"  type="file" accept="video/*" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;z-index:-1;">
+<input id="_mpi_avatar" type="file" accept="image/*" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;z-index:-1;">
 <script>
 (function() {
   window._mediaPickerCallbacks = { image: null, video: null, avatar: null };
@@ -7941,17 +7941,56 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
             // Serialise and trigger download
             var json = JSON.stringify(exportPayload, null, 2);
-            var blob = new Blob([json], { type: 'application/json' });
-            var url  = URL.createObjectURL(blob);
-            var a    = document.createElement('a');
-            a.href     = url;
-            a.download = 'habittrackerpro-my-data-' + new Date().toISOString().slice(0,10) + '.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+            var filename = 'habittrackerpro-my-data-' + new Date().toISOString().slice(0,10) + '.json';
+            var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-            if (statusEl) statusEl.textContent = '✅ Export complete — check your Downloads folder.';
+            if (isIOS) {
+                // iOS Safari blocks programmatic <a download> — show inline viewer instead
+                var existing = document.getElementById('_exportViewer');
+                if (existing) existing.remove();
+                var viewer = document.createElement('div');
+                viewer.id = '_exportViewer';
+                viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;flex-direction:column;padding:20px;box-sizing:border-box;';
+                var _vHeader = document.createElement('div');
+                _vHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;';
+                var _vTitle = document.createElement('span');
+                _vTitle.style.cssText = 'color:#fff;font-weight:700;font-size:14px;';
+                _vTitle.textContent = '\uD83D\uDCC4 ' + filename;
+                var _vClose = document.createElement('button');
+                _vClose.textContent = '\u2715 Close';
+                _vClose.style.cssText = 'background:#fff;border:none;padding:6px 14px;font-weight:700;cursor:pointer;font-size:13px;border-radius:4px;';
+                _vClose.onclick = function() { viewer.remove(); };
+                _vHeader.appendChild(_vTitle);
+                _vHeader.appendChild(_vClose);
+                var _vTip = document.createElement('p');
+                _vTip.style.cssText = 'color:#ffd;font-size:12px;margin-bottom:10px;margin-top:0;';
+                _vTip.textContent = 'iOS tip: Long-press the text \u2192 Select All \u2192 Copy, then paste into Notes or email to yourself.';
+                var _vTa = document.createElement('textarea');
+                _vTa.readOnly = true;
+                _vTa.value = json;
+                _vTa.style.cssText = 'flex:1;width:100%;font-size:11px;font-family:monospace;background:#111;color:#7fff7f;border:1px solid #444;padding:10px;box-sizing:border-box;resize:none;';
+                viewer.appendChild(_vHeader);
+                viewer.appendChild(_vTip);
+                viewer.appendChild(_vTa);
+                document.body.appendChild(viewer);
+                // Also try data: URI as fallback (works in some iOS versions)
+                try {
+                    var dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+                    var a2 = document.createElement('a');
+                    a2.href = dataUri; a2.download = filename;
+                    document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+                } catch(e2) {}
+                if (statusEl) statusEl.textContent = '✅ Data ready — copy from the viewer or check Downloads.';
+            } else {
+                // Android / Desktop: standard Blob download
+                var blob = new Blob([json], { type: 'application/json' });
+                var url  = URL.createObjectURL(blob);
+                var a    = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+                if (statusEl) statusEl.textContent = '✅ Export complete — check your Downloads folder.';
+            }
         } catch (err) {
             console.error('[Export] Error:', err);
             if (statusEl) statusEl.textContent = '⚠️ Export failed: ' + err.message;
