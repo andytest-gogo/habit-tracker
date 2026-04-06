@@ -917,19 +917,29 @@
 <a href="#main-content" class="skip-link">Skip to main content</a>
 <div id="main-content" role="main"></div>
 
-<!-- PERSISTENT FILE INPUTS: outside React tree so they are never unmounted.
-     iOS Safari PWA requires input.click() synchronously in the user gesture;
-     these elements always exist so refs never go stale. -->
-<div id="media-inputs-portal" aria-hidden="true" style="position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;">
-  <input id="_mpi_image"  type="file" accept="image/*">
-  <input id="_mpi_video"  type="file" accept="video/*">
-  <input id="_mpi_avatar" type="file" accept="image/*">
+<!-- PERSISTENT FILE INPUTS
+     These labels+inputs are the ONLY reliable way to trigger file/camera pickers
+     on iOS Safari PWA. The <label> click is native — no JS .click() needed.
+     iOS will show its own action sheet (Camera / Photo Library / Files).
+     DO NOT use capture="environment" — it bypasses the iOS sheet and often fails in PWA mode.
+     The labels are visually hidden but fully functional. -->
+<div id="media-inputs-portal" style="position:fixed;top:-200px;left:-200px;width:180px;height:60px;opacity:0;pointer-events:none;overflow:hidden;">
+  <label id="_lbl_image"  for="_mpi_image"  style="display:block;width:60px;height:60px;cursor:pointer;"></label>
+  <label id="_lbl_video"  for="_mpi_video"  style="display:block;width:60px;height:60px;cursor:pointer;"></label>
+  <label id="_lbl_avatar" for="_mpi_avatar" style="display:block;width:60px;height:60px;cursor:pointer;"></label>
+  <input id="_mpi_image"  type="file" accept="image/*"  style="position:absolute;top:0;left:0;width:60px;height:60px;opacity:0;cursor:pointer;">
+  <input id="_mpi_video"  type="file" accept="video/*"  style="position:absolute;top:0;left:60px;width:60px;height:60px;opacity:0;cursor:pointer;">
+  <input id="_mpi_avatar" type="file" accept="image/*"  style="position:absolute;top:0;left:120px;width:60px;height:60px;opacity:0;cursor:pointer;">
 </div>
 <script>
 (function() {
   var imgEl    = document.getElementById('_mpi_image');
   var vidEl    = document.getElementById('_mpi_video');
   var avatarEl = document.getElementById('_mpi_avatar');
+  var lblImg   = document.getElementById('_lbl_image');
+  var lblVid   = document.getElementById('_lbl_video');
+  var lblAvt   = document.getElementById('_lbl_avatar');
+  var portal   = document.getElementById('media-inputs-portal');
 
   window._mediaPickerCallbacks = { image: null, video: null, avatar: null };
 
@@ -937,6 +947,7 @@
     el.addEventListener('change', function() {
       var file = el.files && el.files[0];
       el.value = '';
+      portal.style.pointerEvents = 'none'; // hide portal after selection
       if (!file) return;
       var cb = window._mediaPickerCallbacks[key];
       if (typeof cb === 'function') cb(file);
@@ -946,15 +957,22 @@
   attachListener(vidEl,    'video');
   attachListener(avatarEl, 'avatar');
 
-  /* Called synchronously inside React onClick handlers */
-  window._mediaPickerOpen = function(type, useCamera) {
-    var el = type === 'video'  ? vidEl
-           : type === 'avatar' ? avatarEl
-           : imgEl;
-    el.value = '';
-    if (useCamera) { el.setAttribute('capture', 'environment'); }
-    else           { el.removeAttribute('capture'); }
-    el.click();
+  /* Move the portal so the correct input is under the user's finger, then show it.
+     This is called synchronously in the React button's onClick — the portal becomes
+     briefly visible/tappable exactly where the user just tapped, so iOS registers
+     the label click as a direct user interaction with no JS .click() needed. */
+  window._mediaPickerOpen = function(type) {
+    var lbl = type === 'video'  ? lblVid
+            : type === 'avatar' ? lblAvt
+            : lblImg;
+    // Position portal in the centre of the screen so the label is tappable
+    portal.style.top = (window.innerHeight / 2 - 30) + 'px';
+    portal.style.left = (window.innerWidth / 2 - 90) + 'px';
+    portal.style.pointerEvents = 'auto';
+    // Programmatic click on the label — labels can be .click()ed safely on iOS
+    lbl.click();
+    // Hide portal again after a short delay (in case user cancels picker)
+    setTimeout(function() { portal.style.pointerEvents = 'none'; }, 2000);
   };
 })();
 </script>
@@ -5988,42 +6006,22 @@ function MainApp(_ref16) {
   var setCamDenied = _useStateCamDenied2[1];
 
   /* Open sheet (mobile) or directly open picker (desktop) */
-  /* ── iOS PWA Media Picker ─────────────────────────────────────────────────
-     The three <input type="file"> elements live OUTSIDE React's render tree
-     (injected into <body> before the React root). This guarantees they are
-     never unmounted by React state changes, so window._mediaPickerOpen() can
-     always call .click() synchronously within the user-gesture activation window.
-
-     On mobile: show the action sheet first (camera vs library choice).
-     On desktop: call _mediaPickerOpen directly (no sheet needed).
-
-     React registers file-received callbacks via window._mediaPickerCallbacks.
-  ─────────────────────────────────────────────────────────────────────────── */
+  /* ── Media Picker ───────────────────────────────────────────────────────
+     openMediaSheet is called by Photo / Video / Avatar buttons.
+     On ALL platforms we directly trigger the native file picker via the
+     persistent <label>+<input> portal outside the React tree.
+     iOS will show its own system sheet (Camera / Photo Library / Files).
+     No custom action sheet needed — eliminates all timing/overlay issues.
+  ─────────────────────────────────────────────────────────────────────── */
 
   var openMediaSheet = function openMediaSheet(type) {
-    if (isMobile) {
-      setMediaSheet(type);
-    } else {
-      /* Desktop: open picker directly via global API (synchronous) */
-      window._mediaPickerOpen(type, false);
-    }
+    window._mediaPickerOpen(type);
   };
 
+  /* kept for any residual references */
   var closeMediaSheet = function closeMediaSheet() { setMediaSheet(null); setCamDenied(false); };
-
-  /* Take photo / Record video — open camera */
-  var requestCameraAndOpen = function requestCameraAndOpen(type) {
-    /* Close sheet first (React state), then open camera via persistent input.
-       Both happen synchronously within the same user-gesture tick. */
-    setMediaSheet(null);
-    setCamDenied(false);
-    window._mediaPickerOpen(type, true);
-  };
-
-  /* Choose from library — open file picker */
-  var _openPickerDirect = function _openPickerDirect(type, useCamera) {
-    window._mediaPickerOpen(type, useCamera);
-  };
+  var requestCameraAndOpen = function requestCameraAndOpen(type) { window._mediaPickerOpen(type); };
+  var _openPickerDirect = function _openPickerDirect(type) { window._mediaPickerOpen(type); };
 
   var handleMediaSelect = /*#__PURE__*/function () {
     var _ref25 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(file, type) {
@@ -7257,53 +7255,7 @@ function MainApp(_ref16) {
     },
     onAdd: addHabit
   }),
-  /* ── MEDIA PICKER SHEET ── */
-  mediaSheet && /*#__PURE__*/React.createElement("div", {
-    className: "media-sheet-overlay",
-    onClick: closeMediaSheet
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "media-sheet",
-    onClick: function onClick(e) { e.stopPropagation(); }
-  }, /*#__PURE__*/React.createElement("div", { className: "media-sheet-handle" }),
-  /*#__PURE__*/React.createElement("div", { className: "media-sheet-title" },
-    mediaSheet === 'avatar' ? "Change profile photo" : mediaSheet === 'photo' ? "Add a photo" : "Add a video"
-  ),
-  camDenied && /*#__PURE__*/React.createElement("div", { className: "cam-denied-banner" },
-    "Camera access was denied. To enable it, go to ", /*#__PURE__*/React.createElement("strong", null, "Settings → Safari → Camera"), " and set it to Allow, then try again."
-  ),
-  !camDenied && /*#__PURE__*/React.createElement("div", {
-    className: "media-sheet-row",
-    onClick: function onClick() { requestCameraAndOpen(mediaSheet); }
-  }, /*#__PURE__*/React.createElement("div", { className: "media-sheet-icon dark" },
-    /*#__PURE__*/React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "#fff", strokeWidth: 2 },
-      /*#__PURE__*/React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" }),
-      /*#__PURE__*/React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M15 13a3 3 0 11-6 0 3 3 0 016 0z" })
-    )
-  ), /*#__PURE__*/React.createElement("div", null,
-    /*#__PURE__*/React.createElement("div", { className: "media-sheet-label" }, mediaSheet === 'video' ? "Record video" : "Take photo"),
-    /*#__PURE__*/React.createElement("div", { className: "media-sheet-sub" }, "Use camera directly")
-  ), /*#__PURE__*/React.createElement("div", { className: "media-sheet-chev" }, "›")),
-  /*#__PURE__*/React.createElement("div", {
-    className: "media-sheet-row",
-    onClick: function onClick() {
-      /* Inputs live outside React tree — just close sheet and open picker directly.
-         Both happen synchronously within the same user-gesture activation tick. */
-      var _type = mediaSheet;
-      setMediaSheet(null);
-      setCamDenied(false);
-      window._mediaPickerOpen(_type, false);
-    }
-  }, /*#__PURE__*/React.createElement("div", { className: "media-sheet-icon light" },
-    /*#__PURE__*/React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2 },
-      /*#__PURE__*/React.createElement("rect", { x: 3, y: 3, width: 18, height: 18, rx: 2 }),
-      /*#__PURE__*/React.createElement("path", { d: "M3 9h18M9 21V9" })
-    )
-  ), /*#__PURE__*/React.createElement("div", null,
-    /*#__PURE__*/React.createElement("div", { className: "media-sheet-label" }, "Choose from library"),
-    /*#__PURE__*/React.createElement("div", { className: "media-sheet-sub" }, mediaSheet === 'video' ? "Select from videos" : "Select from photos")
-  ), /*#__PURE__*/React.createElement("div", { className: "media-sheet-chev" }, "›")),
-  /*#__PURE__*/React.createElement("div", { className: "media-sheet-cancel", onClick: closeMediaSheet }, "Cancel")
-  )),
+
   activeTab === 'home' && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
