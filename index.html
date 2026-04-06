@@ -247,7 +247,7 @@
         .cloudinary-setup-box code { background:#f5e97a; padding:1px 4px; font-size:10px; border-radius:2px; }
 
         /* avatar upload */
-        .profile-avatar-wrap { position:relative; width:72px; margin:0 auto 14px; cursor:pointer; }
+        .profile-avatar-wrap { position:relative; width:72px; margin:0 auto 14px; cursor:pointer; display:block; }
         .profile-avatar-wrap:hover .avatar-edit-overlay { opacity:1; }
         .avatar-edit-overlay {
             position:absolute; inset:0; background:rgba(0,0,0,.45);
@@ -1644,19 +1644,19 @@ var isCloudinaryConfigured = CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' && CLOU
    ★ Upload Quota Settings — adjust limits here ★
    ══════════════════════════════════════════════════ */
 var UPLOAD_LIMITS = {
-  IMAGE_MAX_MB: 2,
-  // Max image size per upload (MB)
-  VIDEO_MAX_MB: 20,
+  IMAGE_MAX_MB: 10,
+  // Max image size per upload AFTER compression (MB)
+  VIDEO_MAX_MB: 100,
   // Max video size per upload (MB)
   DAILY_IMAGE_COUNT: 5,
   // Max images per day
   DAILY_VIDEO_COUNT: 2,
   // Max videos per day
   MONTHLY_TOTAL_MB: 500,
-  // Monthly bandwidth cap (MB). Cloudinary free tier ~25GB; conservative default.
-  IMAGE_COMPRESS_MAX_PX: 1280,
+  // Monthly bandwidth cap (MB)
+  IMAGE_COMPRESS_MAX_PX: 1920,
   // Max image dimension after compression (px)
-  IMAGE_COMPRESS_QUALITY: 0.80 // Image compression quality (0-1)
+  IMAGE_COMPRESS_QUALITY: 0.82 // JPEG quality after compression
 };
 
 /* ── Image compression ── */
@@ -1915,21 +1915,23 @@ function _uploadToCloudinary() {
           isVideo = file.type.startsWith('video/') || resourceType === 'video';
           uid = getCurrentUid();
           currentUser = (_auth2 = auth) === null || _auth2 === void 0 ? void 0 : _auth2.currentUser; // ① Check quota (Firestore, real cross-device count)
-          _context20.n = 2;
-          return checkQuotaFS(uid, file, isVideo);
-        case 2:
-          // ② Compress image
+          // ① Compress image FIRST (so quota size-check uses the compressed size)
           uploadFile = file;
           if (!(!isVideo && file.type.startsWith('image/'))) {
-            _context20.n = 4;
+            _context20.n = 2;
             break;
           }
-          _context20.n = 3;
+          _context20.n = 2;
           return compressImage(file);
+        case 2:
+          if (_context20.v && !isVideo) {
+            uploadFile = _context20.v;
+            console.log("[Upload] Image compressed: ".concat((file.size/1024/1024).toFixed(2), "MB → ").concat((uploadFile.size/1024/1024).toFixed(2), "MB"));
+          }
+          // ② Check quota against compressed file
+          _context20.n = 3;
+          return checkQuotaFS(uid, uploadFile, isVideo);
         case 3:
-          uploadFile = _context20.v;
-          console.log("[Upload] Image compressed: ".concat((file.size/1024/1024).toFixed(2), "MB → ").concat((uploadFile.size/1024/1024).toFixed(2), "MB"));
-        case 4:
           finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
           url = "https://api.cloudinary.com/v1_1/".concat(CLOUDINARY_CLOUD_NAME, "/").concat(resourceType, "/upload");
           formData = new FormData();
