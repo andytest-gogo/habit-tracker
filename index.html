@@ -917,63 +917,25 @@
 <a href="#main-content" class="skip-link">Skip to main content</a>
 <div id="main-content" role="main"></div>
 
-<!-- PERSISTENT FILE INPUTS
-     These labels+inputs are the ONLY reliable way to trigger file/camera pickers
-     on iOS Safari PWA. The <label> click is native — no JS .click() needed.
-     iOS will show its own action sheet (Camera / Photo Library / Files).
-     DO NOT use capture="environment" — it bypasses the iOS sheet and often fails in PWA mode.
-     The labels are visually hidden but fully functional. -->
-<div id="media-inputs-portal" style="position:fixed;top:-200px;left:-200px;width:180px;height:60px;opacity:0;pointer-events:none;overflow:hidden;">
-  <label id="_lbl_image"  for="_mpi_image"  style="display:block;width:60px;height:60px;cursor:pointer;"></label>
-  <label id="_lbl_video"  for="_mpi_video"  style="display:block;width:60px;height:60px;cursor:pointer;"></label>
-  <label id="_lbl_avatar" for="_mpi_avatar" style="display:block;width:60px;height:60px;cursor:pointer;"></label>
-  <input id="_mpi_image"  type="file" accept="image/*"  style="position:absolute;top:0;left:0;width:60px;height:60px;opacity:0;cursor:pointer;">
-  <input id="_mpi_video"  type="file" accept="video/*"  style="position:absolute;top:0;left:60px;width:60px;height:60px;opacity:0;cursor:pointer;">
-  <input id="_mpi_avatar" type="file" accept="image/*"  style="position:absolute;top:0;left:120px;width:60px;height:60px;opacity:0;cursor:pointer;">
-</div>
+<!-- HIDDEN FILE INPUTS for iOS PWA compatibility.
+     These are referenced by <label htmlFor="..."> on the Photo/Video/Avatar buttons.
+     iOS treats a label tap as a direct user interaction — 100% reliable, no JS needed. -->
+<input id="_mpi_image"  type="file" accept="image/*" style="position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;">
+<input id="_mpi_video"  type="file" accept="video/*" style="position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;">
+<input id="_mpi_avatar" type="file" accept="image/*" style="position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;">
 <script>
 (function() {
-  var imgEl    = document.getElementById('_mpi_image');
-  var vidEl    = document.getElementById('_mpi_video');
-  var avatarEl = document.getElementById('_mpi_avatar');
-  var lblImg   = document.getElementById('_lbl_image');
-  var lblVid   = document.getElementById('_lbl_video');
-  var lblAvt   = document.getElementById('_lbl_avatar');
-  var portal   = document.getElementById('media-inputs-portal');
-
   window._mediaPickerCallbacks = { image: null, video: null, avatar: null };
-
-  function attachListener(el, key) {
+  ['image','video','avatar'].forEach(function(key) {
+    var el = document.getElementById('_mpi_' + (key === 'image' ? 'image' : key === 'video' ? 'video' : 'avatar'));
     el.addEventListener('change', function() {
       var file = el.files && el.files[0];
       el.value = '';
-      portal.style.pointerEvents = 'none'; // hide portal after selection
       if (!file) return;
       var cb = window._mediaPickerCallbacks[key];
       if (typeof cb === 'function') cb(file);
     });
-  }
-  attachListener(imgEl,    'image');
-  attachListener(vidEl,    'video');
-  attachListener(avatarEl, 'avatar');
-
-  /* Move the portal so the correct input is under the user's finger, then show it.
-     This is called synchronously in the React button's onClick — the portal becomes
-     briefly visible/tappable exactly where the user just tapped, so iOS registers
-     the label click as a direct user interaction with no JS .click() needed. */
-  window._mediaPickerOpen = function(type) {
-    var lbl = type === 'video'  ? lblVid
-            : type === 'avatar' ? lblAvt
-            : lblImg;
-    // Position portal in the centre of the screen so the label is tappable
-    portal.style.top = (window.innerHeight / 2 - 30) + 'px';
-    portal.style.left = (window.innerWidth / 2 - 90) + 'px';
-    portal.style.pointerEvents = 'auto';
-    // Programmatic click on the label — labels can be .click()ed safely on iOS
-    lbl.click();
-    // Hide portal again after a short delay (in case user cancels picker)
-    setTimeout(function() { portal.style.pointerEvents = 'none'; }, 2000);
-  };
+  });
 })();
 </script>
 
@@ -5993,36 +5955,6 @@ function MainApp(_ref16) {
     setUploadingAvatar = _useState108[1];
   var avatarInputRef = useRef(null);
 
-  /* ── MEDIA PICKER SHEET state ── */
-  var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  var _useStateSheet = useState(null); // null | { type:'photo'|'video'|'avatar', label:str }
-  var _useStateSheet2 = _slicedToArray(_useStateSheet, 2);
-  var mediaSheet = _useStateSheet2[0];
-  var setMediaSheet = _useStateSheet2[1];
-
-  var _useStateCamDenied = useState(false);
-  var _useStateCamDenied2 = _slicedToArray(_useStateCamDenied, 2);
-  var camDenied = _useStateCamDenied2[0];
-  var setCamDenied = _useStateCamDenied2[1];
-
-  /* Open sheet (mobile) or directly open picker (desktop) */
-  /* ── Media Picker ───────────────────────────────────────────────────────
-     openMediaSheet is called by Photo / Video / Avatar buttons.
-     On ALL platforms we directly trigger the native file picker via the
-     persistent <label>+<input> portal outside the React tree.
-     iOS will show its own system sheet (Camera / Photo Library / Files).
-     No custom action sheet needed — eliminates all timing/overlay issues.
-  ─────────────────────────────────────────────────────────────────────── */
-
-  var openMediaSheet = function openMediaSheet(type) {
-    window._mediaPickerOpen(type);
-  };
-
-  /* kept for any residual references */
-  var closeMediaSheet = function closeMediaSheet() { setMediaSheet(null); setCamDenied(false); };
-  var requestCameraAndOpen = function requestCameraAndOpen(type) { window._mediaPickerOpen(type); };
-  var _openPickerDirect = function _openPickerDirect(type) { window._mediaPickerOpen(type); };
-
   var handleMediaSelect = /*#__PURE__*/function () {
     var _ref25 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(file, type) {
       var file, localUrl, resourceType, result, _t7;
@@ -6850,10 +6782,11 @@ function MainApp(_ref16) {
       target: "_blank"
     }, "Sign up free on Cloudinary \u2192"), " (free forever plan)"), /*#__PURE__*/React.createElement("div", {
       className: "profile-header"
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("label", {
       className: "profile-avatar-wrap",
-      onClick: function onClick() { openMediaSheet('avatar'); },
-      title: "Change Photo"
+      htmlFor: "_mpi_avatar",
+      title: "Change Photo",
+      style: {cursor:"pointer"}
     }, avatarUrl ? /*#__PURE__*/React.createElement("img", {
       src: avatarUrl,
       className: "avatar-img",
@@ -6978,9 +6911,10 @@ function MainApp(_ref16) {
       className: "composer-toolbar"
     }, /*#__PURE__*/React.createElement("div", {
       className: "composer-media-btns"
-    }, /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("label", {
       className: "composer-media-btn",
-      onClick: function onClick() { openMediaSheet('photo'); }
+      htmlFor: "_mpi_image",
+      style: {cursor:"pointer"}
     }, /*#__PURE__*/React.createElement("svg", {
       fill: "none",
       viewBox: "0 0 24 24",
@@ -6990,9 +6924,10 @@ function MainApp(_ref16) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-    })), "Photo"), /*#__PURE__*/React.createElement("button", {
+    })), "Photo"), /*#__PURE__*/React.createElement("label", {
       className: "composer-media-btn",
-      onClick: function onClick() { openMediaSheet('video'); }
+      htmlFor: "_mpi_video",
+      style: {cursor:"pointer"}
     }, /*#__PURE__*/React.createElement("svg", {
       fill: "none",
       viewBox: "0 0 24 24",
