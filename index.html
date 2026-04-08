@@ -2420,7 +2420,8 @@ function AuthPage(_ref2) {
               handleCodeInApp: false
             };
             _context.n = 3;
-            return r.user.sendEmailVerification(actionCodeSettings);
+            // reload() refreshes token before sending — prevents auth/user-token-expired
+            return r.user.reload().catch(function(){}).then(function(){ return r.user.sendEmailVerification(actionCodeSettings); });
           case 3:
             startCooldown();
             setError('');
@@ -2435,7 +2436,7 @@ function AuthPage(_ref2) {
             _context.p = 6;
             _t = _context.v;
             _registering = false; // always reset on error
-            setError(firebaseErrMsg(_t.code) || _t.message);
+            setError(firebaseErrMsg(_t.code) || _t.message || 'Failed to send email. Please check your password and try again.');
           case 7:
             return _context.a(2);
         }
@@ -2547,29 +2548,37 @@ function AuthPage(_ref2) {
             console.warn('[signup] Firestore write failed:', fsErr.message);
           }
 
-          // 6. Send verification email — must happen while user token is still valid.
-          // We temporarily set _registering = true to block onAuthStateChanged from
-          // calling signOut() before sendEmailVerification finishes.
-          _registering = true;
+          // 6. Send verification email
+          // reload() refreshes the token after updateProfile — prevents auth/user-token-expired
+          try { await _r.user.reload(); } catch(e) {}
+          var _emailSent = false;
           try {
             await _r.user.sendEmailVerification({
               url: window.location.origin + window.location.pathname,
               handleCodeInApp: false
             });
+            _emailSent = true;
             console.log('[signup] Verification email sent to:', email);
           } catch (emailErr) {
-            // Log but don't block — account is created, user can use Resend
             console.error('[signup] sendEmailVerification failed:', emailErr.code, emailErr.message);
+            // 失敗時仍繼續（帳號已建立），但告知使用者需要手動重寄
+            // _emailSent = false，讓 UI 顯示提示
           }
 
-          // 7. Sign out — AFTER verification email is sent
+          // 7. Sign out — AFTER attempting to send email
           _registering = false;
           await auth.signOut();
 
-          // 8. Show success screen
+          // 8. Show verification screen
+          // 無論 email 是否成功送出都顯示驗證畫面（讓用戶可以用 Resend）
           setSentEmail(email);
           setVerificationSent(true);
-          startCooldown();
+          if (_emailSent) {
+            startCooldown();
+          } else {
+            // email 沒送出，不啟動 cooldown，讓用戶可以立刻點 Resend
+            setError('Account created but verification email failed to send. Please use the Resend button below.');
+          }
 
         } catch (postCreateErr) {
           // Critical step failed — clean up auth account and reset flag
