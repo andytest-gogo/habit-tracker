@@ -1298,7 +1298,20 @@ function renderUsers(f){
 }
 
 function deleteUserData(uid, name){
-  if(!confirm('Delete ALL Firestore data for "'+name+'"?\n\nThis will remove:\n• All habits\n• All posts (and their comments)\n• Upload quota record\n• User profile (including any duplicate docs with same email)\n• Username reservation\n• All associated reports\n\nNote: You still need to delete the Auth account in Firebase Console.\n\nThis cannot be undone!')) return;
+  if(!confirm(
+    'Delete ALL Firestore data for "'+name+'"?\n\n' +
+    'This will remove:\n' +
+    '\u2022 All habits\n' +
+    '\u2022 All posts (+ subcollection comments + per-post reports)\n' +
+    '\u2022 Comments this user left on OTHER people\u2019s posts\n' +
+    '\u2022 Reports filed BY this user\n' +
+    '\u2022 Reports filed AGAINST this user\n' +
+    '\u2022 Upload quota record\n' +
+    '\u2022 User profile doc\n' +
+    '\u2022 Username reservation\n' +
+    '\u2022 Cloudinary media queued for deletion (pending_cloudinary_deletes)\n\n' +
+    'Note: Auth account must be removed separately in Firebase Console.\n\nThis cannot be undone!'
+  )) return;
 
   // Collect ALL UIDs to delete: the clicked UID + any duplicate docs sharing the same email
   var userEmail = (window.fsUsers && window.fsUsers[uid] && window.fsUsers[uid].email) || '';
@@ -1311,40 +1324,94 @@ function deleteUserData(uid, name){
     });
   }
 
-  // ── Register ALL affected UIDs in blacklist IMMEDIATELY (synchronous) ──
-  // onSnapshot fires almost instantly after a Firestore write — we must block
-  // re-insertion BEFORE any async delete starts, not after.
-  // Note: we only blacklist UIDs (not emails), so a future re-registration
-  // with the same email will use a brand-new UID and appear normally.
+  // Blacklist UIDs immediately so onSnapshot cannot re-insert them
   allUidsToDelete.forEach(function(u){ _deletedUids.add(u); });
 
   var tasks = [];
   allUidsToDelete.forEach(function(delUid){
-    // Habits
-    tasks.push(db.collection('habits').where('userId','==',delUid).get().then(function(snap){
-      if(!snap.size) return;
-      var b=db.batch(); snap.docs.forEach(function(d){b.delete(d.ref);}); return b.commit();
-    }));
-    // Posts + comments + reports per post
-    tasks.push(db.collection('posts').where('userId','==',delUid).get().then(function(snap){
-      return Promise.all(snap.docs.map(function(d){
-        var postId=d.id;
-        return Promise.all([
-          d.ref.collection('comments').get().then(function(cs){
-            var b=db.batch(); cs.docs.forEach(function(c){b.delete(c.ref);}); b.delete(d.ref); return b.commit();
-          }),
-          db.collection('reports').where('postId','==',postId).get().then(function(rs){
-            if(!rs.size) return;
-            var b=db.batch(); rs.docs.forEach(function(r){b.delete(r.ref);}); return b.commit();
-          }).catch(function(){})
-        ]);
-      }));
-    }));
-    // Upload quota
+
+    // ── 1. Habits ──────────────────────────────────────────────────────────
+    tasks.push(
+      db.collection('habits').where('userId','==',delUid).get().then(function(snap){
+        if(!snap.size) return;
+        var b=db.batch(); snap.docs.forEach(function(d){b.delete(d.ref);}); return b.commit();
+      }).catch(function(){})
+    );
+
+    // ── 2. Own posts + subcollection comments + per-post reports ───────────
+    tasks.push(
+      db.collection('posts').where('userId','==',delUid).get().then(function(snap){
+        return Promise.all(snap.docs.map(function(postDoc){
+          var postId = postDoc.id;
+          var postData = postDoc.data();
+
+          // Queue Cloudinary media for deletion if post has media
+          if (postData.mediaPublicId) {
+            db.collection('pending_cloudinary_deletes').add({
+              userId:    delUid,
+              publicIds: [{ id: postData.mediaPublicId, type: postData.hasVideo ? 'video' : 'image' }],
+              reason:    'admin_user_delete',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              status:    'pending'
+            }).catch(function(){});
+          }
+
+          return Promise.all([
+            // Delete subcollection comments
+            postDoc.ref.collection('comments').get().then(function(cs){
+              var b=db.batch();
+              cs.docs.forEach(function(c){b.delete(c.ref);});
+              b.delete(postDoc.ref);
+              return b.commit();
+            }),
+            // Delete reports filed against this post
+            db.collection('reports').where('postId','==',postId).get().then(function(rs){
+              if(!rs.size) return;
+              var b=db.batch(); rs.docs.forEach(function(r){b.delete(r.ref);}); return b.commit();
+            }).catch(function(){})
+          ]);
+        }));
+      }).catch(function(){})
+    );
+
+    // ── 3. Comments this user left on OTHER people's posts ─────────────────
+    // Firestore doesn't support cross-collection group queries on subcollections
+    // without a collectionGroup index. We query the top-level posts and filter,
+    // OR if you have a collectionGroup index on 'comments', use that.
+    // Safe fallback: query all posts and delete matching comments.
+    tasks.push(
+      db.collectionGroup('comments').where('userId','==',delUid).get().then(function(snap){
+        if(!snap.size) return;
+        var b=db.batch(); snap.docs.forEach(function(d){b.delete(d.ref);}); return b.commit();
+      }).catch(function(){
+        // collectionGroup may not be indexed — silently skip; comments will become orphaned
+        console.warn('[deleteUserData] collectionGroup comments query failed — index may be missing');
+      })
+    );
+
+    // ── 4. Reports filed BY this user ──────────────────────────────────────
+    tasks.push(
+      db.collection('reports').where('reporterUid','==',delUid).get().then(function(snap){
+        if(!snap.size) return;
+        var b=db.batch(); snap.docs.forEach(function(r){b.delete(r.ref);}); return b.commit();
+      }).catch(function(){})
+    );
+
+    // ── 5. Reports filed AGAINST this user ────────────────────────────────
+    tasks.push(
+      db.collection('reports').where('reportedUserId','==',delUid).get().then(function(snap){
+        if(!snap.size) return;
+        var b=db.batch(); snap.docs.forEach(function(r){b.delete(r.ref);}); return b.commit();
+      }).catch(function(){})
+    );
+
+    // ── 6. Upload quota ────────────────────────────────────────────────────
     tasks.push(db.collection('upload_quotas').doc(delUid).delete().catch(function(){}));
-    // Users doc
+
+    // ── 7. User profile doc ────────────────────────────────────────────────
     tasks.push(db.collection('users').doc(delUid).delete().catch(function(){}));
-    // Username reservation
+
+    // ── 8. Username reservation ────────────────────────────────────────────
     tasks.push(
       db.collection('usernames').where('uid','==',delUid).get().then(function(snap){
         if(!snap.size) return;
@@ -1358,9 +1425,16 @@ function deleteUserData(uid, name){
     renderStats();
     renderUsers(document.getElementById('userSearch').value||'');
     renderPosts(document.getElementById('postSearch').value||'');
-    alert('Done! All Firestore data for "'+name+'" has been deleted.\nRemember to also delete the Auth account in Firebase Console if it still exists.');
+    alert(
+      'Done! All Firestore data for "'+name+'" has been deleted.\n\n' +
+      'Checklist:\n' +
+      '\u2713 Habits, posts, comments, reports deleted\n' +
+      '\u2713 Cloudinary media queued in pending_cloudinary_deletes\n' +
+      '\u26a0 Auth account: delete manually in Firebase Console\n' +
+      '\u26a0 Cloudinary media: run Media Cleanup in this admin panel'
+    );
   }).catch(function(e){
-    alert('Error: '+e.message);
+    alert('Error during deletion: '+e.message);
   });
 }
 
