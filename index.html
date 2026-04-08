@@ -915,73 +915,6 @@
 <body>
 <!-- ── EU Accessibility Act: Skip Navigation Link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-
-<!-- ── 白頁防護：全域錯誤攔截 + 自動偵測空白 Root ── -->
-<script>
-(function() {
-  // 1. 全域未捕獲錯誤 → console 記錄，不讓 app 靜默死亡
-  window.addEventListener('unhandledrejection', function(e) {
-    console.error('[AppGuard] Unhandled Promise rejection:', e.reason);
-  });
-
-  // 2. 白頁偵測：5秒後如果 #main-content 還是空的 → 顯示恢復 UI
-  function showRecoveryUI() {
-    var root = document.getElementById('main-content');
-    if (!root || root.firstChild) return; // React 已正常 mount，不介入
-
-    root.innerHTML = [
-      '<div style="font-family:-apple-system,sans-serif;padding:48px 24px;',
-      'text-align:center;max-width:380px;margin:0 auto">',
-      '<div style="font-size:40px;margin-bottom:16px">⚠️</div>',
-      '<h2 style="font-size:17px;font-weight:700;margin-bottom:10px">',
-      '應用程式載入失敗</h2>',
-      '<p style="font-size:13px;color:#666;line-height:1.7;margin-bottom:24px">',
-      '通常是 Service Worker 快取了舊版本所導致。<br>',
-      '點下方按鈕可自動清除快取並重新載入。</p>',
-      '<button id="_recovery_btn" style="background:#0a0a0a;color:#fff;border:none;',
-      'padding:13px 28px;font-size:13px;font-weight:700;cursor:pointer;',
-      'font-family:inherit;letter-spacing:.5px;width:100%;max-width:280px">',
-      '🔄 清除快取並重新載入</button>',
-      '<p style="font-size:11px;color:#aaa;margin-top:16px">',
-      '如持續發生，請嘗試：設定 → Safari → 清除歷史記錄與網站資料</p>',
-      '</div>'
-    ].join('');
-
-    document.getElementById('_recovery_btn').addEventListener('click', function() {
-      this.textContent = '清除中…';
-      var self = this;
-      Promise.resolve()
-        .then(function() {
-          if ('serviceWorker' in navigator) {
-            return navigator.serviceWorker.getRegistrations()
-              .then(function(regs) {
-                return Promise.all(regs.map(function(r) { return r.unregister(); }));
-              });
-          }
-        })
-        .then(function() {
-          if ('caches' in window) {
-            return caches.keys().then(function(keys) {
-              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-            });
-          }
-        })
-        .then(function() {
-          // Clear app localStorage (keep user session)
-          ['pwa-installed','ios-hint-shown','notif-asked'].forEach(function(k) {
-            try { localStorage.removeItem(k); } catch(e) {}
-          });
-          window.location.reload(true);
-        })
-        .catch(function() { window.location.reload(true); });
-    });
-  }
-
-  // 5秒後偵測，8秒後再偵測一次（Firebase 可能較慢）
-  setTimeout(showRecoveryUI, 5000);
-  setTimeout(showRecoveryUI, 8000);
-})();
-</script>
 <div id="main-content" role="main"></div>
 
 <!-- HIDDEN FILE INPUTS for iOS PWA compatibility.
@@ -1512,15 +1445,10 @@ if (isFirebaseConfigured) {
   app = firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
-  // Offline persistence — silent fallback on multi-tab or private-mode failure
-  db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
-    if (err.code === 'failed-precondition') {
-      // Multiple tabs open — persistence only works in one tab at a time; fine to ignore
-    } else if (err.code === 'unimplemented') {
-      // Browser doesn't support persistence; fine to ignore
-    }
-    // Never throw — a persistence failure must NEVER white-page the app
-  });
+  // Enable offline persistence for faster subsequent loads
+  db.enablePersistence({
+    synchronizeTabs: true
+  }).catch(function () {});
 }
 
 /* ── ICONS ── */
@@ -7337,19 +7265,7 @@ function App() {
       if (u) setUser(JSON.parse(u));
       return;
     }
-    // Safety timeout: if Firebase auth does not respond within 6s, show login page
-    // This prevents a permanent white screen when the network is down or Firebase is slow
-    var _authResolved = false;
-    var _authTimeout = setTimeout(function() {
-      if (!_authResolved) {
-        console.warn('[Auth] onAuthStateChanged timeout — forcing null user');
-        setUser(null);
-      }
-    }, 6000);
-
     var unsub = auth.onAuthStateChanged(function (u) {
-      _authResolved = true;
-      clearTimeout(_authTimeout);
       if (u) {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         var verified = isGoogle || u.emailVerified;
@@ -7391,7 +7307,7 @@ function App() {
         setUser(null);
       }
     });
-    return function () { unsub(); clearTimeout(_authTimeout); };
+    return function () { unsub(); };
   }, []);
   var handleLogout = function handleLogout() {
     if (!isFirebaseConfigured) {
@@ -7419,37 +7335,13 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             navigator.serviceWorker.register('./sw.js')
                 .then(reg => {
                     console.log('[PWA] SW registered:', reg.scope);
-                    _swReg = reg;
-
-                    // Force check for SW updates on every load
-                    reg.update().catch(() => {});
-
-                    // When a new SW is found, tell it to skip waiting immediately
-                    reg.addEventListener('updatefound', () => {
-                        const newWorker = reg.installing;
-                        if (!newWorker) return;
-                        newWorker.addEventListener('statechange', () => {
-                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                // New SW installed — tell it to take over now
-                                newWorker.postMessage({ type: 'SKIP_WAITING' });
-                            }
-                        });
-                    });
-
+                    _swReg = reg; // Store for contextual notification use
+                    // Also schedule reminders if already granted
                     if (Notification.permission === 'granted') {
                         scheduleDailyReminder(reg);
                     }
                 })
                 .catch(err => console.warn('[PWA] SW failed:', err));
-
-            // When new SW takes control, reload once to get fresh assets
-            let _swReloading = false;
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (_swReloading) return;
-                _swReloading = true;
-                console.log('[PWA] New SW active — reloading for fresh assets');
-                window.location.reload();
-            });
         });
     }
 
