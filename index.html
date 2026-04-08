@@ -6856,11 +6856,14 @@ function MainApp(_ref16) {
       target: "_blank"
     }, "Sign up free on Cloudinary \u2192"), " (free forever plan)"), /*#__PURE__*/React.createElement("div", {
       className: "profile-header"
-    }, /*#__PURE__*/React.createElement("label", {
+    }, /*#__PURE__*/React.createElement("div", {
       className: "profile-avatar-wrap",
-      htmlFor: "_mpi_avatar",
       title: "Change Photo",
-      style: {cursor:"pointer"}
+      style: {cursor:"pointer"},
+      role: "button",
+      tabIndex: 0,
+      onClick: function(e) { e.preventDefault(); var el=document.getElementById('_mpi_avatar'); if(el){el.value='';el.click();} },
+      onKeyDown: function(e) { if(e.key==='Enter'||e.key===' '){e.preventDefault();var el=document.getElementById('_mpi_avatar');if(el){el.value='';el.click();}} }
     }, avatarUrl ? /*#__PURE__*/React.createElement("img", {
       src: avatarUrl,
       className: "avatar-img",
@@ -6985,10 +6988,10 @@ function MainApp(_ref16) {
       className: "composer-toolbar"
     }, /*#__PURE__*/React.createElement("div", {
       className: "composer-media-btns"
-    }, /*#__PURE__*/React.createElement("label", {
+    }, /*#__PURE__*/React.createElement("button", {
       className: "composer-media-btn",
-      htmlFor: "_mpi_image",
-      style: {cursor:"pointer"}
+      style: {cursor:"pointer"},
+      onClick: function(e) { e.preventDefault(); var el=document.getElementById('_mpi_image'); if(el){el.value='';el.click();} }
     }, /*#__PURE__*/React.createElement("svg", {
       fill: "none",
       viewBox: "0 0 24 24",
@@ -6998,10 +7001,10 @@ function MainApp(_ref16) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-    })), "Photo"), /*#__PURE__*/React.createElement("label", {
+    })), "Photo"), /*#__PURE__*/React.createElement("button", {
       className: "composer-media-btn",
-      htmlFor: "_mpi_video",
-      style: {cursor:"pointer"}
+      style: {cursor:"pointer"},
+      onClick: function(e) { e.preventDefault(); var el=document.getElementById('_mpi_video'); if(el){el.value='';el.click();} }
     }, /*#__PURE__*/React.createElement("svg", {
       fill: "none",
       viewBox: "0 0 24 24",
