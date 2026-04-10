@@ -920,9 +920,9 @@
 <!-- HIDDEN FILE INPUTS for iOS PWA compatibility.
      These are referenced by <label htmlFor="..."> on the Photo/Video/Avatar buttons.
      iOS treats a label tap as a direct user interaction — 100% reliable, no JS needed. -->
-<input id="_mpi_image"  type="file" accept="image/*" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;z-index:-1;">
-<input id="_mpi_video"  type="file" accept="video/*" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;z-index:-1;">
-<input id="_mpi_avatar" type="file" accept="image/*" style="position:absolute;width:0.1px;height:0.1px;opacity:0;overflow:hidden;z-index:-1;">
+<input id="_mpi_image"  type="file" accept="image/*" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;pointer-events:none;">
+<input id="_mpi_video"  type="file" accept="video/*" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;pointer-events:none;">
+<input id="_mpi_avatar" type="file" accept="image/*" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;pointer-events:none;">
 <script>
 (function() {
   window._mediaPickerCallbacks = { image: null, video: null, avatar: null };
@@ -2420,7 +2420,9 @@ function AuthPage(_ref2) {
               handleCodeInApp: false
             };
             _context.n = 3;
-            return r.user.sendEmailVerification(actionCodeSettings);
+            // reload() refreshes token before sending — prevents auth/user-token-expired
+            console.log('[resend] Sending verification email to:', r.user.email, '| continueUrl:', actionCodeSettings.url);
+            return r.user.reload().catch(function(){}).then(function(){ return r.user.sendEmailVerification(actionCodeSettings); });
           case 3:
             startCooldown();
             setError('');
@@ -2435,7 +2437,14 @@ function AuthPage(_ref2) {
             _context.p = 6;
             _t = _context.v;
             _registering = false; // always reset on error
-            setError(firebaseErrMsg(_t.code) || _t.message);
+            var _resendErrCodes = {
+              'auth/unauthorized-continue-uri': '驗證信發送失敗：網域未授權，請聯絡管理員。',
+              'auth/too-many-requests': '請求過於頻繁，請稍後再試。',
+              'auth/network-request-failed': '網路錯誤，請檢查網路連線後再試。',
+              'auth/user-not-found': '找不到帳號，請重新確認 email。',
+              'auth/wrong-password': '密碼錯誤，請重新輸入。',
+            };
+            setError(_resendErrCodes[_t.code] || firebaseErrMsg(_t.code) || _t.message || 'Failed to send email. Please check your password and try again.');
           case 7:
             return _context.a(2);
         }
@@ -2547,29 +2556,49 @@ function AuthPage(_ref2) {
             console.warn('[signup] Firestore write failed:', fsErr.message);
           }
 
-          // 6. Send verification email — must happen while user token is still valid.
-          // We temporarily set _registering = true to block onAuthStateChanged from
-          // calling signOut() before sendEmailVerification finishes.
-          _registering = true;
+          // 6. Send verification email
+          // reload() refreshes the token after updateProfile — prevents auth/user-token-expired
+          try { await _r.user.reload(); } catch(e) {}
+          var _emailSent = false;
+          var _emailErrMsg = '';
           try {
+            // NOTE: The continueUrl domain MUST be in Firebase Console → Authentication → Settings → Authorized domains
+            var _continueUrl = window.location.origin + window.location.pathname;
+            console.log('[signup] Sending verification email to:', email, '| continueUrl:', _continueUrl);
             await _r.user.sendEmailVerification({
-              url: window.location.origin + window.location.pathname,
+              url: _continueUrl,
               handleCodeInApp: false
             });
-            console.log('[signup] Verification email sent to:', email);
+            _emailSent = true;
+            console.log('[signup] Verification email sent successfully to:', email);
           } catch (emailErr) {
-            // Log but don't block — account is created, user can use Resend
-            console.error('[signup] sendEmailVerification failed:', emailErr.code, emailErr.message);
+            console.error('[signup] sendEmailVerification failed — code:', emailErr.code, '| message:', emailErr.message);
+            // Map common error codes to user-friendly messages
+            var _emailErrCodes = {
+              'auth/unauthorized-continue-uri': '⚠️ 驗證信發送失敗：網域未授權。請聯絡管理員將此網站加入 Firebase Authorized Domains。',
+              'auth/invalid-continue-uri': '⚠️ 驗證信發送失敗：無效的回傳網址，請聯絡管理員。',
+              'auth/missing-continue-uri': '⚠️ 驗證信發送失敗：缺少回傳網址。',
+              'auth/too-many-requests': '⚠️ 驗證信發送失敗：請求過於頻繁，請稍後再試。',
+              'auth/network-request-failed': '⚠️ 驗證信發送失敗：網路錯誤，請檢查網路連線後點選下方「Resend」重新發送。',
+            };
+            _emailErrMsg = _emailErrCodes[emailErr.code] ||
+              ('⚠️ 驗證信發送失敗 [' + (emailErr.code || 'unknown') + ']：請點選下方「Resend」重新發送。');
           }
 
-          // 7. Sign out — AFTER verification email is sent
+          // 7. Sign out — AFTER attempting to send email
           _registering = false;
           await auth.signOut();
 
-          // 8. Show success screen
+          // 8. Show verification screen
+          // 無論 email 是否成功送出都顯示驗證畫面（讓用戶可以用 Resend）
           setSentEmail(email);
           setVerificationSent(true);
-          startCooldown();
+          if (_emailSent) {
+            startCooldown();
+          } else {
+            // email 沒送出，不啟動 cooldown，讓用戶可以立刻點 Resend
+            setError(_emailErrMsg || 'Account created but verification email failed to send. Please use the Resend button below.');
+          }
 
         } catch (postCreateErr) {
           // Critical step failed — clean up auth account and reset flag
@@ -6784,11 +6813,14 @@ function MainApp(_ref16) {
       target: "_blank"
     }, "Sign up free on Cloudinary \u2192"), " (free forever plan)"), /*#__PURE__*/React.createElement("div", {
       className: "profile-header"
-    }, /*#__PURE__*/React.createElement("label", {
+    }, /*#__PURE__*/React.createElement("div", {
       className: "profile-avatar-wrap",
-      htmlFor: "_mpi_avatar",
       title: "Change Photo",
-      style: {cursor:"pointer"}
+      role: "button",
+      tabIndex: 0,
+      style: {cursor:"pointer"},
+      onClick: function(e) { e.preventDefault(); var el=document.getElementById("_mpi_avatar"); if(el){el.value="";el.click();} },
+      onKeyDown: function(e) { if(e.key==="Enter"||e.key===" "){e.preventDefault();var el=document.getElementById("_mpi_avatar");if(el){el.value="";el.click();}} }
     }, avatarUrl ? /*#__PURE__*/React.createElement("img", {
       src: avatarUrl,
       className: "avatar-img",
@@ -6913,10 +6945,11 @@ function MainApp(_ref16) {
       className: "composer-toolbar"
     }, /*#__PURE__*/React.createElement("div", {
       className: "composer-media-btns"
-    }, /*#__PURE__*/React.createElement("label", {
+    }, /*#__PURE__*/React.createElement("button", {
       className: "composer-media-btn",
-      htmlFor: "_mpi_image",
-      style: {cursor:"pointer"}
+      type: "button",
+      style: {cursor:"pointer"},
+      onClick: function(e) { e.preventDefault(); var el=document.getElementById("_mpi_image"); if(el){el.value="";el.click();} }
     }, /*#__PURE__*/React.createElement("svg", {
       fill: "none",
       viewBox: "0 0 24 24",
@@ -6926,10 +6959,11 @@ function MainApp(_ref16) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-    })), "Photo"), /*#__PURE__*/React.createElement("label", {
+    })), "Photo"), /*#__PURE__*/React.createElement("button", {
       className: "composer-media-btn",
-      htmlFor: "_mpi_video",
-      style: {cursor:"pointer"}
+      type: "button",
+      style: {cursor:"pointer"},
+      onClick: function(e) { e.preventDefault(); var el=document.getElementById("_mpi_video"); if(el){el.value="";el.click();} }
     }, /*#__PURE__*/React.createElement("svg", {
       fill: "none",
       viewBox: "0 0 24 24",
