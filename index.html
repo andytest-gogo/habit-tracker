@@ -6094,9 +6094,11 @@ function MainApp(_ref16) {
             result = _context0.v;
             setAvatarUrl(result.url);
             localStorage.setItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid), result.url);
-            // Sync photoURL to Firestore (admin dashboard reads from here)
+            // Sync photoURL + avatarPublicId to Firestore (admin dashboard reads from here)
             if (user && user.uid && typeof db !== 'undefined') {
-              db.collection('users').doc(user.uid).set({ photoURL: result.url }, { merge: true }).catch(function(){});
+              var avatarUpdate = { photoURL: result.url };
+              if (result.publicId) avatarUpdate.avatarPublicId = result.publicId;
+              db.collection('users').doc(user.uid).set(avatarUpdate, { merge: true }).catch(function(){});
               // Batch-update avatarUrl on all existing posts by this user so feed stays in sync
               (function(newUrl, uid) {
                 db.collection('posts').where('userId', '==', uid).get().then(function(snap) {

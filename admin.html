@@ -1341,20 +1341,34 @@ function deleteUserData(uid, name){
     // ── 2. Own posts + subcollection comments + per-post reports ───────────
     tasks.push(
       db.collection('posts').where('userId','==',delUid).get().then(function(snap){
+        // Collect ALL mediaPublicIds from all posts in one batch Cloudinary queue entry
+        var allPostPublicIds = [];
+        snap.docs.forEach(function(postDoc){
+          var postData = postDoc.data();
+          if (postData.mediaPublicId) {
+            allPostPublicIds.push({ id: postData.mediaPublicId, type: postData.hasVideo ? 'video' : 'image' });
+          }
+        });
+
+        // Also collect avatar publicId from user doc
+        var userDoc = window.fsUsers && window.fsUsers[delUid];
+        if (userDoc && userDoc.avatarPublicId) {
+          allPostPublicIds.push({ id: userDoc.avatarPublicId, type: 'image' });
+        }
+
+        // Queue all Cloudinary assets (posts + avatar) in a single record
+        if (allPostPublicIds.length > 0) {
+          db.collection('pending_cloudinary_deletes').add({
+            userId:    delUid,
+            publicIds: allPostPublicIds,
+            reason:    'admin_user_delete',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            status:    'pending'
+          }).catch(function(){});
+        }
+
         return Promise.all(snap.docs.map(function(postDoc){
           var postId = postDoc.id;
-          var postData = postDoc.data();
-
-          // Queue Cloudinary media for deletion if post has media
-          if (postData.mediaPublicId) {
-            db.collection('pending_cloudinary_deletes').add({
-              userId:    delUid,
-              publicIds: [{ id: postData.mediaPublicId, type: postData.hasVideo ? 'video' : 'image' }],
-              reason:    'admin_user_delete',
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              status:    'pending'
-            }).catch(function(){});
-          }
 
           return Promise.all([
             // Delete subcollection comments
@@ -1421,15 +1435,27 @@ function deleteUserData(uid, name){
   });
 
   Promise.all(tasks).then(function(){
+    // ── Remove deleted UIDs from in-memory caches so UI updates instantly ──
+    allUidsToDelete.forEach(function(delUid){
+      // Remove from fsUsers cache
+      if (window.fsUsers) delete window.fsUsers[delUid];
+      // Remove from allHabits
+      allHabits = allHabits.filter(function(h){ return h.userId !== delUid; });
+      // Remove from allPosts (fixes Posts page still showing deleted user's posts)
+      allPosts = allPosts.filter(function(p){ return p.userId !== delUid; });
+    });
+
     buildUsers();
     renderStats();
+    renderCharts();
+    renderRecent();
     renderUsers(document.getElementById('userSearch').value||'');
     renderPosts(document.getElementById('postSearch').value||'');
     alert(
       'Done! All Firestore data for "'+name+'" has been deleted.\n\n' +
       'Checklist:\n' +
       '\u2713 Habits, posts, comments, reports deleted\n' +
-      '\u2713 Cloudinary media queued in pending_cloudinary_deletes\n' +
+      '\u2713 Cloudinary media (posts + avatar) queued in pending_cloudinary_deletes\n' +
       '\u26a0 Auth account: delete manually in Firebase Console\n' +
       '\u26a0 Cloudinary media: run Media Cleanup in this admin panel'
     );
