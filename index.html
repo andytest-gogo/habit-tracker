@@ -1093,7 +1093,6 @@
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js" crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js" crossorigin="anonymous"></script>
 <!-- React -->
 <script>/* React 18 */
 /**
@@ -1446,7 +1445,6 @@ if (isFirebaseConfigured) {
   app = firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
-  var fbFunctions = firebase.app().functions('asia-east1');
   // Enable offline persistence for faster subsequent loads
   db.enablePersistence({
     synchronizeTabs: true
@@ -2421,13 +2419,14 @@ function AuthPage(_ref2) {
               url: window.location.origin + window.location.pathname,
               handleCodeInApp: false
             };
+            actionCodeSettings = {
+              url: window.location.origin + window.location.pathname,
+              handleCodeInApp: false
+            };
             _context.n = 3;
             // reload() refreshes token before sending — prevents auth/user-token-expired
-            console.log('[resend] Calling sendVerificationEmail CF for:', r.user.email);
-            return r.user.reload().catch(function(){}).then(function(){
-              var _resendCF = fbFunctions.httpsCallable('sendVerificationEmail');
-              return _resendCF({ displayName: r.user.displayName || '' });
-            });
+            console.log('[resend] Sending verification email to:', r.user.email, '| continueUrl:', actionCodeSettings.url);
+            return r.user.reload().catch(function(){}).then(function(){ return r.user.sendEmailVerification(actionCodeSettings); });
           case 3:
             startCooldown();
             setError('');
@@ -2561,26 +2560,32 @@ function AuthPage(_ref2) {
             console.warn('[signup] Firestore write failed:', fsErr.message);
           }
 
-          // 6. Send verification email via Cloud Function (SendGrid — 即時發信)
+          // 6. Send verification email
+          // _registering = true 確保 onAuthStateChanged 不會在發信前 signOut
           // reload() refreshes the token after updateProfile — prevents auth/user-token-expired
           try { await _r.user.reload(); } catch(e) {}
           var _emailSent = false;
           var _emailErrMsg = '';
           try {
-            console.log('[signup] Calling sendVerificationEmail CF for:', email);
-            var _sendVerifyCF = fbFunctions.httpsCallable('sendVerificationEmail');
-            await _sendVerifyCF({ displayName: displayName.trim() });
+            var _continueUrl = window.location.origin + window.location.pathname;
+            console.log('[signup] Sending verification email to:', email, '| continueUrl:', _continueUrl);
+            await _r.user.sendEmailVerification({
+              url: _continueUrl,
+              handleCodeInApp: false
+            });
             _emailSent = true;
-            console.log('[signup] Verification email dispatched via SendGrid to:', email);
+            console.log('[signup] Verification email sent successfully to:', email);
           } catch (emailErr) {
-            console.error('[signup] sendVerificationEmail CF failed — code:', emailErr.code, '| message:', emailErr.message);
+            console.error('[signup] sendEmailVerification failed — code:', emailErr.code, '| message:', emailErr.message);
             var _emailErrCodes = {
-              'functions/resource-exhausted': '⚠️ 請稍候 60 秒後再重新發送驗證信。',
-              'functions/unauthenticated':    '⚠️ 驗證失敗，請重新整理頁面後再試。',
-              'functions/unavailable':        '⚠️ 服務暫時無法使用，請稍後再試。',
+              'auth/unauthorized-continue-uri': '⚠️ 驗證信發送失敗：網域未授權。請聯絡管理員將此網站加入 Firebase Authorized Domains。',
+              'auth/invalid-continue-uri': '⚠️ 驗證信發送失敗：無效的回傳網址，請聯絡管理員。',
+              'auth/missing-continue-uri': '⚠️ 驗證信發送失敗：缺少回傳網址。',
+              'auth/too-many-requests': '⚠️ 驗證信發送失敗：請求過於頻繁，請稍後再試。',
+              'auth/network-request-failed': '⚠️ 驗證信發送失敗：網路錯誤，請檢查網路連線後點選下方「Resend」重新發送。',
             };
             _emailErrMsg = _emailErrCodes[emailErr.code] ||
-              ('⚠️ 驗證信發送失敗：' + (emailErr.message || '請使用下方 Resend 重試'));
+              ('⚠️ 驗證信發送失敗 [' + (emailErr.code || 'unknown') + ']：請點選下方「Resend」重新發送。');
           }
 
           // 7. Sign out — AFTER attempting to send email
@@ -7304,7 +7309,12 @@ function App() {
         if (!verified) {
           // Unverified email account: sign out immediately, do not update user state
           // If registration is in progress (_registering), let it handle signOut
-          if (!_registering) auth.signOut();
+          // 加入延遲確認，避免 sendEmailVerification() 前被搶先 signOut
+          if (!_registering) {
+            setTimeout(function() {
+              if (!_registering) auth.signOut();
+            }, 500);
+          }
           return;
         }
         // Verified: update Firestore and sign in
