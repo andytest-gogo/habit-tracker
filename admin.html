@@ -404,8 +404,8 @@ tr:hover td{background:var(--g50)}
 
       <!-- Info banner -->
       <div style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.7">
-        <strong>📋 說明：</strong> 此頁面列出所有 <strong>已註冊但尚未驗證 Email</strong> 的帳號（已驗證的正常用戶不會出現）。
-        由管理員自行判斷是否需要刪除。可以幫你：<strong>①</strong> 一鍵清除對應的 Firestore 資料（users / usernames）　<strong>②</strong> 提供 Firebase Console 連結讓你手動刪除 Auth 帳號。
+        <strong>📋 說明：</strong> 此頁面列出所有 <strong>已註冊但尚未驗證 Email</strong> 的帳號（殭屍帳號）。這類帳號會佔用 username，導致其他用戶無法使用相同名稱。
+        <br>點擊「Delete Firestore」可自動清除 <code>users/</code>、<code>usernames/</code>、<code>upload_quotas/</code> 三筆資料，並自動開啟 Firebase Console 讓你完成 Auth 帳號刪除。
       </div>
 
       <div class="tbl-card">
@@ -434,14 +434,13 @@ tr:hover td{background:var(--g50)}
 
       <!-- Step guide -->
       <div class="tbl-card" style="padding:18px;margin-top:4px">
-        <div class="chart-ttl" style="margin-bottom:12px">📋 如何完整刪除未驗證帳號（兩步驟）</div>
+        <div class="chart-ttl" style="margin-bottom:12px">📋 刪除殭屍帳號流程（兩步驟）</div>
         <div style="font-size:12px;color:var(--g500);line-height:2">
-          <div><strong style="color:var(--black)">Step 1 — 刪除 Firestore 資料</strong>（本頁面可直接操作）<br>
-          點擊每一行的「Delete Firestore」按鈕，或使用「Delete All Firestore Data」一次清除。</div>
-          <div style="margin-top:10px"><strong style="color:var(--black)">Step 2 — 刪除 Auth 帳號</strong>（需手動到 Firebase Console）<br>
-          點擊每一行的「Open in Console」按鈕，或前往
-          <a href="https://console.firebase.google.com" target="_blank" style="color:var(--black);font-weight:700">Firebase Console → Authentication → Users</a>，
-          搜尋 UID 後點擊刪除。</div>
+          <div><strong style="color:#059669">Step 1 — 自動：刪除 Firestore 資料</strong>（本頁面一鍵完成）<br>
+          點擊每一行的「Delete Firestore」按鈕，自動清除 <code>users/</code>、<code>usernames/</code>（釋放 username）、<code>upload_quotas/</code>，並自動開啟 Firebase Console。</div>
+          <div style="margin-top:10px"><strong style="color:#dc2626">Step 2 — 手動：在 Firebase Console 刪除 Auth 帳號</strong>（約 5 秒）<br>
+          Console 會自動開啟並搜尋該 UID。找到帳號後點擊右側「⋮」→「Delete account」即可。<br>
+          若使用「Delete All」批次刪除，結束後會顯示所有 UID 清單供你複製貼上搜尋。</div>
         </div>
       </div>
 
@@ -1858,7 +1857,15 @@ function copyUID(uid, el) {
 }
 
 function deleteFirestoreData(uid, usernameLower, idx) {
-  if (!confirm('Delete Firestore data for UID: ' + uid + '?\n\nThis will remove:\n• users/' + uid + '\n• usernames/' + (usernameLower||'(none)') + '\n\nNote: You still need to delete the Auth account manually in Firebase Console.')) return;
+  if (!confirm(
+    'Delete Firestore data for UID: ' + uid + '?\n\n' +
+    'This will remove:\n' +
+    '• users/' + uid + '\n' +
+    '• usernames/' + (usernameLower||'(none)') + '\n' +
+    '• upload_quotas/' + uid + '\n\n' +
+    '⚠ Firebase Auth account must still be deleted manually.\n' +
+    'Firebase Console will open automatically after deletion.'
+  )) return;
 
   var btn = document.getElementById('czbtn-' + idx);
   if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
@@ -1868,14 +1875,35 @@ function deleteFirestoreData(uid, usernameLower, idx) {
   if (usernameLower) {
     batch.delete(db.collection('usernames').doc(usernameLower));
   }
+  batch.delete(db.collection('upload_quotas').doc(uid));
 
   batch.commit().then(function() {
+    // ── Update row UI ──
     var badge = document.getElementById('czfs-' + idx);
-    if (badge) { badge.textContent = '✓ Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
-    if (btn) { btn.disabled = true; btn.textContent = '✓ Done'; btn.style.borderColor = '#059669'; btn.style.color = '#059669'; }
-    // Remove from allZombies count
+    if (badge) { badge.textContent = '✓ FS Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
+
+    // Replace action cell with "Delete Auth" direct link button
+    var actionCell = btn ? btn.parentElement : null;
+    if (actionCell) {
+      var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(uid);
+      actionCell.innerHTML =
+        '<span style="font-size:10px;color:#059669;font-weight:700">✓ FS Done</span> &nbsp;'
+        + '<a href="' + consoleUrl + '" target="_blank">'
+        + '<button class="btn-console" style="background:#dc2626">🗑 Delete Auth Now</button>'
+        + '</a>';
+    }
+
+    // ── Remove from allZombies in memory ──
+    allZombies = allZombies.filter(function(z){ return z.uid !== uid; });
+    updateCleanupBadge();
     var remaining = document.querySelectorAll('.btn-del-fs:not([disabled])').length;
     if (remaining === 0) document.getElementById('cleanupAllBtn').style.display = 'none';
+
+    // ── Auto-open Firebase Console for Auth deletion ──
+    var consoleUrl2 = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(uid);
+    window.open(consoleUrl2, '_blank');
+    showToast('Firestore deleted. Firebase Console opened — delete the Auth account there.');
+
   }).catch(function(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Delete Firestore'; }
     var msg = e.message || '';
@@ -1883,8 +1911,7 @@ function deleteFirestoreData(uid, usernameLower, idx) {
       alert('❌ 權限不足，無法刪除。\n\n請先到 Firebase Console → Firestore → Rules\n將以下規則加入後再試：\n\n' +
         'match /users/{userId} {\n' +
         '  allow delete: if isAdmin();\n' +
-        '}\n\n' +
-        'match /usernames/{username} {\n' +
+        '}\n\nmatch /usernames/{username} {\n' +
         '  allow delete: if ... || isAdmin();\n' +
         '}\n\n詳細規則請見 Admin → Security & Rules 頁面。');
     } else {
@@ -1896,17 +1923,25 @@ function deleteFirestoreData(uid, usernameLower, idx) {
 function cleanupAllFirestore() {
   var count = allZombies.length;
   if (!count) return;
-  if (!confirm('Delete ALL Firestore data for ' + count + ' zombie account(s)?\n\nThis will remove all their users/ and usernames/ documents.\n\nYou will still need to delete Auth accounts manually in Firebase Console.')) return;
+  if (!confirm(
+    'Delete ALL Firestore data for ' + count + ' zombie account(s)?\n\n' +
+    'This will remove:\n• users/ docs\n• usernames/ docs\n• upload_quotas/ docs\n\n' +
+    '⚠ Firebase Auth accounts must still be deleted manually.\n' +
+    'A UID list + Console link will appear after deletion.'
+  )) return;
 
   var btn = document.getElementById('cleanupAllBtn');
   btn.disabled = true;
   btn.textContent = 'Deleting...';
 
-  // Process in batches of 500 (Firestore limit)
+  // Keep a snapshot of UIDs before clearing
+  var zombieSnapshot = allZombies.slice();
+
+  // Process in batches of 400 (safe below Firestore 500 limit)
   var BATCH_SIZE = 400;
   var chunks = [];
-  for (var i = 0; i < allZombies.length; i += BATCH_SIZE) {
-    chunks.push(allZombies.slice(i, i + BATCH_SIZE));
+  for (var i = 0; i < zombieSnapshot.length; i += BATCH_SIZE) {
+    chunks.push(zombieSnapshot.slice(i, i + BATCH_SIZE));
   }
 
   var promise = Promise.resolve();
@@ -1918,6 +1953,7 @@ function cleanupAllFirestore() {
         if (z.displayName_lower) {
           batch.delete(db.collection('usernames').doc(z.displayName_lower));
         }
+        batch.delete(db.collection('upload_quotas').doc(z.uid));
       });
       return batch.commit();
     });
@@ -1926,15 +1962,53 @@ function cleanupAllFirestore() {
   promise.then(function() {
     btn.textContent = '✓ All Deleted';
     btn.style.background = '#059669';
-    // Update all badges in table
-    allZombies.forEach(function(z, idx) {
+
+    // Update all row badges
+    zombieSnapshot.forEach(function(z, idx) {
       var badge = document.getElementById('czfs-' + idx);
       var rowBtn = document.getElementById('czbtn-' + idx);
-      if (badge) { badge.textContent = '✓ Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
-      if (rowBtn) { rowBtn.disabled = true; rowBtn.textContent = '✓ Done'; rowBtn.style.borderColor = '#059669'; rowBtn.style.color = '#059669'; }
+      if (badge) { badge.textContent = '✓ FS Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
+      if (rowBtn) {
+        var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(z.uid);
+        rowBtn.parentElement.innerHTML =
+          '<span style="font-size:10px;color:#059669;font-weight:700">✓ FS Done</span> &nbsp;'
+          + '<a href="' + consoleUrl + '" target="_blank">'
+          + '<button class="btn-console" style="background:#dc2626">🗑 Delete Auth</button>'
+          + '</a>';
+      }
     });
+
+    // Clear allZombies memory
+    allZombies = [];
+    updateCleanupBadge();
     btn.style.display = 'none';
-    document.getElementById('czFirestore').textContent = '0';
+
+    // ── Show UID summary panel for Auth deletion ──
+    var uidList = zombieSnapshot.map(function(z){ return z.uid; }).join('\n');
+    var consoleBase = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users';
+    var summaryHtml =
+      '<div style="margin-top:16px;padding:16px;background:#fff8e1;border:1px solid #e0c060">' +
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7a6000;margin-bottom:10px">' +
+      '⚠ Step 2 — Delete ' + zombieSnapshot.length + ' Firebase Auth Account(s)</div>' +
+      '<div style="font-size:11px;color:#7a6000;margin-bottom:10px">' +
+      'Firestore 資料已清除。請前往 Firebase Console 逐一刪除 Auth 帳號（搜尋 UID）：</div>' +
+      '<a href="' + consoleBase + '" target="_blank">' +
+      '<button style="padding:8px 16px;background:#dc2626;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;margin-bottom:12px">' +
+      '→ Open Firebase Auth Console</button></a>' +
+      '<div style="font-size:10px;color:#7a6000;margin-bottom:6px">UIDs to delete (copy all):</div>' +
+      '<textarea readonly style="width:100%;height:' + Math.min(zombieSnapshot.length * 22 + 16, 180) + 'px;' +
+      'font-family:var(--mono);font-size:10px;padding:8px;border:1px solid #e0c060;background:#fffdf0;resize:vertical;color:#333">' +
+      uidList + '</textarea></div>';
+
+    var card = document.getElementById('cleanupTbody').closest('.tbl-card');
+    if (card) {
+      var existing = document.getElementById('authDeleteSummary');
+      if (existing) existing.remove();
+      var div = document.createElement('div');
+      div.id = 'authDeleteSummary';
+      div.innerHTML = summaryHtml;
+      card.appendChild(div);
+    }
   }).catch(function(e) {
     btn.disabled = false;
     btn.textContent = '🗑 Delete All Firestore Data';
