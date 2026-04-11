@@ -1446,8 +1446,7 @@ if (isFirebaseConfigured) {
   app = firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
-  var fbFunctions = firebase.functions();
-  fbFunctions.useRegion('asia-east1');
+  var fbFunctions = firebase.app().functions('asia-east1');
   // Enable offline persistence for faster subsequent loads
   db.enablePersistence({
     synchronizeTabs: true
