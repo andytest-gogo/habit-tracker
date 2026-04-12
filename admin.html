@@ -673,7 +673,7 @@ service cloud.firestore {
           </div>
         </div>
         <table>
-          <thead><tr><th>User ID</th><th>Files (public_id)</th><th>Queued At</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th>User ID</th><th>Files (public_id)</th><th>Reason</th><th>Queued At</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="cdTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
         </table>
       </div>
@@ -2709,6 +2709,7 @@ function loadCloudinaryQueue() {
         return '<tr id="cdr-' + r.id + '">'
           + '<td><span class="uid-small" title="' + (r.userId||'') + '">' + (r.userId||'—') + '</span></td>'
           + '<td>' + (idList || '<span style="color:var(--g400);font-size:11px">none</span>') + '</td>'
+          + '<td>' + (function(reason){ var m={'admin_user_delete':['#fce7f3','#9d174d','Account Del'],'composer_cancelled':['#e0e7ff','#3730a3','Cancelled Upload'],'user_self_delete':['#fef3c7','#92400e','Self Delete']}; var r=m[reason]||['#f3f4f6','#6b7280',reason||'—']; return '<span style="font-size:9px;padding:1px 6px;background:'+r[0]+';color:'+r[1]+';font-weight:700;text-transform:uppercase">'+r[2]+'</span>'; })(r.reason) + '</td>'
           + '<td style="font-size:11px;white-space:nowrap">' + ts + '</td>'
           + '<td>' + statusBadge + '</td>'
           + '<td>' + actionBtn + '</td>'
