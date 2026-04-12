@@ -2023,17 +2023,54 @@ var allReports = [];
 
 function loadReports(){
   document.getElementById('reportsUpdated').textContent = 'Loading...';
-  db.collection('reports').orderBy('reportedAt','desc').get()
-    .then(function(snap){
-      allReports = snap.docs.map(function(d){
+
+  // Load reports + all existing users simultaneously
+  Promise.all([
+    db.collection('reports').orderBy('reportedAt','desc').get(),
+    db.collection('users').get()
+  ])
+    .then(function(results){
+      var reportsSnap = results[0];
+      var usersSnap   = results[1];
+
+      // Build a Set of UIDs that still exist in Firestore
+      var existingUids = new Set();
+      usersSnap.docs.forEach(function(d){ existingUids.add(d.id); });
+
+      var autoDeleted = []; // reports auto-dismissed because reported user is gone
+
+      allReports = reportsSnap.docs.map(function(d){
         var data = d.data();
         var ts = data.reportedAt && data.reportedAt.toDate ? data.reportedAt.toDate() : null;
         return Object.assign({ id: d.id }, data, { reportedAtDate: ts });
+      }).filter(function(r){
+        // Keep reports filed BY deleted users — they reported someone else, still valid
+        // Remove reports filed AGAINST deleted users — reported user's content is already gone
+        if (r.reportedUserId && !existingUids.has(r.reportedUserId)) {
+          // Auto-dismiss: reported user's account no longer exists
+          if (r.status === 'pending') {
+            autoDeleted.push(r.id);
+            // Mark as dismissed in Firestore silently
+            db.collection('reports').doc(r.id).update({
+              status: 'dismissed',
+              dismissedReason: 'reported_user_deleted',
+              dismissedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).catch(function(){});
+          }
+          return false; // hide from admin view entirely
+        }
+        return true;
       });
+
       updateReportsBadge();
       renderReportStats();
       renderReports();
-      document.getElementById('reportsUpdated').textContent = 'Last updated: ' + new Date().toLocaleString('en-US');
+
+      var note = 'Last updated: ' + new Date().toLocaleString('en-US');
+      if (autoDeleted.length > 0) {
+        note += ' — ' + autoDeleted.length + ' report(s) auto-dismissed (reported user deleted account)';
+      }
+      document.getElementById('reportsUpdated').textContent = note;
     })
     .catch(function(e){
       document.getElementById('reportsUpdated').textContent = '⚠️ Load failed: ' + e.message;

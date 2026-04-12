@@ -6450,11 +6450,26 @@ function MainApp(_ref16) {
       .then(function() {
         db.collection('user_stats').doc(uid).delete().catch(function() {});
         db.collection('upload_quotas').doc(uid).delete().catch(function() {});
+        // Delete reports filed BY this user (they are no longer here to follow up)
         db.collection('reports').where('reporterUid', '==', uid).get()
           .then(function(snap) {
             if (!snap || snap.empty) return;
             var b = db.batch();
             snap.docs.forEach(function(d) { b.delete(d.ref); });
+            return b.commit();
+          }).catch(function() {});
+        // Auto-dismiss pending reports filed AGAINST this user (their content is already deleted)
+        db.collection('reports').where('reportedUserId', '==', uid).where('status', '==', 'pending').get()
+          .then(function(snap) {
+            if (!snap || snap.empty) return;
+            var b = db.batch();
+            snap.docs.forEach(function(d) {
+              b.update(d.ref, {
+                status: 'dismissed',
+                dismissedReason: 'reported_user_deleted',
+                dismissedAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+            });
             return b.commit();
           }).catch(function() {});
         /* Also clean up liked_posts if exists */
@@ -7185,7 +7200,7 @@ function MainApp(_ref16) {
       className: "danger-modal-title"
     }, "\u26A0 Delete Account"), /*#__PURE__*/React.createElement("div", {
       className: "danger-modal-body"
-    }, "This will permanently delete:", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "All your habits"), ", completion records & streaks", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "All your posts"), " and comments", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "All uploaded photos & videos"), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "Your account"), " and profile data", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "This action cannot be undone.")), /*#__PURE__*/React.createElement("button", {
+    }, "This will permanently delete:", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "All your habits"), ", completion records & streaks", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "All your posts"), " and comments", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "All your posts' photos & videos"), " (queued for removal from media storage; see Privacy Policy § 7)", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "Your account"), " and profile data", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "This action cannot be undone.")), /*#__PURE__*/React.createElement("button", {
       className: "danger-confirm-btn",
       onClick: function onClick() {
         return setDeleteStep(2);
@@ -7585,7 +7600,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             html: `
 <p class="legal-modal-meta">Effective: March 29, 2026 &nbsp;·&nbsp; Version 1.3 — Section 1 follow relationships removed; Section 7 Cloudinary deletion timeline clarified; Section 10 material-change email notice removed</p>
 <div class="legal-modal-highlight">
-  <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account and all data anytime from the Profile tab. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
+  <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account anytime from the Profile tab — your habits, posts, and account are permanently erased immediately. Uploaded photos and videos are queued for removal from media storage on a best-effort basis and may not be deleted instantly. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
 <h3>0. Data Controller</h3>
 <p>This service is operated by an <strong>individual independent developer</strong> (sole trader, not a registered company) based in <strong>Taiwan (Republic of China)</strong>. For all privacy-related matters:</p>
@@ -7642,7 +7657,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <h3>6. Cookies & Analytics</h3>
 <p>We use Firebase Auth cookies (essential — keeps you signed in) and localStorage for app preferences. Umami analytics is cookieless and does not fingerprint users. Umami is only loaded after you consent — if you decline or later withdraw consent, no analytics script is executed.</p>
 <h3>7. Data Retention</h3>
-<p>Your data is retained while your account is active. When you delete your account, your Firebase account and habit data are permanently erased immediately. Uploaded media stored on Cloudinary is removed by the administrator on a best-effort basis; we cannot guarantee a specific deletion timeline for Cloudinary data. If you require confirmation that your media has been removed, please contact us at <a class="_eml" href="#"></a>.</p>
+<p>Your data is retained while your account is active. When you delete your account, your Firebase account and habit data are permanently erased immediately.</p>
+<p><strong>Uploaded media (photos &amp; videos):</strong> Media files stored on Cloudinary are queued for deletion by the administrator on a <strong>best-effort basis</strong>. Due to technical limitations of our media storage infrastructure, we <strong>cannot guarantee complete or immediate removal</strong> of all uploaded media files. Some files — including previously uploaded profile photos or media that was uploaded but never published — may persist on Cloudinary servers for an indeterminate period after account deletion. If you require confirmation or escalation of media removal, please contact us at <a class="_eml" href="#"></a> and we will make every reasonable effort to locate and remove your files.</p>
 <h3>8. Children</h3>
 <p>Habit Tracker Pro is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
 <h3>9. Data Breach Notification</h3>
@@ -7695,7 +7711,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <h3>9. Disclaimer</h3>
 <p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
 <h3>10. Termination</h3>
-<p>You may delete your account at any time. We may delete accounts that violate these Terms. Upon termination, your right to use the app ends immediately.</p>
+<p>You may delete your account at any time. We may delete accounts that violate these Terms. Upon termination, your right to use the app ends immediately and your account data (habits, posts, profile) is permanently deleted. Uploaded media files stored on third-party infrastructure (Cloudinary) are queued for deletion on a best-effort basis but may not be removed immediately or completely — see Privacy Policy Section 7 for full details.</p>
 <h3>11. Governing Law & Jurisdiction</h3>
 <p>These Terms are governed by and construed in accordance with the laws of the <strong>Republic of China (Taiwan)</strong>, without regard to conflict-of-law principles. Any disputes shall be subject to the exclusive jurisdiction of the courts in Taiwan, except where mandatory local consumer protection laws provide otherwise.</p>
 <p><strong>EU users:</strong> You retain all rights under applicable EU consumer protection laws (including EU Directive 2011/83/EU). You may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>. Nothing in these Terms limits your statutory rights as an EU consumer.</p>
