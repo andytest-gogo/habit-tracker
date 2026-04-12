@@ -255,7 +255,7 @@
             font-size:9px; font-weight:700; text-transform:uppercase;
             letter-spacing:.8px; color:white; opacity:0; transition:.2s;
         }
-        .avatar-img { width:72px; height:72px; object-fit:cover; border:2px solid var(--black); display:block; }
+        .avatar-img { width:72px; height:72px; object-fit:contain; background:#fff; border:2px solid var(--black); display:block; }
 
         /* ── AUTH ── */
         .auth-page {
@@ -3049,7 +3049,8 @@ function FeedCard(_ref5) {
     style: {
       width: '100%',
       height: '100%',
-      objectFit: 'cover'
+      objectFit: 'contain',
+      background: '#fff'
     },
     alt: ""
   }) : post.avatar), /*#__PURE__*/React.createElement("div", {
@@ -3201,7 +3202,7 @@ function FeedCard(_ref5) {
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-avatar"
     }, c.userAvatarUrl
-      ? /*#__PURE__*/React.createElement("img", {src:c.userAvatarUrl, style:{width:'100%',height:'100%',objectFit:'cover',borderRadius:0}, alt:""})
+      ? /*#__PURE__*/React.createElement("img", {src:c.userAvatarUrl, style:{width:'100%',height:'100%',objectFit:'contain',background:'#fff',borderRadius:0}, alt:""})
       : c.userAvatar
     ), /*#__PURE__*/React.createElement("div", {
       className: "comment-body"
@@ -3592,7 +3593,7 @@ function UserCommentsPage(_ref_ucp) {
                   /*#__PURE__*/React.createElement('div', { className: 'comment-item', style: { marginBottom: 0 } },
                     /*#__PURE__*/React.createElement('div', { className: 'comment-avatar' },
                       avatarUrl
-                        ? /*#__PURE__*/React.createElement('img', { src: avatarUrl, style: { width: '100%', height: '100%', objectFit: 'cover' }, alt: '' })
+                        ? /*#__PURE__*/React.createElement('img', { src: avatarUrl, style: { width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }, alt: '' })
                         : avatarLetter
                     ),
                     /*#__PURE__*/React.createElement('div', { className: 'comment-body' },
@@ -6086,6 +6087,12 @@ function MainApp(_ref16) {
             }
             return _context0.a(2);
           case 1:
+            // ── Format validation: only allow JPEG, PNG, WebP, GIF ──
+            var _allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+            if (!_allowedTypes.includes(file.type)) {
+              alert('Unsupported file format.\n\nPlease upload a JPEG, PNG, WebP, or GIF image.');
+              return _context0.a(2);
+            }
             setUploadingAvatar(true);
             _context0.p = 2;
             _context0.n = 3;
@@ -6944,6 +6951,18 @@ function MainApp(_ref16) {
           videoPortalRef.current._reset();
         }
         setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
+        // Queue orphaned Cloudinary asset for deletion when user removes media without posting
+        var _orphanId = mediaPublicIdRef.current;
+        var _orphanType = (postMedia && postMedia.type === 'video') ? 'video' : 'image';
+        if (_orphanId && typeof db !== 'undefined' && user && user.uid) {
+          db.collection('pending_cloudinary_deletes').add({
+            userId:    user.uid,
+            publicIds: [{ id: _orphanId, type: _orphanType }],
+            reason:    'composer_cancelled',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            status:    'pending'
+          }).catch(function(){});
+        }
         mediaPublicIdRef.current = null; setPostMedia(null);
       }
     }, "✕") : null), /*#__PURE__*/React.createElement("div", {
