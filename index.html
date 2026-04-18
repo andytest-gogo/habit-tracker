@@ -5990,6 +5990,173 @@ function MainApp(_ref16) {
     setUploadingAvatar = _useState108[1];
   var avatarInputRef = useRef(null);
 
+  // ── Username Edit State ──
+  var _useStateUE1 = useState(false),
+    _useStateUE2 = _slicedToArray(_useStateUE1, 2),
+    showUsernameEdit = _useStateUE2[0],
+    setShowUsernameEdit = _useStateUE2[1];
+  var _useStateUE3 = useState(''),
+    _useStateUE4 = _slicedToArray(_useStateUE3, 2),
+    newUsername = _useStateUE4[0],
+    setNewUsername = _useStateUE4[1];
+  var _useStateUE5 = useState(''),
+    _useStateUE6 = _slicedToArray(_useStateUE5, 2),
+    usernameEditStatus = _useStateUE6[0],
+    setUsernameEditStatus = _useStateUE6[1]; // 'checking'|'available'|'taken'|'saving'|'done'|'error'
+  var _useStateUE7 = useState(''),
+    _useStateUE8 = _slicedToArray(_useStateUE7, 2),
+    usernameEditError = _useStateUE8[0],
+    setUsernameEditError = _useStateUE8[1];
+
+  // Check 30-day cooldown from Firestore users doc
+  var getUsernameLastChanged = async function() {
+    if (!isFirebaseConfigured || !user) return null;
+    try {
+      var snap = await db.collection('users').doc(user.uid).get();
+      if (!snap.exists) return null;
+      var d = snap.data();
+      return d.usernameChangedAt ? (d.usernameChangedAt.toDate ? d.usernameChangedAt.toDate() : new Date(d.usernameChangedAt)) : null;
+    } catch(e) { return null; }
+  };
+
+  var getDaysUntilNextChange = function(lastChanged) {
+    if (!lastChanged) return 0;
+    var msElapsed = Date.now() - lastChanged.getTime();
+    var daysElapsed = msElapsed / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.ceil(30 - daysElapsed));
+  };
+
+  var handleUsernameCheckAvailability = async function() {
+    var name = newUsername.trim();
+    if (!name || name === (user.displayName || '').trim()) return;
+    if (name.length < 2 || name.length > 30) {
+      setUsernameEditStatus('error');
+      setUsernameEditError('Username must be 2–30 characters.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\u4e00-\u9fff\s]+$/.test(name)) {
+      setUsernameEditStatus('error');
+      setUsernameEditError('Only letters, numbers, underscores, spaces, and Chinese characters allowed.');
+      return;
+    }
+    setUsernameEditStatus('checking');
+    setUsernameEditError('');
+    try {
+      var key = name.toLowerCase().replace(/\s+/g, '_');
+      var unameDoc = await db.collection('usernames').doc(key).get();
+      if (!unameDoc.exists) {
+        setUsernameEditStatus('available');
+        return;
+      }
+      var linkedUid = unameDoc.data() && unameDoc.data().uid;
+      if (linkedUid === user.uid) {
+        // Same user's own username key — effectively available
+        setUsernameEditStatus('available');
+        return;
+      }
+      // Check if orphaned
+      if (linkedUid) {
+        var userDoc = await db.collection('users').doc(linkedUid).get();
+        if (!userDoc.exists) { setUsernameEditStatus('available'); return; }
+      }
+      setUsernameEditStatus('taken');
+    } catch(e) { setUsernameEditStatus('error'); setUsernameEditError('Check failed: ' + e.message); }
+  };
+
+  var handleUsernameSave = async function() {
+    var name = newUsername.trim();
+    if (!name || name === (user.displayName || '').trim()) { setShowUsernameEdit(false); return; }
+    if (usernameEditStatus !== 'available') return;
+
+    setUsernameEditStatus('saving');
+    setUsernameEditError('');
+
+    try {
+      var newKey = name.toLowerCase().replace(/\s+/g, '_');
+      var oldKey = (user.displayName || '').trim().toLowerCase().replace(/\s+/g, '_');
+
+      // Batch all Firestore writes
+      var batch = db.batch();
+
+      // 1. Add new usernames key
+      batch.set(db.collection('usernames').doc(newKey), {
+        uid: user.uid,
+        displayName: name,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      // 2. Delete old usernames key (if different)
+      if (oldKey && oldKey !== newKey) {
+        batch.delete(db.collection('usernames').doc(oldKey));
+      }
+
+      // 3. Update users doc
+      batch.update(db.collection('users').doc(user.uid), {
+        displayName: name,
+        displayName_lower: newKey,
+        usernameChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      // 4. Update upload_quotas displayName
+      batch.update(db.collection('upload_quotas').doc(user.uid), { displayName: name });
+
+      await batch.commit();
+
+      // 5. Update Firebase Auth displayName
+      await auth.currentUser.updateProfile({ displayName: name });
+
+      // 6. Update all user's posts (user field)
+      var postsSnap = await db.collection('posts').where('userId', '==', user.uid).get();
+      if (!postsSnap.empty) {
+        var postBatch = db.batch();
+        postsSnap.docs.forEach(function(d) { postBatch.update(d.ref, { user: name }); });
+        await postBatch.commit();
+        // Update local feed state
+        setFeedPosts(function(prev) { return prev.map(function(p) {
+          return p.userId === user.uid ? _objectSpread(_objectSpread({}, p), {}, { user: name }) : p;
+        }); });
+        setMyPosts(function(prev) { return prev.map(function(p) {
+          return p.userId === user.uid ? _objectSpread(_objectSpread({}, p), {}, { user: name }) : p;
+        }); });
+      }
+
+      // 7. Update all user's comments (userName field) via collectionGroup
+      try {
+        var commSnap = await db.collectionGroup('comments').where('userId', '==', user.uid).get();
+        if (!commSnap.empty) {
+          var CHUNK = 400;
+          for (var i = 0; i < commSnap.docs.length; i += CHUNK) {
+            var commBatch = db.batch();
+            commSnap.docs.slice(i, i + CHUNK).forEach(function(d) { commBatch.update(d.ref, { userName: name }); });
+            await commBatch.commit();
+          }
+        }
+      } catch(e) { console.warn('[renameUsername] comments collectionGroup failed (index may be missing):', e.message); }
+
+      // 8. Update reports where reportedUserId === user.uid
+      try {
+        var reportSnap = await db.collection('reports').where('reportedUserId', '==', user.uid).get();
+        if (!reportSnap.empty) {
+          var reportBatch = db.batch();
+          reportSnap.docs.forEach(function(d) { reportBatch.update(d.ref, { reportedUserName: name }); });
+          await reportBatch.commit();
+        }
+      } catch(e) { console.warn('[renameUsername] reports update failed:', e.message); }
+
+      setUsernameEditStatus('done');
+      setShowUsernameEdit(false);
+      setNewUsername('');
+      // Force re-render with new displayName
+      // user object from Firebase Auth is live — updateProfile already updated it
+      // Trigger a state nudge so profile-name re-renders
+      setAvatarUrl(function(prev) { return prev; }); // no-op state update to force re-render
+
+    } catch(e) {
+      setUsernameEditStatus('error');
+      setUsernameEditError('Save failed: ' + e.message);
+    }
+  };
+
   var handleMediaSelect = /*#__PURE__*/function () {
     var _ref25 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(file, type) {
       var file, localUrl, resourceType, result, _t7;
@@ -6856,9 +7023,60 @@ function MainApp(_ref16) {
       className: "profile-avatar"
     }, uploadingAvatar ? '⟳' : ((_ref31 = user.displayName || user.email) === null || _ref31 === void 0 || (_ref31 = _ref31[0]) === null || _ref31 === void 0 ? void 0 : _ref31.toUpperCase()) || 'U'), /*#__PURE__*/React.createElement("div", {
       className: "avatar-edit-overlay"
-    }, uploadingAvatar ? 'Uploading…' : 'Change Photo')), /*#__PURE__*/React.createElement("div", {
-      className: "profile-name"
-    }, user.displayName || 'User'), /*#__PURE__*/React.createElement("div", {
+    }, uploadingAvatar ? 'Uploading…' : 'Change Photo')),
+    !showUsernameEdit
+      ? /*#__PURE__*/React.createElement("div", { style:{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:4 } },
+          /*#__PURE__*/React.createElement("div", { className:"profile-name", style:{ marginBottom:0 } }, (auth.currentUser && auth.currentUser.displayName) || user.displayName || 'User'),
+          /*#__PURE__*/React.createElement("button", {
+            title:"Edit username",
+            style:{ background:'none', border:'none', cursor:'pointer', padding:'2px 4px', color:'var(--gray-400)', lineHeight:1, flexShrink:0 },
+            onClick: async function() {
+              var lastChanged = await getUsernameLastChanged();
+              var daysLeft = getDaysUntilNextChange(lastChanged);
+              if (daysLeft > 0) {
+                alert('You can change your username again in ' + daysLeft + ' day' + (daysLeft>1?'s':'') + '.\n(30-day cooldown)');
+                return;
+              }
+              setNewUsername((auth.currentUser && auth.currentUser.displayName) || user.displayName || '');
+              setUsernameEditStatus('');
+              setUsernameEditError('');
+              setShowUsernameEdit(true);
+            }
+          }, /*#__PURE__*/React.createElement("svg", { width:14, height:14, fill:"none", viewBox:"0 0 24 24", stroke:"currentColor", strokeWidth:2 },
+              /*#__PURE__*/React.createElement("path", { strokeLinecap:"round", strokeLinejoin:"round", d:"M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" })
+          ))
+        )
+      : /*#__PURE__*/React.createElement("div", { style:{ padding:'0 16px 12px', width:'100%', maxWidth:320, margin:'0 auto' } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, color:'var(--gray-500)', marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'center' } },
+            "Edit Username",
+            usernameEditStatus==='checking' && /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, color:'var(--gray-400)', fontWeight:400 } }, "Checking…"),
+            usernameEditStatus==='available' && /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, color:'#38a169', fontWeight:600 } }, "✓ Available"),
+            usernameEditStatus==='taken'     && /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, color:'#e53e3e', fontWeight:600 } }, "✗ Already taken")
+          ),
+          /*#__PURE__*/React.createElement("input", {
+            type:"text", maxLength:30,
+            style:{ width:'100%', padding:'9px 12px', border:'1px solid '+(usernameEditStatus==='taken'?'#e53e3e':usernameEditStatus==='available'?'#38a169':'var(--gray-200)'), fontSize:14, fontFamily:'var(--font)', outline:'none', marginBottom:8, boxSizing:'border-box' },
+            value: newUsername, autoFocus: true,
+            onChange: function(e){ setNewUsername(e.target.value); setUsernameEditStatus(''); setUsernameEditError(''); },
+            onBlur: handleUsernameCheckAvailability,
+            onKeyDown: function(e){ if(e.key==='Escape'){ setShowUsernameEdit(false); } },
+            placeholder:"New username"
+          }),
+          usernameEditError && /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:'#e53e3e', marginBottom:6 } }, usernameEditError),
+          /*#__PURE__*/React.createElement("div", { style:{ display:'flex', gap:6 } },
+            /*#__PURE__*/React.createElement("button", {
+              style:{ flex:1, padding:'8px', background:usernameEditStatus==='available'?'var(--black)':'var(--gray-300)', color:'var(--white)', border:'none', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, cursor:usernameEditStatus==='available'?'pointer':'not-allowed', fontFamily:'var(--font)' },
+              disabled: usernameEditStatus!=='available',
+              onClick: handleUsernameSave
+            }, usernameEditStatus==='saving'?'Saving…':'Save'),
+            /*#__PURE__*/React.createElement("button", {
+              style:{ padding:'8px 14px', background:'none', border:'1px solid var(--gray-200)', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, cursor:'pointer', fontFamily:'var(--font)', color:'var(--gray-500)' },
+              onClick: function(){ setShowUsernameEdit(false); setNewUsername(''); setUsernameEditStatus(''); setUsernameEditError(''); }
+            }, "Cancel")
+          ),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)', marginTop:8, lineHeight:1.6 } }, "⏱ You can change your username once every 30 days.")
+        ),
+    /*#__PURE__*/React.createElement("div", {
       className: "profile-email"
     }, user.email), /*#__PURE__*/React.createElement("div", {
       className: "profile-stats"

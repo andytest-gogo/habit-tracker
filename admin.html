@@ -308,9 +308,10 @@ tr:hover td{background:var(--g50)}
             <th>Habits</th>
             <th>Posts</th>
             <th>Avg. Completion</th>
+            <th>Name Changed</th>
             <th>Action</th>
           </tr></thead>
-          <tbody id="userTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
+          <tbody id="userTbody"><tr class="loading-row"><td colspan="9">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1173,8 +1174,9 @@ function buildUsers(){
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
     var createdAt = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt)) : null;
+    var usernameChangedAt = u.usernameChangedAt ? (u.usernameChangedAt.toDate ? u.usernameChangedAt.toDate() : new Date(u.usernameChangedAt)) : null;
     map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', photoURL:u.photoURL||'',
-              habits:[], posts:[], lastSeen:u.lastSeen, createdAt:createdAt};
+              habits:[], posts:[], lastSeen:u.lastSeen, createdAt:createdAt, usernameChangedAt:usernameChangedAt};
   });
 
   // Supplement habit/post counts only for users already in the map (don't create ghost entries)
@@ -1283,6 +1285,12 @@ function renderUsers(f){
     var av  = avatarHtml(u.uid, u.name);
     var safeUid  = u.uid.replace(/'/g,"\\'");
     var safeName = htmlEsc(u.name).replace(/'/g,"&#39;");
+    var nameChangedStr = u.usernameChangedAt ? u.usernameChangedAt.toLocaleDateString() : '\u2014';
+    var daysAgo = u.usernameChangedAt ? Math.floor((Date.now()-u.usernameChangedAt.getTime())/86400000) : null;
+    var daysLeft = daysAgo !== null ? Math.max(0, 30-daysAgo) : 0;
+    var nameChangedHtml = u.usernameChangedAt
+      ? nameChangedStr + (daysLeft > 0 ? ' <span style="font-size:9px;color:#d97706;font-weight:700">(' + daysLeft + 'd lock)</span>' : ' <span style="font-size:9px;color:#16a34a;font-weight:700">(unlocked)</span>')
+      : '\u2014';
     return '<tr>'+
       '<td><div class="uc">'+av+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
       '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
@@ -1291,6 +1299,7 @@ function renderUsers(f){
       '<td style="font-size:11px;color:var(--g400);white-space:nowrap">'+joined+'</td>'+
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
+      '<td style="font-size:11px;color:var(--g500);white-space:nowrap">'+nameChangedHtml+'</td>'+
       '<td><button class="del" onclick="deleteUserData(\''+safeUid+'\',\''+safeName+'\')" title="Delete all Firestore data">Delete Data</button></td>'+
       '</tr>';
   }).join('');
