@@ -6693,29 +6693,30 @@ function MainApp(_ref16) {
       })
 
       // Step 2e-3: Remove this user's likes from comments on OTHER people's posts
+      // Strategy: iterate all posts → query each post's comments subcollection
+      // This avoids the collectionGroup+where index requirement.
       .then(function() {
-        return db.collectionGroup('comments').where('likedBy', 'array-contains', uid).get()
-          .catch(function(e) {
-            console.warn('[DeleteAccount] comments likedBy query failed (missing index?):', e.message);
-            return { docs: [] };
-          });
+        return db.collection('posts').get().catch(function() { return { docs: [] }; });
       })
-      .then(function(snap) {
-        if (!snap.docs || !snap.docs.length) return;
-        var chunks = [];
-        for (var i = 0; i < snap.docs.length; i += 400) {
-          chunks.push(snap.docs.slice(i, i + 400));
-        }
-        return chunks.reduce(function(chain, chunk) {
+      .then(function(postsSnap) {
+        if (!postsSnap.docs || !postsSnap.docs.length) return;
+        // Process posts in series to avoid too many parallel reads
+        return postsSnap.docs.reduce(function(chain, postDoc) {
           return chain.then(function() {
-            var b = db.batch();
-            chunk.forEach(function(d) {
-              b.update(d.ref, {
-                likedBy: firebase.firestore.FieldValue.arrayRemove(uid),
-                likes:   firebase.firestore.FieldValue.increment(-1)
-              });
-            });
-            return b.commit().catch(function() {});
+            return postDoc.ref.collection('comments')
+              .where('likedBy', 'array-contains', uid).get()
+              .then(function(commSnap) {
+                if (!commSnap.docs || !commSnap.docs.length) return;
+                var b = db.batch();
+                commSnap.docs.forEach(function(d) {
+                  b.update(d.ref, {
+                    likedBy: firebase.firestore.FieldValue.arrayRemove(uid),
+                    likes:   firebase.firestore.FieldValue.increment(-1)
+                  });
+                });
+                return b.commit().catch(function() {});
+              })
+              .catch(function() {});
           });
         }, Promise.resolve());
       })
@@ -7096,11 +7097,11 @@ function MainApp(_ref16) {
       className: "avatar-edit-overlay"
     }, uploadingAvatar ? 'Uploading…' : 'Change Photo')),
     !showUsernameEdit
-      ? /*#__PURE__*/React.createElement("div", { style:{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:4 } },
-          /*#__PURE__*/React.createElement("div", { className:"profile-name", style:{ marginBottom:0 } }, (auth.currentUser && auth.currentUser.displayName) || user.displayName || 'User'),
+      ? /*#__PURE__*/React.createElement("div", { style:{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:4 } },
+          /*#__PURE__*/React.createElement("div", { className:"profile-name", style:{ marginBottom:0, textAlign:'center' } }, (auth.currentUser && auth.currentUser.displayName) || user.displayName || 'User'),
           /*#__PURE__*/React.createElement("button", {
             title:"Edit username",
-            style:{ background:'none', border:'none', cursor:'pointer', padding:'2px 4px', color:'var(--gray-400)', lineHeight:1, flexShrink:0 },
+            style:{ position:'absolute', right:-24, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', padding:'2px 4px', color:'var(--gray-400)', lineHeight:1, flexShrink:0 },
             onClick: function() {
               setNewUsername((auth.currentUser && auth.currentUser.displayName) || user.displayName || '');
               setUsernameEditStatus('');

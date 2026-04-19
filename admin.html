@@ -2180,6 +2180,24 @@ function loadReports(){
 
     // onSnapshot: re-runs automatically whenever any report doc changes
     // (e.g. username rename, status update, new report) — no manual refresh needed
+    // Build a live users map so report names stay in sync when users rename
+    var usersMap = {}; // uid -> displayName
+    usersSnap.docs.forEach(function(d){ usersMap[d.id] = d.data().displayName || ''; });
+
+    // Keep usersMap updated via the existing users onSnapshot (allUsers is maintained by loadUsers)
+    // We also subscribe directly here so reports page gets renames immediately
+    var _usersForReportsUnsub = db.collection('users').onSnapshot(function(snap) {
+      snap.docs.forEach(function(d){ usersMap[d.id] = d.data().displayName || ''; });
+      // Re-render reports with updated names
+      allReports = allReports.map(function(r) {
+        if (r.reportedUserId && usersMap[r.reportedUserId]) {
+          return Object.assign({}, r, { reportedUserName: usersMap[r.reportedUserId] });
+        }
+        return r;
+      });
+      renderReports();
+    }, function(){});
+
     _reportsUnsubscribe = db.collection('reports')
       .orderBy('reportedAt', 'desc')
       .onSnapshot(function(reportsSnap) {
@@ -2188,7 +2206,11 @@ function loadReports(){
         allReports = reportsSnap.docs.map(function(d){
           var data = d.data();
           var ts = data.reportedAt && data.reportedAt.toDate ? data.reportedAt.toDate() : null;
-          return Object.assign({ id: d.id }, data, { reportedAtDate: ts });
+          // Override reportedUserName with live value from users collection
+          var liveDisplayName = data.reportedUserId && usersMap[data.reportedUserId]
+            ? usersMap[data.reportedUserId]
+            : (data.reportedUserName || '');
+          return Object.assign({ id: d.id }, data, { reportedAtDate: ts, reportedUserName: liveDisplayName });
         }).filter(function(r){
           if (r.reportedUserId && !existingUids.has(r.reportedUserId)) {
             if (r.status === 'pending') {
@@ -2220,6 +2242,10 @@ function loadReports(){
           '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load reports: ' + htmlEsc(e.message) +
           '<br><br>Ensure Firestore Rules allow admin to read <code>reports</code> collection.</td></tr>';
       });
+
+    // Cleanup users listener when reports listener is replaced
+    var _origUnsub = _reportsUnsubscribe;
+    _reportsUnsubscribe = function() { _origUnsub(); _usersForReportsUnsub(); };
 
   }).catch(function(e) {
     document.getElementById('reportsUpdated').textContent = '⚠️ Load failed (users): ' + e.message;
