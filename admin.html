@@ -546,7 +546,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null
         &amp;&amp; request.auth.token.admin == true
-        &amp;&amp; request.auth.token.email == '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="462728223f777f7f74767e777e06212b272f2a6825292b">[email&#160;protected]</a>';
+        &amp;&amp; request.auth.token.email == 'andy19920818@gmail.com';
     }
 
     // ── Users collection ─────────────────────────────────────────
@@ -571,8 +571,8 @@ service cloud.firestore {
       allow read:   if request.auth != null;
       allow create: if request.auth != null
                     &amp;&amp; request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null
-                    &amp;&amp; resource.data.userId == request.auth.uid;
+      // ✅ 修正：任何登入用戶皆可 update（按讚/取消讚、刪帳號清讚都需要更新他人貼文）
+      allow update: if request.auth != null;
       allow delete: if request.auth != null
                     &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
 
@@ -580,27 +580,59 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read:   if request.auth != null;
         allow create: if request.auth != null;
+        // ✅ 修正：任何登入用戶皆可 update（留言按讚、頭像同步都需要）
+        allow update: if request.auth != null;
         allow delete: if request.auth != null
                       &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
       }
     }
 
-    // ── Usernames collection (username uniqueness index) ─────────
-    // Needed so unverified users can reserve their username at sign-up.
-    // Without this rule the batch write fails and no Firestore doc is created.
+    // ── Usernames collection ─────────────────────────────────────
     match /usernames/{username} {
       allow read:   if request.auth != null;
       allow create: if request.auth != null
                     &amp;&amp; request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+                    &amp;&amp; resource.data.uid == request.auth.uid;
       allow delete: if request.auth != null
                     &amp;&amp; (resource.data.uid == request.auth.uid || isAdmin());
-      allow read:   if isAdmin();
     }
 
     // ── Upload Quotas ────────────────────────────────────────────
     match /upload_quotas/{uid} {
       allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;
       allow read, write: if isAdmin();
+    }
+
+    // ── Reports collection ✅ 新增 ───────────────────────────────
+    // 任何登入用戶可建立檢舉；被檢舉者可 update 自己的 report（改名同步）；
+    // 檢舉者可 update 自己送出的 report（刪帳號清理）；admin 可全部操作
+    match /reports/{reportId} {
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+                    &amp;&amp; (resource.data.reportedUserId == request.auth.uid
+                        || resource.data.reporterUid == request.auth.uid
+                        || isAdmin());
+      allow read, delete: if isAdmin();
+    }
+
+    // ── Archived Habits ──────────────────────────────────────────
+    match /archived_habits/{docId} {
+      allow read, write, delete: if request.auth != null
+                                 &amp;&amp; resource.data.userId == request.auth.uid;
+      allow read, delete: if isAdmin();
+    }
+
+    // ── User Stats ───────────────────────────────────────────────
+    match /user_stats/{uid} {
+      allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;
+      allow read, write: if isAdmin();
+    }
+
+    // ── Pending Cloudinary Deletes ───────────────────────────────
+    match /pending_cloudinary_deletes/{docId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
   }
 }</pre>
@@ -623,6 +655,27 @@ service cloud.firestore {
           <div id="migrationStatus" style="font-size:12px;color:var(--g500)"></div>
         </div>
         <div id="migrationLog" style="margin-top:12px;font-size:11px;color:var(--g500);line-height:1.8;max-height:160px;overflow-y:auto;display:none;background:var(--g50);padding:10px 12px;border:1px solid var(--g200)"></div>
+      </div>
+
+      <!-- Fix Likes Tool -->
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:8px">🔧 Fix Orphaned Likes</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:14px">
+          Run this to repair posts and comments where deleted accounts left behind stale like counts.<br>
+          This recalculates <code style="background:var(--g100);padding:1px 5px;font-size:11px">likes</code> from the actual
+          <code style="background:var(--g100);padding:1px 5px;font-size:11px">likedBy</code> array for every post and comment,
+          so orphaned UIDs no longer inflate the count.<br><br>
+          <strong>Safe to run anytime.</strong> It reads all posts/comments and sets
+          <code>likes = likedBy.length</code> — no data is deleted.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button onclick="runFixLikes()" id="fixLikesBtn"
+            style="padding:8px 18px;background:var(--black);color:var(--white);border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:.5px">
+            Fix Likes Now
+          </button>
+          <div id="fixLikesStatus" style="font-size:12px;color:var(--g500)"></div>
+        </div>
+        <div id="fixLikesLog" style="margin-top:12px;font-size:11px;color:var(--g500);line-height:1.8;max-height:200px;overflow-y:auto;display:none;background:var(--g50);padding:10px 12px;border:1px solid var(--g200)"></div>
       </div>
 
       <!-- Compliance checklist -->
@@ -1074,6 +1127,89 @@ async function runUsernameMigration() {
     statusEl.style.color = '#991b1b';
     statusEl.textContent = '✗ Migration failed: ' + e.message;
     btn.textContent = 'Run Migration';
+  }
+  btn.disabled = false;
+}
+
+async function runFixLikes() {
+  var btn = document.getElementById('fixLikesBtn');
+  var statusEl = document.getElementById('fixLikesStatus');
+  var logEl = document.getElementById('fixLikesLog');
+
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  logEl.style.display = 'block';
+  logEl.innerHTML = '';
+  statusEl.textContent = 'Loading posts...';
+
+  var fixedPosts = 0, fixedComments = 0, skippedPosts = 0, skippedComments = 0, errors = 0;
+
+  try {
+    // ── 1. Fix posts ──────────────────────────────────────────────
+    var postsSnap = await db.collection('posts').get();
+    statusEl.textContent = 'Fixing ' + postsSnap.docs.length + ' posts...';
+
+    var CHUNK = 400;
+    var postUpdates = [];
+    for (var postDoc of postsSnap.docs) {
+      var d = postDoc.data();
+      var likedBy = Array.isArray(d.likedBy) ? d.likedBy : [];
+      var correct = likedBy.length;
+      if ((d.likes || 0) !== correct) {
+        postUpdates.push({ ref: postDoc.ref, correct: correct, old: d.likes || 0, id: postDoc.id });
+      } else {
+        skippedPosts++;
+      }
+    }
+
+    // Batch update posts in chunks
+    for (var i = 0; i < postUpdates.length; i += CHUNK) {
+      var batch = db.batch();
+      postUpdates.slice(i, i + CHUNK).forEach(function(u) {
+        batch.update(u.ref, { likes: u.correct });
+        logEl.innerHTML += '<span style="color:#065f46">✓ Post ' + u.id.slice(0,8) + '… likes: ' + u.old + ' → ' + u.correct + '</span><br>';
+        fixedPosts++;
+      });
+      await batch.commit();
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+
+    // ── 2. Fix comments ───────────────────────────────────────────
+    statusEl.textContent = 'Fixing comments...';
+    var commSnap = await db.collectionGroup('comments').get();
+    var commentUpdates = [];
+    for (var commDoc of commSnap.docs) {
+      var cd = commDoc.data();
+      var cLikedBy = Array.isArray(cd.likedBy) ? cd.likedBy : [];
+      var cCorrect = cLikedBy.length;
+      if ((cd.likes || 0) !== cCorrect) {
+        commentUpdates.push({ ref: commDoc.ref, correct: cCorrect, old: cd.likes || 0, id: commDoc.id });
+      } else {
+        skippedComments++;
+      }
+    }
+
+    for (var j = 0; j < commentUpdates.length; j += CHUNK) {
+      var cBatch = db.batch();
+      commentUpdates.slice(j, j + CHUNK).forEach(function(u) {
+        cBatch.update(u.ref, { likes: u.correct });
+        logEl.innerHTML += '<span style="color:#1d4ed8">✓ Comment ' + u.id.slice(0,8) + '… likes: ' + u.old + ' → ' + u.correct + '</span><br>';
+        fixedComments++;
+      });
+      await cBatch.commit();
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+
+    statusEl.style.color = '#065f46';
+    statusEl.textContent = '✅ Done — fixed ' + fixedPosts + ' posts, ' + fixedComments + ' comments (' + (skippedPosts + skippedComments) + ' already correct)';
+    logEl.innerHTML += '<br><strong style="color:#065f46">✅ All done. Reload the Posts page to see updated counts.</strong>';
+    btn.textContent = 'Run Again';
+  } catch(e) {
+    statusEl.style.color = '#991b1b';
+    statusEl.textContent = '✗ Failed: ' + e.message;
+    logEl.innerHTML += '<span style="color:#991b1b">Error: ' + e.message + '</span>';
+    btn.textContent = 'Fix Likes Now';
+    console.error('[runFixLikes]', e);
   }
   btn.disabled = false;
 }

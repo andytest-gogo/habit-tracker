@@ -6093,8 +6093,7 @@ function MainApp(_ref16) {
       // 3. Update users doc
       batch.update(db.collection('users').doc(user.uid), {
         displayName: name,
-        displayName_lower: newKey,
-        usernameChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+        displayName_lower: newKey
       });
 
       // 4. Update upload_quotas displayName
@@ -7102,13 +7101,7 @@ function MainApp(_ref16) {
           /*#__PURE__*/React.createElement("button", {
             title:"Edit username",
             style:{ background:'none', border:'none', cursor:'pointer', padding:'2px 4px', color:'var(--gray-400)', lineHeight:1, flexShrink:0 },
-            onClick: async function() {
-              var lastChanged = await getUsernameLastChanged();
-              var daysLeft = getDaysUntilNextChange(lastChanged);
-              if (daysLeft > 0) {
-                alert('You can change your username again in ' + daysLeft + ' day' + (daysLeft>1?'s':'') + '.\n(30-day cooldown)');
-                return;
-              }
+            onClick: function() {
               setNewUsername((auth.currentUser && auth.currentUser.displayName) || user.displayName || '');
               setUsernameEditStatus('');
               setUsernameEditError('');
@@ -7146,7 +7139,7 @@ function MainApp(_ref16) {
               onClick: function(){ setShowUsernameEdit(false); setNewUsername(''); setUsernameEditStatus(''); setUsernameEditError(''); }
             }, "Cancel")
           ),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)', marginTop:8, lineHeight:1.6 } }, "⏱ You can change your username once every 30 days.")
+
         ),
     /*#__PURE__*/React.createElement("div", {
       className: "profile-email"
