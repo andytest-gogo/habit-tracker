@@ -6283,6 +6283,22 @@ function MainApp(_ref16) {
                   });
                   return batch.commit();
                 }).catch(function() {});
+
+                // Also update userAvatarUrl on all comments made by this user (on any post)
+                db.collectionGroup('comments').where('userId', '==', uid).get().then(function(snap) {
+                  if (!snap || snap.empty) return;
+                  var chunks = [];
+                  for (var i = 0; i < snap.docs.length; i += 400) {
+                    chunks.push(snap.docs.slice(i, i + 400));
+                  }
+                  return chunks.reduce(function(chain, chunk) {
+                    return chain.then(function() {
+                      var b = db.batch();
+                      chunk.forEach(function(d) { b.update(d.ref, { userAvatarUrl: newUrl }); });
+                      return b.commit();
+                    });
+                  }, Promise.resolve());
+                }).catch(function() {});
               })(result.url, user.uid);
             }
             _context0.n = 5;
@@ -6647,6 +6663,62 @@ function MainApp(_ref16) {
             snap.docs.forEach(function(d) { b.delete(d.ref); });
             return b.commit();
           }).catch(function() {});
+      })
+
+      // Step 2e-2: Remove this user's likes from OTHER people's posts
+      .then(function() {
+        return db.collection('posts').where('likedBy', 'array-contains', uid).get()
+          .catch(function(e) {
+            console.warn('[DeleteAccount] posts likedBy query failed:', e.message);
+            return { docs: [] };
+          });
+      })
+      .then(function(snap) {
+        if (!snap.docs || !snap.docs.length) return;
+        var chunks = [];
+        for (var i = 0; i < snap.docs.length; i += 400) {
+          chunks.push(snap.docs.slice(i, i + 400));
+        }
+        return chunks.reduce(function(chain, chunk) {
+          return chain.then(function() {
+            var b = db.batch();
+            chunk.forEach(function(d) {
+              b.update(d.ref, {
+                likedBy: firebase.firestore.FieldValue.arrayRemove(uid),
+                likes:   firebase.firestore.FieldValue.increment(-1)
+              });
+            });
+            return b.commit().catch(function() {});
+          });
+        }, Promise.resolve());
+      })
+
+      // Step 2e-3: Remove this user's likes from comments on OTHER people's posts
+      .then(function() {
+        return db.collectionGroup('comments').where('likedBy', 'array-contains', uid).get()
+          .catch(function(e) {
+            console.warn('[DeleteAccount] comments likedBy query failed (missing index?):', e.message);
+            return { docs: [] };
+          });
+      })
+      .then(function(snap) {
+        if (!snap.docs || !snap.docs.length) return;
+        var chunks = [];
+        for (var i = 0; i < snap.docs.length; i += 400) {
+          chunks.push(snap.docs.slice(i, i + 400));
+        }
+        return chunks.reduce(function(chain, chunk) {
+          return chain.then(function() {
+            var b = db.batch();
+            chunk.forEach(function(d) {
+              b.update(d.ref, {
+                likedBy: firebase.firestore.FieldValue.arrayRemove(uid),
+                likes:   firebase.firestore.FieldValue.increment(-1)
+              });
+            });
+            return b.commit().catch(function() {});
+          });
+        }, Promise.resolve());
       })
 
       // Step 2f: Delete username reservation

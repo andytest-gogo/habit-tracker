@@ -2029,64 +2029,65 @@ function cleanupAllFirestore() {
    REPORTS — load, render, actions
 ══════════════════════════════════════════ */
 var allReports = [];
+var _reportsUnsubscribe = null; // holds onSnapshot unsubscribe handle
 
 function loadReports(){
   document.getElementById('reportsUpdated').textContent = 'Loading...';
 
-  // Load reports + all existing users simultaneously
-  Promise.all([
-    db.collection('reports').orderBy('reportedAt','desc').get(),
-    db.collection('users').get()
-  ])
-    .then(function(results){
-      var reportsSnap = results[0];
-      var usersSnap   = results[1];
+  // Unsubscribe any previous listener before creating a new one
+  if (_reportsUnsubscribe) { _reportsUnsubscribe(); _reportsUnsubscribe = null; }
 
-      // Build a Set of UIDs that still exist in Firestore
-      var existingUids = new Set();
-      usersSnap.docs.forEach(function(d){ existingUids.add(d.id); });
+  // First fetch users (one-time) to build existingUids, then start live reports listener
+  db.collection('users').get().then(function(usersSnap) {
+    var existingUids = new Set();
+    usersSnap.docs.forEach(function(d){ existingUids.add(d.id); });
 
-      var autoDeleted = []; // reports auto-dismissed because reported user is gone
+    // onSnapshot: re-runs automatically whenever any report doc changes
+    // (e.g. username rename, status update, new report) — no manual refresh needed
+    _reportsUnsubscribe = db.collection('reports')
+      .orderBy('reportedAt', 'desc')
+      .onSnapshot(function(reportsSnap) {
+        var autoDeleted = [];
 
-      allReports = reportsSnap.docs.map(function(d){
-        var data = d.data();
-        var ts = data.reportedAt && data.reportedAt.toDate ? data.reportedAt.toDate() : null;
-        return Object.assign({ id: d.id }, data, { reportedAtDate: ts });
-      }).filter(function(r){
-        // Keep reports filed BY deleted users — they reported someone else, still valid
-        // Remove reports filed AGAINST deleted users — reported user's content is already gone
-        if (r.reportedUserId && !existingUids.has(r.reportedUserId)) {
-          // Auto-dismiss: reported user's account no longer exists
-          if (r.status === 'pending') {
-            autoDeleted.push(r.id);
-            // Mark as dismissed in Firestore silently
-            db.collection('reports').doc(r.id).update({
-              status: 'dismissed',
-              dismissedReason: 'reported_user_deleted',
-              dismissedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).catch(function(){});
+        allReports = reportsSnap.docs.map(function(d){
+          var data = d.data();
+          var ts = data.reportedAt && data.reportedAt.toDate ? data.reportedAt.toDate() : null;
+          return Object.assign({ id: d.id }, data, { reportedAtDate: ts });
+        }).filter(function(r){
+          if (r.reportedUserId && !existingUids.has(r.reportedUserId)) {
+            if (r.status === 'pending') {
+              autoDeleted.push(r.id);
+              db.collection('reports').doc(r.id).update({
+                status: 'dismissed',
+                dismissedReason: 'reported_user_deleted',
+                dismissedAt: firebase.firestore.FieldValue.serverTimestamp()
+              }).catch(function(){});
+            }
+            return false;
           }
-          return false; // hide from admin view entirely
+          return true;
+        });
+
+        updateReportsBadge();
+        renderReportStats();
+        renderReports();
+
+        var note = 'Last updated: ' + new Date().toLocaleString('en-US') + ' (live)';
+        if (autoDeleted.length > 0) {
+          note += ' — ' + autoDeleted.length + ' report(s) auto-dismissed (reported user deleted account)';
         }
-        return true;
+        document.getElementById('reportsUpdated').textContent = note;
+
+      }, function(e) {
+        document.getElementById('reportsUpdated').textContent = '⚠️ Load failed: ' + e.message;
+        document.getElementById('reportsTbody').innerHTML =
+          '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load reports: ' + htmlEsc(e.message) +
+          '<br><br>Ensure Firestore Rules allow admin to read <code>reports</code> collection.</td></tr>';
       });
 
-      updateReportsBadge();
-      renderReportStats();
-      renderReports();
-
-      var note = 'Last updated: ' + new Date().toLocaleString('en-US');
-      if (autoDeleted.length > 0) {
-        note += ' — ' + autoDeleted.length + ' report(s) auto-dismissed (reported user deleted account)';
-      }
-      document.getElementById('reportsUpdated').textContent = note;
-    })
-    .catch(function(e){
-      document.getElementById('reportsUpdated').textContent = '⚠️ Load failed: ' + e.message;
-      document.getElementById('reportsTbody').innerHTML =
-        '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load reports: ' + htmlEsc(e.message) +
-        '<br><br>Ensure Firestore Rules allow admin to read <code>reports</code> collection.</td></tr>';
-    });
+  }).catch(function(e) {
+    document.getElementById('reportsUpdated').textContent = '⚠️ Load failed (users): ' + e.message;
+  });
 }
 
 function updateReportsBadge(){
