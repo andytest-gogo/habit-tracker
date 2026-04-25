@@ -22,19 +22,19 @@
         font-src    'self'
                     https://fonts.gstatic.com;
         img-src     'self' data: blob:
-                    https://res.cloudinary.com
+                    https://YOUR_SUPABASE_URL.supabase.co
                     https://lh3.googleusercontent.com
-                    https://firebasestorage.googleapis.com;
+                    https://YOUR_SUPABASE_URL.supabase.co;
         connect-src 'self'
-                    https://*.firebaseio.com
+                    https://YOUR_SUPABASE_URL.supabase.co
                     https://*.googleapis.com
                     https://*.cloudfunctions.net
                     https://identitytoolkit.googleapis.com
                     https://securetoken.googleapis.com
-                    https://api.cloudinary.com
+                    https://YOUR_SUPABASE_URL.supabase.co
                     https://umami-psi-opal.vercel.app;
         media-src   'self' blob:
-                    https://res.cloudinary.com;
+                    https://YOUR_SUPABASE_URL.supabase.co;
         frame-src   'none';
         object-src  'none';
         base-uri    'self';
@@ -62,11 +62,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="dns-prefetch" href="https://health-habit-tracker-e6b50.firebaseio.com">
+    <link rel="dns-prefetch" href="https://YOUR_SUPABASE_URL.supabase.co">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="dns-prefetch" href="https://health-habit-tracker-e6b50.firebaseio.com">
+    <link rel="dns-prefetch" href="https://YOUR_SUPABASE_URL.supabase.co">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -1030,13 +1030,13 @@
                 <p class="priv-dpa-title">Third-Party Data Processors &amp; DPA References</p>
                 <ul class="priv-dpa-list">
                     <li>
-                        <strong>Google Firebase</strong> (Auth + Firestore) —
-                        <a href="https://firebase.google.com/terms/data-processing-terms" target="_blank" rel="noopener noreferrer">Data Processing Agreement ↗</a>
+                        <strong>Supabase</strong> (Auth + Database) —
+                        <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy ↗</a>
                         · Transfers under Standard Contractual Clauses (SCCs)
                     </li>
                     <li>
-                        <strong>Cloudinary</strong> (Media storage) —
-                        <a href="https://cloudinary.com/privacy" target="_blank" rel="noopener noreferrer">GDPR Compliance &amp; DPA ↗</a>
+                        <strong>Supabase</strong> (資料庫 &amp; 媒體儲存) —
+                        <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy ↗</a>
                         · EU data residency available
                     </li>
                     <li>
@@ -1089,10 +1089,8 @@
     </div>
 </div>
 
-<!-- Firebase SDK -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js" crossorigin="anonymous"></script>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
 <!-- React -->
 <script>/* React 18 */
 /**
@@ -1427,28 +1425,505 @@ var _React = React,
   useEffect = _React.useEffect,
   useRef = _React.useRef;
 
-/* ── Firebase config ── */
-var firebaseConfig = {
-  apiKey: "AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
-  authDomain: "health-habit-tracker-e6b50.firebaseapp.com",
-  projectId: "health-habit-tracker-e6b50",
-  storageBucket: "health-habit-tracker-e6b50.firebasestorage.app",
-  messagingSenderId: "890093173627",
-  appId: "1:890093173627:web:54032fce30ae7ef3f41bde"
-};
-var app, auth, db;
-// Registration guard: prevents onAuthStateChanged from calling signOut()
-// and invalidating the auth token while registration is writing to Firestore.
+/* ══════════════════════════════════════════════════
+   ★ SUPABASE 設定 — 請填入你自己的 Supabase 資訊 ★
+   1. 前往 https://supabase.com 建立專案
+   2. 到 Project Settings → API 取得 URL 和 anon key
+   ══════════════════════════════════════════════════ */
+var SUPABASE_URL  = 'YOUR_SUPABASE_URL';   // e.g. https://xxxx.supabase.co
+var SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
+
+/* ── Supabase Storage 設定 ─────────────────────────
+   取代 Cloudinary — 使用 Supabase Storage 免費方案
+   Bucket 名稱請在 Supabase Dashboard → Storage 建立：
+   ・media   (公開) — 儲存貼文圖片與影片
+   ・avatars (公開) — 儲存大頭照
+   ══════════════════════════════════════════════════ */
+var STORAGE_BUCKET_MEDIA   = 'media';
+var STORAGE_BUCKET_AVATARS = 'avatars';
+
+var _supabase = null;
+var auth = null;   // will be set below
+var db   = null;   // Firestore-compatible shim (see below)
 var _registering = false;
-var isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+var isFirebaseConfigured = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+var isCloudinaryConfigured = isFirebaseConfigured; // Storage handled by Supabase
+
 if (isFirebaseConfigured) {
-  app = firebase.initializeApp(firebaseConfig);
-  auth = firebase.auth();
-  db = firebase.firestore();
-  // Enable offline persistence for faster subsequent loads
-  db.enablePersistence({
-    synchronizeTabs: true
-  }).catch(function () {});
+  _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  /* ─────────────────────────────────────────────────
+     AUTH SHIM  — maps old firebase.auth() API calls
+     to Supabase auth equivalents
+  ───────────────────────────────────────────────── */
+  auth = {
+    _listeners: [],
+    get currentUser() {
+      var sess = _supabase.auth.session ? _supabase.auth.session() : null;
+      return sess ? _makeUser(sess.user) : null;
+    },
+    onAuthStateChanged: function(cb) {
+      // Supabase v2 uses onAuthStateChange
+      var { data: { subscription } } = _supabase.auth.onAuthStateChange(function(event, session) {
+        cb(session ? _makeUser(session.user) : null);
+      });
+      // Fire immediately with current session
+      _supabase.auth.getSession().then(function({ data: { session } }) {
+        cb(session ? _makeUser(session.user) : null);
+      });
+      return function() { subscription.unsubscribe(); };
+    },
+    signInWithPopup: function(provider) {
+      return _supabase.auth.signInWithOAuth({ provider: 'google',
+        options: { queryParams: { prompt: 'select_account' } }
+      }).then(function(r) {
+        if (r.error) throw r.error;
+        // Return user-like object (real user set after redirect)
+        return { user: auth.currentUser };
+      });
+    },
+    signInWithEmailAndPassword: function(email, password) {
+      return _supabase.auth.signInWithPassword({ email: email, password: password })
+        .then(function(r) {
+          if (r.error) { var e = new Error(r.error.message); e.code = _sbErrToCode(r.error); throw e; }
+          return { user: _makeUser(r.data.user) };
+        });
+    },
+    createUserWithEmailAndPassword: function(email, password) {
+      return _supabase.auth.signUp({ email: email, password: password })
+        .then(function(r) {
+          if (r.error) { var e = new Error(r.error.message); e.code = _sbErrToCode(r.error); throw e; }
+          return { user: _makeUser(r.data.user) };
+        });
+    },
+    sendEmailVerification: function(user) {
+      // Supabase sends email on signUp automatically
+      return Promise.resolve();
+    },
+    sendPasswordResetEmail: function(email) {
+      return _supabase.auth.resetPasswordForEmail(email)
+        .then(function(r) { if (r.error) throw r.error; });
+    },
+    signOut: function() { return _supabase.auth.signOut(); },
+    getIdToken: function() {
+      return _supabase.auth.getSession().then(function(r) {
+        return r.data.session ? r.data.session.access_token : null;
+      });
+    }
+  };
+
+  function _makeUser(u) {
+    if (!u) return null;
+    return {
+      uid: u.id,
+      email: u.email,
+      displayName: u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name) || u.email,
+      photoURL: u.user_metadata && u.user_metadata.avatar_url || null,
+      emailVerified: !!u.email_confirmed_at,
+      providerData: [{ providerId: u.app_metadata && u.app_metadata.provider || 'email' }],
+      getIdToken: function() { return auth.getIdToken(); },
+      getIdTokenResult: function(force) {
+        return _supabase.auth.getSession().then(function(r) {
+          var tok = r.data.session ? r.data.session.access_token : null;
+          // Decode JWT claims
+          var claims = {};
+          try {
+            var payload = tok ? JSON.parse(atob(tok.split('.')[1])) : {};
+            claims = payload.user_metadata || {};
+          } catch(e) {}
+          return { claims: claims, token: tok };
+        });
+      },
+      reload: function() {
+        return _supabase.auth.refreshSession().then(function() {});
+      }
+    };
+  }
+
+  function _sbErrToCode(err) {
+    var msg = (err.message || '').toLowerCase();
+    if (msg.includes('already registered') || msg.includes('already exists')) return 'auth/email-already-in-use';
+    if (msg.includes('invalid login')) return 'auth/wrong-password';
+    if (msg.includes('user not found')) return 'auth/user-not-found';
+    if (msg.includes('weak password') || msg.includes('password')) return 'auth/weak-password';
+    if (msg.includes('email') && msg.includes('invalid')) return 'auth/invalid-email';
+    if (msg.includes('too many')) return 'auth/too-many-requests';
+    return 'auth/unknown';
+  }
+
+  /* ─────────────────────────────────────────────────
+     FIRESTORE SHIM  — maps Firestore chained API
+     calls to Supabase PostgreSQL equivalents.
+
+     Table mapping (Firestore → Supabase tables):
+       users              → users
+       habits             → habits
+       posts              → posts
+       posts/*/comments   → comments (with post_id FK)
+       usernames          → usernames
+       upload_quotas      → upload_quotas
+       reports            → reports
+       archived_habits    → archived_habits
+       user_stats         → user_stats
+       pending_storage_deletes → pending_storage_deletes
+  ───────────────────────────────────────────────── */
+  var FieldValue = {
+    serverTimestamp: function() { return new Date().toISOString(); },
+    increment: function(n) { return { __increment: n }; },
+    arrayUnion: function() {
+      var args = Array.from(arguments);
+      return { __arrayUnion: args };
+    },
+    arrayRemove: function() {
+      var args = Array.from(arguments);
+      return { __arrayRemove: args };
+    },
+    delete: function() { return { __delete: true }; }
+  };
+
+  // Helper: convert Supabase row to Firestore-like doc
+  function _rowToDoc(table, row) {
+    if (!row) return null;
+    var id = row.id;
+    var data = Object.assign({}, row);
+    // Convert ISO strings back to Date-like objects
+    ['created_at','updated_at','createdAt','updatedAt','lastSeen','lastUploadAt',
+     'reportedAt','reviewedAt','dismissedAt','deletedAt','archivedAt'].forEach(function(k) {
+      if (data[k] && typeof data[k] === 'string') {
+        var d = new Date(data[k]);
+        data[k] = { toDate: function(){ return d; }, seconds: Math.floor(d/1000) };
+      }
+    });
+    return {
+      id: String(id),
+      data: function() { return data; },
+      exists: true,
+      ref: _docRef(table, String(id))
+    };
+  }
+
+  function _docRef(table, id) {
+    return {
+      id: id,
+      collection: function(sub) { return _colRef(sub, table, id); },
+      get: function() {
+        return _supabase.from(table).select('*').eq('id', id).single()
+          .then(function(r) {
+            if (r.error && r.error.code === 'PGRST116') return { exists: false, data: function(){ return null; }, id: id };
+            if (r.error) throw r.error;
+            return _rowToDoc(table, r.data);
+          });
+      },
+      set: function(obj, opts) {
+        var row = _toRow(obj, id);
+        if (opts && opts.merge) {
+          return _supabase.from(table).upsert(row).then(function(r) { if(r.error) throw r.error; });
+        }
+        return _supabase.from(table).upsert(row).then(function(r) { if(r.error) throw r.error; });
+      },
+      update: function(obj) {
+        return _applyUpdate(table, id, obj);
+      },
+      delete: function() {
+        return _supabase.from(table).delete().eq('id', id).then(function(r) { if(r.error) throw r.error; });
+      }
+    };
+  }
+
+  function _colRef(table, parentTable, parentId) {
+    return {
+      doc: function(id) {
+        // For subcollections like posts/*/comments
+        if (parentTable && parentId) {
+          var subTable = parentTable === 'posts' && table === 'comments' ? 'comments' : table;
+          return {
+            id: id,
+            get: function() {
+              var q = _supabase.from(subTable).select('*').eq('id', id);
+              if (parentTable === 'posts') q = q.eq('post_id', parentId);
+              return q.single().then(function(r) {
+                if (r.error) return { exists: false };
+                return _rowToDoc(subTable, r.data);
+              });
+            },
+            set: function(obj, opts) {
+              var row = _toRow(obj, id);
+              if (parentTable === 'posts') row.post_id = parentId;
+              return _supabase.from(subTable).upsert(row).then(function(r) { if(r.error) throw r.error; });
+            },
+            update: function(obj) {
+              return _applyUpdate(subTable, id, obj);
+            },
+            delete: function() {
+              return _supabase.from(subTable).delete().eq('id', id).then(function(r) { if(r.error) throw r.error; });
+            },
+            collection: function(sub2) { return _colRef(sub2, subTable, id); }
+          };
+        }
+        return _docRef(table, id);
+      },
+      add: function(obj) {
+        var row = _toRow(obj, null);
+        if (parentTable === 'posts' && parentId) row.post_id = parentId;
+        return _supabase.from(table === 'comments' ? 'comments' : table).insert(row).select('id').single()
+          .then(function(r) { if(r.error) throw r.error; return { id: String(r.data.id) }; });
+      },
+      get: function() {
+        var q = _supabase.from(table).select('*');
+        if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
+        return q.then(function(r) {
+          if(r.error) throw r.error;
+          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+        });
+      },
+      where: function(field, op, val) { return _query(table, parentTable, parentId, [[field, op, val]]); },
+      orderBy: function(field, dir) { return _orderedQuery(table, parentTable, parentId, field, dir); },
+      onSnapshot: function(cb, errCb) {
+        // Supabase Realtime
+        var q = _supabase.from(table).select('*');
+        if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
+        q.then(function(r) {
+          if(r.error) { if(errCb) errCb(r.error); return; }
+          var snap = { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }) };
+          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+          cb(snap);
+        });
+        // Subscribe to realtime changes
+        var sub = _supabase.channel('realtime:' + table + ':' + (parentId||'all'))
+          .on('postgres_changes', { event: '*', schema: 'public', table: table }, function() {
+            q.then(function(r) {
+              if(r.error) return;
+              var snap = { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }) };
+              snap.forEach = function(fn) { snap.docs.forEach(fn); };
+              cb(snap);
+            });
+          })
+          .subscribe();
+        return function() { _supabase.removeChannel(sub); };
+      },
+      limit: function(n) { return _limitedQuery(table, parentTable, parentId, n); }
+    };
+  }
+
+  function _query(table, parentTable, parentId, conditions) {
+    return {
+      get: function() {
+        var q = _supabase.from(table).select('*');
+        if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
+        conditions.forEach(function(c) { q = _applyWhere(q, c[0], c[1], c[2]); });
+        return q.then(function(r) {
+          if(r.error) throw r.error;
+          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+        });
+      },
+      where: function(f, op, v) { return _query(table, parentTable, parentId, conditions.concat([[f, op, v]])); },
+      orderBy: function(field, dir) { return _orderedQuery(table, parentTable, parentId, field, dir, conditions); },
+      limit: function(n) { return _limitedQuery(table, parentTable, parentId, n, conditions); },
+      onSnapshot: function(cb, errCb) {
+        var self = this;
+        self.get().then(function(r) {
+          var snap = { docs: r.docs };
+          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+          cb(snap);
+        }).catch(function(e) { if(errCb) errCb(e); });
+        // Simple poll-once; for real-time extend with Supabase channels
+        return function() {};
+      }
+    };
+  }
+
+  function _orderedQuery(table, parentTable, parentId, orderField, dir, conditions) {
+    var conds = conditions || [];
+    return {
+      get: function() {
+        var q = _supabase.from(table).select('*');
+        if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
+        conds.forEach(function(c) { q = _applyWhere(q, c[0], c[1], c[2]); });
+        q = q.order(_toSnakeCase(orderField), { ascending: dir !== 'desc' });
+        return q.then(function(r) {
+          if(r.error) throw r.error;
+          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+        });
+      },
+      where: function(f, op, v) { return _orderedQuery(table, parentTable, parentId, orderField, dir, conds.concat([[f, op, v]])); },
+      limit: function(n) { return _limitedQuery(table, parentTable, parentId, n, conds, orderField, dir); },
+      onSnapshot: function(cb, errCb) {
+        var self = this;
+        self.get().then(function(r) {
+          var snap = { docs: r.docs, size: r.docs.length };
+          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+          cb(snap);
+          // Realtime subscription
+          var sub = _supabase.channel('rt:' + table + ':ordered')
+            .on('postgres_changes', { event: '*', schema: 'public', table: table }, function() {
+              self.get().then(function(r2) {
+                var snap2 = { docs: r2.docs, size: r2.docs.length };
+                snap2.forEach = function(fn) { snap2.docs.forEach(fn); };
+                cb(snap2);
+              });
+            }).subscribe();
+          return function() { _supabase.removeChannel(sub); };
+        }).catch(function(e) { if(errCb) errCb(e); });
+        return function() {};
+      }
+    };
+  }
+
+  function _limitedQuery(table, parentTable, parentId, n, conditions, orderField, dir) {
+    var conds = conditions || [];
+    return {
+      get: function() {
+        var q = _supabase.from(table).select('*');
+        if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
+        conds.forEach(function(c) { q = _applyWhere(q, c[0], c[1], c[2]); });
+        if (orderField) q = q.order(_toSnakeCase(orderField), { ascending: dir !== 'desc' });
+        q = q.limit(n);
+        return q.then(function(r) {
+          if(r.error) throw r.error;
+          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+        });
+      },
+      onSnapshot: function(cb, errCb) {
+        this.get().then(function(r) {
+          var snap = { docs: r.docs };
+          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+          cb(snap);
+        }).catch(function(e) { if(errCb) errCb(e); });
+        return function() {};
+      }
+    };
+  }
+
+  function _applyWhere(q, field, op, val) {
+    var col = _toSnakeCase(field);
+    if (op === '==' || op === '=') return q.eq(col, val);
+    if (op === '!=') return q.neq(col, val);
+    if (op === '<')  return q.lt(col, val);
+    if (op === '<=') return q.lte(col, val);
+    if (op === '>')  return q.gt(col, val);
+    if (op === '>=') return q.gte(col, val);
+    if (op === 'in') return q.in(col, Array.isArray(val) ? val : [val]);
+    if (op === 'array-contains') return q.contains(col, [val]);
+    return q;
+  }
+
+  function _toRow(obj, id) {
+    var row = {};
+    if (id) row.id = id;
+    Object.keys(obj).forEach(function(k) {
+      var v = obj[k];
+      var col = _toSnakeCase(k);
+      if (v && v.__increment !== undefined) {
+        // Will be handled via RPC or manual fetch; skip here, handle in _applyUpdate
+        row[col] = v;
+      } else if (v && v.__arrayUnion) {
+        row[col] = v;
+      } else if (v && v.__arrayRemove) {
+        row[col] = v;
+      } else if (v && v.__delete) {
+        row[col] = null;
+      } else if (v && v.toDate) {
+        row[col] = v.toDate().toISOString();
+      } else {
+        row[col] = v;
+      }
+    });
+    return row;
+  }
+
+  async function _applyUpdate(table, id, obj) {
+    // First, get current row for array/increment ops
+    var needsFetch = Object.values(obj).some(function(v) {
+      return v && (v.__increment !== undefined || v.__arrayUnion || v.__arrayRemove);
+    });
+    var current = {};
+    if (needsFetch) {
+      var cr = await _supabase.from(table).select('*').eq('id', id).single();
+      if (cr.data) current = cr.data;
+    }
+    var row = {};
+    Object.keys(obj).forEach(function(k) {
+      var v = obj[k];
+      var col = _toSnakeCase(k);
+      if (v && v.__increment !== undefined) {
+        row[col] = (current[col] || 0) + v.__increment;
+      } else if (v && v.__arrayUnion) {
+        var arr = current[col] || [];
+        v.__arrayUnion.forEach(function(item) { if(arr.indexOf(item) === -1) arr.push(item); });
+        row[col] = arr;
+      } else if (v && v.__arrayRemove) {
+        var arr2 = current[col] || [];
+        row[col] = arr2.filter(function(item) { return v.__arrayRemove.indexOf(item) === -1; });
+      } else if (v && v.__delete) {
+        row[col] = null;
+      } else if (v && v.toDate) {
+        row[col] = v.toDate().toISOString();
+      } else {
+        row[col] = v;
+      }
+    });
+    var r = await _supabase.from(table).update(row).eq('id', id);
+    if (r.error) throw r.error;
+  }
+
+  function _toSnakeCase(str) {
+    // Convert camelCase to snake_case for Postgres columns
+    // Common mappings:
+    var map = {
+      'userId': 'user_id', 'postId': 'post_id', 'commentId': 'comment_id',
+      'createdAt': 'created_at', 'updatedAt': 'updated_at', 'lastSeen': 'last_seen',
+      'displayName': 'display_name', 'photoURL': 'photo_url', 'emailVerified': 'email_verified',
+      'displayName_lower': 'display_name_lower', 'likedBy': 'liked_by', 'hasImage': 'has_image',
+      'hasVideo': 'has_video', 'mediaUrl': 'media_url', 'mediaPublicId': 'media_public_id',
+      'commentCount': 'comment_count', 'timeRange': 'time_range', 'dailyTarget': 'daily_target',
+      'intervalDays': 'interval_days', 'todayCounts': 'today_counts', 'freqLabel': 'freq_label',
+      'lastUploadAt': 'last_upload_at', 'totalImages': 'total_images', 'totalVideos': 'total_videos',
+      'totalMB': 'total_mb', 'dailyImages': 'daily_images', 'dailyVideos': 'daily_videos',
+      'dailyDate': 'daily_date', 'monthlyMB': 'monthly_mb', 'monthlyMonth': 'monthly_month',
+      'reportedAt': 'reported_at', 'reportedUserId': 'reported_user_id',
+      'reportedUserName': 'reported_user_name', 'reporterUid': 'reporter_uid',
+      'reviewedAt': 'reviewed_at', 'reviewedBy': 'reviewed_by',
+      'dismissedAt': 'dismissed_at', 'dismissedReason': 'dismissed_reason',
+      'postText': 'post_text', 'isComment': 'is_comment', 'mediaType': 'media_type',
+      'publicIds': 'public_ids', 'usernameChangedAt': 'username_changed_at',
+      'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by'
+    };
+    return map[str] || str.replace(/([A-Z])/g, function(m) { return '_' + m.toLowerCase(); });
+  }
+
+  /* ── Firestore-compatible db object ── */
+  db = {
+    collection: function(name) { return _colRef(name, null, null); },
+    collectionGroup: function(name) {
+      // For subcollection queries (e.g. comments across all posts)
+      return _query(name, null, null, []);
+    },
+    batch: function() {
+      var ops = [];
+      var batchObj = {
+        set: function(ref, data, opts) { ops.push({ type: 'set', ref: ref, data: data, opts: opts }); return batchObj; },
+        update: function(ref, data) { ops.push({ type: 'update', ref: ref, data: data }); return batchObj; },
+        delete: function(ref) { ops.push({ type: 'delete', ref: ref }); return batchObj; },
+        commit: function() {
+          return ops.reduce(function(p, op) {
+            return p.then(function() {
+              if (op.type === 'delete') return op.ref.delete();
+              if (op.type === 'update') return op.ref.update(op.data);
+              if (op.type === 'set') return op.ref.set(op.data, op.opts);
+            });
+          }, Promise.resolve());
+        }
+      };
+      return batchObj;
+    },
+    firestore: { FieldValue: FieldValue }
+  };
+
+  // Make firebase.firestore.FieldValue accessible via old pattern
+  if (!window.firebase) window.firebase = {};
+  window.firebase.firestore = function() { return db; };
+  window.firebase.firestore.FieldValue = FieldValue;
 }
 
 /* ── ICONS ── */
@@ -1627,18 +2102,11 @@ var ShareIcon = function ShareIcon() {
 };
 
 /* ══════════════════════════════════════════════════
-   ★ CLOUDINARY Settings — Please fill in your own info ★
-   Steps:
-   1. Go to https://cloudinary.com and register for free
-   2. Enter Settings → Upload → Add upload preset
-      • Set Signing mode to "Unsigned"
-      • Note Preset name
-   3. Go back to Dashboard and note your Cloud name
-   4. Fill in the two values below — completely free!
+   Supabase Storage — 已取代 Cloudinary
+   設定請見上方 SUPABASE_URL / SUPABASE_ANON
+   Bucket: media (圖片+影片), avatars (大頭照)
    ══════════════════════════════════════════════════ */
-var CLOUDINARY_CLOUD_NAME = 'di21uvipg';
-var CLOUDINARY_UPLOAD_PRESET = 'mxt3i95r';
-var isCloudinaryConfigured = CLOUDINARY_CLOUD_NAME !== 'YOUR_CLOUD_NAME' && CLOUDINARY_UPLOAD_PRESET !== 'YOUR_UPLOAD_PRESET';
+// isCloudinaryConfigured is set above based on SUPABASE_URL
 
 /* ══════════════════════════════════════════════════
    ★ Upload Quota Settings — adjust limits here ★
@@ -1859,7 +2327,7 @@ function _recordUploadFS() {
             totalImages: isVideo ? totalImages : totalImages + 1,
             totalVideos: isVideo ? totalVideos + 1 : totalVideos,
             totalMB: +(totalMB + fileMB).toFixed(3),
-            lastUploadAt: firebase.firestore.FieldValue.serverTimestamp()
+            lastUploadAt: FieldValue.serverTimestamp()
           };
           _context18.n = 4;
           return db.collection('upload_quotas').doc(uid).set(newDoc, {
@@ -1880,114 +2348,58 @@ function _recordUploadFS() {
   }));
   return _recordUploadFS.apply(this, arguments);
 }
-function uploadToCloudinary(_x1) {
-  return _uploadToCloudinary.apply(this, arguments);
+function uploadToCloudinary(file, resourceType, onProgress) {
+  return _uploadToSupabaseStorage(file, resourceType, onProgress);
 }
-/* ── MOCK DATA ── */
-function _uploadToCloudinary() {
-  _uploadToCloudinary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(file) {
-    var _auth2;
-    var resourceType,
-      onProgress,
-      isVideo,
-      uid,
-      currentUser,
-      uploadFile,
-      finalMB,
-      url,
-      formData,
-      _args20 = arguments;
-    return _regenerator().w(function (_context20) {
-      while (1) switch (_context20.n) {
-        case 0:
-          resourceType = _args20.length > 1 && _args20[1] !== undefined ? _args20[1] : 'auto';
-          onProgress = _args20.length > 2 ? _args20[2] : undefined;
-          if (isCloudinaryConfigured) {
-            _context20.n = 1;
-            break;
-          }
-          return _context20.a(2, {
-            url: URL.createObjectURL(file),
-            publicId: null,
-            local: true
-          });
-        case 1:
-          isVideo = file.type.startsWith('video/') || resourceType === 'video';
-          uid = getCurrentUid();
-          currentUser = (_auth2 = auth) === null || _auth2 === void 0 ? void 0 : _auth2.currentUser; // ① Check quota (Firestore, real cross-device count)
-          // ① Compress image FIRST (so quota size-check uses the compressed size)
-          uploadFile = file;
-          if (!(!isVideo && file.type.startsWith('image/'))) {
-            _context20.n = 2;
-            break;
-          }
-          _context20.n = 2;
-          return compressImage(file);
-        case 2:
-          if (_context20.v && !isVideo) {
-            uploadFile = _context20.v;
-            console.log("[Upload] Image compressed: ".concat((file.size/1024/1024).toFixed(2), "MB → ").concat((uploadFile.size/1024/1024).toFixed(2), "MB"));
-          }
-          // ② Check quota against compressed file
-          _context20.n = 3;
-          return checkQuotaFS(uid, uploadFile, isVideo);
-        case 3:
-          finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
-          url = "https://api.cloudinary.com/v1_1/".concat(CLOUDINARY_CLOUD_NAME, "/").concat(resourceType, "/upload");
-          formData = new FormData();
-          formData.append('file', uploadFile);
-          formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-          return _context20.a(2, new Promise(function (resolve, reject) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', url);
-            xhr.upload.onprogress = function (e) {
-              if (!e.lengthComputable || !onProgress) return;
-              var pct = Math.round(e.loaded / e.total * 100);
-              onProgress(pct);
-            };
-            xhr.onload = /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
-              var data, _data$error, _t21;
-              return _regenerator().w(function (_context19) {
-                while (1) switch (_context19.p = _context19.n) {
-                  case 0:
-                    _context19.p = 0;
-                    data = JSON.parse(xhr.responseText);
-                    if (!data.secure_url) {
-                      _context19.n = 2;
-                      break;
-                    }
-                    _context19.n = 1;
-                    return recordUploadFS(uid, finalMB, isVideo, (currentUser === null || currentUser === void 0 ? void 0 : currentUser.displayName) || (currentUser === null || currentUser === void 0 ? void 0 : currentUser.email) || '', (currentUser === null || currentUser === void 0 ? void 0 : currentUser.email) || '');
-                  case 1:
-                    resolve({
-                      url: data.secure_url,
-                      publicId: data.public_id
-                    });
-                    _context19.n = 3;
-                    break;
-                  case 2:
-                    reject(new Error(((_data$error = data.error) === null || _data$error === void 0 ? void 0 : _data$error.message) || 'Upload failed'));
-                  case 3:
-                    _context19.n = 5;
-                    break;
-                  case 4:
-                    _context19.p = 4;
-                    _t21 = _context19.v;
-                    reject(_t21);
-                  case 5:
-                    return _context19.a(2);
-                }
-              }, _callee17, null, [[0, 4]]);
-            }));
-            xhr.onerror = function () {
-              return reject(new Error('Network error'));
-            };
-            xhr.send(formData);
-          }));
-      }
-    }, _callee18);
-  }));
-  return _uploadToCloudinary.apply(this, arguments);
+async function _uploadToSupabaseStorage(file, resourceType, onProgress) {
+  resourceType = resourceType || 'auto';
+  onProgress = onProgress || null;
+
+  if (!isFirebaseConfigured) {
+    return { url: URL.createObjectURL(file), publicId: null, local: true };
+  }
+
+  var isVideo = file.type.startsWith('video/') || resourceType === 'video';
+  var uid = getCurrentUid();
+  var currentUser = auth.currentUser;
+
+  // ① Compress image first
+  var uploadFile = file;
+  if (!isVideo && file.type.startsWith('image/')) {
+    try { uploadFile = await compressImage(file); } catch(e) {}
+    console.log("[Upload] Image compressed: " + (file.size/1024/1024).toFixed(2) + "MB → " + (uploadFile.size/1024/1024).toFixed(2) + "MB");
+  }
+
+  // ② Check quota
+  var finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
+  await checkQuotaFS(uid, uploadFile, isVideo);
+
+  // ③ Upload to Supabase Storage
+  var bucket = isVideo ? STORAGE_BUCKET_MEDIA : STORAGE_BUCKET_MEDIA;
+  var ext    = uploadFile.name.split('.').pop() || (isVideo ? 'mp4' : 'jpg');
+  var path   = uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
+
+  if (onProgress) onProgress(10);
+
+  var { data: uploadData, error: uploadError } = await _supabase.storage
+    .from(bucket)
+    .upload(path, uploadFile, { contentType: uploadFile.type, upsert: false });
+
+  if (uploadError) throw new Error(uploadError.message || 'Upload failed');
+
+  if (onProgress) onProgress(90);
+
+  var { data: urlData } = _supabase.storage.from(bucket).getPublicUrl(path);
+  var publicUrl = urlData.publicUrl;
+
+  // ④ Record quota in DB
+  await recordUploadFS(uid, finalMB, isVideo,
+    (currentUser && currentUser.displayName) || (currentUser && currentUser.email) || '',
+    (currentUser && currentUser.email) || '');
+
+  if (onProgress) onProgress(100);
+
+  return { url: publicUrl, publicId: path };
 }
 var mockGroups = [{
   id: 1,
@@ -2545,14 +2957,14 @@ function AuthPage(_ref2) {
             _batch.set(db.collection('usernames').doc(usernameKey), {
               uid: _uid,
               displayName: displayName.trim(),
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              createdAt: FieldValue.serverTimestamp()
             });
             _batch.set(db.collection('users').doc(_uid), {
               displayName: displayName.trim(),
               displayName_lower: usernameKey,
               email: email.trim(),
               emailVerified: false,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              createdAt: FieldValue.serverTimestamp()
             }, { merge: true });
             await _batch.commit();
             console.log('[signup] Firestore write successful for:', _uid);
@@ -2815,7 +3227,7 @@ function AuthPage(_ref2) {
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
       /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkData" }),
       /*#__PURE__*/React.createElement("span", { className: "legal-check-label" },
-        "I understand my data is stored on Google Firebase servers in the United States, as described in the ",
+        "I understand my data is stored on Supabase servers, as described in the ",
         /*#__PURE__*/React.createElement("a", { onClick: function(e){ e.preventDefault(); e.stopPropagation(); window.openLegalModal('privacy'); } }, "Privacy Policy"),
         "."
       )
@@ -2977,13 +3389,13 @@ function FeedCard(_ref5) {
               likes: 0,
               likedBy: [],
               postId: post.id,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              createdAt: FieldValue.serverTimestamp()
             });
           case 3:
             _context3.n = 4;
             return db.collection('posts').doc(post.id).update({
-              comments: firebase.firestore.FieldValue.increment(1),
-            commentCount: firebase.firestore.FieldValue.increment(1)
+              comments: FieldValue.increment(1),
+            commentCount: FieldValue.increment(1)
             });
           case 4:
             _context3.n = 6;
@@ -3181,10 +3593,10 @@ function FeedCard(_ref5) {
       });
       if (typeof db !== 'undefined' && typeof firebase !== 'undefined') {
         db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
-          likes: firebase.firestore.FieldValue.increment(cLiked ? -1 : 1),
+          likes: FieldValue.increment(cLiked ? -1 : 1),
           likedBy: cLiked
-            ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
-            : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+            ? FieldValue.arrayRemove(currentUser.uid)
+            : FieldValue.arrayUnion(currentUser.uid)
         }).catch(function(e){
           console.error('[commentLike] write failed, reverting:', e);
           // Revert optimistic update on failure
@@ -3249,8 +3661,8 @@ function FeedCard(_ref5) {
               .then(function() {
                 setComments(function(prev) { return prev.filter(function(x){ return x.id !== c.id; }); });
                 db.collection('posts').doc(post.id).update({
-                  commentCount: firebase.firestore.FieldValue.increment(-1),
-                  comments: firebase.firestore.FieldValue.increment(-1)
+                  commentCount: FieldValue.increment(-1),
+                  comments: FieldValue.increment(-1)
                 }).then(function() {
                   db.collection('posts').doc(post.id).get().then(function(doc) {
                     if (!doc.exists) return;
@@ -3361,8 +3773,8 @@ function UserPostsPage(_ref_upp) {
     }); });
     if (typeof db !== 'undefined') {
       db.collection('posts').doc(postId).update({
-        likes: (typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1) : (post.likes || 0) + (hasLiked ? -1 : 1)),
-        likedBy: (typeof firebase !== 'undefined' ? (hasLiked ? firebase.firestore.FieldValue.arrayRemove(user.uid) : firebase.firestore.FieldValue.arrayUnion(user.uid)) : newLikedBy)
+        likes: (typeof firebase !== 'undefined' ? FieldValue.increment(hasLiked ? -1 : 1) : (post.likes || 0) + (hasLiked ? -1 : 1)),
+        likedBy: (typeof firebase !== 'undefined' ? (hasLiked ? FieldValue.arrayRemove(user.uid) : FieldValue.arrayUnion(user.uid)) : newLikedBy)
       }).catch(function(e) { console.error(e); });
     }
   }
@@ -3504,8 +3916,8 @@ function UserCommentsPage(_ref_ucp) {
       });
     });
     db.collection('posts').doc(postId).collection('comments').doc(commentId).update({
-      likes: firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1),
-      likedBy: hasLiked ? firebase.firestore.FieldValue.arrayRemove(user.uid) : firebase.firestore.FieldValue.arrayUnion(user.uid)
+      likes: FieldValue.increment(hasLiked ? -1 : 1),
+      likedBy: hasLiked ? FieldValue.arrayRemove(user.uid) : FieldValue.arrayUnion(user.uid)
     }).catch(function(e) { console.error(e); });
   }
 
@@ -3516,8 +3928,8 @@ function UserCommentsPage(_ref_ucp) {
       db.collection('posts').doc(postId).collection('comments').doc(commentId).delete()
         .then(function() {
           db.collection('posts').doc(postId).update({
-            commentCount: firebase.firestore.FieldValue.increment(-1),
-            comments: firebase.firestore.FieldValue.increment(-1)
+            commentCount: FieldValue.increment(-1),
+            comments: FieldValue.increment(-1)
           }).then(function() {
             // Clamp: if Firestore value went negative, reset to 0
             db.collection('posts').doc(postId).get().then(function(doc) {
@@ -5477,7 +5889,7 @@ function MainApp(_ref16) {
       });
       setShowModal(false);
       db.collection('habits').add(_objectSpread(_objectSpread({}, habit), {}, {
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       })).catch(function(err) {
         console.error('Failed to save habit:', err);
         // Roll back optimistic update on error
@@ -5523,7 +5935,7 @@ function MainApp(_ref16) {
     // Then refine with real data from Firestore (may be blocked by security rules)
     db.collection('user_stats').doc(user.uid).set({
       avgRate: myExpiredAvg,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: FieldValue.serverTimestamp()
     }, {
       merge: true
     }).then(function () {
@@ -5881,8 +6293,8 @@ function MainApp(_ref16) {
             _context8.p = 3;
             _context8.n = 4;
             return db.collection('posts').doc(postId).update({
-              likes: firebase.firestore.FieldValue.increment(hasLiked ? -1 : 1),
-              likedBy: hasLiked ? firebase.firestore.FieldValue.arrayRemove(user.uid) : firebase.firestore.FieldValue.arrayUnion(user.uid)
+              likes: FieldValue.increment(hasLiked ? -1 : 1),
+              likedBy: hasLiked ? FieldValue.arrayRemove(user.uid) : FieldValue.arrayUnion(user.uid)
             });
           case 4:
             _context8.n = 6;
@@ -5939,7 +6351,7 @@ function MainApp(_ref16) {
   var _progressTimer = null;
   function _setProgressDOM(pct) {
     uploadProgressRef.current = pct;
-    // Smooth simulated progress: after XHR reaches ~90%, crawl to 99 while Cloudinary processes
+    // Smooth simulated progress: after upload reaches ~90%, crawl to 99 while storage processes
     if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
     if (pct >= 90 && pct < 100) {
       var _displayed = pct;
@@ -6082,7 +6494,7 @@ function MainApp(_ref16) {
       batch.set(db.collection('usernames').doc(newKey), {
         uid: user.uid,
         displayName: name,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
       // 2. Delete old usernames key (if different)
@@ -6399,7 +6811,7 @@ function MainApp(_ref16) {
             _context1.p = 14;
             _context1.n = 15;
             return db.collection('posts').add(_objectSpread(_objectSpread({}, newPost), {}, {
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              createdAt: FieldValue.serverTimestamp()
             }));
           case 15:
             _context1.n = 17;
@@ -6483,9 +6895,9 @@ function MainApp(_ref16) {
 
     // Step 1: Re-authenticate
     var reauth = isGoogleUser()
-      ? auth.currentUser.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider())
+      ? _supabase.auth.signInWithOAuth({ provider: 'google' }).then(function(r){ if(r.error) throw r.error; return r; })
       : auth.currentUser.reauthenticateWithCredential(
-          firebase.auth.EmailAuthProvider.credential(user.email, deletePassword)
+          { email: user.email, password: deletePassword }  // Supabase re-auth credential
         );
 
     var errMap = {
@@ -6523,17 +6935,17 @@ function MainApp(_ref16) {
       .then(function(postsSnap) {
         if (!postsSnap.docs || !postsSnap.docs.length) return;
 
-        /* ── Collect Cloudinary public_ids and queue for admin deletion ── */
+        /* ── Collect storage paths and queue for admin deletion ── */
         var publicIds = [];
         postsSnap.docs.forEach(function(postDoc) {
           var d = postDoc.data();
           if (d.mediaPublicId) publicIds.push({ id: d.mediaPublicId, type: d.hasVideo ? 'video' : 'image' });
         });
         if (publicIds.length > 0) {
-          db.collection('pending_cloudinary_deletes').add({
+          db.collection('pending_storage_deletes').add({
             userId:    uid,
             publicIds: publicIds,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             status:    'pending'
           }).catch(function() {});
         }
@@ -6597,8 +7009,8 @@ function MainApp(_ref16) {
           var updatePromises = Object.keys(postCountMap).map(function(postId) {
             var entry = postCountMap[postId];
             return entry.ref.update({
-              commentCount: firebase.firestore.FieldValue.increment(-entry.count),
-              comments:     firebase.firestore.FieldValue.increment(-entry.count)
+              commentCount: FieldValue.increment(-entry.count),
+              comments:     FieldValue.increment(-entry.count)
             })
             /* Clamp to 0 if count went negative */
             .then(function() {
@@ -6649,7 +7061,7 @@ function MainApp(_ref16) {
               b.update(d.ref, {
                 status: 'dismissed',
                 dismissedReason: 'reported_user_deleted',
-                dismissedAt: firebase.firestore.FieldValue.serverTimestamp()
+                dismissedAt: FieldValue.serverTimestamp()
               });
             });
             return b.commit();
@@ -6683,8 +7095,8 @@ function MainApp(_ref16) {
             var b = db.batch();
             chunk.forEach(function(d) {
               b.update(d.ref, {
-                likedBy: firebase.firestore.FieldValue.arrayRemove(uid),
-                likes:   firebase.firestore.FieldValue.increment(-1)
+                likedBy: FieldValue.arrayRemove(uid),
+                likes:   FieldValue.increment(-1)
               });
             });
             return b.commit().catch(function() {});
@@ -6710,8 +7122,8 @@ function MainApp(_ref16) {
                 var b = db.batch();
                 commSnap.docs.forEach(function(d) {
                   b.update(d.ref, {
-                    likedBy: firebase.firestore.FieldValue.arrayRemove(uid),
-                    likes:   firebase.firestore.FieldValue.increment(-1)
+                    likedBy: FieldValue.arrayRemove(uid),
+                    likes:   FieldValue.increment(-1)
                   });
                 });
                 return b.commit().catch(function() {});
@@ -7074,8 +7486,8 @@ function MainApp(_ref16) {
     var _ref31;
     return /*#__PURE__*/React.createElement("div", null, !isCloudinaryConfigured && /*#__PURE__*/React.createElement("div", {
       className: "cloudinary-setup-box"
-    }, /*#__PURE__*/React.createElement("strong", null, "\u26A1 Enable media uploads:"), " Fill in your info at the top of the code", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("code", null, "CLOUDINARY_CLOUD_NAME"), " and ", /*#__PURE__*/React.createElement("code", null, "CLOUDINARY_UPLOAD_PRESET"), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("a", {
-      href: "https://cloudinary.com",
+    }, /*#__PURE__*/React.createElement("strong", null, "\u26A1 Enable media uploads:"), " Fill in your info at the top of the code", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("code", null, "SUPABASE_URL"), " and ", /*#__PURE__*/React.createElement("code", null, "SUPABASE_ANON"), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("a", {
+      href: "https://supabase.com",
       target: "_blank"
     }, "Sign up free on Cloudinary \u2192"), " (free forever plan)"), /*#__PURE__*/React.createElement("div", {
       className: "profile-header"
@@ -7250,15 +7662,15 @@ function MainApp(_ref16) {
           videoPortalRef.current._reset();
         }
         setVideoThumb(null); setVideoFinalUrl(null); setVideoPlaying(false);
-        // Queue orphaned Cloudinary asset for deletion when user removes media without posting
+        // Queue orphaned Supabase Storage asset for deletion when user removes media without posting
         var _orphanId = mediaPublicIdRef.current;
         var _orphanType = (postMedia && postMedia.type === 'video') ? 'video' : 'image';
         if (_orphanId && typeof db !== 'undefined' && user && user.uid) {
-          db.collection('pending_cloudinary_deletes').add({
+          db.collection('pending_storage_deletes').add({
             userId:    user.uid,
             publicIds: [{ id: _orphanId, type: _orphanType }],
             reason:    'composer_cancelled',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             status:    'pending'
           }).catch(function(){});
         }
@@ -7638,7 +8050,7 @@ function App() {
           return;
         }
         // Verified: update Firestore and sign in
-        // First fetch existing doc to avoid overwriting a custom Cloudinary avatar
+        // First fetch existing doc to avoid overwriting a custom avatar
         // with the Firebase Auth photoURL (e.g. Google profile pic or empty string).
         db.collection('users').doc(u.uid).get().then(function(docSnap) {
           var existing = docSnap.exists ? docSnap.data() : {};
@@ -7652,11 +8064,11 @@ function App() {
             displayName: u.displayName || '',
             photoURL: photoURL,
             emailVerified: true,
-            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+            lastSeen: FieldValue.serverTimestamp()
           };
           if (ageConfirmedLocal && !existing.ageVerified) {
             updateDoc.ageVerified = true;
-            updateDoc.ageVerifiedAt = firebase.firestore.FieldValue.serverTimestamp();
+            updateDoc.ageVerifiedAt = FieldValue.serverTimestamp();
           }
           // If Firestore already has ageVerified, sync back to localStorage
           if (existing.ageVerified && !ageConfirmedLocal) {
@@ -7882,7 +8294,7 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
         privacy: {
             title: 'Privacy Policy',
             html: `
-<p class="legal-modal-meta">Effective: March 29, 2026 &nbsp;·&nbsp; Version 1.3 — Section 1 follow relationships removed; Section 7 Cloudinary deletion timeline clarified; Section 10 material-change email notice removed</p>
+<p class="legal-modal-meta">Effective: March 29, 2026 &nbsp;·&nbsp; Version 1.3 — Section 1 follow relationships removed; Section 7 Supabase Storage deletion timeline clarified; Section 10 material-change email notice removed</p>
 <div class="legal-modal-highlight">
   <p><strong>Plain English:</strong> We collect only what we need to run the app — your email, habits, and activity data. We never sell your data. You can delete your account anytime from the Profile tab — your habits, posts, and account are permanently erased immediately. Uploaded photos and videos are queued for removal from media storage on a best-effort basis and may not be deleted instantly. You can also change your analytics consent anytime in Profile → Privacy Settings.</p>
 </div>
@@ -7903,11 +8315,11 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 <h3>2. How We Use Your Data</h3>
 <p>To provide and operate the app, authenticate your account, display your habits and progress, and enable optional community features. We never use your data to serve you ads or sell it to third parties.</p>
 <h3>3. Data Sharing & Third Parties</h3>
-<p><strong>Google Firebase</strong> — stores your account and habit data on servers in the United States. Firebase processes data under a <a href="https://firebase.google.com/terms/data-processing-terms" target="_blank" rel="noopener noreferrer">Data Processing Agreement (DPA)</a> and Standard Contractual Clauses (SCCs) for EU/EEA transfers.</p>
-<p><strong>Cloudinary</strong> — stores uploaded photos and videos. Cloudinary provides a <a href="https://cloudinary.com/privacy" target="_blank" rel="noopener noreferrer">GDPR-compliant DPA</a> and supports EU data residency.</p>
+<p><strong>Supabase</strong> — stores your account and habit data. Supabase processes data under a <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and Standard Contractual Clauses (SCCs) for EU/EEA transfers.</p>
+<p><strong>Supabase Storage</strong> — stores uploaded photos and videos. Supabase provides a <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">GDPR-compliant privacy policy</a>.</p>
 <p><strong>Umami (self-hosted)</strong> — anonymous, cookieless analytics. No personal data shared. Only activated after your explicit consent.</p>
 <p>We do <strong>not</strong> sell, rent, or trade your personal information. Ever.</p>
-<p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Google Firebase and Cloudinary process data under Standard Contractual Clauses (SCCs) as required by GDPR Chapter 5.</p>
+<p><strong>International transfers:</strong> If you are in the EU/EEA, your data is transferred to the US. Supabase processes data under Standard Contractual Clauses (SCCs) as required by GDPR Chapter 5.</p>
 <h3>4. Your Rights</h3>
 <p><strong>EU/EEA — GDPR Rights:</strong></p>
 <ul>
@@ -7995,7 +8407,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <h3>9. Disclaimer</h3>
 <p>The app is provided "as is" without warranties. Habit Tracker Pro is a productivity tool only — it is <strong>not</strong> medical advice. We are not liable for indirect or consequential damages arising from your use of the app.</p>
 <h3>10. Termination</h3>
-<p>You may delete your account at any time. We may delete accounts that violate these Terms. Upon termination, your right to use the app ends immediately and your account data (habits, posts, profile) is permanently deleted. Uploaded media files stored on third-party infrastructure (Cloudinary) are queued for deletion on a best-effort basis but may not be removed immediately or completely — see Privacy Policy Section 7 for full details.</p>
+<p>You may delete your account at any time. We may delete accounts that violate these Terms. Upon termination, your right to use the app ends immediately and your account data (habits, posts, profile) is permanently deleted. Uploaded media files stored on third-party infrastructure (Supabase Storage) are queued for deletion on a best-effort basis but may not be removed immediately or completely — see Privacy Policy Section 7 for full details.</p>
 <h3>11. Governing Law & Jurisdiction</h3>
 <p>These Terms are governed by and construed in accordance with the laws of the <strong>Republic of China (Taiwan)</strong>, without regard to conflict-of-law principles. Any disputes shall be subject to the exclusive jurisdiction of the courts in Taiwan, except where mandatory local consumer protection laws provide otherwise.</p>
 <p><strong>EU users:</strong> You retain all rights under applicable EU consumer protection laws (including EU Directive 2011/83/EU). You may also use the <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener noreferrer">EU Online Dispute Resolution platform ↗</a>. Nothing in these Terms limits your statutory rights as an EU consumer.</p>
@@ -8258,8 +8670,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
                 }
             };
 
-            if (typeof firebase !== 'undefined' && firebase.auth) {
-                var fbAuth = firebase.auth();
+            if (typeof _supabase !== 'undefined') {
+                var fbAuth = auth;
                 var currentUser = fbAuth && fbAuth.currentUser;
 
                 if (currentUser) {
@@ -8513,7 +8925,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     // Determine current user uid
     var reporterUid = 'anonymous';
     if (typeof firebase !== 'undefined') {
-      var fbAuth = firebase.auth && firebase.auth();
+      var fbAuth = (typeof _supabase !== 'undefined') ? auth : null;
       if (fbAuth && fbAuth.currentUser) reporterUid = fbAuth.currentUser.uid;
     }
 
@@ -8529,8 +8941,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       hasImage:        !!(_post.hasImage),
       hasVideo:        !!(_post.hasVideo),
       mediaType:       _post.mediaType || '',
-      reportedAt:      (typeof firebase !== 'undefined' && firebase.firestore)
-                         ? firebase.firestore.FieldValue.serverTimestamp()
+      reportedAt:      (typeof FieldValue !== 'undefined')
+                         ? FieldValue.serverTimestamp()
                          : new Date().toISOString()
     };
     // If reporting a comment, include commentId and isComment flag

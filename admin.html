@@ -406,7 +406,7 @@ tr:hover td{background:var(--g50)}
       <!-- Info banner -->
       <div style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.7">
         <strong>📋 說明：</strong> 此頁面列出所有 <strong>已註冊但尚未驗證 Email</strong> 的帳號（殭屍帳號）。這類帳號會佔用 username，導致其他用戶無法使用相同名稱。
-        <br>點擊「Delete Firestore」可自動清除 <code>users/</code>、<code>usernames/</code>、<code>upload_quotas/</code> 三筆資料，並自動開啟 Firebase Console 讓你完成 Auth 帳號刪除。
+        <br>點擊「Delete DB Data」可自動清除 <code>users</code>、<code>usernames</code>、<code>upload_quotas</code> 三筆資料，並自動開啟 Supabase Dashboard 讓你完成 Auth 帳號刪除。
       </div>
 
       <div class="tbl-card">
@@ -438,9 +438,9 @@ tr:hover td{background:var(--g50)}
         <div class="chart-ttl" style="margin-bottom:12px">📋 刪除殭屍帳號流程（兩步驟）</div>
         <div style="font-size:12px;color:var(--g500);line-height:2">
           <div><strong style="color:#059669">Step 1 — 自動：刪除 Firestore 資料</strong>（本頁面一鍵完成）<br>
-          點擊每一行的「Delete Firestore」按鈕，自動清除 <code>users/</code>、<code>usernames/</code>（釋放 username）、<code>upload_quotas/</code>，並自動開啟 Firebase Console。</div>
-          <div style="margin-top:10px"><strong style="color:#dc2626">Step 2 — 手動：在 Firebase Console 刪除 Auth 帳號</strong>（約 5 秒）<br>
-          Console 會自動開啟並搜尋該 UID。找到帳號後點擊右側「⋮」→「Delete account」即可。<br>
+          點擊每一行的「Delete DB Data」按鈕，自動清除 <code>users</code>、<code>usernames</code>（釋放 username）、<code>upload_quotas</code>，並自動開啟 Supabase Dashboard。</div>
+          <div style="margin-top:10px"><strong style="color:#dc2626">Step 2 — 手動：在 Supabase Dashboard 刪除 Auth 帳號</strong>（約 5 秒）<br>
+          Dashboard 會自動開啟。到 Auth → Users 搜尋 UID，找到帳號後點擊「Delete」即可。<br>
           若使用「Delete All」批次刪除，結束後會顯示所有 UID 清單供你複製貼上搜尋。</div>
         </div>
       </div>
@@ -504,7 +504,7 @@ tr:hover td{background:var(--g50)}
     <!-- Security & Rules -->
     <div class="pg" id="pg-security">
       <div class="pg-title">Security &amp; Rules</div>
-      <div class="pg-sub">Firestore Security Rules, Admin SDK setup, and compliance checklist</div>
+      <div class="pg-sub">Supabase RLS Policies, Service Role setup, and compliance checklist</div>
 
       <!-- Session status -->
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
@@ -521,121 +521,91 @@ tr:hover td{background:var(--g50)}
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
         <div class="chart-ttl" style="margin-bottom:10px">⚙️ Step 1 — Set Firebase Custom Claim (One-time setup)</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:12px">
-          To enable the second layer of admin verification, run this <strong>once</strong> in your Firebase project using the Admin SDK or Cloud Functions. Replace <code style="background:var(--g100);padding:1px 5px;font-size:11px">YOUR_ADMIN_UID</code> with your Firebase UID (visible in Firebase Console → Authentication).
+          To enable the second layer of admin verification, run this <strong>once</strong> in your Firebase project using the Admin SDK or Cloud Functions. Replace <code style="background:var(--g100);padding:1px 5px;font-size:11px">YOUR_ADMIN_UID</code> with your Firebase UID (visible in Supabase Dashboard → Authentication).
         </p>
-        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">// Node.js (Firebase Admin SDK)
-const admin = require('firebase-admin');
-admin.initializeApp();
+        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">-- Option A: Supabase SQL Editor (Dashboard → SQL Editor → New query)
+UPDATE auth.users
+  SET raw_user_meta_data = raw_user_meta_data || '{"admin": true}'::jsonb
+  WHERE email = 'andy19920818@gmail.com';
 
-await admin.auth().setCustomUserClaims('YOUR_ADMIN_UID', { admin: true });
-console.log('✅ Admin claim set successfully');</pre>
+-- Option B: Node.js (Supabase Admin SDK)
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+await supabase.auth.admin.updateUserById('YOUR_ADMIN_UID', {
+  user_metadata: { admin: true }
+});
+console.log('✅ Admin metadata set successfully');</pre>
         <p style="font-size:11px;color:var(--g400);margin-top:10px">After setting the claim, sign out and sign back in to the admin dashboard for it to take effect.</p>
       </div>
 
-      <!-- Firestore Security Rules -->
+      <!-- Supabase RLS Policies -->
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
-        <div class="chart-ttl" style="margin-bottom:10px">🛡️ Step 2 — Firestore Security Rules</div>
+        <div class="chart-ttl" style="margin-bottom:10px">🛡️ Step 2 — Supabase RLS Policies</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:12px">
-          Copy these rules into <strong>Firebase Console → Firestore Database → Rules</strong>. These rules enforce that users can only read/write their own data, while the admin account has read access to all collections.
+          Copy these rules into <strong>Supabase Dashboard → Firestore Database → Rules</strong>. These rules enforce that users can only read/write their own data, while the admin account has read access to all collections.
         </p>
-        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">-- ══ Supabase RLS Policies ════════════════════════════════════════════════
+-- Run in Supabase Dashboard → SQL Editor → New query
 
-    // ── Helper: is this request from the admin? ──────────────────
-    function isAdmin() {
-      return request.auth != null
-        &amp;&amp; request.auth.token.admin == true
-        &amp;&amp; request.auth.token.email == 'andy19920818@gmail.com';
-    }
+-- Helper function to check admin
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS boolean AS $$
+  SELECT COALESCE(
+    (auth.jwt()->>'user_metadata')::jsonb->>'admin' = 'true'
+    OR auth.jwt()->>'email' = 'andy19920818@gmail.com',
+    false
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
 
-    // ── Users collection ─────────────────────────────────────────
-    match /users/{userId} {
-      allow read:   if request.auth != null &amp;&amp; (request.auth.uid == userId || isAdmin());
-      allow write:  if request.auth != null &amp;&amp; request.auth.uid == userId;
-      allow delete: if isAdmin();
-    }
+-- ── users ─────────────────────────────────────────────────────────────────
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users_read"   ON users FOR SELECT USING (auth.uid()=id OR is_admin());
+CREATE POLICY "users_write"  ON users FOR INSERT WITH CHECK (auth.uid()=id);
+CREATE POLICY "users_update" ON users FOR UPDATE USING (auth.uid()=id);
+CREATE POLICY "users_delete" ON users FOR DELETE USING (auth.uid()=id OR is_admin());
 
-    // ── Habits collection ────────────────────────────────────────
-    match /habits/{habitId} {
-      allow read:  if request.auth != null
-                   &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if request.auth != null
-                    &amp;&amp; request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null
-                            &amp;&amp; resource.data.userId == request.auth.uid;
-    }
+-- ── habits ────────────────────────────────────────────────────────────────
+ALTER TABLE habits ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "habits_own"   ON habits FOR ALL   USING (auth.uid()=user_id);
+CREATE POLICY "habits_admin" ON habits FOR SELECT USING (is_admin());
 
-    // ── Posts collection ─────────────────────────────────────────
-    match /posts/{postId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null
-                    &amp;&amp; request.resource.data.userId == request.auth.uid;
-      // ✅ 修正：任何登入用戶皆可 update（按讚/取消讚、刪帳號清讚都需要更新他人貼文）
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null
-                    &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
+-- ── posts ─────────────────────────────────────────────────────────────────
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "posts_read"   ON posts FOR SELECT USING (auth.role()='authenticated');
+CREATE POLICY "posts_insert" ON posts FOR INSERT WITH CHECK (auth.uid()=user_id);
+CREATE POLICY "posts_update" ON posts FOR UPDATE USING (auth.role()='authenticated');
+CREATE POLICY "posts_delete" ON posts FOR DELETE USING (auth.uid()=user_id OR is_admin());
 
-      // Comments sub-collection
-      match /comments/{commentId} {
-        allow read:   if request.auth != null;
-        allow create: if request.auth != null;
-        // ✅ 修正：任何登入用戶皆可 update（留言按讚、頭像同步都需要）
-        allow update: if request.auth != null;
-        allow delete: if request.auth != null
-                      &amp;&amp; (resource.data.userId == request.auth.uid || isAdmin());
-      }
-    }
+-- ── comments ──────────────────────────────────────────────────────────────
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "comments_read"   ON comments FOR SELECT USING (auth.role()='authenticated');
+CREATE POLICY "comments_insert" ON comments FOR INSERT WITH CHECK (auth.role()='authenticated');
+CREATE POLICY "comments_update" ON comments FOR UPDATE USING (auth.role()='authenticated');
+CREATE POLICY "comments_delete" ON comments FOR DELETE USING (auth.uid()=user_id OR is_admin());
 
-    // ── Usernames collection ─────────────────────────────────────
-    match /usernames/{username} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null
-                    &amp;&amp; request.resource.data.uid == request.auth.uid;
-      allow update: if request.auth != null
-                    &amp;&amp; resource.data.uid == request.auth.uid;
-      allow delete: if request.auth != null
-                    &amp;&amp; (resource.data.uid == request.auth.uid || isAdmin());
-    }
+-- ── usernames ─────────────────────────────────────────────────────────────
+ALTER TABLE usernames ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "usernames_read"   ON usernames FOR SELECT USING (auth.role()='authenticated');
+CREATE POLICY "usernames_write"  ON usernames FOR ALL    USING (auth.uid()=uid);
+CREATE POLICY "usernames_delete_admin" ON usernames FOR DELETE USING (is_admin());
 
-    // ── Upload Quotas ────────────────────────────────────────────
-    match /upload_quotas/{uid} {
-      allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;
-      allow read, write: if isAdmin();
-    }
+-- ── upload_quotas ─────────────────────────────────────────────────────────
+ALTER TABLE upload_quotas ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "quotas_own"   ON upload_quotas FOR ALL USING (auth.uid()=id);
+CREATE POLICY "quotas_admin" ON upload_quotas FOR ALL USING (is_admin());
 
-    // ── Reports collection ✅ 新增 ───────────────────────────────
-    // 任何登入用戶可建立檢舉；被檢舉者可 update 自己的 report（改名同步）；
-    // 檢舉者可 update 自己送出的 report（刪帳號清理）；admin 可全部操作
-    match /reports/{reportId} {
-      allow create: if request.auth != null;
-      allow update: if request.auth != null
-                    &amp;&amp; (resource.data.reportedUserId == request.auth.uid
-                        || resource.data.reporterUid == request.auth.uid
-                        || isAdmin());
-      allow read, delete: if isAdmin();
-    }
+-- ── reports ───────────────────────────────────────────────────────────────
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "reports_insert" ON reports FOR INSERT WITH CHECK (auth.role()='authenticated');
+CREATE POLICY "reports_update" ON reports FOR UPDATE
+  USING (auth.uid()=reported_user_id OR auth.uid()=reporter_uid OR is_admin());
+CREATE POLICY "reports_admin"  ON reports FOR SELECT USING (is_admin());
+CREATE POLICY "reports_delete" ON reports FOR DELETE USING (is_admin());
 
-    // ── Archived Habits ──────────────────────────────────────────
-    match /archived_habits/{docId} {
-      allow read, write, delete: if request.auth != null
-                                 &amp;&amp; resource.data.userId == request.auth.uid;
-      allow read, delete: if isAdmin();
-    }
-
-    // ── User Stats ───────────────────────────────────────────────
-    match /user_stats/{uid} {
-      allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;
-      allow read, write: if isAdmin();
-    }
-
-    // ── Pending Cloudinary Deletes ───────────────────────────────
-    match /pending_cloudinary_deletes/{docId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if isAdmin();
-    }
-  }
-}</pre>
+-- ── pending_storage_deletes ───────────────────────────────────────────────
+ALTER TABLE pending_storage_deletes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "psd_insert" ON pending_storage_deletes FOR INSERT WITH CHECK (auth.role()='authenticated');
+CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin());</pre>
       </div>
 
 
@@ -684,17 +654,17 @@ service cloud.firestore {
         <table>
           <thead><tr><th>Item</th><th>Status</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>Firebase Auth email whitelist</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2948474d501810101b19111811694e44484045074a4644">[email&#160;protected]</a></td></tr>
-            <tr><td>Firebase Custom Claim (admin:true)</td><td><span class="badge" id="cl-claim-status">⚠️ Check required</span></td><td style="font-size:11px;color:var(--g500)">Set via Admin SDK then re-login</td></tr>
+            <tr><td>Supabase Auth email restriction</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2948474d501810101b19111811694e44484045074a4644">[email&#160;protected]</a></td></tr>
+            <tr><td>Supabase user_metadata (admin:true)</td><td><span class="badge" id="cl-claim-status">⚠️ Check required</span></td><td style="font-size:11px;color:var(--g500)">Set via Supabase Dashboard or SQL Editor, then re-login</td></tr>
             <tr><td>Session auto-logout (30 min)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Inactivity timer running</td></tr>
             <tr><td>Admin page noindex meta tag</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">robots: noindex, nofollow</td></tr>
             <tr><td>Force Google account selection</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">prompt: select_account</td></tr>
-            <tr><td>Firestore Security Rules</td><td><span class="badge" style="background:#fef3c7;color:#92400e">⚠️ Verify in Console</span></td><td style="font-size:11px;color:var(--g500)">Copy rules from Step 2 above</td></tr>
+            <tr><td>Supabase RLS Policies</td><td><span class="badge" style="background:#fef3c7;color:#92400e">⚠️ Verify in Console</span></td><td style="font-size:11px;color:var(--g500)">Copy rules from Step 2 above</td></tr>
             <tr><td>GDPR conditional analytics</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Umami loads after user consent</td></tr>
             <tr><td>Age verification (birth year)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">EU min age 16</td></tr>
             <tr><td>Privacy Settings / consent withdrawal</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Profile → Privacy Settings</td></tr>
-            <tr><td>Firebase DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to firebase.google.com/terms/data-processing-terms</td></tr>
-            <tr><td>Cloudinary DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to cloudinary.com/privacy/gdpr</td></tr>
+            <tr><td>Supabase DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to supabase.com/privacy</td></tr>
+            <tr><td>Supabase Storage DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to supabase.com/privacy</td></tr>
           </tbody>
         </table>
       </div>
@@ -703,7 +673,7 @@ service cloud.firestore {
     <!-- ══ CLOUDINARY MEDIA CLEANUP PAGE ══ -->
     <div class="pg" id="pg-cloudinary">
       <div class="pg-title">Media Cleanup</div>
-      <div class="pg-sub">Cloudinary files pending deletion — queued when users deleted their accounts</div>
+      <div class="pg-sub">Supabase Storage files pending deletion — queued when users deleted their accounts</div>
 
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
         <div class="stat dark"><div class="stat-lbl">Pending</div><div class="stat-val" id="cdPending">—</div><div class="stat-note">Files to delete</div></div>
@@ -713,8 +683,8 @@ service cloud.firestore {
 
       <div class="quota-warn show" id="cdApiWarn" style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;">
         ⚠️ <strong>Manual step required:</strong> Cloudinary deletion requires your API Secret (cannot be stored in frontend code).
-        Copy the <code style="background:#f5e97a;padding:1px 5px;font-size:11px">public_id</code> values below and delete them directly in
-        <a href="https://console.cloudinary.com" target="_blank" style="color:#7a6000;font-weight:700">Cloudinary Console → Media Library ↗</a>,
+        Copy the <code style="background:#f5e97a;padding:1px 5px;font-size:11px">storage path</code> values below and delete them directly in
+        <a href="https://console.cloudinary.com" target="_blank" style="color:#7a6000;font-weight:700">Supabase Dashboard → Storage ↗</a>,
         or use the Cloudinary CLI / Admin API from a secure environment.
       </div>
 
@@ -735,12 +705,12 @@ service cloud.firestore {
       <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
         <div class="chart-ttl" style="margin-bottom:8px">📋 How to delete files in Cloudinary</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.8">
-          <strong>Option A — Cloudinary Console (easiest):</strong><br>
+          <strong>Option A — Supabase Dashboard (easiest):</strong><br>
           Go to <a href="https://console.cloudinary.com/pm/c-95b84eb0679afd26d1b6c405cee152/media-explorer" target="_blank" style="color:var(--black);font-weight:700">Media Library ↗</a>,
-          search for the <code style="background:#e0e0e0;padding:1px 5px">public_id</code>, select and delete.<br><br>
-          <strong>Option B — Cloudinary CLI:</strong><br>
-          <code style="background:#1e293b;color:#94a3b8;padding:4px 10px;display:inline-block;margin-top:4px">cloudinary uploader destroy &lt;public_id&gt;</code><br><br>
-          After deleting in Cloudinary, click <strong>"Mark as Deleted"</strong> below to update this queue.
+          navigate to the bucket, find the file by path, and delete it.<br><br>
+          <strong>Option B — Supabase CLI:</strong><br>
+          <code style="background:#1e293b;color:#94a3b8;padding:4px 10px;display:inline-block;margin-top:4px">supabase storage rm &lt;bucket/path&gt;</code><br><br>
+          After deleting in Supabase Storage, click <strong>"Mark as Deleted"</strong> below to update this queue.
         </p>
       </div>
     </div>
@@ -804,31 +774,254 @@ service cloud.firestore {
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Immediate safety: if Firebase CDN failed to load, show login immediately
-if(typeof firebase === 'undefined'){
+// Safety: if Supabase CDN failed to load, show login immediately
+if(typeof window.supabase === 'undefined'){
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('loginWrap').style.display='flex';
   document.getElementById('errBox').style.display='block';
-  document.getElementById('errBox').textContent='Failed to load Firebase. Please check your internet connection and reload.';
-  throw new Error('Firebase not loaded');
+  document.getElementById('errBox').textContent='Failed to load Supabase. Please check your internet connection and reload.';
+  throw new Error('Supabase not loaded');
 }
 
-// 使用獨立命名的 app，避免與 index.html 的 auth session 互相干擾
-var adminApp = firebase.initializeApp({
-  apiKey:"AIzaSyDxa2PZEep3eXY1Iiu4IhjXCwXd6z0HelA",
-  authDomain:"health-habit-tracker-e6b50.firebaseapp.com",
-  projectId:"health-habit-tracker-e6b50",
-  storageBucket:"health-habit-tracker-e6b50.firebasestorage.app",
-  messagingSenderId:"890093173627",
-  appId:"1:890093173627:web:54032fce30ae7ef3f41bde"
-}, "admin");
-var auth = firebase.auth(adminApp);
-var db   = firebase.firestore(adminApp);
+/* ══════════════════════════════════════════════════
+   ★ SUPABASE 設定 — 請填入你的 Supabase 資訊 ★
+   ══════════════════════════════════════════════════ */
+var SUPABASE_URL         = 'YOUR_SUPABASE_URL';      // e.g. https://xxxx.supabase.co
+var SUPABASE_SERVICE_KEY = 'YOUR_SERVICE_ROLE_KEY';  // Settings → API → service_role key
+
+var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+/* ─── Auth shim ─────────────────────────────────── */
+var auth = {
+  currentUser: null,
+  onAuthStateChanged: function(cb) {
+    var sub = _supabase.auth.onAuthStateChange(function(event, session) {
+      auth.currentUser = session ? _mkUser(session.user) : null;
+      cb(auth.currentUser);
+    });
+    _supabase.auth.getSession().then(function(r) {
+      auth.currentUser = r.data.session ? _mkUser(r.data.session.user) : null;
+      cb(auth.currentUser);
+    });
+    return function() { sub.data && sub.data.subscription && sub.data.subscription.unsubscribe(); };
+  },
+  signOut: function() { auth.currentUser = null; return _supabase.auth.signOut(); }
+};
+function _mkUser(u) {
+  if (!u) return null;
+  var meta = u.user_metadata || {};
+  return {
+    uid: u.id, email: u.email,
+    displayName: meta.full_name || meta.name || u.email,
+    photoURL: meta.avatar_url || null,
+    providerData: [{ providerId: (u.app_metadata || {}).provider || 'email' }],
+    getIdTokenResult: function() {
+      return _supabase.auth.getSession().then(function(r) {
+        var tok = r.data.session && r.data.session.access_token;
+        var claims = {};
+        try { if (tok) claims = JSON.parse(atob(tok.split('.')[1])).user_metadata || {}; } catch(e) {}
+        return { claims: claims };
+      });
+    }
+  };
+}
+
+/* ─── FieldValue shim ───────────────────────────── */
+var FieldValue = {
+  serverTimestamp: function() { return new Date().toISOString(); },
+  increment: function(n) { return { __inc: n }; },
+  arrayUnion: function() { var a = Array.from(arguments); return { __au: a }; },
+  arrayRemove: function() { var a = Array.from(arguments); return { __ar: a }; }
+};
+if (!window.firebase) window.firebase = {};
+window.firebase.firestore = function() { return db; };
+window.firebase.firestore.FieldValue = FieldValue;
+
+/* ─── Field name mapper (camelCase → snake_case) ── */
+var _FM = {
+  userId:'user_id',postId:'post_id',commentId:'comment_id',
+  createdAt:'created_at',updatedAt:'updated_at',lastSeen:'last_seen',
+  displayName:'display_name',photoURL:'photo_url',emailVerified:'email_verified',
+  displayName_lower:'display_name_lower',likedBy:'liked_by',
+  hasImage:'has_image',hasVideo:'has_video',mediaUrl:'media_url',mediaPublicId:'media_public_id',
+  commentCount:'comment_count',timeRange:'time_range',dailyTarget:'daily_target',
+  intervalDays:'interval_days',todayCounts:'today_counts',freqLabel:'freq_label',
+  lastUploadAt:'last_upload_at',totalImages:'total_images',totalVideos:'total_videos',
+  totalMB:'total_mb',dailyImages:'daily_images',dailyVideos:'daily_videos',
+  dailyDate:'daily_date',monthlyMB:'monthly_mb',monthlyMonth:'monthly_month',
+  reportedAt:'reported_at',reportedUserId:'reported_user_id',reportedUserName:'reported_user_name',
+  reporterUid:'reporter_uid',reviewedAt:'reviewed_at',reviewedBy:'reviewed_by',
+  dismissedAt:'dismissed_at',dismissedReason:'dismissed_reason',
+  postText:'post_text',isComment:'is_comment',publicIds:'public_ids',
+  usernameChangedAt:'username_changed_at',avatarPublicId:'avatar_public_id',
+  deletedAt:'deleted_at',deletedBy:'deleted_by'
+};
+function _fc(k){ return _FM[k] || k.replace(/([A-Z])/g,function(m){return '_'+m.toLowerCase();}); }
+
+/* ─── Row → doc converter ──────────────────────── */
+function _rDoc(table, row) {
+  if (!row) return null;
+  var d = Object.assign({}, row);
+  // Wrap timestamps
+  ['created_at','updated_at','last_seen','last_upload_at','reported_at',
+   'reviewed_at','dismissed_at','deleted_at','username_changed_at'].forEach(function(k){
+    if (d[k] && typeof d[k]==='string') { var dt=new Date(d[k]); d[k]={toDate:function(){return dt;}}; }
+  });
+  // camelCase aliases
+  var aliases = [
+    ['created_at','createdAt'],['last_seen','lastSeen'],['display_name','displayName'],
+    ['photo_url','photoURL'],['user_id','userId'],['post_id','postId'],
+    ['email_verified','emailVerified'],['liked_by','likedBy'],['has_image','hasImage'],
+    ['has_video','hasVideo'],['media_url','mediaUrl'],['media_public_id','mediaPublicId'],
+    ['comment_count','commentCount'],['total_mb','totalMB'],['total_images','totalImages'],
+    ['total_videos','totalVideos'],['daily_images','dailyImages'],['daily_videos','dailyVideos'],
+    ['daily_date','dailyDate'],['monthly_mb','monthlyMB'],['monthly_month','monthlyMonth'],
+    ['last_upload_at','lastUploadAt'],['reported_at','reportedAt'],
+    ['reported_user_id','reportedUserId'],['reported_user_name','reportedUserName'],
+    ['reporter_uid','reporterUid'],['reviewed_at','reviewedAt'],['reviewed_by','reviewedBy'],
+    ['dismissed_at','dismissedAt'],['dismissed_reason','dismissedReason'],
+    ['post_text','postText'],['is_comment','isComment'],['public_ids','publicIds'],
+    ['username_changed_at','usernameChangedAt'],['display_name_lower','displayName_lower'],
+    ['avatar_public_id','avatarPublicId'],['deleted_at','deletedAt'],['deleted_by','deletedBy'],
+    ['freq_label','freqLabel'],['today_counts','todayCounts'],['time_range','timeRange'],
+    ['daily_target','dailyTarget'],['interval_days','intervalDays']
+  ];
+  aliases.forEach(function(pair){ if(d[pair[0]]!==undefined) d[pair[1]]=d[pair[0]]; });
+  var docId = String(row.id || row.uid || '');
+  return { id:docId, data:function(){return d;}, exists:true, ref:_dRef(table,docId) };
+}
+
+/* ─── Doc ref ───────────────────────────────────── */
+function _dRef(table, id) {
+  return {
+    id: id,
+    collection: function(sub){ return _cRef(sub, table, id); },
+    get: function(){
+      return _supabase.from(table).select('*').eq('id',id).single()
+        .then(function(r){
+          if(r.error&&r.error.code==='PGRST116') return{exists:false,data:function(){return null;},id:id};
+          if(r.error) throw r.error;
+          return _rDoc(table,r.data);
+        });
+    },
+    set: function(obj){ return _supabase.from(table).upsert(_toRow(obj,id)).then(function(r){if(r.error)throw r.error;}); },
+    update: function(obj){ return _applyUpd(table,id,obj); },
+    delete: function(){ return _supabase.from(table).delete().eq('id',id).then(function(r){if(r.error)throw r.error;}); }
+  };
+}
+
+function _toRow(obj, id) {
+  var row = {}; if(id) row.id=id;
+  Object.keys(obj).forEach(function(k){
+    var v=obj[k], col=_fc(k);
+    if(v&&v.__inc!==undefined) row[col]=v; // handled in _applyUpd
+    else if(v&&(v.__au||v.__ar)) row[col]=v;
+    else if(v&&v.toDate) row[col]=v.toDate().toISOString();
+    else row[col]=v;
+  });
+  return row;
+}
+
+async function _applyUpd(table, id, obj) {
+  var needsFetch=Object.values(obj).some(function(v){return v&&(v.__inc!==undefined||v.__au||v.__ar);});
+  var cur={};
+  if(needsFetch){var cr=await _supabase.from(table).select('*').eq('id',id).single();if(cr.data)cur=cr.data;}
+  var row={};
+  Object.keys(obj).forEach(function(k){
+    var v=obj[k],col=_fc(k);
+    if(v&&v.__inc!==undefined){row[col]=(cur[col]||0)+v.__inc;}
+    else if(v&&v.__au){var a=cur[col]||[];v.__au.forEach(function(x){if(a.indexOf(x)===-1)a.push(x);});row[col]=a;}
+    else if(v&&v.__ar){row[col]=(cur[col]||[]).filter(function(x){return v.__ar.indexOf(x)===-1;});}
+    else if(v&&v.toDate){row[col]=v.toDate().toISOString();}
+    else{row[col]=v;}
+  });
+  var r=await _supabase.from(table).update(row).eq('id',id);
+  if(r.error) throw r.error;
+}
+
+/* ─── Collection ref ────────────────────────────── */
+function _cRef(table, parentTable, parentId) {
+  var tbl=(parentTable==='posts'&&table==='comments')?'comments':table;
+  function _buildQ(conditions,orderField,dir,lim){
+    return function(){
+      var q=_supabase.from(tbl).select('*');
+      if(parentTable==='posts'&&parentId) q=q.eq('post_id',parentId);
+      conditions.forEach(function(c){
+        var col=_fc(c[0]),op=c[1],val=c[2];
+        if(op==='=='||op==='=') q=q.eq(col,val);
+        else if(op==='!=') q=q.neq(col,val);
+        else if(op==='in') q=q.in(col,Array.isArray(val)?val:[val]);
+        else if(op==='array-contains') q=q.contains(col,[val]);
+      });
+      if(orderField) q=q.order(_fc(orderField),{ascending:dir!=='desc'});
+      if(lim) q=q.limit(lim);
+      return q.then(function(r){
+        if(r.error)throw r.error;
+        var docs=(r.data||[]).map(function(row){return _rDoc(tbl,row);});
+        return{docs:docs,size:docs.length};
+      });
+    };
+  }
+  function _makeChain(conditions,orderField,dir,lim){
+    var get=_buildQ(conditions,orderField,dir,lim);
+    return{
+      get:get,
+      where:function(f,op,v){return _makeChain(conditions.concat([[f,op,v]]),orderField,dir,lim);},
+      orderBy:function(f,d){return _makeChain(conditions,f,d,lim);},
+      limit:function(n){return _makeChain(conditions,orderField,dir,n);},
+      onSnapshot:function(cb,errCb){
+        get().then(function(r){
+          var snap={docs:r.docs,size:r.docs.length};
+          snap.forEach=function(fn){snap.docs.forEach(fn);};
+          cb(snap);
+          var sub=_supabase.channel('rt:'+tbl+':'+(parentId||'all'))
+            .on('postgres_changes',{event:'*',schema:'public',table:tbl},function(){
+              get().then(function(r2){var s2={docs:r2.docs};s2.forEach=function(fn){s2.docs.forEach(fn);};cb(s2);});
+            }).subscribe();
+          return function(){_supabase.removeChannel(sub);};
+        }).catch(function(e){if(errCb)errCb(e);});
+        return function(){};
+      }
+    };
+  }
+  return Object.assign(_makeChain([],null,null,null),{
+    doc:function(id){return _dRef(tbl,id);},
+    add:function(obj){
+      var row=_toRow(obj,null);
+      if(parentTable==='posts'&&parentId) row.post_id=parentId;
+      return _supabase.from(tbl).insert(row).select('id').single()
+        .then(function(r){if(r.error)throw r.error;return{id:String(r.data.id)};});
+    }
+  });
+}
+
+/* ─── db object ─────────────────────────────────── */
+var db = {
+  collection:function(name){return _cRef(name,null,null);},
+  collectionGroup:function(name){return _cRef(name,null,null);},
+  batch:function(){
+    var ops=[];
+    var b={
+      set:function(ref,data,opts){ops.push({t:'set',ref:ref,data:data,opts:opts});return b;},
+      update:function(ref,data){ops.push({t:'update',ref:ref,data:data});return b;},
+      delete:function(ref){ops.push({t:'delete',ref:ref});return b;},
+      commit:function(){
+        return ops.reduce(function(p,op){
+          return p.then(function(){
+            if(op.t==='delete') return op.ref.delete();
+            if(op.t==='update') return op.ref.update(op.data);
+            if(op.t==='set')    return op.ref.set(op.data,op.opts);
+          });
+        },Promise.resolve());
+      }
+    };
+    return b;
+  }
+};
+
 
 /* ── Admin Security Configuration ────────────────────────────────────
    Layer 1: Client-side email whitelist (fast UI feedback — first line of defence)
@@ -873,44 +1066,31 @@ function showAdminError(msg) {
   b.textContent = msg;
 }
 
-/* ── Multi-layer admin verification ── */
+/* ── Multi-layer admin verification (Supabase) ── */
 async function verifyAdminAccess(user) {
   var email = (user.email || '').toLowerCase().trim();
-
-  // Layer 1: Email whitelist check (client-side — fast feedback only)
   var emailAllowed = ALLOWED_ADMINS.length === 0 ||
     ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); }).indexOf(email) !== -1;
-
   if (!emailAllowed) {
     return { allowed: false, reason: 'Access denied: ' + email + ' is not authorised.' };
   }
-
-  // Layer 2: Firebase ID Token Custom Claims (server-side verified — required)
+  // Check Supabase user_metadata for admin:true
+  // Set via: Supabase Dashboard → Auth → Users → edit user_metadata
+  // OR SQL: UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data || '{"admin":true}'::jsonb WHERE email='your@email.com';
   try {
-    var idTokenResult = await user.getIdTokenResult(true); // force token refresh
-    var hasClaim = idTokenResult.claims && idTokenResult.claims[ADMIN_CUSTOM_CLAIM] === true;
-
+    var tokenResult = await user.getIdTokenResult(true);
+    var hasClaim = tokenResult.claims && tokenResult.claims[ADMIN_CUSTOM_CLAIM] === true;
     if (!hasClaim) {
       if (ALLOW_EMAIL_ONLY_FALLBACK) {
-        // ⚠️ Onboarding mode only — switch ALLOW_EMAIL_ONLY_FALLBACK to false once claim is set
-        console.warn('[Admin] Custom claim not found — running in email-only fallback mode (onboarding).');
-        return { allowed: true, warning: '⚠️ Firebase custom claim "admin: true" is not set on this account. ' +
-          'This is a security risk. Set it via the Firebase Admin SDK before production launch.' };
+        console.warn('[Admin] admin:true not found in user_metadata — email-only fallback mode.');
+        return { allowed: true, warning: '⚠️ Supabase user_metadata "admin: true" not set. Set it via Dashboard → Auth → Users or SQL Editor.' };
       }
-      // Production: block access without verified server-side claim
-      return {
-        allowed: false,
-        reason: 'Access denied: Firebase admin custom claim not verified. ' +
-          'Please ask the system owner to run: admin.auth().setCustomUserClaims(uid, { admin: true }) ' +
-          'and then sign out and back in.'
-      };
+      return { allowed: false, reason: 'Access denied: admin claim not verified. Set user_metadata.admin=true in Supabase Dashboard.' };
     }
-
     return { allowed: true };
   } catch (e) {
     console.error('[Admin] Token verification failed:', e);
-    // Do NOT silently fall through — token check failure is a hard block
-    return { allowed: false, reason: 'Security check failed: ' + e.message + '. Please try again.' };
+    return { allowed: false, reason: 'Security check failed: ' + e.message };
   }
 }
 
@@ -984,44 +1164,18 @@ auth.onAuthStateChanged(async function(user){
   }
 });
 
-// Handle redirect sign-in result
-var _hasAuthParams = window.location.href.indexOf('__/auth/handler') > -1
-  || window.location.search.indexOf('code=') > -1;
-if(_hasAuthParams){
-  auth.getRedirectResult().then(async function(result){
-    if(result && result.user){
-      var check = await verifyAdminAccess(result.user);
-      if(!check.allowed){
-        showAdminError(check.reason || 'Access denied.');
-      }
-    }
-  }).catch(function(e){
-    if(e.code && e.code !== 'auth/no-current-user'){
-      showAdminError('Sign in failed: ' + e.message);
-    }
-  });
-}
+// Supabase handles redirect sign-in automatically via onAuthStateChange
 
 // Login
 document.getElementById('loginBtn').onclick = function(){
   var b=document.getElementById('errBox');
   b.style.display='none';
-  var provider = new firebase.auth.GoogleAuthProvider();
-  // Force account selection to prevent silent re-use of wrong account
-  provider.setCustomParameters({ prompt: 'select_account' });
-  auth.signInWithPopup(provider).then(async function(result){
-    var check = await verifyAdminAccess(result.user);
-    if(!check.allowed){
-      b.style.display='block';
-      b.textContent = check.reason || 'Access denied.';
-    }
-  }).catch(function(e){
-    if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request'){
-      auth.signInWithRedirect(provider);
-    } else if(e.code !== 'auth/popup-closed-by-user'){
-      showAdminError('Sign in failed: ' + e.message);
-    }
-  });
+  _supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { queryParams: { prompt: 'select_account' } }
+  }).then(function(r){
+    if(r.error) showAdminError('Sign in failed: ' + r.error.message);
+  }).catch(function(e){ showAdminError('Sign in failed: ' + e.message); });
 };
 
 // Logout
@@ -1107,7 +1261,7 @@ async function runUsernameMigration() {
           await db.collection('usernames').doc(key).set({
             uid: uid,
             displayName: displayName,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp()
           });
           logEl.innerHTML += '<span style="color:#065f46">✓ Migrated: ' + displayName + '</span><br>';
           done++;
@@ -1453,8 +1607,8 @@ function deleteUserData(uid, name){
     '\u2022 Upload quota record\n' +
     '\u2022 User profile doc\n' +
     '\u2022 Username reservation\n' +
-    '\u2022 Cloudinary media queued for deletion (pending_cloudinary_deletes)\n\n' +
-    'Note: Auth account must be removed separately in Firebase Console.\n\nThis cannot be undone!'
+    '\u2022 Cloudinary media queued for deletion (pending_storage_deletes)\n\n' +
+    'Note: Auth account must be removed separately in Supabase Dashboard.\n\nThis cannot be undone!'
   )) return;
 
   // Collect ALL UIDs to delete: the clicked UID + any duplicate docs sharing the same email
@@ -1502,11 +1656,11 @@ function deleteUserData(uid, name){
 
         // Queue all Cloudinary assets (posts + avatar) in a single record
         if (allPostPublicIds.length > 0) {
-          db.collection('pending_cloudinary_deletes').add({
+          db.collection('pending_storage_deletes').add({
             userId:    delUid,
             publicIds: allPostPublicIds,
             reason:    'admin_user_delete',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             status:    'pending'
           }).catch(function(){});
         }
@@ -1599,8 +1753,8 @@ function deleteUserData(uid, name){
       'Done! All Firestore data for "'+name+'" has been deleted.\n\n' +
       'Checklist:\n' +
       '\u2713 Habits, posts, comments, reports deleted\n' +
-      '\u2713 Cloudinary media (posts + avatar) queued in pending_cloudinary_deletes\n' +
-      '\u26a0 Auth account: delete manually in Firebase Console\n' +
+      '\u2713 Cloudinary media (posts + avatar) queued in pending_storage_deletes\n' +
+      '\u26a0 Auth account: delete manually in Supabase Dashboard\n' +
       '\u26a0 Cloudinary media: run Media Cleanup in this admin panel'
     );
   }).catch(function(e){
@@ -1717,7 +1871,7 @@ function loadQuota(){
       '<tr><td colspan="8" style="padding:20px 18px;color:#c00;font-size:12px;line-height:1.8">' +
       '<strong>&#10060; Firestore Permission Denied</strong><br>' +
       'The admin panel does not have read access to the upload_quotas collection.<br>' +
-      'Please add the following rule in Firebase Console &rarr; Firestore &rarr; Rules:<br><br>' +
+      'Please add the following rule in Supabase Dashboard &rarr; Firestore &rarr; Rules:<br><br>' +
       '<code style="background:#1e293b;color:#94a3b8;padding:10px 14px;display:block;margin-top:6px;font-size:11px;border-radius:2px;white-space:pre-wrap">' +
       'match /upload_quotas/{uid} {\n' +
       '  allow read, write: if request.auth != null\n' +
@@ -1957,7 +2111,7 @@ function renderCleanup() {
   }
   var now = Date.now();
   tbody.innerHTML = allZombies.map(function(z, idx) {
-    var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(z.uid);
+    var consoleUrl = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(z.uid);
 
     // Registered time display
     var timeStr     = z.createdAt ? z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -1971,7 +2125,7 @@ function renderCleanup() {
     var fsBadge  = '<span class="badge" id="czfs-' + idx + '" style="background:#fef3c7;color:#92400e">Exists</span>';
     var delFsBtn = '<button class="btn-del-fs" id="czbtn-' + idx + '" '
       + 'onclick="deleteFirestoreData(\'' + z.uid + '\',\'' + (z.displayName_lower||'') + '\',' + idx + ')" '
-      + 'title="Delete users/{uid} and usernames/{name} from Firestore">Delete Firestore</button>';
+      + 'title="Delete users/{uid} and usernames/{name} from Firestore">Delete DB Data</button>';
 
     return '<tr id="czrow-' + idx + '">'
       + '<td>'
@@ -1986,7 +2140,7 @@ function renderCleanup() {
       + '</td>'
       + '<td>' + fsBadge + '</td>'
       + '<td>'
-      + '<a href="' + consoleUrl + '" target="_blank"><button class="btn-console">Open in Console</button></a>'
+      + '<a href="' + consoleUrl + '" target="_blank"><button class="btn-console">Supabase Dashboard</button></a>'
       + delFsBtn
       + '</td>'
       + '</tr>';
@@ -2003,13 +2157,13 @@ function copyUID(uid, el) {
 
 function deleteFirestoreData(uid, usernameLower, idx) {
   if (!confirm(
-    'Delete Firestore data for UID: ' + uid + '?\n\n' +
+    'Delete DB Data data for UID: ' + uid + '?\n\n' +
     'This will remove:\n' +
     '• users/' + uid + '\n' +
     '• usernames/' + (usernameLower||'(none)') + '\n' +
     '• upload_quotas/' + uid + '\n\n' +
     '⚠ Firebase Auth account must still be deleted manually.\n' +
-    'Firebase Console will open automatically after deletion.'
+    'Supabase Dashboard will open automatically after deletion.'
   )) return;
 
   var btn = document.getElementById('czbtn-' + idx);
@@ -2030,7 +2184,7 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     // Replace action cell with "Delete Auth" direct link button
     var actionCell = btn ? btn.parentElement : null;
     if (actionCell) {
-      var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(uid);
+      var consoleUrl = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(uid);
       actionCell.innerHTML =
         '<span style="font-size:10px;color:#059669;font-weight:700">✓ FS Done</span> &nbsp;'
         + '<a href="' + consoleUrl + '" target="_blank">'
@@ -2044,16 +2198,16 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     var remaining = document.querySelectorAll('.btn-del-fs:not([disabled])').length;
     if (remaining === 0) document.getElementById('cleanupAllBtn').style.display = 'none';
 
-    // ── Auto-open Firebase Console for Auth deletion ──
-    var consoleUrl2 = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(uid);
+    // ── Auto-open Supabase Dashboard for Auth deletion ──
+    var consoleUrl2 = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(uid);
     window.open(consoleUrl2, '_blank');
-    showToast('Firestore deleted. Firebase Console opened — delete the Auth account there.');
+    showToast('Firestore deleted. Supabase Dashboard opened — delete the Auth account there.');
 
   }).catch(function(e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Delete Firestore'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete DB Data'; }
     var msg = e.message || '';
     if (msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1) {
-      alert('❌ 權限不足，無法刪除。\n\n請先到 Firebase Console → Firestore → Rules\n將以下規則加入後再試：\n\n' +
+      alert('❌ 權限不足，無法刪除。\n\n請先到 Supabase Dashboard → Firestore → Rules\n將以下規則加入後再試：\n\n' +
         'match /users/{userId} {\n' +
         '  allow delete: if isAdmin();\n' +
         '}\n\nmatch /usernames/{username} {\n' +
@@ -2114,7 +2268,7 @@ function cleanupAllFirestore() {
       var rowBtn = document.getElementById('czbtn-' + idx);
       if (badge) { badge.textContent = '✓ FS Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
       if (rowBtn) {
-        var consoleUrl = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users?search=' + encodeURIComponent(z.uid);
+        var consoleUrl = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(z.uid);
         rowBtn.parentElement.innerHTML =
           '<span style="font-size:10px;color:#059669;font-weight:700">✓ FS Done</span> &nbsp;'
           + '<a href="' + consoleUrl + '" target="_blank">'
@@ -2130,13 +2284,13 @@ function cleanupAllFirestore() {
 
     // ── Show UID summary panel for Auth deletion ──
     var uidList = zombieSnapshot.map(function(z){ return z.uid; }).join('\n');
-    var consoleBase = 'https://console.firebase.google.com/project/health-habit-tracker-e6b50/authentication/users';
+    var consoleBase = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users';
     var summaryHtml =
       '<div style="margin-top:16px;padding:16px;background:#fff8e1;border:1px solid #e0c060">' +
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7a6000;margin-bottom:10px">' +
       '⚠ Step 2 — Delete ' + zombieSnapshot.length + ' Firebase Auth Account(s)</div>' +
       '<div style="font-size:11px;color:#7a6000;margin-bottom:10px">' +
-      'Firestore 資料已清除。請前往 Firebase Console 逐一刪除 Auth 帳號（搜尋 UID）：</div>' +
+      'Supabase DB 資料已清除。請前往 Supabase Dashboard 逐一刪除 Auth 帳號（搜尋 UID）：</div>' +
       '<a href="' + consoleBase + '" target="_blank">' +
       '<button style="padding:8px 16px;background:#dc2626;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;margin-bottom:12px">' +
       '→ Open Firebase Auth Console</button></a>' +
@@ -2218,7 +2372,7 @@ function loadReports(){
               db.collection('reports').doc(r.id).update({
                 status: 'dismissed',
                 dismissedReason: 'reported_user_deleted',
-                dismissedAt: firebase.firestore.FieldValue.serverTimestamp()
+                dismissedAt: FieldValue.serverTimestamp()
               }).catch(function(){});
             }
             return false;
@@ -2625,7 +2779,7 @@ async function deleteAllOrphanQuotas() {
 function setReportStatus(reportId, newStatus){
   db.collection('reports').doc(reportId).update({
     status: newStatus,
-    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    reviewedAt: FieldValue.serverTimestamp(),
     reviewedBy: auth.currentUser ? auth.currentUser.email : 'admin'
   }).then(function(){
     // Update in-memory
@@ -2666,8 +2820,8 @@ function deleteReportedComment(btn) {
   btn.disabled = true; btn.textContent = 'Deleting...';
   db.collection('posts').doc(postId).collection('comments').doc(commentId).delete().then(function() {
     db.collection('posts').doc(postId).update({
-      comments: firebase.firestore.FieldValue.increment(-1),
-      commentCount: firebase.firestore.FieldValue.increment(-1)
+      comments: FieldValue.increment(-1),
+      commentCount: FieldValue.increment(-1)
     }).catch(function(){});
     // Delete ALL reports for this commentId
     return db.collection('reports').where('commentId', '==', commentId).get();
@@ -2826,8 +2980,8 @@ function deleteCommentFromModal(postId, commentId) {
     .then(function(){
       // Update both fields to keep counts in sync
       db.collection('posts').doc(postId).update({
-        comments: firebase.firestore.FieldValue.increment(-1),
-        commentCount: firebase.firestore.FieldValue.increment(-1)
+        comments: FieldValue.increment(-1),
+        commentCount: FieldValue.increment(-1)
       }).catch(function(){});
       // Grey out deleted comment in modal UI
       var el = document.getElementById('cm-'+commentId);
@@ -2864,7 +3018,7 @@ function loadCloudinaryQueue() {
   if (!tbody) return;
   tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Loading...</td></tr>';
 
-  db.collection('pending_cloudinary_deletes')
+  db.collection('pending_storage_deletes')
     .orderBy('createdAt', 'desc')
     .limit(200)
     .get()
@@ -2931,9 +3085,9 @@ function loadCloudinaryQueue() {
 }
 
 function markCloudinaryDone(docId) {
-  db.collection('pending_cloudinary_deletes').doc(docId).update({
+  db.collection('pending_storage_deletes').doc(docId).update({
     status: 'deleted',
-    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    deletedAt: FieldValue.serverTimestamp(),
     deletedBy: auth.currentUser ? auth.currentUser.email : 'admin'
   }).then(function() {
     var r = allCdRecords.find(function(x){ return x.id === docId; });
@@ -2968,10 +3122,10 @@ function markAllCloudinaryDone() {
 
   var batch = db.batch();
   pending.forEach(function(r) {
-    var ref = db.collection('pending_cloudinary_deletes').doc(r.id);
+    var ref = db.collection('pending_storage_deletes').doc(r.id);
     batch.update(ref, {
       status: 'deleted',
-      deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      deletedAt: FieldValue.serverTimestamp(),
       deletedBy: auth.currentUser ? auth.currentUser.email : 'admin'
     });
     r.status = 'deleted';
