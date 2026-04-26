@@ -6897,9 +6897,8 @@ function MainApp(_ref16) {
     // Step 1: Re-authenticate
     var reauth = isGoogleUser()
       ? _supabase.auth.signInWithOAuth({ provider: 'google' }).then(function(r){ if(r.error) throw r.error; return r; })
-      : auth.currentUser.reauthenticateWithCredential(
-          { email: user.email, password: deletePassword }  // Supabase re-auth credential
-        );
+      : _supabase.auth.signInWithPassword({ email: user.email, password: deletePassword })
+          .then(function(r){ if(r.error) { var e = new Error(r.error.message); e.code = 'auth/wrong-password'; throw e; } return r; });
 
     var errMap = {
       'auth/wrong-password':        'Incorrect password. Please try again.',
