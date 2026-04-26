@@ -32,6 +32,7 @@
                     https://*.cloudfunctions.net
                     https://identitytoolkit.googleapis.com
                     https://securetoken.googleapis.com
+                    https://cdn.jsdelivr.net
                     https://nvyyneoiocyjxbtcyxyi.supabase.co
                     https://umami-psi-opal.vercel.app;
         media-src   'self' blob:
@@ -1561,7 +1562,7 @@ if (isFirebaseConfigured) {
        users              → users
        habits             → habits
        posts              → posts
-       posts/*/comments   → comments (with post_id FK)
+       posts/{postId}/comments   → comments (with post_id FK)
        usernames          → usernames
        upload_quotas      → upload_quotas
        reports            → reports
