@@ -798,14 +798,26 @@ var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 var auth = {
   currentUser: null,
   onAuthStateChanged: function(cb) {
+    // Check for OAuth hash fragment in URL (returned from Supabase callback)
+    var hasOAuthHash = window.location.hash && (
+      window.location.hash.indexOf('access_token') !== -1 ||
+      window.location.hash.indexOf('error') !== -1
+    );
+
     var sub = _supabase.auth.onAuthStateChange(function(event, session) {
       auth.currentUser = session ? _mkUser(session.user) : null;
       cb(auth.currentUser);
     });
-    _supabase.auth.getSession().then(function(r) {
-      auth.currentUser = r.data.session ? _mkUser(r.data.session.user) : null;
-      cb(auth.currentUser);
-    });
+
+    if (!hasOAuthHash) {
+      // No OAuth callback in progress — safe to call getSession immediately
+      _supabase.auth.getSession().then(function(r) {
+        auth.currentUser = r.data.session ? _mkUser(r.data.session.user) : null;
+        cb(auth.currentUser);
+      });
+    }
+    // If hasOAuthHash, let onAuthStateChange handle it (avoids race condition)
+
     return function() { sub.data && sub.data.subscription && sub.data.subscription.unsubscribe(); };
   },
   signOut: function() { auth.currentUser = null; return _supabase.auth.signOut(); }
