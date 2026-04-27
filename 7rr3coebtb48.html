@@ -1172,7 +1172,10 @@ document.getElementById('loginBtn').onclick = function(){
   b.style.display='none';
   _supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { queryParams: { prompt: 'select_account' } }
+    options: {
+      queryParams: { prompt: 'select_account' },
+      redirectTo: 'https://andytest-gogo.github.io/habit-tracker/7rr3coebtb48.html'
+    }
   }).then(function(r){
     if(r.error) showAdminError('Sign in failed: ' + r.error.message);
   }).catch(function(e){ showAdminError('Sign in failed: ' + e.message); });
