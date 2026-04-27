@@ -1108,15 +1108,21 @@ async function verifyAdminAccess(user) {
 
 // ── Auth state ──────────────────────────────────────────────────
 var authResolved = false;
+// If OAuth hash is in URL, give Supabase more time to process the token
+var hasOAuthCallback = window.location.hash && window.location.hash.indexOf('access_token') !== -1;
 var authSafetyTimer = setTimeout(function(){
   if(!authResolved){
     authResolved = true;
     document.getElementById('loadingScreen').style.display='none';
     document.getElementById('loginWrap').style.display='flex';
   }
-}, 5000);
+}, hasOAuthCallback ? 15000 : 5000);
 
 auth.onAuthStateChanged(async function(user){
+  // If no user yet but OAuth hash is still in URL, Supabase is still processing — wait
+  if(!user && window.location.hash && window.location.hash.indexOf('access_token') !== -1){
+    return;
+  }
   clearTimeout(authSafetyTimer);
   authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
