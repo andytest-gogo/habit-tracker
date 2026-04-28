@@ -789,23 +789,40 @@ if(typeof window.supabase === 'undefined'){
 /* ══════════════════════════════════════════════════
    ★ SUPABASE 設定 — 請填入你的 Supabase 資訊 ★
    ══════════════════════════════════════════════════ */
-var SUPABASE_URL         = 'https://nvyyneoiocyjxbtcyxyi.supabase.co';      // e.g. https://xxxx.supabase.co
-var SUPABASE_SERVICE_KEY = 'sb_secret_8Bd9iDaIOSLbNeQe2MPCtw_LKoWhjfS';  // Settings → API → service_role key
+var SUPABASE_URL         = 'https://nvyyneoiocyjxbtcyxyi.supabase.co';
+var SUPABASE_ANON_KEY    = 'sb_publishable_1Qa7KHluDoNyeW2cKRk9pw_BX4JjvYC';   // Settings → API → anon/public key ← 用於 OAuth 登入
+var SUPABASE_SERVICE_KEY = 'sb_secret_8Bd9iDaIOSLbNeQe2MPCtw_LKoWhjfS';  // Settings → API → service_role key ← 用於資料庫查詢
 
-var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { detectSessionInUrl: true, flowType: "pkce" } });
+// ⚠️ 必須分成兩個 client:
+// _authClient: 使用 anon key — 處理 OAuth / session（service_role key 會導致登入後 session 無法建立）
+// _supabase:   使用 service_role key — 繞過 RLS 查詢所有資料（僅在 Admin 已通過驗證後使用）
+var _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { detectSessionInUrl: true, flowType: 'pkce', persistSession: true }
+});
+var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+});
 
-/* ─── Auth shim ─────────────────────────────────── */
+/* ─── Auth shim — 使用 _authClient (anon key) ───── */
 var auth = {
   currentUser: null,
   onAuthStateChanged: function(cb) {
-    // flowType:'implicit' means Supabase auto-parses #access_token from URL on init
-    var sub = _supabase.auth.onAuthStateChange(function(event, session) {
+    // 初始化時主動取一次 session（處理 PKCE callback 情況）
+    _authClient.auth.getSession().then(function(r) {
+      if (r.data && r.data.session) {
+        auth.currentUser = _mkUser(r.data.session.user);
+        cb(auth.currentUser);
+      }
+    }).catch(function() {});
+
+    var sub = _authClient.auth.onAuthStateChange(function(event, session) {
+      console.log('[Auth] event:', event, 'session:', !!session);
       auth.currentUser = session ? _mkUser(session.user) : null;
       cb(auth.currentUser);
     });
     return function() { sub.data && sub.data.subscription && sub.data.subscription.unsubscribe(); };
   },
-  signOut: function() { auth.currentUser = null; return _supabase.auth.signOut(); }
+  signOut: function() { auth.currentUser = null; return _authClient.auth.signOut(); }
 };
 function _mkUser(u) {
   if (!u) return null;
@@ -816,10 +833,20 @@ function _mkUser(u) {
     photoURL: meta.avatar_url || null,
     providerData: [{ providerId: (u.app_metadata || {}).provider || 'email' }],
     getIdTokenResult: function() {
-      return _supabase.auth.getSession().then(function(r) {
+      return _authClient.auth.getSession().then(function(r) {
         var tok = r.data.session && r.data.session.access_token;
         var claims = {};
-        try { if (tok) claims = JSON.parse(atob(tok.split('.')[1])).user_metadata || {}; } catch(e) {}
+        try {
+          if (tok) {
+            // Supabase JWT uses URL-safe base64 (replace - and _ before decoding)
+            var payload = tok.split('.')[1];
+            var base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+            var padded = base64 + '=='.slice(0, (4 - base64.length % 4) % 4);
+            var decoded = JSON.parse(atob(padded));
+            // admin claim 放在 user_metadata 裡
+            claims = decoded.user_metadata || {};
+          }
+        } catch(e) { console.warn('[getIdTokenResult] JWT decode failed:', e); }
         return { claims: claims };
       });
     }
@@ -862,10 +889,12 @@ function _fc(k){ return _FM[k] || k.replace(/([A-Z])/g,function(m){return '_'+m.
 function _rDoc(table, row) {
   if (!row) return null;
   var d = Object.assign({}, row);
-  // Wrap timestamps
+  // Wrap timestamps — use IIFE to capture correct value in closure
   ['created_at','updated_at','last_seen','last_upload_at','reported_at',
    'reviewed_at','dismissed_at','deleted_at','username_changed_at'].forEach(function(k){
-    if (d[k] && typeof d[k]==='string') { var dt=new Date(d[k]); d[k]={toDate:function(){return dt;}}; }
+    if (d[k] && typeof d[k]==='string') {
+      (function(val){ d[k] = { toDate: function(){ return new Date(val); } }; })(d[k]);
+    }
   });
   // camelCase aliases
   var aliases = [
@@ -970,17 +999,18 @@ function _cRef(table, parentTable, parentId) {
       orderBy:function(f,d){return _makeChain(conditions,f,d,lim);},
       limit:function(n){return _makeChain(conditions,orderField,dir,n);},
       onSnapshot:function(cb,errCb){
+        var _unsub = function(){};
         get().then(function(r){
           var snap={docs:r.docs,size:r.docs.length};
           snap.forEach=function(fn){snap.docs.forEach(fn);};
           cb(snap);
           var sub=_supabase.channel('rt:'+tbl+':'+(parentId||'all'))
             .on('postgres_changes',{event:'*',schema:'public',table:tbl},function(){
-              get().then(function(r2){var s2={docs:r2.docs};s2.forEach=function(fn){s2.docs.forEach(fn);};cb(s2);});
+              get().then(function(r2){var s2={docs:r2.docs,size:r2.docs.length};s2.forEach=function(fn){s2.docs.forEach(fn);};cb(s2);});
             }).subscribe();
-          return function(){_supabase.removeChannel(sub);};
+          _unsub = function(){_supabase.removeChannel(sub);};
         }).catch(function(e){if(errCb)errCb(e);});
-        return function(){};
+        return function(){ _unsub(); };
       }
     };
   }
@@ -1093,8 +1123,7 @@ async function verifyAdminAccess(user) {
 
 // ── Auth state ──────────────────────────────────────────────────
 var authResolved = false;
-// If OAuth callback is in URL, give Supabase more time to process the token
-// PKCE flow uses ?code= query param; implicit flow used #access_token hash
+// PKCE flow redirects back with ?code= in the URL query string
 var hasOAuthCallback = (window.location.search && window.location.search.indexOf('code=') !== -1)
   || (window.location.hash && window.location.hash.indexOf('access_token') !== -1);
 var authSafetyTimer = setTimeout(function(){
@@ -1102,8 +1131,9 @@ var authSafetyTimer = setTimeout(function(){
     authResolved = true;
     document.getElementById('loadingScreen').style.display='none';
     document.getElementById('loginWrap').style.display='flex';
+    if(hasOAuthCallback) showAdminError('登入逾時，請重試。(Auth timeout — please try again)');
   }
-}, hasOAuthCallback ? 15000 : 5000);
+}, hasOAuthCallback ? 20000 : 5000);
 
 auth.onAuthStateChanged(async function(user){
   clearTimeout(authSafetyTimer);
@@ -1171,7 +1201,7 @@ auth.onAuthStateChanged(async function(user){
 document.getElementById('loginBtn').onclick = function(){
   var b=document.getElementById('errBox');
   b.style.display='none';
-  _supabase.auth.signInWithOAuth({
+  _authClient.auth.signInWithOAuth({
     provider: 'google',
     options: {
       queryParams: { prompt: 'select_account' },
