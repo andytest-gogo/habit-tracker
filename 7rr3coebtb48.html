@@ -792,7 +792,7 @@ if(typeof window.supabase === 'undefined'){
 var SUPABASE_URL         = 'https://nvyyneoiocyjxbtcyxyi.supabase.co';      // e.g. https://xxxx.supabase.co
 var SUPABASE_SERVICE_KEY = 'sb_secret_8Bd9iDaIOSLbNeQe2MPCtw_LKoWhjfS';  // Settings → API → service_role key
 
-var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
+var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { detectSessionInUrl: true, flowType: "pkce" } });
 
 /* ─── Auth shim ─────────────────────────────────── */
 var auth = {
@@ -1093,8 +1093,10 @@ async function verifyAdminAccess(user) {
 
 // ── Auth state ──────────────────────────────────────────────────
 var authResolved = false;
-// If OAuth hash is in URL, give Supabase more time to process the token
-var hasOAuthCallback = window.location.hash && window.location.hash.indexOf('access_token') !== -1;
+// If OAuth callback is in URL, give Supabase more time to process the token
+// PKCE flow uses ?code= query param; implicit flow used #access_token hash
+var hasOAuthCallback = (window.location.search && window.location.search.indexOf('code=') !== -1)
+  || (window.location.hash && window.location.hash.indexOf('access_token') !== -1);
 var authSafetyTimer = setTimeout(function(){
   if(!authResolved){
     authResolved = true;
