@@ -790,18 +790,15 @@ if(typeof window.supabase === 'undefined'){
    ★ SUPABASE 設定 — 請填入你的 Supabase 資訊 ★
    ══════════════════════════════════════════════════ */
 var SUPABASE_URL         = 'https://nvyyneoiocyjxbtcyxyi.supabase.co';
-var SUPABASE_ANON_KEY    = 'sb_publishable_1Qa7KHluDoNyeW2cKRk9pw_BX4JjvYC';   // Settings → API → anon/public key ← 用於 OAuth 登入
-var SUPABASE_SERVICE_KEY = 'sb_secret_8Bd9iDaIOSLbNeQe2MPCtw_LKoWhjfS';  // Settings → API → service_role key ← 用於資料庫查詢
+var SUPABASE_ANON_KEY    = 'sb_publishable_1Qa7KHluDoNyeW2cKRk9pw_BX4JjvYC';
+var SUPABASE_PROJECT_REF = 'nvyyneoiocyjxbtcyxyi';
 
-// ⚠️ 必須分成兩個 client:
-// _authClient: 使用 anon key — 處理 OAuth / session（service_role key 會導致登入後 session 無法建立）
-// _supabase:   使用 service_role key — 繞過 RLS 查詢所有資料（僅在 Admin 已通過驗證後使用）
+// Supabase JS v2 新版封鎖在瀏覽器使用 service_role key。
+// 改用 anon key + RLS admin policy 讓已登入的 admin 讀寫所有資料。
 var _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { detectSessionInUrl: true, flowType: 'pkce', persistSession: true }
 });
-var _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-});
+var _supabase = _authClient; // 同一個 client，由 RLS admin policy 控制權限
 
 /* ─── Auth shim — 使用 _authClient (anon key) ───── */
 var auth = {
