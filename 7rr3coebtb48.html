@@ -399,7 +399,7 @@ tr:hover td{background:var(--g50)}
       <!-- Stats row -->
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
         <div class="stat dark"><div class="stat-lbl">Unverified Accounts</div><div class="stat-val" id="czTotal">—</div><div class="stat-note">Registered but not verified</div></div>
-        <div class="stat"><div class="stat-lbl">Firestore Data</div><div class="stat-val" id="czFirestore">—</div><div class="stat-note">Can be auto-deleted</div></div>
+        <div class="stat"><div class="stat-lbl">DB Data</div><div class="stat-val" id="czFirestore">—</div><div class="stat-note">Can be auto-deleted</div></div>
         <div class="stat"><div class="stat-lbl">Auth Only</div><div class="stat-val" id="czAuth">—</div><div class="stat-note">Requires backend SDK</div></div>
       </div>
 
@@ -416,7 +416,7 @@ tr:hover td{background:var(--g50)}
             <button class="refresh" id="cleanupRefreshBtn" onclick="loadCleanup()">Refresh</button>
             <button id="cleanupAllBtn" onclick="cleanupAllFirestore()"
               style="padding:7px 13px;background:#c00;border:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:#fff;font-family:var(--font);display:none">
-              🗑 Delete All Firestore Data
+              🗑 Delete All DB Data
             </button>
           </div>
         </div>
@@ -437,8 +437,8 @@ tr:hover td{background:var(--g50)}
       <div class="tbl-card" style="padding:18px;margin-top:4px">
         <div class="chart-ttl" style="margin-bottom:12px">📋 刪除殭屍帳號流程（兩步驟）</div>
         <div style="font-size:12px;color:var(--g500);line-height:2">
-          <div><strong style="color:#059669">Step 1 — 自動：刪除 Firestore 資料</strong>（本頁面一鍵完成）<br>
-          點擊每一行的「Delete DB Data」按鈕，自動清除 <code>users</code>、<code>usernames</code>（釋放 username）、<code>upload_quotas</code>，並自動開啟 Supabase Dashboard。</div>
+          <div><strong style="color:#059669">Step 1 — 自動：刪除 Supabase DB 資料</strong>（本頁面一鍵完成）<br>
+          點擊每一行的「Delete DB Data」按鈕，自動清除 <code>users</code>、<code>usernames</code>（釋放 username）、<code>upload_quotas</code> 三筆資料，並自動開啟 Supabase Dashboard。</div>
           <div style="margin-top:10px"><strong style="color:#dc2626">Step 2 — 手動：在 Supabase Dashboard 刪除 Auth 帳號</strong>（約 5 秒）<br>
           Dashboard 會自動開啟。到 Auth → Users 搜尋 UID，找到帳號後點擊「Delete」即可。<br>
           若使用「Delete All」批次刪除，結束後會顯示所有 UID 清單供你複製貼上搜尋。</div>
@@ -519,9 +519,9 @@ tr:hover td{background:var(--g50)}
 
       <!-- Custom Claims setup guide -->
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
-        <div class="chart-ttl" style="margin-bottom:10px">⚙️ Step 1 — Set Firebase Custom Claim (One-time setup)</div>
+        <div class="chart-ttl" style="margin-bottom:10px">⚙️ Step 1 — Set Supabase Admin Claim (One-time setup)</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:12px">
-          To enable the second layer of admin verification, run this <strong>once</strong> in your Firebase project using the Admin SDK or Cloud Functions. Replace <code style="background:var(--g100);padding:1px 5px;font-size:11px">YOUR_ADMIN_UID</code> with your Firebase UID (visible in Supabase Dashboard → Authentication).
+          To enable the second layer of admin verification, run one of the SQL queries below in Supabase Dashboard → SQL Editor. Replace the email with your admin email.
         </p>
         <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">-- Option A: Supabase SQL Editor (Dashboard → SQL Editor → New query)
 UPDATE auth.users
@@ -542,7 +542,7 @@ console.log('✅ Admin metadata set successfully');</pre>
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
         <div class="chart-ttl" style="margin-bottom:10px">🛡️ Step 2 — Supabase RLS Policies</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.7;margin-bottom:12px">
-          Copy these rules into <strong>Supabase Dashboard → Firestore Database → Rules</strong>. These rules enforce that users can only read/write their own data, while the admin account has read access to all collections.
+          Copy these rules into <strong>Supabase Dashboard → SQL Editor → New query</strong>. These rules enforce that users can only read/write their own data, while the admin account has read access to all collections.
         </p>
         <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap">-- ══ Supabase RLS Policies ════════════════════════════════════════════════
 -- Run in Supabase Dashboard → SQL Editor → New query
@@ -682,10 +682,10 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
       </div>
 
       <div class="quota-warn show" id="cdApiWarn" style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;">
-        ⚠️ <strong>Manual step required:</strong> Cloudinary deletion requires your API Secret (cannot be stored in frontend code).
+        ⚠️ <strong>Manual step required:</strong> Supabase Storage deletion must be done via the Dashboard or CLI (cannot auto-delete from frontend).
         Copy the <code style="background:#f5e97a;padding:1px 5px;font-size:11px">storage path</code> values below and delete them directly in
-        <a href="https://console.cloudinary.com" target="_blank" style="color:#7a6000;font-weight:700">Supabase Dashboard → Storage ↗</a>,
-        or use the Cloudinary CLI / Admin API from a secure environment.
+        <a href="https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/storage/buckets" target="_blank" style="color:#7a6000;font-weight:700">Supabase Dashboard → Storage ↗</a>,
+        or use the Supabase CLI.
       </div>
 
       <div class="tbl-card" style="margin-bottom:20px">
@@ -703,12 +703,12 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
       </div>
 
       <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
-        <div class="chart-ttl" style="margin-bottom:8px">📋 How to delete files in Cloudinary</div>
+        <div class="chart-ttl" style="margin-bottom:8px">📋 How to delete files in Supabase Storage</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.8">
           <strong>Option A — Supabase Dashboard (easiest):</strong><br>
-          Go to <a href="https://console.cloudinary.com/pm/c-95b84eb0679afd26d1b6c405cee152/media-explorer" target="_blank" style="color:var(--black);font-weight:700">Media Library ↗</a>,
-          navigate to the bucket, find the file by path, and delete it.<br><br>
-          <strong>Option B — Supabase CLI:</strong><br>
+          Go to <a href="https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/storage/buckets" target="_blank" style="color:var(--black);font-weight:700">Supabase Storage ↗</a>,
+          open the bucket, find the file by path, and delete it.<br><br>
+          <strong>Option B — Supabase CLI (recommended for bulk):</strong><br>
           <code style="background:#1e293b;color:#94a3b8;padding:4px 10px;display:inline-block;margin-top:4px">supabase storage rm &lt;bucket/path&gt;</code><br><br>
           After deleting in Supabase Storage, click <strong>"Mark as Deleted"</strong> below to update this queue.
         </p>
@@ -746,8 +746,8 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
           <option value="other">Other</option>
         </select>
         <button class="refresh" id="reportsRefreshBtn" onclick="loadReports()">Refresh</button>
-        <button class="refresh" style="background:#fef3c7;color:#92400e;border-color:#fbbf24" onclick="purgeReviewedReports(this)" title="Delete all reviewed &amp; dismissed reports from Firestore">🧹 Clear Reviewed</button>
-        <button class="refresh" style="background:#fce7f3;color:#9d174d;border-color:#f9a8d4" onclick="purgeOrphanReports(this)" title="Delete reports whose post no longer exists in Firestore">🗑 Clear Orphan Reports</button>
+        <button class="refresh" style="background:#fef3c7;color:#92400e;border-color:#fbbf24" onclick="purgeReviewedReports(this)" title="Delete all reviewed &amp; dismissed reports from DB">🧹 Clear Reviewed</button>
+        <button class="refresh" style="background:#fce7f3;color:#9d174d;border-color:#f9a8d4" onclick="purgeOrphanReports(this)" title="Delete reports whose post no longer exists in DB">🗑 Clear Orphan Reports</button>
         <div style="margin-left:auto;font-size:11px;color:var(--g400)" id="reportsCnt"></div>
       </div>
 
@@ -1052,18 +1052,19 @@ var db = {
 
 /* ── Admin Security Configuration ────────────────────────────────────
    Layer 1: Client-side email whitelist (fast UI feedback — first line of defence)
-   Layer 2: Firebase Custom Claims (server-side verified — required for access)
-   ⚠️  IMPORTANT: Set custom claim on your account before deploying:
-       firebase admin SDK: admin.auth().setCustomUserClaims(uid, { admin: true })
+   Layer 2: Supabase user_metadata claim (server-verified — set admin:true via SQL Editor)
+   ⚠️  IMPORTANT: Run once in Supabase SQL Editor:
+       UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data || '{"admin":true}'::jsonb
+       WHERE email='andy19920818@gmail.com';
    ──────────────────────────────────────────────────────────────────── */
 var ALLOWED_ADMINS = [
   'andy19920818@gmail.com',
 ];
-var ADMIN_CUSTOM_CLAIM = 'admin'; // claim key — must be true in Firebase token
+var ADMIN_CUSTOM_CLAIM = 'admin'; // claim key — must be true in Supabase user_metadata
 // Layer 3: Session timeout (auto sign-out after inactivity)
 var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 // Set to true ONLY during initial onboarding to allow email-only access before claim is set
-// Switch to false immediately once admin claim is configured in Firebase
+// Switch to false once admin:true is set in Supabase user_metadata
 var ALLOW_EMAIL_ONLY_FALLBACK = true;
 // ────────────────────────────────────────────────────────────────────
 
@@ -1494,7 +1495,7 @@ function setActFilter(f){
 function buildUsers(){
   var map={};
 
-  // Only count users that exist in the Firestore users collection (real verified accounts)
+  // Only count users that exist in the Supabase users table (real verified accounts)
   Object.entries(window.fsUsers||{}).forEach(function(entry){
     var uid=entry[0], u=entry[1];
     var createdAt = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt)) : null;
@@ -1641,7 +1642,7 @@ function deleteUserData(uid, name){
     '\u2022 Upload quota record\n' +
     '\u2022 User profile doc\n' +
     '\u2022 Username reservation\n' +
-    '\u2022 Cloudinary media queued for deletion (pending_storage_deletes)\n\n' +
+    '\u2022 Supabase Storage media queued for deletion (pending_storage_deletes)\n\n' +
     'Note: Auth account must be removed separately in Supabase Dashboard.\n\nThis cannot be undone!'
   )) return;
 
@@ -1673,7 +1674,7 @@ function deleteUserData(uid, name){
     // ── 2. Own posts + subcollection comments + per-post reports ───────────
     tasks.push(
       db.collection('posts').where('userId','==',delUid).get().then(function(snap){
-        // Collect ALL mediaPublicIds from all posts in one batch Cloudinary queue entry
+        // Collect ALL storage paths from all posts in one batch storage delete queue entry
         var allPostPublicIds = [];
         snap.docs.forEach(function(postDoc){
           var postData = postDoc.data();
@@ -1688,7 +1689,7 @@ function deleteUserData(uid, name){
           allPostPublicIds.push({ id: userDoc.avatarPublicId, type: 'image' });
         }
 
-        // Queue all Cloudinary assets (posts + avatar) in a single record
+        // Queue all Supabase Storage assets (posts + avatar) in a single record
         if (allPostPublicIds.length > 0) {
           db.collection('pending_storage_deletes').add({
             userId:    delUid,
@@ -1784,12 +1785,12 @@ function deleteUserData(uid, name){
     renderUsers(document.getElementById('userSearch').value||'');
     renderPosts(document.getElementById('postSearch').value||'');
     alert(
-      'Done! All Firestore data for "'+name+'" has been deleted.\n\n' +
+      'Done! All DB data for "'+name+'" has been deleted.\n\n' +
       'Checklist:\n' +
       '\u2713 Habits, posts, comments, reports deleted\n' +
-      '\u2713 Cloudinary media (posts + avatar) queued in pending_storage_deletes\n' +
-      '\u26a0 Auth account: delete manually in Supabase Dashboard\n' +
-      '\u26a0 Cloudinary media: run Media Cleanup in this admin panel'
+      '\u2713 Supabase Storage media queued in pending_storage_deletes\n' +
+      '\u26a0 Auth account: delete manually in Supabase Dashboard \u2192 Auth \u2192 Users\n' +
+      '\u26a0 Storage media: run Media Cleanup tab in this admin panel'
     );
   }).catch(function(e){
     alert('Error during deletion: '+e.message);
@@ -1903,17 +1904,12 @@ function loadQuota(){
     document.getElementById('quotaUpdated').textContent = '⚠️ Load failed: '+e.message;
     document.getElementById('quotaTbody').innerHTML =
       '<tr><td colspan="8" style="padding:20px 18px;color:#c00;font-size:12px;line-height:1.8">' +
-      '<strong>&#10060; Firestore Permission Denied</strong><br>' +
-      'The admin panel does not have read access to the upload_quotas collection.<br>' +
-      'Please add the following rule in Supabase Dashboard &rarr; Firestore &rarr; Rules:<br><br>' +
+      '<strong>&#10060; Supabase Permission Denied</strong><br>' +
+      'Cannot read the <code>upload_quotas</code> table. Ensure RLS policy allows service_role access, or run in Supabase SQL Editor:<br><br>' +
       '<code style="background:#1e293b;color:#94a3b8;padding:10px 14px;display:block;margin-top:6px;font-size:11px;border-radius:2px;white-space:pre-wrap">' +
-      'match /upload_quotas/{uid} {\n' +
-      '  allow read, write: if request.auth != null\n' +
-      '    &amp;&amp; request.auth.uid == uid;\n' +
-      '  // Admin read-all (replace with your email)\n' +
-      '  allow read: if request.auth != null\n' +
-      '    &amp;&amp; request.auth.token.email == \"YOUR_ADMIN@EMAIL.COM\";\n' +
-      '}</code></td></tr>';
+      'ALTER TABLE upload_quotas ENABLE ROW LEVEL SECURITY;\n' +
+      'CREATE POLICY "quotas_admin" ON upload_quotas FOR ALL USING (true);\n' +
+      '-- (service_role bypasses RLS automatically — check your Supabase client key)</code></td></tr>';
   });
 }
 
@@ -1993,7 +1989,7 @@ function renderQuota(){
         + 'border:1px solid #f5b97a;border-radius:2px;vertical-align:middle">已刪除帳號</span>'
       : '';
     var orphanNote = isOrphan
-      ? '<div style="font-size:10px;color:#b45309;margin-top:3px">⚠️ Firestore 用戶資料已刪除，此為孤立 quota 記錄</div>'
+      ? '<div style="font-size:10px;color:#b45309;margin-top:3px">⚠️ Supabase DB 用戶資料已刪除，此為孤立 quota 記錄</div>'
       : '';
     var actionCell = isOrphan
       ? '<button class="del" style="background:#c00;color:#fff;border-color:#c00" '
@@ -2064,7 +2060,7 @@ function formatDuration(ms) {
 function loadCleanup() {
   var tbody = document.getElementById('cleanupTbody');
   var updated = document.getElementById('cleanupUpdated');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning Firestore for unverified accounts...</td></tr>';
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning database for unverified accounts...</td></tr>';
   updated.textContent = 'Scanning...';
   document.getElementById('cleanupAllBtn').style.display = 'none';
   allZombies = [];
@@ -2145,7 +2141,7 @@ function renderCleanup() {
   }
   var now = Date.now();
   tbody.innerHTML = allZombies.map(function(z, idx) {
-    var consoleUrl = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(z.uid);
+    var consoleUrl = 'https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/auth/users?filter=' + encodeURIComponent(z.uid);
 
     // Registered time display
     var timeStr     = z.createdAt ? z.createdAt.toLocaleString('en-US', {month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -2196,7 +2192,7 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     '• users/' + uid + '\n' +
     '• usernames/' + (usernameLower||'(none)') + '\n' +
     '• upload_quotas/' + uid + '\n\n' +
-    '⚠ Firebase Auth account must still be deleted manually.\n' +
+    '⚠ Supabase Auth account must still be deleted manually.\n' +
     'Supabase Dashboard will open automatically after deletion.'
   )) return;
 
@@ -2218,7 +2214,7 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     // Replace action cell with "Delete Auth" direct link button
     var actionCell = btn ? btn.parentElement : null;
     if (actionCell) {
-      var consoleUrl = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(uid);
+      var consoleUrl = 'https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/auth/users?filter=' + encodeURIComponent(uid);
       actionCell.innerHTML =
         '<span style="font-size:10px;color:#059669;font-weight:700">✓ FS Done</span> &nbsp;'
         + '<a href="' + consoleUrl + '" target="_blank">'
@@ -2233,15 +2229,15 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     if (remaining === 0) document.getElementById('cleanupAllBtn').style.display = 'none';
 
     // ── Auto-open Supabase Dashboard for Auth deletion ──
-    var consoleUrl2 = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(uid);
+    var consoleUrl2 = 'https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/auth/users?filter=' + encodeURIComponent(uid);
     window.open(consoleUrl2, '_blank');
-    showToast('Firestore deleted. Supabase Dashboard opened — delete the Auth account there.');
+    showToast('DB data deleted. Supabase Dashboard opened — delete the Auth account there.');
 
   }).catch(function(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Delete DB Data'; }
     var msg = e.message || '';
     if (msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1) {
-      alert('❌ 權限不足，無法刪除。\n\n請先到 Supabase Dashboard → Firestore → Rules\n將以下規則加入後再試：\n\n' +
+      alert('❌ 刪除失敗。\n\n請確認 Supabase service_role key 已正確設定，\n或到 Supabase Dashboard → SQL Editor 確認 RLS policies。\n\n' +
         'match /users/{userId} {\n' +
         '  allow delete: if isAdmin();\n' +
         '}\n\nmatch /usernames/{username} {\n' +
@@ -2259,7 +2255,7 @@ function cleanupAllFirestore() {
   if (!confirm(
     'Delete ALL Firestore data for ' + count + ' zombie account(s)?\n\n' +
     'This will remove:\n• users/ docs\n• usernames/ docs\n• upload_quotas/ docs\n\n' +
-    '⚠ Firebase Auth accounts must still be deleted manually.\n' +
+    '⚠ Supabase Auth accounts must still be deleted manually.\n' +
     'A UID list + Console link will appear after deletion.'
   )) return;
 
@@ -2302,7 +2298,7 @@ function cleanupAllFirestore() {
       var rowBtn = document.getElementById('czbtn-' + idx);
       if (badge) { badge.textContent = '✓ FS Deleted'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46'; }
       if (rowBtn) {
-        var consoleUrl = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users?filter=' + encodeURIComponent(z.uid);
+        var consoleUrl = 'https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/auth/users?filter=' + encodeURIComponent(z.uid);
         rowBtn.parentElement.innerHTML =
           '<span style="font-size:10px;color:#059669;font-weight:700">✓ FS Done</span> &nbsp;'
           + '<a href="' + consoleUrl + '" target="_blank">'
@@ -2318,16 +2314,16 @@ function cleanupAllFirestore() {
 
     // ── Show UID summary panel for Auth deletion ──
     var uidList = zombieSnapshot.map(function(z){ return z.uid; }).join('\n');
-    var consoleBase = 'https://supabase.com/dashboard/project/YOUR_PROJECT_REF/auth/users';
+    var consoleBase = 'https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/auth/users';
     var summaryHtml =
       '<div style="margin-top:16px;padding:16px;background:#fff8e1;border:1px solid #e0c060">' +
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7a6000;margin-bottom:10px">' +
-      '⚠ Step 2 — Delete ' + zombieSnapshot.length + ' Firebase Auth Account(s)</div>' +
+      '⚠ Step 2 — Delete ' + zombieSnapshot.length + ' Supabase Auth Account(s)</div>' +
       '<div style="font-size:11px;color:#7a6000;margin-bottom:10px">' +
       'Supabase DB 資料已清除。請前往 Supabase Dashboard 逐一刪除 Auth 帳號（搜尋 UID）：</div>' +
       '<a href="' + consoleBase + '" target="_blank">' +
       '<button style="padding:8px 16px;background:#dc2626;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;margin-bottom:12px">' +
-      '→ Open Firebase Auth Console</button></a>' +
+      '→ Open Supabase Auth Console</button></a>' +
       '<div style="font-size:10px;color:#7a6000;margin-bottom:6px">UIDs to delete (copy all):</div>' +
       '<textarea readonly style="width:100%;height:' + Math.min(zombieSnapshot.length * 22 + 16, 180) + 'px;' +
       'font-family:var(--mono);font-size:10px;padding:8px;border:1px solid #e0c060;background:#fffdf0;resize:vertical;color:#333">' +
@@ -2344,7 +2340,7 @@ function cleanupAllFirestore() {
     }
   }).catch(function(e) {
     btn.disabled = false;
-    btn.textContent = '🗑 Delete All Firestore Data';
+    btn.textContent = '🗑 Delete All DB Data';
     alert('Batch delete failed: ' + e.message);
   });
 }
@@ -2428,7 +2424,7 @@ function loadReports(){
         document.getElementById('reportsUpdated').textContent = '⚠️ Load failed: ' + e.message;
         document.getElementById('reportsTbody').innerHTML =
           '<tr><td colspan="6" style="padding:20px;color:#c00;font-size:12px">Failed to load reports: ' + htmlEsc(e.message) +
-          '<br><br>Ensure Firestore Rules allow admin to read <code>reports</code> collection.</td></tr>';
+          '<br><br>Ensure Supabase RLS allows service_role to read <code>reports</code> table.</td></tr>';
       });
 
     // Cleanup users listener when reports listener is replaced
@@ -2772,7 +2768,7 @@ function deleteOrphanQuota(uid, idx) {
 
 async function deleteAllOrphanQuotas() {
   if (!allOrphanQuotas.length) return;
-  if (!confirm('Delete ALL ' + allOrphanQuotas.length + ' orphaned quota record(s)?\n\nThis only removes upload_quotas documents — Cloudinary files are NOT deleted.')) return;
+  if (!confirm('Delete ALL ' + allOrphanQuotas.length + ' orphaned quota record(s)?\n\nThis only removes upload_quotas documents — Supabase Storage files are NOT deleted.')) return;
   var btn = document.getElementById('deleteOrphanQuotasBtn');
   btn.disabled = true; btn.textContent = 'Deleting...';
   try {
