@@ -364,7 +364,207 @@
         .habit-mark-btn:hover { border-color:var(--black); color:var(--black); }
         .habit-mark-btn.marked { background:var(--black); color:var(--white); border-color:var(--black); }
 
-        /* ── HABIT DETAIL VIEW ── */
+        /* ── FIND PARTNER BUTTON ── */
+        .find-partner-btn {
+            display:flex; align-items:center; gap:5px;
+            background:var(--black); color:var(--white);
+            border:none; padding:5px 10px;
+            font-size:8px; font-weight:700; letter-spacing:1px;
+            text-transform:uppercase; cursor:pointer;
+            font-family:var(--font); white-space:nowrap;
+            flex-shrink:0; transition:.15s;
+        }
+        .find-partner-btn:hover { opacity:.8; }
+
+        /* ── AI MATCHING MODAL ── */
+        .matching-overlay {
+            position:fixed; inset:0; background:rgba(0,0,0,.85);
+            z-index:2000; display:flex; align-items:flex-end;
+            justify-content:center;
+        }
+        .matching-sheet {
+            background:#0a0a0a; width:100%; max-width:480px;
+            min-height:70vh; padding:0; overflow:hidden;
+        }
+        .matching-top {
+            padding:20px 20px 16px; border-bottom:1px solid #1a1a1a;
+        }
+        .matching-label {
+            font-size:8px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:#555; margin-bottom:6px;
+        }
+        .matching-habit-name {
+            font-size:20px; font-weight:700; letter-spacing:.5px;
+            text-transform:uppercase; color:#fff;
+            font-family:var(--din); line-height:1.1;
+        }
+        .matching-body { padding:20px; }
+        .matching-status {
+            font-size:9px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:#555; margin-bottom:14px;
+            display:flex; align-items:center; gap:8px;
+        }
+        .status-blink {
+            width:5px; height:5px; background:#fff;
+            animation:matchBlink 1s infinite;
+        }
+        @keyframes matchBlink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+        .match-grid {
+            display:grid; grid-template-columns:1fr 1fr;
+            gap:1px; background:#1a1a1a; margin-bottom:16px;
+        }
+        .match-cell {
+            background:#0f0f0f; padding:10px 12px;
+        }
+        .match-cell-lbl {
+            font-size:8px; font-weight:700; letter-spacing:1px;
+            text-transform:uppercase; color:#3d3d3d; margin-bottom:4px;
+        }
+        .match-cell-val {
+            font-size:18px; font-weight:700; font-family:var(--din); color:#fff;
+        }
+        .match-cell-sub {
+            font-size:8px; color:#555; text-transform:uppercase;
+            letter-spacing:.5px; margin-top:1px;
+        }
+        .prog-row {
+            display:flex; align-items:center; gap:10px; margin-bottom:8px;
+        }
+        .prog-lbl {
+            font-size:8px; font-weight:700; letter-spacing:1px;
+            text-transform:uppercase; color:#3d3d3d; width:100px; flex-shrink:0;
+        }
+        .prog-track { flex:1; height:1px; background:#1a1a1a; }
+        .prog-fill { height:100%; background:#fff; transition:width 1.2s ease-out; }
+        .prog-val {
+            font-size:9px; font-weight:700; color:#555;
+            letter-spacing:.5px; width:28px; text-align:right; flex-shrink:0;
+        }
+        .match-note {
+            font-size:9px; font-weight:700; letter-spacing:.8px;
+            text-transform:uppercase; color:#2a2a2a; line-height:1.7;
+            border-top:1px solid #1a1a1a; padding-top:14px;
+        }
+        /* Result sheet */
+        .result-hdr {
+            background:#0a0a0a; padding:16px 18px 14px;
+            border-bottom:1px solid #1a1a1a;
+        }
+        .result-hdr-top {
+            font-size:8px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:#555; margin-bottom:4px;
+        }
+        .result-hdr-title {
+            font-size:18px; font-weight:700; letter-spacing:.5px;
+            text-transform:uppercase; color:#fff; font-family:var(--din);
+        }
+        .result-hdr-sub {
+            font-size:9px; font-weight:700; letter-spacing:.8px;
+            text-transform:uppercase; color:#3d3d3d; margin-top:4px;
+        }
+        .result-score-row {
+            padding:16px 18px 12px; border-bottom:1px solid #1a1a1a;
+        }
+        .result-score-lbl {
+            font-size:8px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:#555; margin-bottom:8px;
+        }
+        .result-score-big {
+            display:flex; align-items:baseline; gap:4px;
+        }
+        .score-num {
+            font-size:36px; font-weight:700; font-family:var(--din); color:#fff; line-height:1;
+        }
+        .score-unit {
+            font-size:14px; font-weight:700; color:#555;
+            text-transform:uppercase; letter-spacing:.5px;
+        }
+        .score-bar-track { height:2px; background:#1a1a1a; margin-top:10px; }
+        .score-bar-fill { height:100%; background:#fff; }
+        .result-breakdown { padding:14px 18px; border-bottom:1px solid #1a1a1a; }
+        .result-breakdown-lbl {
+            font-size:8px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:#555; margin-bottom:10px;
+        }
+        .result-ai-section { padding:14px 18px 12px; border-bottom:1px solid #1a1a1a; }
+        .result-ai-lbl {
+            font-size:8px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:#555; margin-bottom:8px;
+        }
+        .result-ai-text {
+            font-size:11px; color:#737373; line-height:1.7;
+        }
+        .result-actions { padding:12px 18px; }
+        .result-cta {
+            background:#fff; color:#0a0a0a; border:none; width:100%;
+            padding:12px; font-size:9px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; cursor:pointer; font-family:var(--font);
+            margin-bottom:8px; transition:.15s;
+        }
+        .result-cta:hover { opacity:.85; }
+        .result-skip {
+            width:100%; padding:10px; font-size:8px; font-weight:700;
+            letter-spacing:1.2px; text-transform:uppercase; color:#555;
+            background:transparent; border:none; cursor:pointer; font-family:var(--font);
+        }
+
+        /* ── BUDDIES TAB ── */
+        .buddies-header {
+            padding:16px 20px 12px; border-bottom:1px solid var(--gray-200);
+            display:flex; justify-content:space-between; align-items:flex-end;
+        }
+        .buddies-title {
+            font-size:15px; font-weight:700; letter-spacing:.5px;
+            text-transform:uppercase; font-family:var(--din);
+        }
+        .buddies-sub {
+            font-size:9px; font-weight:700; letter-spacing:1.5px;
+            text-transform:uppercase; color:var(--gray-400); margin-top:2px;
+        }
+        .buddies-empty {
+            padding:48px 24px; text-align:center;
+        }
+        .buddies-empty-icon {
+            font-size:32px; margin-bottom:14px;
+        }
+        .buddies-empty-title {
+            font-size:13px; font-weight:700; text-transform:uppercase;
+            letter-spacing:.5px; margin-bottom:8px;
+        }
+        .buddies-empty-sub {
+            font-size:11px; color:var(--gray-400); line-height:1.7;
+        }
+        .pair-card {
+            border:1px solid var(--gray-200); margin:0 0 1px;
+            padding:14px 16px; cursor:pointer; transition:.15s;
+            display:flex; align-items:center; gap:14px;
+        }
+        .pair-card:hover { border-color:var(--black); }
+        .pair-avs { display:flex; }
+        .pair-av {
+            width:32px; height:32px; background:var(--gray-100);
+            border:1px solid var(--gray-200); display:flex;
+            align-items:center; justify-content:center;
+            font-size:10px; font-weight:700; flex-shrink:0;
+        }
+        .pair-av:nth-child(2) { margin-left:-8px; border-color:var(--white); }
+        .pair-info { flex:1; min-width:0; }
+        .pair-name {
+            font-size:12px; font-weight:700; letter-spacing:.3px;
+            text-transform:uppercase; color:var(--black);
+        }
+        .pair-habit-tag {
+            font-size:9px; font-weight:700; letter-spacing:.8px;
+            text-transform:uppercase; color:var(--gray-400); margin-top:2px;
+        }
+        .pair-streak {
+            font-size:9px; font-weight:700; letter-spacing:.5px;
+            text-transform:uppercase; color:var(--gray-600);
+            background:var(--gray-100); border:1px solid var(--gray-200);
+            padding:3px 8px; flex-shrink:0;
+        }
+
+        
         .detail-back { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; margin-bottom:20px; color:var(--gray-600); padding:0; border:none; background:none; }
         .detail-back svg { width:16px; height:16px; }
         .detail-back:hover { color:var(--black); }
@@ -1493,18 +1693,44 @@ if (isFirebaseConfigured) {
         });
     },
     createUserWithEmailAndPassword: function(email, password) {
-      return _supabase.auth.signUp({ email: email, password: password })
-        .then(function(r) {
+      return _supabase.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          emailRedirectTo: window.location.origin + window.location.pathname
+        }
+      }).then(function(r) {
           if (r.error) { var e = new Error(r.error.message); e.code = _sbErrToCode(r.error); throw e; }
+          // Supabase returns identities:[] if email already exists but is unconfirmed
+          if (r.data.user && r.data.user.identities && r.data.user.identities.length === 0) {
+            var e = new Error('Email already registered'); e.code = 'auth/email-already-in-use'; throw e;
+          }
           return { user: _makeUser(r.data.user) };
         });
     },
-    sendEmailVerification: function(user) {
-      // Supabase sends email on signUp automatically
-      return Promise.resolve();
+    sendEmailVerification: function(user, actionCodeSettings) {
+      // Supabase: resend verification email via auth.resend()
+      var opts = {};
+      if (actionCodeSettings && actionCodeSettings.url) {
+        opts.emailRedirectTo = actionCodeSettings.url;
+      }
+      return _supabase.auth.resend({ type: 'signup', email: user.email, options: opts })
+        .then(function(r) {
+          if (r.error) {
+            var e = new Error(r.error.message);
+            e.code = 'auth/resend-failed';
+            throw e;
+          }
+        });
     },
-    sendPasswordResetEmail: function(email) {
-      return _supabase.auth.resetPasswordForEmail(email)
+    sendPasswordResetEmail: function(email, actionCodeSettings) {
+      var opts = {};
+      if (actionCodeSettings && actionCodeSettings.url) {
+        opts.redirectTo = actionCodeSettings.url;
+      } else {
+        opts.redirectTo = window.location.origin + window.location.pathname;
+      }
+      return _supabase.auth.resetPasswordForEmail(email, opts)
         .then(function(r) { if (r.error) throw r.error; });
     },
     signOut: function() { return _supabase.auth.signOut(); },
@@ -1538,19 +1764,46 @@ if (isFirebaseConfigured) {
         });
       },
       reload: function() {
-        return _supabase.auth.refreshSession().then(function() {});
+        return _supabase.auth.refreshSession().then(function(r) {
+          // update emailVerified after reload
+          if (r.data && r.data.user) {
+            var updated = _makeUser(r.data.user);
+            // copy updated fields back
+            Object.assign(this, updated);
+          }
+        }.bind(this));
+      },
+      updateProfile: function(profile) {
+        var updates = {};
+        if (profile.displayName !== undefined) {
+          updates.data = updates.data || {};
+          updates.data.full_name = profile.displayName;
+          updates.data.name = profile.displayName;
+        }
+        if (profile.photoURL !== undefined) {
+          updates.data = updates.data || {};
+          updates.data.avatar_url = profile.photoURL;
+        }
+        var self = this;
+        return _supabase.auth.updateUser(updates).then(function(r) {
+          if (r.error) throw r.error;
+          if (profile.displayName !== undefined) self.displayName = profile.displayName;
+          if (profile.photoURL !== undefined) self.photoURL = profile.photoURL;
+        });
       }
     };
   }
 
   function _sbErrToCode(err) {
     var msg = (err.message || '').toLowerCase();
-    if (msg.includes('already registered') || msg.includes('already exists')) return 'auth/email-already-in-use';
-    if (msg.includes('invalid login')) return 'auth/wrong-password';
-    if (msg.includes('user not found')) return 'auth/user-not-found';
-    if (msg.includes('weak password') || msg.includes('password')) return 'auth/weak-password';
+    if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already registered')) return 'auth/email-already-in-use';
+    if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('wrong password')) return 'auth/wrong-password';
+    if (msg.includes('user not found') || msg.includes('no user found')) return 'auth/user-not-found';
+    if (msg.includes('weak password') || msg.includes('at least') || msg.includes('password should')) return 'auth/weak-password';
     if (msg.includes('email') && msg.includes('invalid')) return 'auth/invalid-email';
-    if (msg.includes('too many')) return 'auth/too-many-requests';
+    if (msg.includes('too many') || msg.includes('rate limit')) return 'auth/too-many-requests';
+    if (msg.includes('email not confirmed')) return 'auth/email-not-verified';
+    if (msg.includes('network') || msg.includes('fetch')) return 'auth/network-request-failed';
     return 'auth/unknown';
   }
 
@@ -7258,6 +7511,7 @@ function MainApp(_ref16) {
       var todayKey = currentDay;
       // Home bar: cumulative completion rate (supports custom intervalDays)
       var progPct = calcCompletionRate(habit);
+      var isQualified = (habit.streak || 0) >= 21 && progPct >= 95;
       return /*#__PURE__*/React.createElement("div", {
         key: habit.id,
         className: "habit-card",
@@ -7333,7 +7587,13 @@ function MainApp(_ref16) {
         onClick: function onClick(e) {
           return e.stopPropagation();
         }
-      }, /*#__PURE__*/React.createElement("button", {
+      }, isQualified && /*#__PURE__*/React.createElement("button", {
+        className: "find-partner-btn",
+        onClick: function onClick(e) {
+          e.stopPropagation();
+          window.openMatchingModal(habit);
+        }
+      }, "+ Find Partner"), /*#__PURE__*/React.createElement("button", {
         className: "card-delete-btn",
         onClick: function onClick() {
           return deleteHabit(habit.id);
@@ -7956,7 +8216,7 @@ function MainApp(_ref16) {
     onClick: onLogout
   }, "Sign Out")), /*#__PURE__*/React.createElement("div", {
     className: "content"
-  }, activeTab === 'home' && renderHome(), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile()), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
+  }, activeTab === 'home' && renderHome(), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits })), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
     onClose: function onClose() {
       return setShowModal(false);
     },
@@ -8013,6 +8273,18 @@ function MainApp(_ref16) {
       return setActiveTab('feed');
     }
   }, /*#__PURE__*/React.createElement(FeedIcon, null), /*#__PURE__*/React.createElement("span", null, "Feed")), /*#__PURE__*/React.createElement("button", {
+    className: "tab-item".concat(activeTab === 'buddies' ? ' active' : ''),
+    role: "tab",
+    "aria-selected": activeTab === 'buddies',
+    "aria-controls": "main-content",
+    onClick: function onClick() { return setActiveTab('buddies'); }
+  }, /*#__PURE__*/React.createElement("svg", {
+    fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2,
+    width: "20", height: "20", style: { display:'block', margin:'0 auto 3px' }
+  }, /*#__PURE__*/React.createElement("path", {
+    strokeLinecap: "round", strokeLinejoin: "round",
+    d: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+  })), /*#__PURE__*/React.createElement("span", null, "Buddies")), /*#__PURE__*/React.createElement("button", {
     className: "tab-item".concat(activeTab === 'profile' ? ' active' : ''),
     role: "tab",
     "aria-selected": activeTab === 'profile',
@@ -8021,6 +8293,71 @@ function MainApp(_ref16) {
       return setActiveTab('profile');
     }
   }, /*#__PURE__*/React.createElement(ProfileIcon, null), /*#__PURE__*/React.createElement("span", null, "Profile"))));
+}
+
+/* ── BUDDIES PAGE ── */
+function BuddiesPage(_ref_buddies) {
+  var user = _ref_buddies.user;
+  var habits = _ref_buddies.habits || [];
+  var _useState_pairs = useState([]);
+  var pairs = _useState_pairs[0], setPairs = _useState_pairs[1];
+  var _useState_loading = useState(true);
+  var pairsLoading = _useState_loading[0], setPairsLoading = _useState_loading[1];
+
+  useEffect(function() {
+    if (!user) return;
+    var q = _supabase.from('pairs').select('*')
+      .or('user_id.eq.' + user.uid + ',partner_id.eq.' + user.uid)
+      .in('status', ['active','pending'])
+      .order('created_at', { ascending: false });
+    q.then(function(r) {
+      setPairs(r.data || []);
+      setPairsLoading(false);
+    }).catch(function() { setPairsLoading(false); });
+  }, [user]);
+
+  var qualifiedHabits = habits.filter(function(h) {
+    return (h.streak || 0) >= 21 && calcCompletionRate(h) >= 95;
+  });
+
+  return /*#__PURE__*/React.createElement("div", { className: "app-container" },
+    /*#__PURE__*/React.createElement("div", { className: "buddies-header" },
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { className: "buddies-title" }, "Buddies"),
+        /*#__PURE__*/React.createElement("div", { className: "buddies-sub" }, pairs.length + " active pairs")
+      )
+    ),
+    pairsLoading
+      ? /*#__PURE__*/React.createElement("div", { style: { padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--gray-400)' } }, "Loading...")
+      : pairs.length === 0
+        ? /*#__PURE__*/React.createElement("div", { className: "buddies-empty" },
+            /*#__PURE__*/React.createElement("div", { className: "buddies-empty-icon" }, "👥"),
+            /*#__PURE__*/React.createElement("div", { className: "buddies-empty-title" }, "No Buddies Yet"),
+            /*#__PURE__*/React.createElement("div", { className: "buddies-empty-sub" },
+              qualifiedHabits.length > 0
+                ? "You have " + qualifiedHabits.length + " qualified habit" + (qualifiedHabits.length > 1 ? 's' : '') + ". Tap "+ Find Partner +" on any habit to get matched."
+                : "Keep a habit for 21+ days at 95%+ completion to unlock partner matching."
+            )
+          )
+        : /*#__PURE__*/React.createElement("div", null,
+            pairs.map(function(pair) {
+              var isUser = pair.user_id === user.uid;
+              var partnerId = isUser ? pair.partner_id : pair.user_id;
+              var habitName = isUser ? pair.habit_name : pair.partner_habit_name;
+              return /*#__PURE__*/React.createElement("div", { key: pair.id, className: "pair-card" },
+                /*#__PURE__*/React.createElement("div", { className: "pair-avs" },
+                  /*#__PURE__*/React.createElement("div", { className: "pair-av" }, "YOU"),
+                  /*#__PURE__*/React.createElement("div", { className: "pair-av" }, partnerId.slice(0,2).toUpperCase())
+                ),
+                /*#__PURE__*/React.createElement("div", { className: "pair-info" },
+                  /*#__PURE__*/React.createElement("div", { className: "pair-name" }, "Partner " + partnerId.slice(0,6)),
+                  /*#__PURE__*/React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name)
+                ),
+                /*#__PURE__*/React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase())
+              );
+            })
+          )
+  );
 }
 
 /* ── ROOT APP ── */
@@ -8988,3 +9325,218 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
 })(); // ← close IIFE
 </script>
+
+<!-- ══════════════════════════════════════════
+     AI MATCHING MODAL
+══════════════════════════════════════════ -->
+<div id="matchingOverlay" style="display:none;" class="matching-overlay" onclick="if(event.target===this)window.closeMatchingModal()">
+  <div class="matching-sheet" id="matchingSheet">
+    <!-- State A: Scanning -->
+    <div id="matchingScanning">
+      <div class="matching-top">
+        <div class="matching-label">Analysing habit</div>
+        <div class="matching-habit-name" id="matchingHabitName">—</div>
+      </div>
+      <div style="height:1px;background:#1a1a1a;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:1px;background:#fff;animation:matchBlink 1.4s ease-in-out infinite;"></div>
+      </div>
+      <div class="matching-body">
+        <div class="matching-status">
+          <div class="status-blink"></div>
+          <span id="matchingStatusText">Searching users...</span>
+        </div>
+        <div class="match-grid">
+          <div class="match-cell"><div class="match-cell-lbl">Your streak</div><div class="match-cell-val" id="mStreak">—</div><div class="match-cell-sub">days</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Completion</div><div class="match-cell-val" id="mCompletion">—</div><div class="match-cell-sub">rate</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Category</div><div class="match-cell-val" id="mCategory" style="font-size:13px;">—</div><div class="match-cell-sub">&nbsp;</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Remaining</div><div class="match-cell-val" id="mRemaining">3</div><div class="match-cell-sub">matches today</div></div>
+        </div>
+        <div id="matchingProgRows">
+          <div class="prog-row"><div class="prog-lbl">Semantic match</div><div class="prog-track"><div class="prog-fill" id="prog1" style="width:0%"></div></div><div class="prog-val" id="progVal1">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Schedule align</div><div class="prog-track"><div class="prog-fill" id="prog2" style="width:0%"></div></div><div class="prog-val" id="progVal2">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Streak parity</div><div class="prog-track"><div class="prog-fill" id="prog3" style="width:0%"></div></div><div class="prog-val" id="progVal3">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Consistency</div><div class="prog-track"><div class="prog-fill" id="prog4" style="width:0%"></div></div><div class="prog-val" id="progVal4">—</div></div>
+        </div>
+        <div class="match-note">Claude is comparing habit descriptions, time patterns and consistency profiles to find your best match.</div>
+      </div>
+    </div>
+    <!-- State B: Result -->
+    <div id="matchingResult" style="display:none;">
+      <div class="result-hdr">
+        <div class="result-hdr-top">Best match found</div>
+        <div class="result-hdr-title" id="resultUsername">—</div>
+        <div class="result-hdr-sub" id="resultHabitSub">—</div>
+      </div>
+      <div class="result-score-row">
+        <div class="result-score-lbl">Overall compatibility</div>
+        <div class="result-score-big"><div class="score-num" id="resultScore">—</div><div class="score-unit">% match</div></div>
+        <div class="score-bar-track"><div class="score-bar-fill" id="resultScoreBar" style="width:0%"></div></div>
+      </div>
+      <div class="result-breakdown">
+        <div class="result-breakdown-lbl">Match breakdown</div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Habit intent</div><div class="prog-track"><div class="prog-fill" id="rProg1" style="width:0%"></div></div><div class="prog-val" id="rVal1">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Consistency</div><div class="prog-track"><div class="prog-fill" id="rProg2" style="width:0%"></div></div><div class="prog-val" id="rVal2">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Schedule</div><div class="prog-track"><div class="prog-fill" id="rProg3" style="width:0%"></div></div><div class="prog-val" id="rVal3">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Streak level</div><div class="prog-track"><div class="prog-fill" id="rProg4" style="width:0%"></div></div><div class="prog-val" id="rVal4">—</div></div>
+      </div>
+      <div class="result-ai-section">
+        <div class="result-ai-lbl">Why Claude chose this match</div>
+        <div class="result-ai-text" id="resultReason">—</div>
+      </div>
+      <div class="result-actions">
+        <button class="result-cta" onclick="window.sendPartnerRequest()">Send Partner Request</button>
+        <button class="result-skip" onclick="window.closeMatchingModal()">See other matches later</button>
+      </div>
+    </div>
+    <!-- State C: Error -->
+    <div id="matchingError" style="display:none;padding:32px 20px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:12px;">⚠</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#fff;margin-bottom:8px;" id="matchingErrorTitle">No matches found</div>
+      <div style="font-size:10px;color:#555;line-height:1.7;margin-bottom:20px;" id="matchingErrorMsg">Try again later.</div>
+      <button class="result-cta" style="max-width:200px;margin:0 auto;display:block;" onclick="window.closeMatchingModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var EDGE_URL = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/match-partner';
+  var _currentHabit = null;
+  var _currentMatch = null;
+
+  window.openMatchingModal = function(habit) {
+    _currentHabit = habit;
+    _currentMatch = null;
+
+    // Reset states
+    document.getElementById('matchingScanning').style.display = '';
+    document.getElementById('matchingResult').style.display = 'none';
+    document.getElementById('matchingError').style.display = 'none';
+
+    // Fill habit info
+    document.getElementById('matchingHabitName').textContent = habit.name;
+    document.getElementById('mStreak').textContent = habit.streak || 0;
+    document.getElementById('mCompletion').textContent = (window.calcCompletionRate ? window.calcCompletionRate(habit) : '—') + '%';
+    document.getElementById('mCategory').textContent = habit.category || '—';
+    document.getElementById('matchingStatusText').textContent = 'Searching users...';
+
+    // Animate progress bars
+    var progs = [['prog1','progVal1',94],['prog2','progVal2',81],['prog3','progVal3',76],['prog4','progVal4',89]];
+    progs.forEach(function(p, i) {
+      setTimeout(function() {
+        document.getElementById(p[0]).style.width = '0%';
+        document.getElementById(p[1]).textContent = '...';
+        setTimeout(function() {
+          document.getElementById(p[0]).style.width = p[2] + '%';
+          document.getElementById(p[1]).textContent = p[2] + '%';
+        }, 200);
+      }, i * 300);
+    });
+
+    document.getElementById('matchingOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    // Call Edge Function
+    callMatchPartner(habit);
+  };
+
+  async function callMatchPartner(habit) {
+    try {
+      document.getElementById('matchingStatusText').textContent = 'Claude is analysing...';
+
+      var session = await _supabase.auth.getSession();
+      var token = session.data.session && session.data.session.access_token;
+      if (!token) throw new Error('Not logged in');
+
+      var res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          habitId: habit.id,
+          habitName: habit.name,
+          habitCategory: habit.category || '',
+          habitStreak: habit.streak || 0
+        })
+      });
+
+      var data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          showMatchingError('Daily limit reached', data.message || 'You have used all 3 matches for today. Try again tomorrow.');
+        } else {
+          showMatchingError('No matches found', data.message || 'Could not find a suitable match right now.');
+        }
+        return;
+      }
+
+      _currentMatch = data.match;
+      document.getElementById('mRemaining').textContent = data.remaining !== undefined ? data.remaining : '—';
+      showMatchingResult(data.match);
+    } catch(err) {
+      showMatchingError('Connection error', 'Please check your internet and try again.');
+    }
+  }
+
+  function showMatchingResult(match) {
+    document.getElementById('matchingScanning').style.display = 'none';
+    document.getElementById('matchingResult').style.display = '';
+
+    document.getElementById('resultUsername').textContent = '@' + (match.displayName || 'partner');
+    document.getElementById('resultHabitSub').textContent = (match.habitName || '—') + ' · ' + (match.streak || 0) + '-day streak';
+    document.getElementById('resultScore').textContent = match.score || 0;
+    document.getElementById('resultScoreBar').style.width = (match.score || 0) + '%';
+    document.getElementById('resultReason').textContent = match.reason || '—';
+
+    var bd = match.breakdown || {};
+    [['rProg1','rVal1', bd.habitIntent||0],
+     ['rProg2','rVal2', bd.consistency||0],
+     ['rProg3','rVal3', bd.schedule||0],
+     ['rProg4','rVal4', bd.streakParity||0]].forEach(function(r) {
+      document.getElementById(r[0]).style.width = r[2] + '%';
+      document.getElementById(r[1]).textContent = r[2] + '%';
+    });
+  }
+
+  function showMatchingError(title, msg) {
+    document.getElementById('matchingScanning').style.display = 'none';
+    document.getElementById('matchingResult').style.display = 'none';
+    document.getElementById('matchingError').style.display = '';
+    document.getElementById('matchingErrorTitle').textContent = title;
+    document.getElementById('matchingErrorMsg').textContent = msg;
+  }
+
+  window.closeMatchingModal = function() {
+    document.getElementById('matchingOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    _currentHabit = null;
+  };
+
+  window.sendPartnerRequest = async function() {
+    if (!_currentMatch || !_currentHabit) return;
+    try {
+      var session = await _supabase.auth.getSession();
+      var userId = session.data.session && session.data.session.user && session.data.session.user.id;
+      if (!userId) return;
+
+      await _supabase.from('pairs').insert({
+        user_id: userId,
+        partner_id: _currentMatch.userId,
+        habit_name: _currentHabit.name,
+        partner_habit_name: _currentMatch.habitName,
+        match_score: _currentMatch.score,
+        status: 'pending'
+      });
+
+      window.closeMatchingModal();
+      if (typeof showToast === 'function') showToast('Partner request sent!');
+    } catch(e) {
+      alert('Failed to send request: ' + e.message);
+    }
+  };
+})();
+</script>
+
