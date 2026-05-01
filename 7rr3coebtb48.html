@@ -1319,7 +1319,13 @@ auth.onAuthStateChanged(async function(user){
     // Log admin access (audit trail)
     console.info('[Admin] Access granted to:', user.email, 'at', new Date().toISOString());
 
-    loadAll();
+    // Wait for session refresh so user_metadata (role:admin) is in JWT
+    // before loadAll() queries with RLS policies that check the claim
+    _authClient.auth.refreshSession().then(function() {
+      loadAll();
+    }).catch(function() {
+      loadAll();
+    });
   } else {
     clearTimeout(_sessionTimer);
     document.getElementById('loginWrap').style.display='flex';
