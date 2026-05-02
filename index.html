@@ -534,6 +534,91 @@
         .buddies-empty-sub {
             font-size:11px; color:var(--gray-400); line-height:1.7;
         }
+        /* ── PAIR WALL ── */
+        .pw-page { min-height:100vh; background:var(--white); display:flex; flex-direction:column; }
+        .pw-hdr { background:var(--black); padding:0; position:sticky; top:0; z-index:50; }
+        .pw-status { display:flex; justify-content:space-between; align-items:center; padding:10px 16px 0; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,.25); }
+        .pw-identity { padding:10px 16px 12px; display:flex; align-items:center; gap:10px; }
+        .pw-avs { display:flex; flex-shrink:0; }
+        .pw-av { width:32px; height:32px; background:var(--gray-700,#2e2e2e); border:2px solid var(--black); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--white); text-transform:uppercase; border-radius:50%; flex-shrink:0; }
+        .pw-av.you { background:var(--white); color:var(--black); z-index:2; }
+        .pw-av.them { margin-left:-8px; z-index:1; }
+        .pw-pair-info { flex:1; min-width:0; }
+        .pw-pair-name { font-size:14px; font-weight:700; color:var(--white); letter-spacing:.3px; line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--din,'Barlow Condensed',monospace); }
+        .pw-pair-sub { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,.35); margin-top:3px; }
+        .pw-badge { background:#1c1c1c; border:1px solid #2e2e2e; padding:4px 9px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,.5); white-space:nowrap; flex-shrink:0; }
+        .pw-back { background:none; border:none; color:rgba(255,255,255,.45); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); padding:0; flex-shrink:0; }
+        /* post meta */
+        .pw-post-meta { padding:10px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--gray-100); }
+        .pw-pm-av { width:30px; height:30px; border-radius:50%; background:var(--black); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--white); flex-shrink:0; }
+        .pw-pm-av.you-av { background:var(--gray-200); color:var(--black); }
+        .pw-pm-name { font-size:13px; font-weight:700; color:var(--black); letter-spacing:.3px; }
+        .pw-pm-time { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-400); margin-top:1px; }
+        /* media */
+        .pw-media { position:relative; background:var(--black); width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+        .pw-media img, .pw-media video { width:100%; height:100%; object-fit:cover; display:block; }
+        .pw-media-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; }
+        .pw-media-diamond { width:48px; height:48px; border:2px solid rgba(255,255,255,.15); transform:rotate(45deg); }
+        /* caption */
+        .pw-caption { padding:10px 16px; border-bottom:1px solid var(--gray-100); font-size:12px; color:var(--gray-700); line-height:1.55; }
+        .pw-caption strong { color:var(--black); font-weight:700; }
+        /* section divider */
+        .pw-divider { padding:6px 16px; background:var(--gray-50); border-top:1px solid var(--gray-100); border-bottom:1px solid var(--gray-100); font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--gray-400); }
+        /* empty state */
+        .pw-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px 24px; gap:12px; background:var(--gray-50); min-height:240px; }
+        .pw-empty-box { width:48px; height:48px; border:1.5px dashed var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--gray-300); }
+        .pw-empty-title { font-size:16px; font-weight:700; color:var(--black); text-align:center; letter-spacing:.3px; font-family:var(--din,'Barlow Condensed',monospace); }
+        .pw-empty-sub { font-size:12px; color:var(--gray-400); text-align:center; line-height:1.7; max-width:240px; }
+        .pw-empty-btn { padding:12px 24px; background:var(--black); color:var(--white); border:none; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); margin-top:4px; }
+        /* waiting dots */
+        .pw-wait { padding:8px 16px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); display:flex; align-items:center; gap:6px; }
+        .pw-wait-dot { width:5px; height:5px; border-radius:50%; background:var(--gray-300); animation:pwPulse 1.5s ease-in-out infinite; }
+        .pw-wait-dot:nth-child(2) { animation-delay:.2s; }
+        .pw-wait-dot:nth-child(3) { animation-delay:.4s; }
+        @keyframes pwPulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+        .pw-wait-text { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-400); }
+        /* nudge */
+        .pw-nudge { padding:8px 16px; background:var(--white); border-top:1px solid var(--gray-100); display:flex; align-items:center; gap:10px; }
+        .pw-nudge-txt { font-size:11px; color:var(--gray-500); flex:1; line-height:1.4; }
+        .pw-nudge-btn { padding:6px 12px; background:var(--black); color:var(--white); border:none; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); white-space:nowrap; flex-shrink:0; }
+        /* chat */
+        .pw-chat { background:var(--gray-50); flex:1; }
+        .pw-chat-label { padding:7px 16px 5px; font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:var(--gray-400); border-bottom:1px solid var(--gray-150,#e8e8e8); }
+        .pw-msgs { padding:10px 16px; display:flex; flex-direction:column; gap:8px; }
+        .pw-msg { display:flex; gap:7px; align-items:flex-end; }
+        .pw-msg.me { flex-direction:row-reverse; }
+        .pw-mav { width:24px; height:24px; border-radius:50%; background:var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:var(--gray-600); flex-shrink:0; }
+        .pw-mav.dk { background:var(--black); color:var(--white); }
+        .pw-mbub { max-width:220px; padding:7px 11px; font-size:12px; line-height:1.55; color:var(--gray-700); border:1px solid var(--gray-200); background:var(--white); }
+        .pw-msg.me .pw-mbub { background:var(--black); color:var(--white); border-color:var(--black); }
+        .pw-mt { font-size:9px; color:var(--gray-300); padding:0 3px; white-space:nowrap; }
+        /* input bar */
+        .pw-input-bar { border-top:1px solid var(--gray-150,#e8e8e8); padding:10px 14px; display:flex; gap:8px; align-items:center; background:var(--white); position:sticky; bottom:0; }
+        .pw-attach { width:32px; height:32px; border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:16px; cursor:pointer; color:var(--gray-400); flex-shrink:0; }
+        .pw-input { flex:1; border:1px solid var(--gray-200); padding:8px 11px; font-size:12px; outline:none; font-family:var(--font); color:var(--black); background:var(--white); resize:none; }
+        .pw-input:focus { border-color:var(--black); }
+        .pw-send { width:32px; height:32px; background:var(--black); border:none; color:var(--white); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+        .pw-send:disabled { background:var(--gray-300); cursor:not-allowed; }
+        /* upload overlay */
+        .pw-upload-overlay { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:200; display:flex; flex-direction:column; }
+        .pw-upload-preview { flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; cursor:pointer; }
+        .pw-upload-preview input[type=file] { display:none; }
+        .pw-upload-dashed { border:1.5px dashed rgba(255,255,255,.2); width:calc(100% - 48px); max-width:320px; aspect-ratio:1/1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; }
+        .pw-upload-icon { font-size:32px; opacity:.3; }
+        .pw-upload-hint { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,.3); }
+        .pw-upload-hint2 { font-size:9px; color:rgba(255,255,255,.15); text-transform:uppercase; letter-spacing:1px; }
+        .pw-upload-form { background:var(--white); padding:20px 18px; }
+        .pw-upload-tabs { display:flex; border-bottom:1px solid var(--gray-150,#e8e8e8); margin-bottom:14px; }
+        .pw-upload-tab { flex:1; padding:9px 0; text-align:center; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:var(--gray-300); cursor:pointer; border-bottom:2px solid transparent; background:none; border-top:none; border-left:none; border-right:none; font-family:var(--font); }
+        .pw-upload-tab.on { color:var(--black); border-bottom-color:var(--black); }
+        .pw-field-lbl { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-500); margin-bottom:6px; display:block; }
+        .pw-textarea { width:100%; padding:10px 12px; border:1px solid var(--gray-200); font-size:12px; font-family:var(--font); background:var(--white); color:var(--black); outline:none; resize:none; height:60px; line-height:1.6; margin-bottom:14px; }
+        .pw-textarea:focus { border-color:var(--black); }
+        .pw-pub-btn { width:100%; padding:13px; background:var(--black); color:var(--white); border:none; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:2px; cursor:pointer; font-family:var(--font); }
+        .pw-pub-btn:disabled { background:var(--gray-300); cursor:not-allowed; }
+        .pw-cancel-btn { width:100%; padding:10px; background:none; color:var(--gray-400); border:none; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); margin-top:8px; }
+        .pw-preview-img { width:100%; height:100%; object-fit:cover; }
+
         .pair-card {
             border:1px solid var(--gray-200); margin:0 0 1px;
             padding:14px 16px; cursor:pointer; transition:.15s;
@@ -8295,6 +8380,299 @@ function MainApp(_ref16) {
   }, /*#__PURE__*/React.createElement(ProfileIcon, null), /*#__PURE__*/React.createElement("span", null, "Profile"))));
 }
 
+/* ── PAIR WALL PAGE ── */
+function PairWallPage(_ref_pw) {
+  var user = _ref_pw.user;
+  var pair = _ref_pw.pair;
+  var onBack = _ref_pw.onBack;
+
+  var isUser = pair.user_id === user.uid;
+  var partnerId = isUser ? pair.partner_id : pair.user_id;
+  var partnerInitials = partnerId.toString().slice(0,2).toUpperCase();
+  var habitName = isUser ? pair.habit_name : pair.partner_habit_name;
+  var daysSince = pair.created_at ? Math.max(1, Math.floor((Date.now() - new Date(pair.created_at)) / 86400000)) : 1;
+
+  /* state */
+  var _sp = useState(null); var partnerPost = _sp[0]; var setPartnerPost = _sp[1];
+  var _sy = useState(null); var myPost = _sy[0]; var setMyPost = _sy[1];
+  var _sm = useState([]); var messages = _sm[0]; var setMessages = _sm[1];
+  var _sl = useState(true); var loading = _sl[0]; var setLoading = _sl[1];
+  var _si = useState(''); var inputText = _si[0]; var setInputText = _si[1];
+  var _ss = useState(false); var sending = _ss[0]; var setSending = _ss[1];
+  var _su = useState(false); var showUpload = _su[0]; var setShowUpload = _su[1];
+  var _sc = useState(''); var caption = _sc[0]; var setCaption = _sc[1];
+  var _sf = useState(null); var selectedFile = _sf[0]; var setSelectedFile = _sf[1];
+  var _sp2 = useState(null); var previewUrl = _sp2[0]; var setPreviewUrl = _sp2[1];
+  var _smt = useState('image'); var mediaType = _smt[0]; var setMediaType = _smt[1];
+  var _spub = useState(false); var publishing = _spub[0]; var setPublishing = _spub[1];
+  var msgsEndRef = React.useRef(null);
+
+  /* load posts + messages */
+  useEffect(function() {
+    if (!user || !pair) return;
+    setLoading(true);
+    Promise.all([
+      _supabase.from('pair_posts').select('*').eq('pair_id', pair.id).order('created_at', { ascending: false }),
+      _supabase.from('pair_messages').select('*').eq('pair_id', pair.id).order('created_at', { ascending: true })
+    ]).then(function(results) {
+      var posts = results[0].data || [];
+      var myP = posts.find(function(p) { return p.user_id === user.uid; });
+      var theirP = posts.find(function(p) { return p.user_id !== user.uid; });
+      setMyPost(myP || null);
+      setPartnerPost(theirP || null);
+      setMessages(results[1].data || []);
+      setLoading(false);
+    }).catch(function() { setLoading(false); });
+  }, [user, pair]);
+
+  /* realtime messages */
+  useEffect(function() {
+    if (!pair) return;
+    var ch = _supabase.channel('pw_msgs_' + pair.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pair_messages', filter: 'pair_id=eq.' + pair.id },
+        function(payload) { setMessages(function(prev) { return prev.concat([payload.new]); }); }
+      ).subscribe();
+    return function() { _supabase.removeChannel(ch); };
+  }, [pair]);
+
+  /* scroll to bottom on new messages */
+  useEffect(function() {
+    if (msgsEndRef.current) msgsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  /* send message */
+  function sendMessage() {
+    var text = inputText.trim();
+    if (!text || sending) return;
+    setSending(true);
+    _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
+      .then(function() { setInputText(''); setSending(false); })
+      .catch(function() { setSending(false); });
+  }
+
+  /* handle file select */
+  function handleFileSelect(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var isVid = file.type.startsWith('video/');
+    setMediaType(isVid ? 'video' : 'image');
+    setSelectedFile(file);
+    var url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  }
+
+  /* publish post */
+  function publishPost() {
+    if (!selectedFile || publishing) return;
+    setPublishing(true);
+    var ext = selectedFile.name.split('.').pop() || (mediaType === 'video' ? 'mp4' : 'jpg');
+    var path = 'pair_posts/' + pair.id + '/' + user.uid + '_' + Date.now() + '.' + ext;
+    _supabase.storage.from(STORAGE_BUCKET_MEDIA).upload(path, selectedFile, { contentType: selectedFile.type, upsert: false })
+      .then(function(r) {
+        if (r.error) throw r.error;
+        var urlData = _supabase.storage.from(STORAGE_BUCKET_MEDIA).getPublicUrl(path);
+        var mediaUrl = urlData.data.publicUrl;
+        return _supabase.from('pair_posts').insert({ pair_id: pair.id, user_id: user.uid, media_url: mediaUrl, media_type: mediaType, caption: caption.trim() || null });
+      })
+      .then(function(r) {
+        if (r.error) throw r.error;
+        return _supabase.from('pair_posts').select('*').eq('pair_id', pair.id).eq('user_id', user.uid).order('created_at', { ascending: false }).limit(1).single();
+      })
+      .then(function(r) {
+        setMyPost(r.data);
+        setShowUpload(false);
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setCaption('');
+        setPublishing(false);
+      })
+      .catch(function(e) { alert('Upload failed: ' + e.message); setPublishing(false); });
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function fmtDate(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'Today · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  var canChat = !!(partnerPost || myPost);
+
+  /* UPLOAD OVERLAY */
+  function renderUpload() {
+    return React.createElement('div', { className: 'pw-upload-overlay' },
+      React.createElement('div', { className: 'pw-upload-preview',
+        onClick: function() { document.getElementById('pw-file-input').click(); }
+      },
+        previewUrl
+          ? (mediaType === 'video'
+              ? React.createElement('video', { src: previewUrl, style: { width:'calc(100% - 48px)', maxWidth:320, aspectRatio:'1/1', objectFit:'cover' }, muted: true, playsInline: true })
+              : React.createElement('img', { src: previewUrl, className: 'pw-preview-img', style: { width:'calc(100% - 48px)', maxWidth:320, aspectRatio:'1/1', objectFit:'cover' } })
+            )
+          : React.createElement('div', { className: 'pw-upload-dashed' },
+              React.createElement('div', { className: 'pw-upload-icon' }, '↑'),
+              React.createElement('div', { className: 'pw-upload-hint' }, 'Tap to select photo or video'),
+              React.createElement('div', { className: 'pw-upload-hint2' }, 'JPG · MP4 · MOV')
+            ),
+        React.createElement('input', { type: 'file', id: 'pw-file-input', accept: 'image/*,video/*', onChange: handleFileSelect })
+      ),
+      React.createElement('div', { className: 'pw-upload-form' },
+        React.createElement('div', { className: 'pw-upload-tabs' },
+          React.createElement('button', { className: 'pw-upload-tab' + (mediaType==='image'?' on':''), onClick: function(){ setMediaType('image'); } }, 'Photo'),
+          React.createElement('button', { className: 'pw-upload-tab' + (mediaType==='video'?' on':''), onClick: function(){ setMediaType('video'); } }, 'Video')
+        ),
+        React.createElement('label', { className: 'pw-field-lbl' }, 'Caption (optional)'),
+        React.createElement('textarea', { className: 'pw-textarea', placeholder: "How did today's session go?", value: caption, onChange: function(e){ setCaption(e.target.value); } }),
+        React.createElement('button', { className: 'pw-pub-btn', disabled: !selectedFile || publishing, onClick: publishPost },
+          publishing ? 'Publishing...' : 'Publish Update →'
+        ),
+        React.createElement('button', { className: 'pw-cancel-btn', onClick: function(){ setShowUpload(false); setSelectedFile(null); setPreviewUrl(null); setCaption(''); } }, 'Cancel')
+      )
+    );
+  }
+
+  /* MEDIA BLOCK */
+  function renderMediaBlock(post, isMe) {
+    return React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'pw-post-meta' },
+        React.createElement('div', { className: 'pw-pm-av' + (isMe ? ' you-av' : '') },
+          isMe ? 'YOU' : partnerInitials
+        ),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', { className: 'pw-pm-name' }, isMe ? 'You' : ('Partner ' + partnerInitials)),
+          React.createElement('div', { className: 'pw-pm-time' }, fmtDate(post.created_at))
+        )
+      ),
+      React.createElement('div', { className: 'pw-media' },
+        post.media_type === 'video'
+          ? React.createElement('video', { src: post.media_url, controls: true, playsInline: true, style: { width:'100%', height:'100%', objectFit:'cover' } })
+          : React.createElement('img', { src: post.media_url, alt: 'habit post', style: { width:'100%', height:'100%', objectFit:'cover' } })
+      ),
+      post.caption && React.createElement('div', { className: 'pw-caption' },
+        React.createElement('strong', null, isMe ? 'You' : ('Partner ' + partnerInitials)),
+        '\u00a0 ' + post.caption
+      )
+    );
+  }
+
+  if (loading) return React.createElement('div', { className: 'pw-page' },
+    React.createElement('div', { className: 'pw-hdr' },
+      React.createElement('div', { className: 'pw-identity' },
+        React.createElement('button', { className: 'pw-back', onClick: onBack }, '← Back'),
+        React.createElement('div', { style:{ flex:1 } })
+      )
+    ),
+    React.createElement('div', { style:{ padding:32, textAlign:'center', fontSize:12, color:'var(--gray-400)' } }, 'Loading...')
+  );
+
+  return React.createElement('div', { className: 'pw-page' },
+    showUpload && renderUpload(),
+
+    /* HEADER */
+    React.createElement('div', { className: 'pw-hdr' },
+      React.createElement('div', { className: 'pw-identity' },
+        React.createElement('div', { className: 'pw-avs' },
+          React.createElement('div', { className: 'pw-av you' }, 'YOU'),
+          React.createElement('div', { className: 'pw-av them' }, partnerInitials)
+        ),
+        React.createElement('div', { className: 'pw-pair-info' },
+          React.createElement('div', { className: 'pw-pair-name' }, 'YOU × ' + partnerInitials),
+          React.createElement('div', { className: 'pw-pair-sub' }, habitName)
+        ),
+        React.createElement('div', { className: 'pw-badge' }, daysSince + '-Day Pair'),
+        React.createElement('button', { className: 'pw-back', onClick: onBack }, '← Back')
+      )
+    ),
+
+    /* CONTENT */
+    /* State 1: nobody posted */
+    !partnerPost && !myPost && React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'pw-wait' },
+        React.createElement('div', { className: 'pw-wait-dot' }),
+        React.createElement('div', { className: 'pw-wait-dot' }),
+        React.createElement('div', { className: 'pw-wait-dot' }),
+        React.createElement('div', { className: 'pw-wait-text' }, 'Waiting for partner\'s update')
+      ),
+      React.createElement('div', { className: 'pw-empty' },
+        React.createElement('div', { className: 'pw-empty-box' }, '↑'),
+        React.createElement('div', { className: 'pw-empty-title' }, 'Post Your First Update'),
+        React.createElement('div', { className: 'pw-empty-sub' }, 'Upload today\'s habit photo or video to start the conversation.'),
+        React.createElement('button', { className: 'pw-empty-btn', onClick: function(){ setShowUpload(true); } }, "Post Today's Habit →")
+      )
+    ),
+
+    /* State 2+3: partner posted */
+    partnerPost && React.createElement(React.Fragment, null,
+      renderMediaBlock(partnerPost, false),
+      !myPost && React.createElement('div', { className: 'pw-nudge' },
+        React.createElement('div', { className: 'pw-nudge-txt' }, 'Share your update too'),
+        React.createElement('button', { className: 'pw-nudge-btn', onClick: function(){ setShowUpload(true); } }, 'Post →')
+      )
+    ),
+
+    /* Your post (when both posted) */
+    myPost && partnerPost && React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'pw-divider' }, 'Your Update'),
+      renderMediaBlock(myPost, true)
+    ),
+
+    /* Your post only (no partner post yet) */
+    myPost && !partnerPost && React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'pw-wait' },
+        React.createElement('div', { className: 'pw-wait-dot' }),
+        React.createElement('div', { className: 'pw-wait-dot' }),
+        React.createElement('div', { className: 'pw-wait-dot' }),
+        React.createElement('div', { className: 'pw-wait-text' }, "Waiting for partner's update")
+      ),
+      renderMediaBlock(myPost, true)
+    ),
+
+    /* CHAT */
+    canChat && React.createElement('div', { className: 'pw-chat' },
+      React.createElement('div', { className: 'pw-chat-label' }, 'Conversation'),
+      messages.length === 0
+        ? React.createElement('div', { style:{ padding:'16px', fontSize:11, color:'var(--gray-400)', textAlign:'center' } }, 'No messages yet. Say something.')
+        : React.createElement('div', { className: 'pw-msgs' },
+            messages.map(function(m) {
+              var isMe = m.sender_id === user.uid;
+              return React.createElement('div', { key: m.id, className: 'pw-msg' + (isMe ? ' me' : '') },
+                React.createElement('div', { className: 'pw-mav' + (isMe ? '' : ' dk') }, isMe ? 'YOU' : partnerInitials),
+                React.createElement('div', { className: 'pw-mbub' }, m.content),
+                React.createElement('div', { className: 'pw-mt' }, fmtTime(m.created_at))
+              );
+            }),
+            React.createElement('div', { ref: msgsEndRef })
+          )
+    ),
+
+    /* POST YOUR OWN (no upload yet, only shown when there's no post and no partner post) */
+    !myPost && !partnerPost ? null :
+    !myPost && partnerPost ? null :
+    myPost ? null :
+    null,
+
+    /* INPUT BAR */
+    canChat && React.createElement('div', { className: 'pw-input-bar' },
+      React.createElement('div', { className: 'pw-attach', onClick: function(){ setShowUpload(true); } }, '+'),
+      React.createElement('input', {
+        className: 'pw-input',
+        placeholder: 'Reply to today\'s update…',
+        value: inputText,
+        onChange: function(e){ setInputText(e.target.value); },
+        onKeyDown: function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
+      }),
+      React.createElement('button', { className: 'pw-send', disabled: !inputText.trim() || sending, onClick: sendMessage }, '↑')
+    )
+  );
+}
+
 /* ── BUDDIES PAGE ── */
 function BuddiesPage(_ref_buddies) {
   var user = _ref_buddies.user;
@@ -8303,6 +8681,8 @@ function BuddiesPage(_ref_buddies) {
   var pairs = _useState_pairs[0], setPairs = _useState_pairs[1];
   var _useState_loading = useState(true);
   var pairsLoading = _useState_loading[0], setPairsLoading = _useState_loading[1];
+  var _useState_selected = useState(null);
+  var selectedPair = _useState_selected[0], setSelectedPair = _useState_selected[1];
 
   useEffect(function() {
     if (!user) return;
@@ -8316,44 +8696,55 @@ function BuddiesPage(_ref_buddies) {
     }).catch(function() { setPairsLoading(false); });
   }, [user]);
 
+  /* open pair wall */
+  if (selectedPair) {
+    return React.createElement(PairWallPage, {
+      user: user,
+      pair: selectedPair,
+      onBack: function() { setSelectedPair(null); }
+    });
+  }
+
   var qualifiedHabits = habits.filter(function(h) {
     return (h.streak || 0) >= 21 && calcCompletionRate(h) >= 95;
   });
 
-  return /*#__PURE__*/React.createElement("div", { className: "app-container" },
-    /*#__PURE__*/React.createElement("div", { className: "buddies-header" },
-      /*#__PURE__*/React.createElement("div", null,
-        /*#__PURE__*/React.createElement("div", { className: "buddies-title" }, "Buddies"),
-        /*#__PURE__*/React.createElement("div", { className: "buddies-sub" }, pairs.length + " active pairs")
+  return React.createElement("div", { className: "app-container" },
+    React.createElement("div", { className: "buddies-header" },
+      React.createElement("div", null,
+        React.createElement("div", { className: "buddies-title" }, "Buddies"),
+        React.createElement("div", { className: "buddies-sub" }, pairs.length + " active pairs")
       )
     ),
     pairsLoading
-      ? /*#__PURE__*/React.createElement("div", { style: { padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--gray-400)' } }, "Loading...")
+      ? React.createElement("div", { style: { padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--gray-400)' } }, "Loading...")
       : pairs.length === 0
-        ? /*#__PURE__*/React.createElement("div", { className: "buddies-empty" },
-            /*#__PURE__*/React.createElement("div", { className: "buddies-empty-icon" }, "👥"),
-            /*#__PURE__*/React.createElement("div", { className: "buddies-empty-title" }, "No Buddies Yet"),
-            /*#__PURE__*/React.createElement("div", { className: "buddies-empty-sub" },
+        ? React.createElement("div", { className: "buddies-empty" },
+            React.createElement("div", { className: "buddies-empty-icon" }, "👥"),
+            React.createElement("div", { className: "buddies-empty-title" }, "No Buddies Yet"),
+            React.createElement("div", { className: "buddies-empty-sub" },
               qualifiedHabits.length > 0
                 ? "You have " + qualifiedHabits.length + " qualified habit" + (qualifiedHabits.length > 1 ? 's' : '') + ". Tap '+ Find Partner' on any habit to get matched."
                 : "Keep a habit for 21+ days at 95%+ completion to unlock partner matching."
             )
           )
-        : /*#__PURE__*/React.createElement("div", null,
+        : React.createElement("div", null,
             pairs.map(function(pair) {
               var isUser = pair.user_id === user.uid;
               var partnerId = isUser ? pair.partner_id : pair.user_id;
               var habitName = isUser ? pair.habit_name : pair.partner_habit_name;
-              return /*#__PURE__*/React.createElement("div", { key: pair.id, className: "pair-card" },
-                /*#__PURE__*/React.createElement("div", { className: "pair-avs" },
-                  /*#__PURE__*/React.createElement("div", { className: "pair-av" }, "YOU"),
-                  /*#__PURE__*/React.createElement("div", { className: "pair-av" }, partnerId.slice(0,2).toUpperCase())
+              var initials = partnerId.toString().slice(0,2).toUpperCase();
+              return React.createElement("div", { key: pair.id, className: "pair-card", onClick: function(){ setSelectedPair(pair); } },
+                React.createElement("div", { className: "pair-avs" },
+                  React.createElement("div", { className: "pair-av" }, "YOU"),
+                  React.createElement("div", { className: "pair-av" }, initials)
                 ),
-                /*#__PURE__*/React.createElement("div", { className: "pair-info" },
-                  /*#__PURE__*/React.createElement("div", { className: "pair-name" }, "Partner " + partnerId.slice(0,6)),
-                  /*#__PURE__*/React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name)
+                React.createElement("div", { className: "pair-info" },
+                  React.createElement("div", { className: "pair-name" }, 'YOU × ' + initials),
+                  React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name)
                 ),
-                /*#__PURE__*/React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase())
+                React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase()),
+                React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
               );
             })
           )
