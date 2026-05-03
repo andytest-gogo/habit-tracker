@@ -970,6 +970,9 @@ var auth = {
 
     var sub = _authClient.auth.onAuthStateChange(function(event, session) {
       console.log('[Auth] event:', event, 'session:', !!session);
+      // TOKEN_REFRESHED just means the JWT rotated — not a real sign-in/out event.
+      // Skip it to prevent the admin handler from running loadAll() in a loop.
+      if (event === 'TOKEN_REFRESHED') return;
       auth.currentUser = session ? _mkUser(session.user) : null;
       cb(auth.currentUser);
     });
@@ -1362,12 +1365,8 @@ auth.onAuthStateChanged(async function(user){
       sendLoginNotification(user.email);
     }
 
-    // Refresh session then load data
-    _authClient.auth.refreshSession().then(function() {
-      loadAll();
-    }).catch(function() {
-      loadAll();
-    });
+    // Load data directly — no refreshSession() to avoid TOKEN_REFRESHED loop
+    loadAll();
   } else {
     // User signed out — reset flag
     _adminAccessGranted = false;
