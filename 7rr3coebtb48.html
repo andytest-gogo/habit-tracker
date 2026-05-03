@@ -155,11 +155,33 @@ tr:hover td{background:var(--g50)}
     <div class="login-logo">Habit Tracker</div>
     <div class="login-sub">Admin Dashboard</div>
     <div class="err-box" id="errBox"></div>
-    <button class="g-btn" id="loginBtn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-      Sign in with Google
-    </button>
-    <p class="login-note">Only your authorized Google account can access this dashboard</p>
+    <div id="loginForm">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <input type="email" id="adminEmailInput" placeholder="Admin email" autocomplete="email"
+          style="width:100%;padding:11px 13px;border:1px solid #e0e0e0;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0a0a0a;box-sizing:border-box;" />
+        <input type="password" id="adminPwInput" placeholder="Password" autocomplete="current-password"
+          style="width:100%;padding:11px 13px;border:1px solid #e0e0e0;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0a0a0a;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')document.getElementById('loginBtn').click()" />
+        <button id="loginBtn" style="width:100%;padding:12px;background:#0a0a0a;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;font-family:inherit;">Sign In</button>
+      </div>
+      <p class="login-note" style="cursor:pointer;text-decoration:underline;margin-top:12px;" onclick="showResetForm()">Forgot password?</p>
+    </div>
+    <div id="resetForm" style="display:none;">
+      <p style="font-size:12px;color:#555;margin-bottom:14px;line-height:1.6;">Enter your admin email to receive a password reset link.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <input type="email" id="resetEmailInput" placeholder="Admin email"
+          style="width:100%;padding:11px 13px;border:1px solid #e0e0e0;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0a0a0a;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')document.getElementById('resetBtn').click()" />
+        <button id="resetBtn" style="width:100%;padding:12px;background:#0a0a0a;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;font-family:inherit;">Send Reset Link</button>
+      </div>
+      <p class="login-note" style="cursor:pointer;text-decoration:underline;margin-top:12px;" onclick="showLoginForm()">← Back to sign in</p>
+    </div>
+    <div id="resetSuccess" style="display:none;text-align:center;padding:8px 0;">
+      <p style="font-size:13px;color:#0a0a0a;font-weight:700;margin-bottom:6px;">Reset link sent</p>
+      <p style="font-size:11px;color:#888;line-height:1.6;">Check your email and click the link to set a new password.</p>
+      <p class="login-note" style="cursor:pointer;text-decoration:underline;margin-top:14px;" onclick="showLoginForm()">← Back to sign in</p>
+    </div>
+    <p class="login-note" style="margin-top:16px;">Restricted access — authorised personnel only</p>
   </div>
 </div>
 
@@ -1318,6 +1340,7 @@ auth.onAuthStateChanged(async function(user){
     resetSessionTimer();
     // Log admin access (audit trail)
     console.info('[Admin] Access granted to:', user.email, 'at', new Date().toISOString());
+    sendLoginNotification(user.email);
 
     // Wait for session refresh so user_metadata (role:admin) is in JWT
     // before loadAll() queries with RLS policies that check the claim
@@ -1335,19 +1358,94 @@ auth.onAuthStateChanged(async function(user){
 
 // Supabase handles redirect sign-in automatically via onAuthStateChange
 
-// Login
-document.getElementById('loginBtn').onclick = function(){
-  var b=document.getElementById('errBox');
-  b.style.display='none';
-  _authClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      queryParams: { prompt: 'select_account' },
-      redirectTo: 'https://andytest-gogo.github.io/habit-tracker/7rr3coebtb48.html'
-    }
-  }).then(function(r){
-    if(r.error) showAdminError('Sign in failed: ' + r.error.message);
-  }).catch(function(e){ showAdminError('Sign in failed: ' + e.message); });
+// ── EmailJS ──
+(function() {
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js';
+  s.onload = function() {
+    emailjs.init({ publicKey: 'lrUesdDCLB1hxSPo7' });
+  };
+  document.head.appendChild(s);
+})();
+
+// ── Login notification ──
+function sendLoginNotification(adminEmail) {
+  var now = new Date();
+  var timeStr = now.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  });
+  var ua = navigator.userAgent.substring(0, 200);
+  if (window.emailjs) {
+    emailjs.send('service_qizl8zl', 'template_keqet5t', {
+      to_email:   adminEmail,
+      login_time: timeStr,
+      user_agent: ua
+    }).then(function() {
+      console.info('[Admin] Login notification sent to', adminEmail);
+    }).catch(function(e) {
+      console.warn('[Admin] Email notification failed:', e);
+    });
+  } else {
+    setTimeout(function() { sendLoginNotification(adminEmail); }, 1500);
+  }
+}
+
+// ── Show/hide login vs reset forms ──
+function showResetForm() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('resetForm').style.display = 'block';
+  document.getElementById('resetSuccess').style.display = 'none';
+  document.getElementById('errBox').style.display = 'none';
+}
+function showLoginForm() {
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('resetForm').style.display = 'none';
+  document.getElementById('resetSuccess').style.display = 'none';
+  document.getElementById('errBox').style.display = 'none';
+}
+
+// ── Login with email + password ──
+document.getElementById('loginBtn').onclick = function() {
+  var b = document.getElementById('errBox');
+  b.style.display = 'none';
+  var email    = (document.getElementById('adminEmailInput').value || '').trim();
+  var password = (document.getElementById('adminPwInput').value || '');
+  if (!email || !password) {
+    b.style.display = 'block'; b.textContent = 'Please enter your email and password.'; return;
+  }
+  var btn = document.getElementById('loginBtn');
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  _authClient.auth.signInWithPassword({ email: email, password: password })
+    .then(function(r) {
+      btn.textContent = 'Sign In'; btn.disabled = false;
+      if (r.error) { b.style.display = 'block'; b.textContent = r.error.message || 'Sign in failed.'; }
+    })
+    .catch(function(e) {
+      btn.textContent = 'Sign In'; btn.disabled = false;
+      b.style.display = 'block'; b.textContent = e.message || 'Sign in failed.';
+    });
+};
+
+// ── Password reset ──
+document.getElementById('resetBtn').onclick = function() {
+  var b = document.getElementById('errBox');
+  b.style.display = 'none';
+  var email = (document.getElementById('resetEmailInput').value || '').trim();
+  if (!email) { b.style.display = 'block'; b.textContent = 'Please enter your email.'; return; }
+  var btn = document.getElementById('resetBtn');
+  btn.textContent = 'Sending…'; btn.disabled = true;
+  _authClient.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://andytest-gogo.github.io/habit-tracker/7rr3coebtb48.html'
+  }).then(function(r) {
+    btn.textContent = 'Send Reset Link'; btn.disabled = false;
+    if (r.error) { b.style.display = 'block'; b.textContent = r.error.message || 'Failed to send reset email.'; return; }
+    document.getElementById('resetForm').style.display = 'none';
+    document.getElementById('resetSuccess').style.display = 'block';
+  }).catch(function(e) {
+    btn.textContent = 'Send Reset Link'; btn.disabled = false;
+    b.style.display = 'block'; b.textContent = e.message || 'Failed to send reset email.';
+  });
 };
 
 // Logout
