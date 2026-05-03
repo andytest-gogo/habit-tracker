@@ -1292,24 +1292,37 @@ var authSafetyTimer = setTimeout(function(){
   }
 }, hasOAuthCallback ? 20000 : 5000);
 
+// Track if admin access already granted this session
+var _adminAccessGranted = false;
+
 auth.onAuthStateChanged(async function(user){
   clearTimeout(authSafetyTimer);
   authResolved = true;
   document.getElementById('loadingScreen').style.display='none';
 
   if(user){
+    // If already verified this session, just keep dashboard visible
+    if (_adminAccessGranted) {
+      console.info('[Admin] Auth state refreshed — already verified, skipping re-check.');
+      resetSessionTimer();
+      return;
+    }
+
     var result = await verifyAdminAccess(user);
 
     if(!result.allowed){
+      _adminAccessGranted = false;
       document.getElementById('loginWrap').style.display='flex';
       document.getElementById('layout').style.display='none';
       showAdminError(result.reason || 'Access denied.');
       return;
     }
 
+    // Mark as verified so subsequent auth events don't re-check
+    _adminAccessGranted = true;
+
     if(result.warning){
       console.warn('[Admin Security]', result.warning);
-      // Show a subtle warning in the dashboard
       var warnBar = document.getElementById('adminSecurityWarn');
       if(warnBar){ warnBar.style.display='block'; warnBar.textContent = '⚠️ Security notice: ' + result.warning; }
     }
@@ -1349,14 +1362,15 @@ auth.onAuthStateChanged(async function(user){
       sendLoginNotification(user.email);
     }
 
-    // Wait for session refresh so user_metadata (role:admin) is in JWT
-    // before loadAll() queries with RLS policies that check the claim
+    // Refresh session then load data
     _authClient.auth.refreshSession().then(function() {
       loadAll();
     }).catch(function() {
       loadAll();
     });
   } else {
+    // User signed out — reset flag
+    _adminAccessGranted = false;
     clearTimeout(_sessionTimer);
     document.getElementById('loginWrap').style.display='flex';
     document.getElementById('layout').style.display='none';
