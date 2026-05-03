@@ -1359,17 +1359,19 @@ auth.onAuthStateChanged(async function(user){
     resetSessionTimer();
     // Log admin access (audit trail)
     console.info('[Admin] Access granted to:', user.email, 'at', new Date().toISOString());
-    // Only send notification once per page load
-    if (!window._adminNotifSent) {
-      window._adminNotifSent = true;
+    // Only send notification once per browser session (survives F5, not tab close)
+    if (!sessionStorage.getItem('_adminNotifSent')) {
+      sessionStorage.setItem('_adminNotifSent', '1');
       sendLoginNotification(user.email);
     }
 
     // Load data directly — no refreshSession() to avoid TOKEN_REFRESHED loop
     loadAll();
   } else {
-    // User signed out — reset flag
+    // User signed out — reset all session flags
     _adminAccessGranted = false;
+    window._adminNotifRetried = false;
+    sessionStorage.removeItem('_adminNotifSent');
     clearTimeout(_sessionTimer);
     document.getElementById('loginWrap').style.display='flex';
     document.getElementById('layout').style.display='none';
