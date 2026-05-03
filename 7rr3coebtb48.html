@@ -1255,22 +1255,25 @@ async function verifyAdminAccess(user) {
   if (!emailAllowed) {
     return { allowed: false, reason: 'Access denied: ' + email + ' is not authorised.' };
   }
-  // Check Supabase user_metadata for admin:true
-  // Set via: Supabase Dashboard → Auth → Users → edit user_metadata
-  // OR SQL: UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data || '{"admin":true}'::jsonb WHERE email='your@email.com';
+  // Try to check admin claim in JWT — if it fails, fall back to email whitelist
   try {
     var tokenResult = await user.getIdTokenResult(true);
     var hasClaim = tokenResult.claims && tokenResult.claims[ADMIN_CUSTOM_CLAIM] === true;
-    if (!hasClaim) {
-      if (ALLOW_EMAIL_ONLY_FALLBACK) {
-        console.warn('[Admin] admin:true not found in user_metadata — email-only fallback mode.');
-        return { allowed: true, warning: '⚠️ Supabase user_metadata "admin: true" not set. Set it via Dashboard → Auth → Users or SQL Editor.' };
-      }
-      return { allowed: false, reason: 'Access denied: admin claim not verified. Set user_metadata.admin=true in Supabase Dashboard.' };
+    if (hasClaim) {
+      return { allowed: true };
     }
-    return { allowed: true };
+    // No claim — allow if email is whitelisted (email-only fallback)
+    if (ALLOW_EMAIL_ONLY_FALLBACK) {
+      console.warn('[Admin] admin:true claim not found — email whitelist fallback active.');
+      return { allowed: true, warning: 'admin:true not set in user_metadata. Email whitelist fallback is active.' };
+    }
+    return { allowed: false, reason: 'Access denied: admin claim not verified.' };
   } catch (e) {
-    console.error('[Admin] Token verification failed:', e);
+    // JWT decode failed (common with email/password login) — fall back to email whitelist
+    console.warn('[Admin] JWT check failed, using email whitelist fallback:', e.message);
+    if (ALLOW_EMAIL_ONLY_FALLBACK && emailAllowed) {
+      return { allowed: true, warning: 'JWT check failed — email whitelist fallback active.' };
+    }
     return { allowed: false, reason: 'Security check failed: ' + e.message };
   }
 }
@@ -1340,7 +1343,11 @@ auth.onAuthStateChanged(async function(user){
     resetSessionTimer();
     // Log admin access (audit trail)
     console.info('[Admin] Access granted to:', user.email, 'at', new Date().toISOString());
-    sendLoginNotification(user.email);
+    // Only send notification once per page load
+    if (!window._adminNotifSent) {
+      window._adminNotifSent = true;
+      sendLoginNotification(user.email);
+    }
 
     // Wait for session refresh so user_metadata (role:admin) is in JWT
     // before loadAll() queries with RLS policies that check the claim
