@@ -1396,7 +1396,9 @@ function sendLoginNotification(adminEmail) {
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   });
   var ua = navigator.userAgent.substring(0, 200);
+  // Retry once if emailjs not yet loaded, but guard against multiple retries
   if (window.emailjs) {
+    window._adminNotifSent = true; // ensure flag stays set
     emailjs.send('service_qizl8zl', 'template_keqet5t', {
       to_email:   adminEmail,
       login_time: timeStr,
@@ -1406,7 +1408,9 @@ function sendLoginNotification(adminEmail) {
     }).catch(function(e) {
       console.warn('[Admin] Email notification failed:', e);
     });
-  } else {
+  } else if (!window._adminNotifRetried) {
+    // Only retry once to avoid repeated sends if emailjs is slow to load
+    window._adminNotifRetried = true;
     setTimeout(function() { sendLoginNotification(adminEmail); }, 1500);
   }
 }
@@ -1502,9 +1506,14 @@ document.getElementById('habitSearch').oninput = function(){ renderHabits(this.v
 // Load
 function loadAll(){
   document.getElementById('lastUpdated').textContent='Loading...';
-  Promise.all([loadHabits(), loadPosts(), loadUsers()]).then(function(){
+  // Reset allUsers to avoid stale data flash before all sources are ready
+  allUsers = [];
+  // Load habits and posts first, THEN load users (which triggers render)
+  // This prevents onSnapshot from rendering with empty habits/posts data
+  Promise.all([loadHabits(), loadPosts()]).then(function(){
+    return loadUsers();
+  }).then(function(){
     buildUsers();
-    renderUsers('');
     renderStats();
     renderCharts();
     renderRecent();
@@ -1674,17 +1683,17 @@ function loadUsers(){
         if (_deletedUids.has(d.id)) return; // skip UIDs deleted this session
         window.fsUsers[d.id] = d.data();
       });
-      // Re-build user map
-      buildUsers();
-      // Always re-render the Users table
-      renderUsers(document.getElementById('userSearch').value||'');
-      renderStats();
-      renderCharts();
       if(_initialUsersLoad){
+        // First snapshot -- just resolve, let loadAll handle all rendering
+        // after habits & posts are also ready
         _initialUsersLoad = false;
         resolve();
       } else {
-        // Subsequent snapshots = live avatar change — refresh all sections that show avatars
+        // Subsequent snapshots = live change -- re-render with current data
+        buildUsers();
+        renderUsers(document.getElementById('userSearch').value||'');
+        renderStats();
+        renderCharts();
         renderRecent();
         renderPosts(document.getElementById('postSearch').value||'');
         renderReports();
