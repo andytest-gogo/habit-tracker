@@ -1872,10 +1872,16 @@ if (isFirebaseConfigured) {
           updates.data.avatar_url = profile.photoURL;
         }
         var self = this;
-        return _supabase.auth.updateUser(updates).then(function(r) {
-          if (r.error) throw r.error;
+        // In Supabase email-confirmation mode, signUp does not create an active session
+        // until the user verifies their email. updateUser() requires a session, so we
+        // update the local object only and silently skip the API call if no session exists.
+        return _supabase.auth.getSession().then(function(r) {
           if (profile.displayName !== undefined) self.displayName = profile.displayName;
           if (profile.photoURL !== undefined) self.photoURL = profile.photoURL;
+          if (!r.data || !r.data.session) return; // no session — skip API call silently
+          return _supabase.auth.updateUser(updates).then(function(r2) {
+            if (r2.error) console.warn('[updateProfile] updateUser failed:', r2.error.message);
+          });
         });
       }
     };
@@ -3289,8 +3295,12 @@ function AuthPage(_ref2) {
         var _r = await auth.createUserWithEmailAndPassword(email, password);
 
         try {
-          // 4. Set display name
-          await _r.user.updateProfile({ displayName: displayName.trim() });
+          // 4. Set display name (best-effort — may silently skip if no session yet)
+          try {
+            await _r.user.updateProfile({ displayName: displayName.trim() });
+          } catch(profileErr) {
+            console.warn('[signup] updateProfile skipped (no session):', profileErr.message);
+          }
 
           // 5. Write Firestore profile while user is signed in
           try {
