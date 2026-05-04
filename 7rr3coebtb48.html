@@ -952,7 +952,7 @@ var SUPABASE_PROJECT_REF = 'nvyyneoiocyjxbtcyxyi';
 // Supabase JS v2 新版封鎖在瀏覽器使用 service_role key。
 // 改用 anon key + RLS admin policy 讓已登入的 admin 讀寫所有資料。
 var _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { detectSessionInUrl: true, flowType: 'pkce', persistSession: true }
+  auth: { detectSessionInUrl: true, flowType: 'pkce', persistSession: true, storageKey: 'sb-admin-session' }
 });
 var _supabase = _authClient; // 同一個 client，由 RLS admin policy 控制權限
 
@@ -1510,6 +1510,7 @@ function loadAll(){
   document.getElementById('lastUpdated').textContent='Loading...';
   // Reset allUsers to avoid stale data flash before all sources are ready
   allUsers = [];
+  _loadAllDone = false; // block realtime updates until load is complete
   // Load habits and posts first, THEN load users (which triggers render)
   // This prevents onSnapshot from rendering with empty habits/posts data
   Promise.all([loadHabits(), loadPosts()]).then(function(){
@@ -1523,6 +1524,7 @@ function loadAll(){
     renderPosts('');
     renderHabits('');
     document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-US');
+    _loadAllDone = true; // now allow realtime updates to re-render
   });
   // Quota & Reports 獨立載入
   loadQuota();
@@ -1532,6 +1534,7 @@ function loadAll(){
 var _usersUnsubscribe = null;
 var _initialUsersLoad = true; // skip heavy re-renders on first snapshot (loadAll handles them)
 var _deletedUids = new Set(); // UIDs deleted this session — blocks onSnapshot from re-adding them
+var _loadAllDone = false; // prevents realtime events from rendering before loadAll completes
 
 
 async function runUsernameMigration() {
@@ -1691,7 +1694,9 @@ function loadUsers(){
         _initialUsersLoad = false;
         resolve();
       } else {
-        // Subsequent snapshots = live change -- re-render with current data
+        // Subsequent snapshots = live change — only re-render if loadAll has completed
+        // (guards against Supabase realtime firing during initial page load)
+        if (!_loadAllDone) return;
         buildUsers();
         renderUsers(document.getElementById('userSearch').value||'');
         renderStats();
