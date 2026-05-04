@@ -1753,12 +1753,15 @@ if (isFirebaseConfigured) {
       return sess ? _makeUser(sess.user) : null;
     },
     onAuthStateChanged: function(cb) {
-      // Supabase v2 uses onAuthStateChange
+      // Use onAuthStateChange exclusively — avoids double-firing with getSession().
+      // INITIAL_SESSION fires once on load with persisted session.
+      // TOKEN_REFRESHED is skipped (silent JWT rotation, not a real state change).
+      var _lastUid = null;
       var { data: { subscription } } = _supabase.auth.onAuthStateChange(function(event, session) {
-        cb(session ? _makeUser(session.user) : null);
-      });
-      // Fire immediately with current session
-      _supabase.auth.getSession().then(function({ data: { session } }) {
+        if (event === 'TOKEN_REFRESHED') return;
+        var uid = session && session.user && session.user.id;
+        if (event === 'SIGNED_IN' && uid && uid === _lastUid) return; // deduplicate
+        _lastUid = uid || null;
         cb(session ? _makeUser(session.user) : null);
       });
       return function() { subscription.unsubscribe(); };
@@ -1833,7 +1836,7 @@ if (isFirebaseConfigured) {
     return {
       uid: u.id,
       email: u.email,
-      displayName: u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name) || u.email,
+      displayName: (u.user_metadata && (u.user_metadata.signup_display_name || u.user_metadata.full_name || u.user_metadata.name)) || u.email,
       photoURL: u.user_metadata && u.user_metadata.avatar_url || null,
       emailVerified: !!u.email_confirmed_at,
       providerData: [{ providerId: u.app_metadata && u.app_metadata.provider || 'email' }],
@@ -1883,6 +1886,11 @@ if (isFirebaseConfigured) {
             if (r2.error) console.warn('[updateProfile] updateUser failed:', r2.error.message);
           });
         });
+      },
+      sendEmailVerification: function(actionCodeSettings) {
+        // Supabase already sent the confirmation email during signUp().
+        // This is a no-op to avoid rate-limit errors from double-sending.
+        return Promise.resolve();
       }
     };
   }
@@ -3287,41 +3295,38 @@ function AuthPage(_ref2) {
           // Orphaned doc — silently overwrite it during registration batch write
         }
 
-        // 3. Create Firebase Auth account (throws auth/email-already-in-use if duplicate)
-        // Set _registering = true BEFORE createUser so that onAuthStateChanged
-        // (which fires immediately after account creation) does not call signOut()
-        // and invalidate our token before we finish writing to Firestore.
+        // 3. Pre-check: block if email already exists in users table.
+        // Prevents a new signup from overwriting an existing verified user's profile.
+        try {
+          var _emailCheck = await _supabase.from('users').select('id').eq('email', email.trim().toLowerCase()).maybeSingle();
+          if (_emailCheck.data) {
+            setEmailStatus('taken');
+            setError('This email is already registered. Please sign in instead.');
+            return;
+          }
+        } catch(e) { /* DB check failed — Auth will catch duplicate */ }
+
+        // Create Supabase Auth account
         _registering = true;
         var _r = await auth.createUserWithEmailAndPassword(email, password);
 
         try {
-          // 4. Set display name (best-effort — may silently skip if no session yet)
+          // 4. Store displayName + usernameKey in Supabase user_metadata.
+          // We do NOT write to the users/usernames tables here because the user
+          // has no active session yet (email not confirmed) and RLS would block the insert.
+          // The actual DB write happens in onAuthStateChanged after email verification.
           try {
-            await _r.user.updateProfile({ displayName: displayName.trim() });
-          } catch(profileErr) {
-            console.warn('[signup] updateProfile skipped (no session):', profileErr.message);
-          }
-
-          // 5. Write Firestore profile while user is signed in
-          try {
-            var _uid = _r.user.uid;
-            var _batch = db.batch();
-            _batch.set(db.collection('usernames').doc(usernameKey), {
-              uid: _uid,
-              displayName: displayName.trim(),
-              createdAt: FieldValue.serverTimestamp()
+            var _metaResult = await _supabase.auth.updateUser({
+              data: {
+                full_name: displayName.trim(),
+                username_key: usernameKey,
+                signup_display_name: displayName.trim()
+              }
             });
-            _batch.set(db.collection('users').doc(_uid), {
-              displayName: displayName.trim(),
-              displayName_lower: usernameKey,
-              email: email.trim(),
-              emailVerified: false,
-              createdAt: FieldValue.serverTimestamp()
-            }, { merge: true });
-            await _batch.commit();
-            console.log('[signup] Firestore write successful for:', _uid);
-          } catch(fsErr) {
-            console.warn('[signup] Firestore write failed:', fsErr.message);
+            if (_metaResult.error) console.warn('[signup] metadata save failed:', _metaResult.error.message);
+            else console.log('[signup] Display name saved to metadata:', displayName.trim());
+          } catch(metaErr) {
+            console.warn('[signup] metadata save error:', metaErr.message);
           }
 
           // 6. Send verification email
@@ -8798,31 +8803,58 @@ function App() {
           setUser(u);
           return;
         }
-        // First fetch existing doc to avoid overwriting a custom avatar
-        // with the Firebase Auth photoURL (e.g. Google profile pic or empty string).
+        // Fetch existing user doc to avoid overwriting custom avatar.
+        // Also: if this is a fresh signup (signup_display_name in metadata),
+        // write the displayName + username reservation now — user is authenticated,
+        // so RLS will allow the insert.
         db.collection('users').doc(u.uid).get().then(function(docSnap) {
           var existing = docSnap.exists ? docSnap.data() : {};
-          // Only use Firebase Auth photoURL if there is no custom avatar already stored
           var photoURL = existing.photoURL || u.photoURL || '';
-          // Persist age-verification to Firestore so it survives localStorage clears
           var ageConfirmedLocal = !!localStorage.getItem('ht-age-confirmed');
-          var updateDoc = {
-            uid: u.uid,
-            email: u.email || '',
-            displayName: u.displayName || '',
-            photoURL: photoURL,
-            emailVerified: true,
-            lastSeen: FieldValue.serverTimestamp()
-          };
-          if (ageConfirmedLocal && !existing.ageVerified) {
-            updateDoc.ageVerified = true;
-            updateDoc.ageVerifiedAt = FieldValue.serverTimestamp();
-          }
-          // If Firestore already has ageVerified, sync back to localStorage
-          if (existing.ageVerified && !ageConfirmedLocal) {
-            localStorage.setItem('ht-age-confirmed', '1');
-          }
-          return db.collection('users').doc(u.uid).set(updateDoc, { merge: true });
+
+          // Read signup metadata written during registration
+          var meta = (u.providerData && u.providerData[0] && u.providerData[0].providerId === 'google.com')
+            ? {} : (_supabase.auth.getSession ? {} : {});
+          // Get metadata directly from Supabase session
+          _supabase.auth.getSession().then(function(sr) {
+            var smeta = (sr.data && sr.data.session && sr.data.session.user && sr.data.session.user.user_metadata) || {};
+            var signupDisplayName = smeta.signup_display_name || smeta.full_name || u.displayName || '';
+            var usernameKey = smeta.username_key || '';
+
+            var updateDoc = {
+              uid: u.uid,
+              email: u.email || '',
+              displayName: existing.displayName || signupDisplayName || u.displayName || '',
+              photoURL: photoURL,
+              emailVerified: true,
+              lastSeen: FieldValue.serverTimestamp()
+            };
+            if (ageConfirmedLocal && !existing.ageVerified) {
+              updateDoc.ageVerified = true;
+              updateDoc.ageVerifiedAt = FieldValue.serverTimestamp();
+            }
+            if (existing.ageVerified && !ageConfirmedLocal) {
+              localStorage.setItem('ht-age-confirmed', '1');
+            }
+
+            var writePromises = [
+              db.collection('users').doc(u.uid).set(updateDoc, { merge: true })
+            ];
+
+            // If fresh signup and username not yet reserved → write usernames entry
+            if (usernameKey && !docSnap.exists) {
+              writePromises.push(
+                db.collection('usernames').doc(usernameKey).set({
+                  uid: u.uid,
+                  displayName: signupDisplayName,
+                  createdAt: FieldValue.serverTimestamp()
+                })
+              );
+              console.log('[auth] Writing username reservation:', usernameKey, 'for uid:', u.uid);
+            }
+
+            return Promise.all(writePromises);
+          }).catch(function(e) { console.warn('[auth] DB write failed:', e.message); });
         }).catch(function () {});
         setUser(u);
       } else {
