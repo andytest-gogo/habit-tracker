@@ -1738,7 +1738,9 @@ var isFirebaseConfigured = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 var isCloudinaryConfigured = isFirebaseConfigured; // Storage handled by Supabase
 
 if (isFirebaseConfigured) {
-  _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: { storageKey: 'sb-app-session' }
+  });
 
   /* ─────────────────────────────────────────────────
      AUTH SHIM  — maps old firebase.auth() API calls
@@ -8779,6 +8781,13 @@ function App() {
           return;
         }
         // Verified: update Firestore and sign in
+        // Skip DB write for admin accounts — admins are not app users and
+        // should not appear in the users table or the admin dashboard user count.
+        var ADMIN_EMAILS_INDEX = ['andy19920818@gmail.com'];
+        if (ADMIN_EMAILS_INDEX.indexOf((u.email || '').toLowerCase().trim()) !== -1) {
+          setUser(u);
+          return;
+        }
         // First fetch existing doc to avoid overwriting a custom avatar
         // with the Firebase Auth photoURL (e.g. Google profile pic or empty string).
         db.collection('users').doc(u.uid).get().then(function(docSnap) {

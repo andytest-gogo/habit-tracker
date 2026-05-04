@@ -1771,7 +1771,11 @@ function buildUsers(){
   var map={};
 
   // Only count users that exist in the Supabase users table (real verified accounts)
+  // Exclude admin accounts — they are not real app users and must not appear in stats
+  var _adminEmails = ALLOWED_ADMINS.map(function(e){ return e.toLowerCase().trim(); });
   Object.entries(window.fsUsers||{}).forEach(function(entry){
+    var _entryEmail = (entry[1].email || '').toLowerCase().trim();
+    if (_adminEmails.indexOf(_entryEmail) !== -1) return; // skip admin accounts
     var uid=entry[0], u=entry[1];
     var createdAt = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt)) : null;
     var usernameChangedAt = u.usernameChangedAt ? (u.usernameChangedAt.toDate ? u.usernameChangedAt.toDate() : new Date(u.usernameChangedAt)) : null;
