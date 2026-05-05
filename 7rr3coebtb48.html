@@ -960,9 +960,12 @@ var _supabase = _authClient; // 同一個 client，由 RLS admin policy 控制�
 var auth = {
   currentUser: null,
   onAuthStateChanged: function(cb) {
+    var _getSessionFired = false; // prevents INITIAL_SESSION from double-firing loadAll
+
     // 初始化時主動取一次 session（處理 PKCE callback 情況）
     _authClient.auth.getSession().then(function(r) {
       if (r.data && r.data.session) {
+        _getSessionFired = true;
         auth.currentUser = _mkUser(r.data.session.user);
         cb(auth.currentUser);
       }
@@ -973,6 +976,9 @@ var auth = {
       // TOKEN_REFRESHED just means the JWT rotated — not a real sign-in/out event.
       // Skip it to prevent the admin handler from running loadAll() in a loop.
       if (event === 'TOKEN_REFRESHED') return;
+      // INITIAL_SESSION fires right after getSession() — if getSession already handled
+      // the session, skip INITIAL_SESSION to prevent double loadAll() (the 0->1->0 flash).
+      if (event === 'INITIAL_SESSION' && _getSessionFired) return;
       auth.currentUser = session ? _mkUser(session.user) : null;
       cb(auth.currentUser);
     });
@@ -1481,7 +1487,7 @@ document.getElementById('logoutBtn').onclick = function(){
 };
 
 // Refresh
-document.getElementById('refreshBtn').onclick = loadAll;
+document.getElementById('refreshBtn').onclick = function(){ _loadAllRunning = false; loadAll(); };
 
 // Nav
 document.querySelectorAll('.nav-btn').forEach(function(btn){
@@ -1506,10 +1512,15 @@ document.getElementById('postSearch').oninput = function(){ renderPosts(this.val
 document.getElementById('habitSearch').oninput = function(){ renderHabits(this.value); };
 
 // Load
+var _loadAllRunning = false; // prevents concurrent loadAll() calls (double-fire guard)
 function loadAll(){
+  // Guard: if a load is already in progress, skip to prevent 0->1->0 flash
+  if (_loadAllRunning) {
+    console.log('[Admin] loadAll() skipped — already running');
+    return;
+  }
+  _loadAllRunning = true;
   document.getElementById('lastUpdated').textContent='Loading...';
-  // Reset allUsers to avoid stale data flash before all sources are ready
-  allUsers = [];
   _loadAllDone = false; // block realtime updates until load is complete
   // Load habits and posts first, THEN load users (which triggers render)
   // This prevents onSnapshot from rendering with empty habits/posts data
@@ -1525,6 +1536,10 @@ function loadAll(){
     renderHabits('');
     document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-US');
     _loadAllDone = true; // now allow realtime updates to re-render
+    _loadAllRunning = false;
+  }).catch(function(e) {
+    console.warn('[Admin] loadAll() error:', e);
+    _loadAllRunning = false;
   });
   // Quota & Reports 獨立載入
   loadQuota();
