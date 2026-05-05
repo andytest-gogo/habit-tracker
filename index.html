@@ -3316,12 +3316,14 @@ function AuthPage(_ref2) {
           // has no active session yet (email not confirmed) and RLS would block the insert.
           // The actual DB write happens in onAuthStateChanged after email verification.
 
-          // Also save to localStorage as a reliable backup — updateUser() may silently fail
+          // Save to localStorage as a reliable backup — updateUser() may silently fail
           // if Supabase hasn't created an active session yet (pre-email-verification).
+          // Key by EMAIL (not uid) so recovery still works after signOut → click link → re-login.
           try {
             localStorage.setItem('ht-pending-display-name', displayName.trim());
             localStorage.setItem('ht-pending-username-key', usernameKey);
             localStorage.setItem('ht-pending-uid', _r.user && _r.user.uid ? _r.user.uid : '');
+            localStorage.setItem('ht-pending-email', email.trim().toLowerCase());
           } catch(lsErr) { /* ignore */ }
 
           try {
@@ -8816,99 +8818,127 @@ function App() {
         // Also: if this is a fresh signup (signup_display_name in metadata),
         // write the displayName + username reservation now — user is authenticated,
         // so RLS will allow the insert.
-        db.collection('users').doc(u.uid).get().then(function(docSnap) {
+        // Run all async work first, THEN setUser so the UI always gets the correct displayName
+        Promise.all([
+          db.collection('users').doc(u.uid).get(),
+          _supabase.auth.getSession()
+        ]).then(function(results) {
+          var docSnap = results[0];
+          var sr      = results[1];
           var existing = docSnap.exists ? docSnap.data() : {};
           var photoURL = existing.photoURL || u.photoURL || '';
           var ageConfirmedLocal = !!localStorage.getItem('ht-age-confirmed');
+          var smeta = (sr.data && sr.data.session && sr.data.session.user && sr.data.session.user.user_metadata) || {};
 
-          // Read signup metadata written during registration
-          var meta = (u.providerData && u.providerData[0] && u.providerData[0].providerId === 'google.com')
-            ? {} : (_supabase.auth.getSession ? {} : {});
-          // Get metadata directly from Supabase session
-          _supabase.auth.getSession().then(function(sr) {
-            var smeta = (sr.data && sr.data.session && sr.data.session.user && sr.data.session.user.user_metadata) || {};
-
-            // Recover from localStorage backup if metadata wasn't saved during signup
-            var _lsPendingName = '';
-            var _lsPendingKey = '';
-            try {
-              var _lsUid = localStorage.getItem('ht-pending-uid');
-              if (_lsUid && _lsUid === u.uid) {
-                _lsPendingName = localStorage.getItem('ht-pending-display-name') || '';
-                _lsPendingKey  = localStorage.getItem('ht-pending-username-key') || '';
-              }
-            } catch(e) {}
-
-            var signupDisplayName = smeta.signup_display_name || smeta.full_name || _lsPendingName || u.displayName || '';
-            var usernameKey = smeta.username_key || _lsPendingKey || '';
-
-            // Clear localStorage backup after reading
-            if (_lsPendingName || _lsPendingKey) {
-              try {
-                localStorage.removeItem('ht-pending-display-name');
-                localStorage.removeItem('ht-pending-username-key');
-                localStorage.removeItem('ht-pending-uid');
-              } catch(e) {}
+          // ── Step 1: Recover displayName & usernameKey ──────────────────────────────
+          // Priority order:
+          //   1. metadata written at signup (most reliable when it worked)
+          //   2. localStorage backup (reliable fallback — survives signOut between signup & verify)
+          //   3. existing DB displayName (for returning users)
+          //   4. email prefix (last resort — never show full email as a username)
+          var _lsPendingName = '';
+          var _lsPendingKey = '';
+          try {
+            // localStorage backup: stored by email so uid mismatch after re-login doesn't matter
+            var _lsEmail = localStorage.getItem('ht-pending-email');
+            if (_lsEmail && _lsEmail.toLowerCase() === (u.email || '').toLowerCase()) {
+              _lsPendingName = localStorage.getItem('ht-pending-display-name') || '';
+              _lsPendingKey  = localStorage.getItem('ht-pending-username-key') || '';
+              console.log('[auth] Recovered from localStorage backup — name:', _lsPendingName, 'key:', _lsPendingKey);
             }
+          } catch(e) {}
 
-            // Auto-repair: if metadata was not saved during signup (no session at that time),
-            // try to recover displayName from any available source, fallback to email prefix (not full email)
-            var resolvedDisplayName = existing.displayName || signupDisplayName || u.displayName || (u.email ? u.email.split('@')[0] : '');
+          var signupDisplayName = smeta.signup_display_name || smeta.full_name || _lsPendingName || '';
+          var usernameKey = smeta.username_key || _lsPendingKey || '';
 
-            // Auto-repair: if the stored displayName looks like a full email address, replace it with email prefix
-            if (existing.displayName && existing.displayName.indexOf('@') !== -1) {
-              resolvedDisplayName = signupDisplayName || (existing.displayName.split('@')[0]);
-            }
+          // Clear localStorage backup after reading
+          try {
+            localStorage.removeItem('ht-pending-display-name');
+            localStorage.removeItem('ht-pending-username-key');
+            localStorage.removeItem('ht-pending-uid');
+            localStorage.removeItem('ht-pending-email');
+          } catch(e) {}
 
-            // Auto-repair: if metadata signup_display_name was never saved, write it now so future sessions are correct
-            if (!smeta.signup_display_name && resolvedDisplayName) {
-              _supabase.auth.updateUser({ data: { signup_display_name: resolvedDisplayName, full_name: resolvedDisplayName } })
-                .then(function(r2) { if (!r2.error) console.log('[auth] Auto-repaired signup_display_name in metadata:', resolvedDisplayName); })
-                .catch(function(e) { console.warn('[auth] metadata auto-repair failed:', e.message); });
-            }
+          // Resolve final displayName — repair if it looks like an email
+          var existingName = existing.displayName || '';
+          var isExistingNameBad = existingName.indexOf('@') !== -1;
+          var resolvedDisplayName;
+          if (signupDisplayName) {
+            // Fresh signup or recovered — always use the signup name
+            resolvedDisplayName = signupDisplayName;
+          } else if (existingName && !isExistingNameBad) {
+            // Returning user with a good name — keep it
+            resolvedDisplayName = existingName;
+          } else {
+            // Fallback: email prefix (never full email)
+            resolvedDisplayName = u.email ? u.email.split('@')[0] : '';
+          }
 
-            var updateDoc = {
-              uid: u.uid,
-              email: u.email || '',
-              displayName: resolvedDisplayName,
-              displayName_lower: resolvedDisplayName.toLowerCase(),
-              photoURL: photoURL,
-              emailVerified: true,
-              lastSeen: FieldValue.serverTimestamp()
-            };
-            if (ageConfirmedLocal && !existing.ageVerified) {
-              updateDoc.ageVerified = true;
-              updateDoc.ageVerifiedAt = FieldValue.serverTimestamp();
-            }
-            if (existing.ageVerified && !ageConfirmedLocal) {
-              localStorage.setItem('ht-age-confirmed', '1');
-            }
+          // ── Step 2: Repair Supabase metadata if missing ────────────────────────────
+          if (!smeta.signup_display_name && resolvedDisplayName) {
+            _supabase.auth.updateUser({ data: {
+              signup_display_name: resolvedDisplayName,
+              full_name: resolvedDisplayName,
+              username_key: usernameKey || resolvedDisplayName.toLowerCase().replace(/\s+/g, '_')
+            }}).then(function(r2) {
+              if (!r2.error) console.log('[auth] Auto-repaired metadata — name:', resolvedDisplayName);
+            }).catch(function(e) { console.warn('[auth] metadata repair failed:', e.message); });
+          }
 
-            var writePromises = [
-              db.collection('users').doc(u.uid).set(updateDoc, { merge: true })
-            ];
+          // ── Step 3: Build users table write ───────────────────────────────────────
+          var updateDoc = {
+            uid: u.uid,
+            email: u.email || '',
+            displayName: resolvedDisplayName,
+            displayName_lower: resolvedDisplayName.toLowerCase(),
+            photoURL: photoURL,
+            emailVerified: true,
+            lastSeen: FieldValue.serverTimestamp()
+          };
+          if (ageConfirmedLocal && !existing.ageVerified) {
+            updateDoc.ageVerified = true;
+            updateDoc.ageVerifiedAt = FieldValue.serverTimestamp();
+          }
+          if (existing.ageVerified && !ageConfirmedLocal) {
+            localStorage.setItem('ht-age-confirmed', '1');
+          }
 
-            // If fresh signup and username not yet reserved → write usernames entry
-            if (usernameKey && !docSnap.exists) {
-              writePromises.push(
-                db.collection('usernames').doc(usernameKey).set({
-                  uid: u.uid,
-                  displayName: resolvedDisplayName,
-                  createdAt: FieldValue.serverTimestamp()
-                })
-              );
-              console.log('[auth] Writing username reservation:', usernameKey, 'for uid:', u.uid);
-            }
+          var writePromises = [
+            db.collection('users').doc(u.uid).set(updateDoc, { merge: true })
+          ];
 
-            // Patch the user object so the UI immediately shows the repaired displayName
-            if (u.displayName !== resolvedDisplayName) {
-              u.displayName = resolvedDisplayName;
-            }
+          // ── Step 4: Write usernames reservation ───────────────────────────────────
+          // Fix: previously only wrote when !docSnap.exists, which meant returning users
+          // never got their username reserved. Now we check the usernames table directly.
+          if (usernameKey) {
+            writePromises.push(
+              db.collection('usernames').doc(usernameKey).get().then(function(unameSnap) {
+                // Write if: (a) no entry exists, or (b) entry exists but points to this same uid (re-login)
+                var existingUid = unameSnap.exists && unameSnap.data() ? unameSnap.data().uid : null;
+                if (!unameSnap.exists || existingUid === u.uid) {
+                  console.log('[auth] Writing username reservation:', usernameKey, '→', u.uid);
+                  return db.collection('usernames').doc(usernameKey).set({
+                    uid: u.uid,
+                    displayName: resolvedDisplayName,
+                    createdAt: FieldValue.serverTimestamp()
+                  });
+                } else {
+                  console.log('[auth] Username already reserved by another user — skipping:', usernameKey);
+                }
+              })
+            );
+          }
 
-            return Promise.all(writePromises);
-          }).catch(function(e) { console.warn('[auth] DB write failed:', e.message); });
-        }).catch(function () {});
-        setUser(u);
+          // Patch user object so the UI immediately shows the correct displayName
+          u.displayName = resolvedDisplayName;
+
+          return Promise.all(writePromises);
+        }).then(function() {
+          setUser(u); // setUser AFTER all writes — UI always gets correct data
+        }).catch(function(e) {
+          console.warn('[auth] DB write failed:', e.message);
+          setUser(u); // still set user even if DB write failed
+        });
       } else {
         setUser(null);
       }
