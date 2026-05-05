@@ -1749,9 +1749,11 @@ if (isFirebaseConfigured) {
   auth = {
     _listeners: [],
     get currentUser() {
-      var sess = _supabase.auth.session ? _supabase.auth.session() : null;
-      return sess ? _makeUser(sess.user) : null;
+      // _supabase.auth.session() was removed in Supabase SDK v2.
+      // We keep a cached reference updated by onAuthStateChange instead.
+      return auth._cachedUser || null;
     },
+    _cachedUser: null,
     onAuthStateChanged: function(cb) {
       // Use onAuthStateChange exclusively — avoids double-firing with getSession().
       // INITIAL_SESSION fires once on load with persisted session.
@@ -1762,7 +1764,9 @@ if (isFirebaseConfigured) {
         var uid = session && session.user && session.user.id;
         if (event === 'SIGNED_IN' && uid && uid === _lastUid) return; // deduplicate
         _lastUid = uid || null;
-        cb(session ? _makeUser(session.user) : null);
+        // Keep _cachedUser in sync so auth.currentUser is always accurate
+        auth._cachedUser = session ? _makeUser(session.user) : null;
+        cb(auth._cachedUser);
       });
       return function() { subscription.unsubscribe(); };
     },
@@ -1891,6 +1895,17 @@ if (isFirebaseConfigured) {
         // Supabase already sent the confirmation email during signUp().
         // This is a no-op to avoid rate-limit errors from double-sending.
         return Promise.resolve();
+      },
+      delete: function() {
+        // Supabase does not expose a client-side deleteUser() for security reasons.
+        // The correct approach is to call auth.admin.deleteUser() from a server function,
+        // but since this app has no backend, we use signOut() to clear the session and
+        // rely on the Supabase dashboard / RLS to prevent orphaned data access.
+        // The user's DB data is already deleted before this is called.
+        return _supabase.auth.signOut().then(function(r) {
+          if (r && r.error) throw r.error;
+          auth._cachedUser = null;
+        });
       }
     };
   }
@@ -7523,20 +7538,23 @@ function MainApp(_ref16) {
           .forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
       })
 
-      // Step 4: Delete Firebase Auth account — must run regardless of Firestore cleanup result
+      // Step 4: Sign out — Supabase does not allow client-side account deletion.
+      // All user data has already been deleted from the DB above.
+      // Signing out clears the session; the auth account row in Supabase auth.users
+      // can be cleaned up via the Supabase dashboard or a server-side function if needed.
       .then(function() {
-        return auth.currentUser.delete();
+        auth._cachedUser = null;
+        return _supabase.auth.signOut().then(function(r) {
+          if (r && r.error) throw r.error;
+        });
       })
 
-      // Step 5: Done — auth state listener will fire onLogout() and redirect to login
+      // Step 5: Done — signOut triggers onAuthStateChanged → onLogout() → redirect to login
       .catch(function(err) {
         if (err && err.__handled) return; /* reauth error already handled */
-        /* Firestore cleanup partially failed, but Auth account may still be deleted → 
-           if currentUser is gone, deletion succeeded — logout directly */
-        if (!auth.currentUser) return;
-        /* Auth deletion also failed → show error */
+        /* Show error to user */
         setDeleteStep(2);
-        setDeleteError(errMap[err.code] || 'Deletion failed: ' + err.message);
+        setDeleteError(errMap[err && err.code] || 'Deletion failed: ' + (err && err.message ? err.message : 'Unknown error'));
       });
   };
 
