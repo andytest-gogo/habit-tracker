@@ -1958,12 +1958,54 @@ if (isFirebaseConfigured) {
     if (!row) return null;
     var id = row.id;
     var data = Object.assign({}, row);
-    // Convert ISO strings back to Date-like objects
+
+    // ── snake_case → camelCase field mapping (reverse of _toSnakeCase) ──
+    // Supabase stores columns as snake_case; app code uses camelCase field names.
+    // This mapping must mirror _toSnakeCase exactly.
+    var _snakeToCamel = {
+      'user_id':'userId','post_id':'postId','comment_id':'commentId',
+      'created_at':'createdAt','updated_at':'updatedAt','last_seen':'lastSeen',
+      'display_name':'displayName','photo_url':'photoURL','email_verified':'emailVerified',
+      'display_name_lower':'displayName_lower','liked_by':'likedBy',
+      'has_image':'hasImage','has_video':'hasVideo','media_url':'mediaUrl',
+      'media_public_id':'mediaPublicId','comment_count':'commentCount',
+      'time_range':'timeRange','daily_target':'dailyTarget','interval_days':'intervalDays',
+      'today_counts':'todayCounts','freq_label':'freqLabel',
+      'last_upload_at':'lastUploadAt','total_images':'totalImages','total_videos':'totalVideos',
+      'total_mb':'totalMB','daily_images':'dailyImages','daily_videos':'dailyVideos',
+      'daily_date':'dailyDate','monthly_mb':'monthlyMB','monthly_month':'monthlyMonth',
+      'reported_at':'reportedAt','reported_user_id':'reportedUserId',
+      'reported_user_name':'reportedUserName','reporter_uid':'reporterUid',
+      'reviewed_at':'reviewedAt','reviewed_by':'reviewedBy',
+      'dismissed_at':'dismissedAt','dismissed_reason':'dismissedReason',
+      'post_text':'postText','is_comment':'isComment','media_type':'mediaType',
+      'public_ids':'publicIds','username_changed_at':'usernameChangedAt',
+      'avatar_public_id':'avatarPublicId','deleted_at':'deletedAt','deleted_by':'deletedBy',
+      'age_verified':'ageVerified','age_verified_at':'ageVerifiedAt',
+      'avatar_url':'avatarUrl'
+    };
+    Object.keys(_snakeToCamel).forEach(function(snake) {
+      var camel = _snakeToCamel[snake];
+      if (snake in data && !(camel in data)) {
+        data[camel] = data[snake];
+        // keep snake_case copy too so RLS/DB queries still work
+      }
+    });
+
+    // ── Convert ISO timestamp strings → Firebase-like {toDate, seconds} objects ──
     ['created_at','updated_at','createdAt','updatedAt','lastSeen','lastUploadAt',
-     'reportedAt','reviewedAt','dismissedAt','deletedAt','archivedAt'].forEach(function(k) {
+     'reportedAt','reviewedAt','dismissedAt','deletedAt','archivedAt',
+     'ageVerifiedAt','usernameChangedAt'].forEach(function(k) {
       if (data[k] && typeof data[k] === 'string') {
         var d = new Date(data[k]);
-        data[k] = { toDate: function(){ return d; }, seconds: Math.floor(d/1000) };
+        var _ms = d.getTime();
+        data[k] = {
+          toDate: function(){ return d; },
+          seconds: Math.floor(_ms/1000),
+          milliseconds: _ms % 1000,
+          toMillis: function(){ return _ms; },
+          toJSON: function(){ return d.toISOString(); }
+        };
       }
     });
     return {
@@ -2045,7 +2087,7 @@ if (isFirebaseConfigured) {
         if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
         return q.then(function(r) {
           if(r.error) throw r.error;
-          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+          var _docs = (r.data||[]).map(function(row){ return _rowToDoc(table, row); }); return { docs: _docs, size: _docs.length, empty: _docs.length === 0, forEach: function(fn){ _docs.forEach(fn); } };
         });
       },
       where: function(field, op, val) { return _query(table, parentTable, parentId, [[field, op, val]]); },
@@ -2085,7 +2127,7 @@ if (isFirebaseConfigured) {
         conditions.forEach(function(c) { q = _applyWhere(q, c[0], c[1], c[2]); });
         return q.then(function(r) {
           if(r.error) throw r.error;
-          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+          var _docs = (r.data||[]).map(function(row){ return _rowToDoc(table, row); }); return { docs: _docs, size: _docs.length, empty: _docs.length === 0, forEach: function(fn){ _docs.forEach(fn); } };
         });
       },
       where: function(f, op, v) { return _query(table, parentTable, parentId, conditions.concat([[f, op, v]])); },
@@ -2093,18 +2135,29 @@ if (isFirebaseConfigured) {
       limit: function(n) { return _limitedQuery(table, parentTable, parentId, n, conditions); },
       onSnapshot: function(cb, errCb) {
         var self = this;
+        var _unsub = function(){};
         self.get().then(function(r) {
-          var snap = { docs: r.docs };
-          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+          var snap = { docs: r.docs, size: r.docs.length, empty: r.docs.length === 0, forEach: function(fn){ r.docs.forEach(fn); } };
           cb(snap);
+          var _rtReady = false;
+          var sub = _supabase.channel('rt:' + table + ':query:' + Date.now())
+            .on('postgres_changes', { event: '*', schema: 'public', table: table }, function() {
+              if (!_rtReady) { _rtReady = true; return; }
+              self.get().then(function(r2) {
+                var snap2 = { docs: r2.docs, size: r2.docs.length, empty: r2.docs.length === 0, forEach: function(fn){ r2.docs.forEach(fn); } };
+                cb(snap2);
+              });
+            }).subscribe(function(status) {
+              if (status === 'SUBSCRIBED') _rtReady = true;
+            });
+          _unsub = function(){ _supabase.removeChannel(sub); };
         }).catch(function(e) { if(errCb) errCb(e); });
-        // Simple poll-once; for real-time extend with Supabase channels
-        return function() {};
+        return function(){ _unsub(); };
       }
     };
   }
 
-  function _orderedQuery(table, parentTable, parentId, orderField, dir, conditions) {
+  function _orderedQuery(table, parentTable, parentId, orderField, dir, conditions, cursorDoc) {
     var conds = conditions || [];
     return {
       get: function() {
@@ -2112,36 +2165,49 @@ if (isFirebaseConfigured) {
         if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
         conds.forEach(function(c) { q = _applyWhere(q, c[0], c[1], c[2]); });
         q = q.order(_toSnakeCase(orderField), { ascending: dir !== 'desc' });
+        // startAfter cursor: use the cursor doc's value for the order field
+        if (cursorDoc) {
+          var cursorData = cursorDoc.data ? cursorDoc.data() : cursorDoc;
+          var cursorVal = cursorData[orderField] || cursorData[_toSnakeCase(orderField)];
+          if (cursorVal) {
+            var cursorStr = (cursorVal && cursorVal.toDate) ? cursorVal.toDate().toISOString() : String(cursorVal);
+            q = (dir === 'desc') ? q.lt(_toSnakeCase(orderField), cursorStr) : q.gt(_toSnakeCase(orderField), cursorStr);
+          }
+        }
         return q.then(function(r) {
           if(r.error) throw r.error;
-          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+          var _docs = (r.data||[]).map(function(row){ return _rowToDoc(table, row); }); return { docs: _docs, size: _docs.length, empty: _docs.length === 0, forEach: function(fn){ _docs.forEach(fn); } };
         });
       },
-      where: function(f, op, v) { return _orderedQuery(table, parentTable, parentId, orderField, dir, conds.concat([[f, op, v]])); },
-      limit: function(n) { return _limitedQuery(table, parentTable, parentId, n, conds, orderField, dir); },
+      where: function(f, op, v) { return _orderedQuery(table, parentTable, parentId, orderField, dir, conds.concat([[f, op, v]]), cursorDoc); },
+      limit: function(n) { return _limitedQuery(table, parentTable, parentId, n, conds, orderField, dir, cursorDoc); },
+      startAfter: function(doc) { return _orderedQuery(table, parentTable, parentId, orderField, dir, conds, doc); },
       onSnapshot: function(cb, errCb) {
         var self = this;
+        var _unsub = function(){};
         self.get().then(function(r) {
-          var snap = { docs: r.docs, size: r.docs.length };
-          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+          var snap = { docs: r.docs, size: r.docs.length, empty: r.docs.length === 0, forEach: function(fn){ r.docs.forEach(fn); } };
           cb(snap);
-          // Realtime subscription
-          var sub = _supabase.channel('rt:' + table + ':ordered')
+          // Unique channel name per table+timestamp to avoid conflicts between multiple listeners
+          var _rtReady = false;
+          var sub = _supabase.channel('rt:' + table + ':ordered:' + Date.now())
             .on('postgres_changes', { event: '*', schema: 'public', table: table }, function() {
+              if (!_rtReady) { _rtReady = true; return; } // skip subscription-established echo
               self.get().then(function(r2) {
-                var snap2 = { docs: r2.docs, size: r2.docs.length };
-                snap2.forEach = function(fn) { snap2.docs.forEach(fn); };
+                var snap2 = { docs: r2.docs, size: r2.docs.length, empty: r2.docs.length === 0, forEach: function(fn){ r2.docs.forEach(fn); } };
                 cb(snap2);
               });
-            }).subscribe();
-          return function() { _supabase.removeChannel(sub); };
+            }).subscribe(function(status) {
+              if (status === 'SUBSCRIBED') _rtReady = true;
+            });
+          _unsub = function(){ _supabase.removeChannel(sub); };
         }).catch(function(e) { if(errCb) errCb(e); });
-        return function() {};
+        return function(){ _unsub(); };
       }
     };
   }
 
-  function _limitedQuery(table, parentTable, parentId, n, conditions, orderField, dir) {
+  function _limitedQuery(table, parentTable, parentId, n, conditions, orderField, dir, cursorDoc) {
     var conds = conditions || [];
     return {
       get: function() {
@@ -2149,10 +2215,18 @@ if (isFirebaseConfigured) {
         if (parentTable === 'posts' && parentId) q = q.eq('post_id', parentId);
         conds.forEach(function(c) { q = _applyWhere(q, c[0], c[1], c[2]); });
         if (orderField) q = q.order(_toSnakeCase(orderField), { ascending: dir !== 'desc' });
+        if (cursorDoc) {
+          var cursorData = cursorDoc.data ? cursorDoc.data() : cursorDoc;
+          var cursorVal = cursorData[orderField] || cursorData[_toSnakeCase(orderField)];
+          if (cursorVal) {
+            var cursorStr = (cursorVal && cursorVal.toDate) ? cursorVal.toDate().toISOString() : String(cursorVal);
+            q = (dir === 'desc') ? q.lt(_toSnakeCase(orderField), cursorStr) : q.gt(_toSnakeCase(orderField), cursorStr);
+          }
+        }
         q = q.limit(n);
         return q.then(function(r) {
           if(r.error) throw r.error;
-          return { docs: (r.data||[]).map(function(row){ return _rowToDoc(table, row); }), size: (r.data||[]).length };
+          var _docs = (r.data||[]).map(function(row){ return _rowToDoc(table, row); }); return { docs: _docs, size: _docs.length, empty: _docs.length === 0, forEach: function(fn){ _docs.forEach(fn); } };
         });
       },
       onSnapshot: function(cb, errCb) {
@@ -2746,8 +2820,9 @@ async function _uploadToSupabaseStorage(file, resourceType, onProgress) {
   await checkQuotaFS(uid, uploadFile, isVideo);
 
   // ③ Upload to Supabase Storage
-  var bucket = isVideo ? STORAGE_BUCKET_MEDIA : STORAGE_BUCKET_MEDIA;
-  var ext    = uploadFile.name.split('.').pop() || (isVideo ? 'mp4' : 'jpg');
+  var bucket = STORAGE_BUCKET_MEDIA; // images and videos both go to 'media' bucket
+  var _uploadName = uploadFile.name || file.name || '';
+  var ext = (_uploadName.includes('.') ? _uploadName.split('.').pop() : '') || (isVideo ? 'mp4' : 'jpg');
   var path   = uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
 
   if (onProgress) onProgress(10);
@@ -3722,13 +3797,9 @@ function FeedCard(_ref5) {
     if (!showComments || !isFirebaseConfigured || !post.id) return;
     setLoadingComments(true);
     var unsub = db.collection('posts').doc(post.id).collection('comments').orderBy('createdAt', 'asc').onSnapshot(
-      { includeMetadataChanges: true },
       function (snap) {
-        // Only update UI from server-confirmed data.
-        // Ignore pending-write snapshots — these cause the like count to flash
-        // from the old value to the new value and back if the write is rejected
-        // by Firestore security rules.
-        if (snap.metadata.hasPendingWrites) return;
+        // Note: snap.metadata.hasPendingWrites is Firebase-only and not available in Supabase shim.
+        // Supabase shim always returns server-confirmed data so this check is not needed.
         setComments(snap.docs.map(function (d) {
           return _objectSpread({
             id: d.id
@@ -3974,7 +4045,7 @@ function FeedCard(_ref5) {
           return x.id === c.id ? Object.assign({}, x, { likedBy: newLikedBy, likes: newLikes }) : x;
         });
       });
-      if (typeof db !== 'undefined' && typeof firebase !== 'undefined') {
+      if (typeof db !== 'undefined' && isFirebaseConfigured) {
         db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
           likes: FieldValue.increment(cLiked ? -1 : 1),
           likedBy: cLiked
@@ -4156,8 +4227,8 @@ function UserPostsPage(_ref_upp) {
     }); });
     if (typeof db !== 'undefined') {
       db.collection('posts').doc(postId).update({
-        likes: (typeof firebase !== 'undefined' ? FieldValue.increment(hasLiked ? -1 : 1) : (post.likes || 0) + (hasLiked ? -1 : 1)),
-        likedBy: (typeof firebase !== 'undefined' ? (hasLiked ? FieldValue.arrayRemove(user.uid) : FieldValue.arrayUnion(user.uid)) : newLikedBy)
+        likes: FieldValue.increment(hasLiked ? -1 : 1),
+        likedBy: hasLiked ? FieldValue.arrayRemove(user.uid) : FieldValue.arrayUnion(user.uid)
       }).catch(function(e) { console.error(e); });
     }
   }
@@ -6896,8 +6967,14 @@ function MainApp(_ref16) {
 
       await batch.commit();
 
-      // 5. Update Firebase Auth displayName
-      await auth.currentUser.updateProfile({ displayName: name });
+      // 5. Update Supabase Auth metadata displayName
+      if (auth.currentUser) {
+        await auth.currentUser.updateProfile({ displayName: name });
+        // Keep _cachedUser in sync so UI re-renders with new name immediately
+        if (auth._cachedUser) {
+          auth._cachedUser.displayName = name;
+        }
+      }
 
       // 6. Update all user's posts (user field)
       var postsSnap = await db.collection('posts').where('userId', '==', user.uid).get();
@@ -7062,6 +7139,8 @@ function MainApp(_ref16) {
             result = _context0.v;
             setAvatarUrl(result.url);
             localStorage.setItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid), result.url);
+            // Sync _cachedUser.photoURL so auth.currentUser.photoURL is always up to date
+            if (auth._cachedUser) auth._cachedUser.photoURL = result.url;
             // Sync photoURL + avatarPublicId to Firestore (admin dashboard reads from here)
             if (user && user.uid && typeof db !== 'undefined') {
               var avatarUpdate = { photoURL: result.url };
@@ -7365,12 +7444,18 @@ function MainApp(_ref16) {
         /* Count deleted comments per post to update counters */
         var postCountMap = {};  // { postId: count }
         cgSnap.docs.forEach(function(d) {
-          /* Comment path: posts/{postId}/comments/{commentId}
-             d.ref.parent.parent is the parent post DocumentReference */
-          var postRef = d.ref.parent.parent;
-          if (!postRef) return;
-          postCountMap[postRef.id] = postCountMap[postRef.id] || { ref: postRef, count: 0 };
-          postCountMap[postRef.id].count += 1;
+          // Firebase: d.ref.parent.parent gives the post DocumentReference
+          // Supabase shim: comments have a post_id FK field instead
+          var postId = null;
+          var data = d.data ? d.data() : d;
+          if (data && data.post_id) {
+            postId = String(data.post_id); // Supabase FK column
+          } else if (d.ref && d.ref.parent && d.ref.parent.parent) {
+            postId = d.ref.parent.parent.id; // Firebase fallback
+          }
+          if (!postId) return;
+          postCountMap[postId] = postCountMap[postId] || { ref: db.collection('posts').doc(postId), count: 0 };
+          postCountMap[postId].count += 1;
         });
 
         /* Batch delete comments (400 per batch) */
@@ -9804,9 +9889,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
     // Determine current user uid
     var reporterUid = 'anonymous';
-    if (typeof firebase !== 'undefined') {
-      var fbAuth = (typeof _supabase !== 'undefined') ? auth : null;
-      if (fbAuth && fbAuth.currentUser) reporterUid = fbAuth.currentUser.uid;
+    if (auth && auth.currentUser) {
+      reporterUid = auth.currentUser.uid;
     }
 
     var reportDoc = {
