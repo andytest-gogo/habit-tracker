@@ -7354,6 +7354,7 @@ function MainApp(_ref16) {
     setDeleteStep(3);
     setDeleteError('');
     var uid = user.uid;
+    window._isDeletingAccount = true; // 防止 reauth 觸發的 onAuthStateChanged 重建 DB 資料
 
     // Step 1: Re-authenticate
     var reauth = isGoogleUser()
@@ -7624,13 +7625,21 @@ function MainApp(_ref16) {
       })
 
       // Step 4: 呼叫 Edge Function 刪除 auth.users 帳號
-      // 資料已在前面步驟清除，這裡真正刪除認證帳號，避免用戶用同一個 Google/Email 再次登入
+      // 關鍵時序：必須在 signOut() 前拿 token，signOut 後 token 就失效了
       .then(async function() {
+        // 4a. 先拿目前有效的 session token
+        var token = null;
         try {
-          var session = await _supabase.auth.getSession();
-          var token = session.data.session && session.data.session.access_token;
-          if (token) {
-            await fetch(
+          var sessionRes = await _supabase.auth.getSession();
+          token = sessionRes.data.session && sessionRes.data.session.access_token;
+        } catch(e) {
+          console.warn('[DeleteAccount] getSession failed:', e.message);
+        }
+
+        // 4b. 用有效 token 呼叫 Edge Function 刪除 auth.users
+        if (token) {
+          try {
+            var resp = await fetch(
               'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/delete-user',
               {
                 method: 'POST',
@@ -7640,11 +7649,22 @@ function MainApp(_ref16) {
                 }
               }
             );
+            if (!resp.ok) {
+              var errBody = await resp.text();
+              console.warn('[DeleteAccount] Edge Function returned error:', resp.status, errBody);
+            } else {
+              console.log('[DeleteAccount] auth.users deleted successfully');
+            }
+          } catch(e) {
+            console.warn('[DeleteAccount] Edge Function delete-user failed:', e.message);
           }
-        } catch(e) {
-          console.warn('[DeleteAccount] Edge Function delete-user failed:', e.message);
+        } else {
+          console.warn('[DeleteAccount] No valid token — skipping Edge Function call');
         }
+
+        // 4c. 最後才 signOut，清除 session
         auth._cachedUser = null;
+        window._isDeletingAccount = false;
         return _supabase.auth.signOut().then(function(r) {
           if (r && r.error) throw r.error;
         });
@@ -7652,6 +7672,7 @@ function MainApp(_ref16) {
 
       // Step 5: Done — signOut triggers onAuthStateChanged → onLogout() → redirect to login
       .catch(function(err) {
+        window._isDeletingAccount = false; // 出錯時清除 flag
         if (err && err.__handled) return; /* reauth error already handled */
         /* Show error to user */
         setDeleteStep(2);
@@ -8924,6 +8945,8 @@ function App() {
           return;
         }
         // Verified: update Firestore and sign in
+        // 刪除帳號流程中，reauth 會觸發 SIGNED_IN，此時跳過所有 DB 寫入避免競爭
+        if (window._isDeletingAccount) return;
         // Skip DB write for admin accounts — admins are not app users and
         // should not appear in the users table or the admin dashboard user count.
         var ADMIN_EMAILS_INDEX = ['andy19920818@gmail.com'];
