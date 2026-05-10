@@ -7623,11 +7623,27 @@ function MainApp(_ref16) {
           .forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
       })
 
-      // Step 4: Sign out — Supabase does not allow client-side account deletion.
-      // All user data has already been deleted from the DB above.
-      // Signing out clears the session; the auth account row in Supabase auth.users
-      // can be cleaned up via the Supabase dashboard or a server-side function if needed.
-      .then(function() {
+      // Step 4: 呼叫 Edge Function 刪除 auth.users 帳號
+      // 資料已在前面步驟清除，這裡真正刪除認證帳號，避免用戶用同一個 Google/Email 再次登入
+      .then(async function() {
+        try {
+          var session = await _supabase.auth.getSession();
+          var token = session.data.session && session.data.session.access_token;
+          if (token) {
+            await fetch(
+              'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/delete-user',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + token
+                }
+              }
+            );
+          }
+        } catch(e) {
+          console.warn('[DeleteAccount] Edge Function delete-user failed:', e.message);
+        }
         auth._cachedUser = null;
         return _supabase.auth.signOut().then(function(r) {
           if (r && r.error) throw r.error;
