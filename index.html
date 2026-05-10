@@ -7727,7 +7727,7 @@ function MainApp(_ref16) {
       var todayKey = currentDay;
       // Home bar: cumulative completion rate (supports custom intervalDays)
       var progPct = calcCompletionRate(habit);
-      var isQualified = (habit.streak || 0) >= 21 && progPct >= 95;
+      var isQualified = true; // qualification conditions temporarily removed for testing
       return /*#__PURE__*/React.createElement("div", {
         key: habit.id,
         className: "habit-card",
@@ -8836,9 +8836,7 @@ function BuddiesPage(_ref_buddies) {
     });
   }
 
-  var qualifiedHabits = habits.filter(function(h) {
-    return (h.streak || 0) >= 21 && calcCompletionRate(h) >= 95;
-  });
+  var qualifiedHabits = habits; // qualification conditions temporarily removed for testing
 
   return React.createElement("div", { className: "app-container" },
     React.createElement("div", { className: "buddies-header" },
@@ -8855,8 +8853,8 @@ function BuddiesPage(_ref_buddies) {
             React.createElement("div", { className: "buddies-empty-title" }, "No Buddies Yet"),
             React.createElement("div", { className: "buddies-empty-sub" },
               qualifiedHabits.length > 0
-                ? "You have " + qualifiedHabits.length + " qualified habit" + (qualifiedHabits.length > 1 ? 's' : '') + ". Tap '+ Find Partner' on any habit to get matched."
-                : "Keep a habit for 21+ days at 95%+ completion to unlock partner matching."
+                ? "You have " + qualifiedHabits.length + " habit" + (qualifiedHabits.length > 1 ? 's' : '') + ". Tap '+ Find Partner' on any habit to get matched."
+                : "Add a habit first to unlock partner matching."
             )
           )
         : React.createElement("div", null,
