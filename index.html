@@ -2230,12 +2230,26 @@ if (isFirebaseConfigured) {
         });
       },
       onSnapshot: function(cb, errCb) {
-        this.get().then(function(r) {
-          var snap = { docs: r.docs };
-          snap.forEach = function(fn) { snap.docs.forEach(fn); };
+        var self = this;
+        var _unsub = function(){};
+        self.get().then(function(r) {
+          var snap = { docs: r.docs, size: r.docs.length, empty: r.docs.length === 0, forEach: function(fn){ r.docs.forEach(fn); } };
           cb(snap);
+          // 加入 Realtime 訂閱，有變動時重新 get
+          var _rtReady = false;
+          var sub = _supabase.channel('rt:' + table + ':limited:' + Date.now())
+            .on('postgres_changes', { event: '*', schema: 'public', table: table }, function() {
+              if (!_rtReady) { _rtReady = true; return; }
+              self.get().then(function(r2) {
+                var snap2 = { docs: r2.docs, size: r2.docs.length, empty: r2.docs.length === 0, forEach: function(fn){ r2.docs.forEach(fn); } };
+                cb(snap2);
+              });
+            }).subscribe(function(status) {
+              if (status === 'SUBSCRIBED') _rtReady = true;
+            });
+          _unsub = function(){ _supabase.removeChannel(sub); };
         }).catch(function(e) { if(errCb) errCb(e); });
-        return function() {};
+        return function(){ _unsub(); };
       }
     };
   }
@@ -6465,15 +6479,14 @@ function MainApp(_ref16) {
     });
   }, [habits, archivedHabits, loading]);
   var deleteHabit = function deleteHabit(habitId) {
-    if (!isFirebaseConfigured) {
-      setHabits(function (prev) {
-        return prev.filter(function (h) {
-          return h.id !== habitId;
-        });
-      });
-    } else {
-      db.collection('habits').doc(habitId).delete();
-    }
+    // 先從本地 state 移除（optimistic update）
+    setHabits(function(prev) { return prev.filter(function(h) { return h.id !== habitId; }); });
+    if (!isFirebaseConfigured) return;
+    // temp- ID 表示尚未存進資料庫（insert 還在 pending），不需要刪除
+    if (!habitId || habitId.toString().startsWith('temp-')) return;
+    db.collection('habits').doc(habitId).delete().catch(function(err) {
+      console.error('[deleteHabit] failed:', err.message);
+    });
   };
   var countHabit = /*#__PURE__*/function () {
     var _ref21 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5(habitId, delta) {
