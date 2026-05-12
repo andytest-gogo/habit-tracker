@@ -3093,6 +3093,14 @@ function AuthPage(_ref2) {
     _useState8 = _slicedToArray(_useState7, 2),
     displayName = _useState8[0],
     setDisplayName = _useState8[1];
+  var _useStateAge1 = useState(''),
+    _useStateAge2 = _slicedToArray(_useStateAge1, 2),
+    ageInput = _useStateAge2[0],
+    setAgeInput = _useStateAge2[1];
+  var _useStateGender1 = useState(''),
+    _useStateGender2 = _slicedToArray(_useStateGender1, 2),
+    gender = _useStateGender2[0],
+    setGender = _useStateGender2[1];
   var _useState9 = useState(''),
     _useState0 = _slicedToArray(_useState9, 2),
     error = _useState0[0],
@@ -3367,6 +3375,24 @@ function AuthPage(_ref2) {
         }
 
         // 2. Final check username uniqueness via public `usernames` collection
+        // 年齡驗證（COPPA：13 歲以上）
+        var ageNum = parseInt(ageInput, 10);
+        if (!ageInput || isNaN(ageNum) || ageNum < 1 || ageNum > 120) {
+          setError('Please enter a valid age.');
+          setLoading(false);
+          return;
+        }
+        if (ageNum < 13) {
+          setError('You must be at least 13 years old to register (COPPA requirement).');
+          setLoading(false);
+          return;
+        }
+        if (!gender) {
+          setError('Please select your gender.');
+          setLoading(false);
+          return;
+        }
+
         var usernameKey = displayName.trim().toLowerCase().replace(/\s+/g, '_');
         var usernameDoc = await db.collection('usernames').doc(usernameKey).get();
         if (usernameDoc.exists) {
@@ -3421,7 +3447,9 @@ function AuthPage(_ref2) {
               data: {
                 full_name: displayName.trim(),
                 username_key: usernameKey,
-                signup_display_name: displayName.trim()
+                signup_display_name: displayName.trim(),
+                signup_age: ageNum,
+                signup_gender: gender
               }
             });
             if (_metaResult.error) console.warn('[signup] metadata save failed:', _metaResult.error.message);
@@ -3665,6 +3693,34 @@ function AuthPage(_ref2) {
   }), !isLogin && /*#__PURE__*/React.createElement("div", {
     style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 6, lineHeight: 1.6 }
   }, "Password must be at least 8 chars, with uppercase, lowercase, and a number")),
+  !isLogin && /*#__PURE__*/React.createElement("div", { className: "form-group", style: { display: 'flex', gap: 12 } },
+    /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+      /*#__PURE__*/React.createElement("label", { className: "form-label" }, "Age"),
+      /*#__PURE__*/React.createElement("input", {
+        type: "number",
+        className: "form-input",
+        value: ageInput,
+        onChange: function(e) { setAgeInput(e.target.value); },
+        placeholder: "e.g. 25",
+        min: "13",
+        max: "120",
+        style: { width: '100%' }
+      })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+      /*#__PURE__*/React.createElement("label", { className: "form-label" }, "Gender"),
+      /*#__PURE__*/React.createElement("select", {
+        className: "form-input",
+        value: gender,
+        onChange: function(e) { setGender(e.target.value); },
+        style: { width: '100%', cursor: 'pointer' }
+      },
+        /*#__PURE__*/React.createElement("option", { value: "" }, "Select..."),
+        /*#__PURE__*/React.createElement("option", { value: "male" }, "Male"),
+        /*#__PURE__*/React.createElement("option", { value: "female" }, "Female")
+      )
+    )
+  ),
   !isLogin && /*#__PURE__*/React.createElement("div", { className: "legal-checks-wrap" },
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
       /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkTerms" }),
@@ -7534,14 +7590,7 @@ function MainApp(_ref16) {
             });
             return b.commit();
           }).catch(function() {});
-        /* Also clean up liked_posts if exists */
-        db.collection('liked_posts').where('userId', '==', uid).get()
-          .then(function(snap) {
-            if (!snap || snap.empty) return;
-            var b = db.batch();
-            snap.docs.forEach(function(d) { b.delete(d.ref); });
-            return b.commit();
-          }).catch(function() {});
+        // liked_posts 表不存在，略過此清除步驟
       })
 
       // Step 2e-2: Remove this user's likes from OTHER people's posts
@@ -9049,8 +9098,12 @@ function App() {
           }
 
           // ── Step 3: Build users table write ───────────────────────────────────────
+          // 從 metadata 取得 age 和 gender（signup 時已存入）
+          var signupAge = smeta.signup_age ? parseInt(smeta.signup_age, 10) : null;
+          var signupGender = smeta.signup_gender || null;
+
           var updateDoc = {
-            uid: u.uid,
+            // uid 欄位不存在於 users 表，移除避免 400 錯誤
             email: u.email || '',
             displayName: resolvedDisplayName,
             displayName_lower: resolvedDisplayName.toLowerCase(),
@@ -9058,13 +9111,9 @@ function App() {
             emailVerified: true,
             lastSeen: FieldValue.serverTimestamp()
           };
-          if (ageConfirmedLocal && !existing.ageVerified) {
-            updateDoc.ageVerified = true;
-            updateDoc.ageVerifiedAt = FieldValue.serverTimestamp();
-          }
-          if (existing.ageVerified && !ageConfirmedLocal) {
-            localStorage.setItem('ht-age-confirmed', '1');
-          }
+          // 只在首次登入時寫入 age 和 gender（不覆蓋已存在的值）
+          if (signupAge && !existing.age) updateDoc.age = signupAge;
+          if (signupGender && !existing.gender) updateDoc.gender = signupGender;
 
           var writePromises = [
             db.collection('users').doc(u.uid).set(updateDoc, { merge: true })
