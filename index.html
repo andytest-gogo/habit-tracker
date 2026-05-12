@@ -7601,6 +7601,29 @@ function MainApp(_ref16) {
         }, Promise.resolve());
       })
 
+      // Step 2e-4: Delete pairs and match_requests
+      .then(function() {
+        // 刪除此用戶的所有配對紀錄（user_id 或 partner_id）
+        var delPairs = _supabase.from('pairs')
+          .delete()
+          .or('user_id.eq.' + uid + ',partner_id.eq.' + uid)
+          .then(function(r) { if(r.error) console.warn('[DeleteAccount] pairs delete error:', r.error.message); })
+          .catch(function() {});
+        // 刪除此用戶的所有配對請求
+        var delRequests = _supabase.from('match_requests')
+          .delete()
+          .eq('user_id', uid)
+          .then(function(r) { if(r.error) console.warn('[DeleteAccount] match_requests delete error:', r.error.message); })
+          .catch(function() {});
+        // 刪除 subscriptions
+        var delSubs = _supabase.from('subscriptions')
+          .delete()
+          .eq('user_id', uid)
+          .then(function(r) { if(r.error) console.warn('[DeleteAccount] subscriptions delete error:', r.error.message); })
+          .catch(function() {});
+        return Promise.all([delPairs, delRequests, delSubs]);
+      })
+
       // Step 2f: Delete username reservation
       .then(function() {
         return db.collection('users').doc(uid).get()
