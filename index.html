@@ -3440,6 +3440,8 @@ function AuthPage(_ref2) {
             localStorage.setItem('ht-pending-username-key', usernameKey);
             localStorage.setItem('ht-pending-uid', _r.user && _r.user.uid ? _r.user.uid : '');
             localStorage.setItem('ht-pending-email', email.trim().toLowerCase());
+            localStorage.setItem('ht-pending-age', String(ageNum));
+            localStorage.setItem('ht-pending-gender', gender);
           } catch(lsErr) { /* ignore */ }
 
           try {
@@ -9050,13 +9052,18 @@ function App() {
           //   4. email prefix (last resort — never show full email as a username)
           var _lsPendingName = '';
           var _lsPendingKey = '';
+          var _lsPendingAge = null;
+          var _lsPendingGender = null;
           try {
             // localStorage backup: stored by email so uid mismatch after re-login doesn't matter
             var _lsEmail = localStorage.getItem('ht-pending-email');
             if (_lsEmail && _lsEmail.toLowerCase() === (u.email || '').toLowerCase()) {
-              _lsPendingName = localStorage.getItem('ht-pending-display-name') || '';
-              _lsPendingKey  = localStorage.getItem('ht-pending-username-key') || '';
-              console.log('[auth] Recovered from localStorage backup — name:', _lsPendingName, 'key:', _lsPendingKey);
+              _lsPendingName   = localStorage.getItem('ht-pending-display-name') || '';
+              _lsPendingKey    = localStorage.getItem('ht-pending-username-key') || '';
+              var _lsAge       = localStorage.getItem('ht-pending-age');
+              _lsPendingAge    = _lsAge ? parseInt(_lsAge, 10) : null;
+              _lsPendingGender = localStorage.getItem('ht-pending-gender') || null;
+              console.log('[auth] Recovered from localStorage backup — name:', _lsPendingName, 'age:', _lsPendingAge, 'gender:', _lsPendingGender);
             }
           } catch(e) {}
 
@@ -9069,6 +9076,8 @@ function App() {
             localStorage.removeItem('ht-pending-username-key');
             localStorage.removeItem('ht-pending-uid');
             localStorage.removeItem('ht-pending-email');
+            localStorage.removeItem('ht-pending-age');
+            localStorage.removeItem('ht-pending-gender');
           } catch(e) {}
 
           // Resolve final displayName — repair if it looks like an email
@@ -9088,19 +9097,22 @@ function App() {
 
           // ── Step 2: Repair Supabase metadata if missing ────────────────────────────
           if (!smeta.signup_display_name && resolvedDisplayName) {
-            _supabase.auth.updateUser({ data: {
+            var _repairData = {
               signup_display_name: resolvedDisplayName,
               full_name: resolvedDisplayName,
               username_key: usernameKey || resolvedDisplayName.toLowerCase().replace(/\s+/g, '_')
-            }}).then(function(r2) {
-              if (!r2.error) console.log('[auth] Auto-repaired metadata — name:', resolvedDisplayName);
+            };
+            if (signupAge) _repairData.signup_age = signupAge;
+            if (signupGender) _repairData.signup_gender = signupGender;
+            _supabase.auth.updateUser({ data: _repairData }).then(function(r2) {
+              if (!r2.error) console.log('[auth] Auto-repaired metadata — name:', resolvedDisplayName, 'age:', signupAge, 'gender:', signupGender);
             }).catch(function(e) { console.warn('[auth] metadata repair failed:', e.message); });
           }
 
           // ── Step 3: Build users table write ───────────────────────────────────────
           // 從 metadata 取得 age 和 gender（signup 時已存入）
-          var signupAge = smeta.signup_age ? parseInt(smeta.signup_age, 10) : null;
-          var signupGender = smeta.signup_gender || null;
+          var signupAge = smeta.signup_age ? parseInt(smeta.signup_age, 10) : (_lsPendingAge || null);
+          var signupGender = smeta.signup_gender || _lsPendingGender || null;
 
           var updateDoc = {
             // uid 欄位不存在於 users 表，移除避免 400 錯誤
