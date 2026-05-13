@@ -379,12 +379,14 @@
         /* ── AI MATCHING MODAL ── */
         .matching-overlay {
             position:fixed; inset:0; background:rgba(0,0,0,.85);
-            z-index:2000; display:flex; align-items:flex-end;
-            justify-content:center;
+            z-index:2000; display:flex; align-items:flex-start;
+            justify-content:center; overflow-y:auto;
+            -webkit-overflow-scrolling:touch;
         }
         .matching-sheet {
             background:#0a0a0a; width:100%; max-width:480px;
-            min-height:70vh; padding:0; overflow:hidden;
+            min-height:100vh; padding:0; overflow:visible;
+            margin-top:0;
         }
         .matching-top {
             padding:20px 20px 16px; border-bottom:1px solid #1a1a1a;
@@ -1207,9 +1209,9 @@
 <!-- HIDDEN FILE INPUTS for iOS PWA compatibility.
      These are referenced by <label htmlFor="..."> on the Photo/Video/Avatar buttons.
      iOS treats a label tap as a direct user interaction — 100% reliable, no JS needed. -->
-<input id="_mpi_image"  type="file" accept="image/*" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;pointer-events:none;">
-<input id="_mpi_video"  type="file" accept="video/*" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;pointer-events:none;">
-<input id="_mpi_avatar" type="file" accept="image/*" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;pointer-events:none;">
+<input id="_mpi_image"  type="file" accept="image/*" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;">
+<input id="_mpi_video"  type="file" accept="video/*,video/mp4,video/quicktime" capture="environment" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;">
+<input id="_mpi_avatar" type="file" accept="image/*" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;">
 <script>
 (function() {
   window._mediaPickerCallbacks = { image: null, video: null, avatar: null };
@@ -6077,10 +6079,16 @@ function MainApp(_ref16) {
     showAllComments = _useStateAllCommentsArr[0],
     setShowAllComments = _useStateAllCommentsArr[1];
   var _useState71 = useState(function () {
-      // Pre-load from cache so user sees content instantly while Firestore syncs
+      // Pre-load from cache ONLY if fresh (< 30s old) — prevents stale PWA cache from showing
+      // deleted habits or out-of-sync data across devices
       try {
-        var cached = localStorage.getItem("habits_".concat(user === null || user === void 0 ? void 0 : user.uid));
-        return cached ? JSON.parse(cached) : [];
+        var uid = user === null || user === void 0 ? void 0 : user.uid;
+        var cached = localStorage.getItem("habits_".concat(uid));
+        var ts = parseInt(localStorage.getItem("habits_ts_".concat(uid)) || '0', 10);
+        var age = Date.now() - ts;
+        // Only use cache if it was written in the last 30 seconds (same session)
+        if (cached && age < 30000) return JSON.parse(cached);
+        return [];
       } catch (e) {
         return [];
       }
@@ -6096,15 +6104,7 @@ function MainApp(_ref16) {
     _useState76 = _slicedToArray(_useState75, 2),
     percentile = _useState76[0],
     setPercentile = _useState76[1];
-  var _useState77 = useState(function () {
-      // Pre-check localStorage to show cached content immediately if available
-      try {
-        var cached = localStorage.getItem("habits_".concat(user === null || user === void 0 ? void 0 : user.uid));
-        return !cached; // If cache exists, don't show loading
-      } catch (e) {
-        return true;
-      }
-    }),
+  var _useState77 = useState(true),
     _useState78 = _slicedToArray(_useState77, 2),
     loading = _useState78[0],
     setLoading = _useState78[1];
@@ -6315,9 +6315,18 @@ function MainApp(_ref16) {
       });
       setHabits(list);
       setLoading(false);
-      // Cache to localStorage for instant next load
+      // Cache to localStorage with timestamp — used to detect stale cache on next load
       try {
-        localStorage.setItem("habits_".concat(user.uid), JSON.stringify(list));
+        var _cacheKey = "habits_".concat(user.uid);
+        var _cacheJson = JSON.stringify(list);
+        localStorage.setItem(_cacheKey, _cacheJson);
+        localStorage.setItem("habits_ts_".concat(user.uid), String(Date.now()));
+        // Broadcast to other PWA windows/tabs so they re-sync immediately
+        try {
+          var _bc = new BroadcastChannel('ht_habits_sync');
+          _bc.postMessage({ type: 'habits_updated', uid: user.uid, data: _cacheJson, ts: Date.now() });
+          _bc.close();
+        } catch(e) {}
       } catch (e) {}
     }, function (err) {
       console.error('Firestore error:', err);
@@ -6346,6 +6355,7 @@ function MainApp(_ref16) {
   useEffect(function () {
     if (!isFirebaseConfigured && habits.length >= 0) {
       localStorage.setItem("habits_".concat(user.uid), JSON.stringify(habits));
+      localStorage.setItem("habits_ts_".concat(user.uid), String(Date.now()));
     }
   }, [habits, user]);
   useEffect(function () {
@@ -6353,6 +6363,29 @@ function MainApp(_ref16) {
       localStorage.setItem("archived_habits_".concat(user.uid), JSON.stringify(archivedHabits));
     }
   }, [archivedHabits, user]);
+
+  // ── BroadcastChannel: 接收來自其他 PWA 視窗的習慣同步通知 ──
+  // 當手機刪除/新增習慣後，電腦的 PWA 視窗會立即收到更新，不需重整
+  useEffect(function () {
+    if (!user || !user.uid) return;
+    var _bc2 = null;
+    try {
+      _bc2 = new BroadcastChannel('ht_habits_sync');
+      _bc2.onmessage = function(event) {
+        var msg = event.data;
+        if (msg && msg.type === 'habits_updated' && msg.uid === user.uid && msg.data) {
+          try {
+            var updated = JSON.parse(msg.data);
+            setHabits(updated);
+            localStorage.setItem("habits_".concat(user.uid), msg.data);
+            localStorage.setItem("habits_ts_".concat(user.uid), String(msg.ts || Date.now()));
+            console.log('[BroadcastChannel] Habits synced from another window, count:', updated.length);
+          } catch(e) {}
+        }
+      };
+    } catch(e) {}
+    return function() { try { if (_bc2) _bc2.close(); } catch(e) {} };
+  }, [user]);
 
   // Auto-detect midnight rollover: schedule re-render at next 00:00
   var _useState93 = useState(toISODay()),
@@ -6908,8 +6941,7 @@ function MainApp(_ref16) {
     _useState106 = _slicedToArray(_useState105, 2),
     avatarUrl = _useState106[0],
     setAvatarUrl = _useState106[1];
-  // On mount: sync avatar from Firestore so admin dashboard stays in sync
-  // even when the user hasn't re-uploaded their avatar in this session.
+  // On mount: sync avatar from Firestore — always fetch fresh to avoid PWA cache staleness
   useEffect(function () {
     if (!user || !user.uid || typeof db === 'undefined') return;
     db.collection('users').doc(user.uid).get().then(function (docSnap) {
@@ -6918,8 +6950,26 @@ function MainApp(_ref16) {
       if (fsPhotoURL) {
         localStorage.setItem("avatar_".concat(user.uid), fsPhotoURL);
         setAvatarUrl(fsPhotoURL);
+        // Sync to auth cache as well
+        if (auth._cachedUser) auth._cachedUser.photoURL = fsPhotoURL;
       }
     }).catch(function () {});
+
+    // Listen for avatar updates broadcast from other PWA windows/tabs
+    var _avatarBc2 = null;
+    try {
+      _avatarBc2 = new BroadcastChannel('ht_avatar_sync');
+      _avatarBc2.onmessage = function(event) {
+        var msg = event.data;
+        if (msg && msg.type === 'avatar_updated' && msg.uid === user.uid && msg.url) {
+          setAvatarUrl(msg.url);
+          localStorage.setItem("avatar_".concat(user.uid), msg.url);
+          if (auth._cachedUser) auth._cachedUser.photoURL = msg.url;
+          console.log('[BroadcastChannel] Avatar synced from another window');
+        }
+      };
+    } catch(e) {}
+    return function() { try { if (_avatarBc2) _avatarBc2.close(); } catch(e) {} };
   }, [user]);
   var _useState107 = useState(false),
     _useState108 = _slicedToArray(_useState107, 2),
@@ -7212,6 +7262,13 @@ function MainApp(_ref16) {
             localStorage.setItem("avatar_".concat(user === null || user === void 0 ? void 0 : user.uid), result.url);
             // Sync _cachedUser.photoURL so auth.currentUser.photoURL is always up to date
             if (auth._cachedUser) auth._cachedUser.photoURL = result.url;
+            // Broadcast new avatar URL to all other PWA windows/tabs so they update instantly
+            // without needing a page refresh (fixes PWA cross-device avatar delay)
+            try {
+              var _avatarBc = new BroadcastChannel('ht_avatar_sync');
+              _avatarBc.postMessage({ type: 'avatar_updated', uid: user.uid, url: result.url, ts: Date.now() });
+              _avatarBc.close();
+            } catch(e) {}
             // Sync photoURL + avatarPublicId to Firestore (admin dashboard reads from here)
             if (user && user.uid && typeof db !== 'undefined') {
               var avatarUpdate = { photoURL: result.url };
@@ -9055,18 +9112,37 @@ function App() {
           var existing = docSnap.exists ? docSnap.data() : {};
           var photoURL = existing.photoURL || u.photoURL || '';
           var ageConfirmedLocal = !!localStorage.getItem('ht-age-confirmed');
-          var smeta = (sr.data && sr.data.session && sr.data.session.user && sr.data.session.user.user_metadata) || {};
-
           // ── Step 1: Recover displayName & usernameKey ──────────────────────────────
           // Priority order:
-          //   1. metadata written at signup (most reliable when it worked)
+          //   1. fresh getUser() metadata (最可靠 — 繞過 session cache，直接從 Supabase 拿最新值)
           //   2. localStorage backup (reliable fallback — survives signOut between signup & verify)
           //   3. existing DB displayName (for returning users)
           //   4. email prefix (last resort — never show full email as a username)
+
+          // 先宣告所有變數，避免 used-before-declaration 問題
+          var signupAge = null;
+          var signupGender = null;
           var _lsPendingName = '';
           var _lsPendingKey = '';
           var _lsPendingAge = null;
           var _lsPendingGender = null;
+
+          // 直接呼叫 getUser() 取得最新 metadata，不依賴 session cache
+          // session 在 email 驗證後第一次登入時 user_metadata 可能尚未同步
+          var freshMeta = {};
+          try {
+            var freshUserRes = await _supabase.auth.getUser();
+            freshMeta = (freshUserRes.data && freshUserRes.data.user && freshUserRes.data.user.user_metadata) || {};
+          } catch(e) { console.warn('[auth] getUser() failed:', e.message); }
+
+          // session metadata 作為備援
+          var smeta = (sr.data && sr.data.session && sr.data.session.user && sr.data.session.user.user_metadata) || {};
+
+          // 合併：優先用 freshMeta，再 fallback 到 smeta
+          var meta = {};
+          Object.keys(smeta).forEach(function(k) { meta[k] = smeta[k]; });
+          Object.keys(freshMeta).forEach(function(k) { meta[k] = freshMeta[k]; });
+
           try {
             // localStorage backup: stored by email so uid mismatch after re-login doesn't matter
             var _lsEmail = localStorage.getItem('ht-pending-email');
@@ -9080,8 +9156,12 @@ function App() {
             }
           } catch(e) {}
 
-          var signupDisplayName = smeta.signup_display_name || smeta.full_name || _lsPendingName || '';
-          var usernameKey = smeta.username_key || _lsPendingKey || '';
+          var signupDisplayName = meta.signup_display_name || meta.full_name || _lsPendingName || '';
+          var usernameKey = meta.username_key || _lsPendingKey || '';
+
+          // 安全地賦值 signupAge / signupGender（已在頂部宣告）
+          signupAge    = meta.signup_age ? parseInt(meta.signup_age, 10) : (_lsPendingAge || null);
+          signupGender = meta.signup_gender || _lsPendingGender || null;
 
           // Clear localStorage backup after reading
           try {
@@ -9109,7 +9189,7 @@ function App() {
           }
 
           // ── Step 2: Repair Supabase metadata if missing ────────────────────────────
-          if (!smeta.signup_display_name && resolvedDisplayName) {
+          if (!meta.signup_display_name && resolvedDisplayName) {
             var _repairData = {
               signup_display_name: resolvedDisplayName,
               full_name: resolvedDisplayName,
@@ -9123,9 +9203,6 @@ function App() {
           }
 
           // ── Step 3: Build users table write ───────────────────────────────────────
-          // 從 metadata 取得 age 和 gender（signup 時已存入）
-          var signupAge = smeta.signup_age ? parseInt(smeta.signup_age, 10) : (_lsPendingAge || null);
-          var signupGender = smeta.signup_gender || _lsPendingGender || null;
 
           var updateDoc = {
             // uid 欄位不存在於 users 表，移除避免 400 錯誤
