@@ -9106,7 +9106,7 @@ function App() {
         Promise.all([
           db.collection('users').doc(u.uid).get(),
           _supabase.auth.getSession()
-        ]).then(function(results) {
+        ]).then(async function(results) {
           var docSnap = results[0];
           var sr      = results[1];
           var existing = docSnap.exists ? docSnap.data() : {};
