@@ -4,12 +4,17 @@
   "short_name": "HabitTracker",
   "description": "Build better habits, track your streaks, and grow together with a community.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "lang": "en",
-  "categories": ["health", "fitness", "lifestyle"],
+  "dir": "ltr",
+  "categories": ["health", "fitness", "lifestyle", "social"],
+  "iarc_rating_id": "",
+  "prefer_related_applications": false,
   "icons": [
     { "src": "icons/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "maskable any" },
     { "src": "icons/icon-96x96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "maskable any" },
@@ -27,6 +32,22 @@
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Habit Tracker Pro — Home Screen"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Habits",
+      "short_name": "Habits",
+      "description": "View and check in your habits",
+      "url": "./index.html#home",
+      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Community Feed",
+      "short_name": "Feed",
+      "description": "See what the community is up to",
+      "url": "./index.html#feed",
+      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
     }
   ]
 }
