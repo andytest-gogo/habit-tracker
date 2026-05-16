@@ -6525,6 +6525,12 @@ function MainApp(_ref16) {
     return function() { try { if (_bc2) _bc2.close(); } catch(e) {} };
   }, [user]);
 
+  // PTR refreshing state
+  var _useStatePTR = useState(false),
+    _useStatePTRa = _slicedToArray(_useStatePTR, 2),
+    isPtrRefreshing = _useStatePTRa[0],
+    setIsPtrRefreshing = _useStatePTRa[1];
+
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
   // 用於 visibilitychange 回前台、pull-to-refresh 觸發
   var fetchHabitsNow = React.useCallback(function() {
