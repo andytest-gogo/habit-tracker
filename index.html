@@ -96,6 +96,7 @@
             color: var(--black);
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
+            overscroll-behavior-y: auto;
         }
         .app-container {
             max-width: 480px;
@@ -307,35 +308,34 @@
         /* ── CONTENT ── */
         .content { padding:20px; padding-bottom:140px; }
         /* Pull-to-refresh indicator */
-        /* Pull-to-refresh indicator — works even when JS/React is dead */
         #_ptr_indicator {
             position: fixed;
             top: 0; left: 50%;
-            transform: translateX(-50%) translateY(-60px);
+            transform: translateX(-50%) translateY(-64px);
             z-index: 10000;
             background: #ffffff;
             color: #000;
-            border-radius: 0 0 20px 20px;
-            padding: 10px 20px 8px;
-            font-size: 12px;
+            border-radius: 0 0 24px 24px;
+            padding: 12px 24px 10px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: .3px;
-            font-family: sans-serif;
+            font-family: -apple-system, sans-serif;
             white-space: nowrap;
             display: flex;
             align-items: center;
-            gap: 8px;
-            min-width: 140px;
+            gap: 10px;
+            min-width: 160px;
             justify-content: center;
             pointer-events: none;
-            transition: transform .22s cubic-bezier(.4,0,.2,1);
-            box-shadow: 0 2px 16px rgba(0,0,0,.18);
+            transition: transform .25s cubic-bezier(.4,0,.2,1);
+            box-shadow: 0 4px 20px rgba(0,0,0,.2);
         }
         #_ptr_indicator.visible {
             transform: translateX(-50%) translateY(0);
         }
         #_ptr_indicator .ptr-spinner {
-            width: 16px; height: 16px;
+            width: 18px; height: 18px;
             border: 2.5px solid #e0e0e0;
             border-top-color: #000;
             border-radius: 50%;
@@ -348,7 +348,7 @@
         }
         @keyframes _ptrSpin {
             from { transform: rotate(0deg); }
-            to   { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
 
         /* ── TAB BAR ── */
@@ -1248,70 +1248,70 @@
 <body>
 <!-- ── EU Accessibility Act: Skip Navigation Link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-<div id="_ptr_indicator" aria-live="polite" aria-label="Refreshing"><div class="ptr-spinner"></div><span id="_ptr_text">Pull to refresh</span></div>
+<div id="_ptr_indicator"><div class="ptr-spinner"></div><span id="_ptr_text">Pull to refresh</span></div>
 <div id="main-content" role="main"></div>
-
-<!-- Native pull-to-refresh: pure DOM touch handler, no React/SW dependency.
-     Works on white screen. Clears SW caches then hard-reloads. -->
 <script>
+/* ── Native pull-to-refresh ──────────────────────────────────────────
+   Runs before React. Works on white screen. Down-swipe from top of
+   page → shows indicator → clears all SW caches → hard reloads.
+   Uses passive touch listeners (required for iOS Safari).
+──────────────────────────────────────────────────────────────────── */
 (function(){
-    var ind = document.getElementById('_ptr_indicator');
-    var txt = document.getElementById('_ptr_text');
-    var startY = 0, pulling = false, triggered = false;
-    var THR = 80;
+  var ind = document.getElementById('_ptr_indicator');
+  var txt = document.getElementById('_ptr_text');
+  var sy = 0, sx = 0, pulling = false, fired = false;
+  var THR = 72;
 
-    function upd(dy) {
-        if (!ind) return;
-        var ratio = Math.min(dy / THR, 1);
-        ind.style.transform = 'translateX(-50%) translateY(' + (ratio * -60 + 60 * ratio * ratio) + 'px)';
-        ind.classList.toggle('visible', dy > 8);
-        if (txt) txt.textContent = dy >= THR ? 'Release to refresh' : 'Pull to refresh';
+  function move(dy) {
+    if (!ind) return;
+    ind.style.transform = 'translateX(-50%) translateY(' + (Math.min(dy/THR,1)*64-64) + 'px)';
+    ind.classList.add('visible');
+    if (txt) txt.textContent = dy >= THR ? 'Release to refresh' : 'Pull to refresh';
+  }
+  function reset() {
+    if (!ind) return;
+    ind.classList.remove('visible','refreshing');
+    ind.style.transform = '';
+    if (txt) txt.textContent = 'Pull to refresh';
+  }
+  function go() {
+    if (ind) {
+      ind.classList.add('visible','refreshing');
+      ind.style.transform = 'translateX(-50%) translateY(0)';
+      if (txt) txt.textContent = 'Refreshing…';
     }
-    function hide() {
-        if (!ind) return;
-        ind.classList.remove('visible','refreshing');
-        ind.style.transform = '';
-        if (txt) txt.textContent = 'Pull to refresh';
-    }
-    function doRefresh() {
-        if (ind) {
-            ind.classList.add('visible','refreshing');
-            ind.style.transform = 'translateX(-50%) translateY(0)';
-            if (txt) txt.textContent = 'Refreshing…';
-        }
-        setTimeout(function(){
-            if ('caches' in window) {
-                caches.keys().then(function(ks){
-                    Promise.all(ks.map(function(k){return caches.delete(k);}))
-                        .then(function(){ window.location.reload(true); })
-                        .catch(function(){ window.location.reload(true); });
-                }).catch(function(){ window.location.reload(true); });
-            } else { window.location.reload(true); }
-        }, 500);
-    }
+    setTimeout(function(){
+      if ('caches' in window) {
+        caches.keys().then(function(ks){
+          Promise.all(ks.map(function(k){ return caches.delete(k); }))
+            .then(function(){ window.location.href = window.location.pathname+'?r='+Date.now(); })
+            .catch(function(){ window.location.reload(true); });
+        }).catch(function(){ window.location.reload(true); });
+      } else { window.location.reload(true); }
+    }, 500);
+  }
 
-    document.addEventListener('touchstart', function(e){
-        if (window.scrollY > 0) return;
-        startY = e.touches[0].clientY;
-        pulling = true; triggered = false;
-    }, {passive:true});
-    document.addEventListener('touchmove', function(e){
-        if (!pulling) return;
-        var dy = e.touches[0].clientY - startY;
-        if (dy > 0 && window.scrollY === 0) {
-            upd(dy);
-            if (dy >= THR) triggered = true;
-        }
-    }, {passive:true});
-    document.addEventListener('touchend', function(){
-        if (!pulling) return;
-        pulling = false;
-        if (triggered) { doRefresh(); } else { hide(); }
-        startY = 0;
-    }, {passive:true});
-    document.addEventListener('touchcancel', function(){
-        pulling = false; triggered = false; hide();
-    }, {passive:true});
+  document.addEventListener('touchstart', function(e){
+    if (window.scrollY > 2) return;
+    sy = e.touches[0].clientY; sx = e.touches[0].clientX;
+    pulling = true; fired = false;
+  },{passive:true});
+  document.addEventListener('touchmove', function(e){
+    if (!pulling) return;
+    var dy = e.touches[0].clientY - sy;
+    var dx = Math.abs(e.touches[0].clientX - sx);
+    if (dx > dy*0.8) { pulling=false; reset(); return; }
+    if (dy > 4 && window.scrollY === 0) { move(dy); if (dy>=THR) fired=true; }
+  },{passive:true});
+  document.addEventListener('touchend', function(){
+    if (!pulling) return;
+    pulling = false;
+    if (fired) { go(); } else { reset(); }
+    sy=0; sx=0; fired=false;
+  },{passive:true});
+  document.addEventListener('touchcancel', function(){
+    pulling=false; fired=false; sy=0; sx=0; reset();
+  },{passive:true});
 })();
 </script>
 
@@ -9555,82 +9555,44 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
 (function() {
     /* 1. Register Service Worker */
     if ('serviceWorker' in navigator) {
-
-        // ── SW registration + instant update takeover ──
-        // Uses skipWaiting so new SW activates immediately without waiting for tabs to close.
-        // controllerchange fires after new SW takes over → reload once to get fresh HTML.
-        var _swRefreshing = false;
-
-        // Guard: only allow one auto-reload per session to prevent reload loops
-        // If we just did a SW-triggered reload, don't do it again immediately
-        var _swReloadKey = '_ht_sw_reload';
-        var _justReloaded = sessionStorage.getItem(_swReloadKey);
-        if (_justReloaded) sessionStorage.removeItem(_swReloadKey);
+        var _swDone = false;
+        var _swPrev = sessionStorage.getItem('_sw_r');
+        if (_swPrev) sessionStorage.removeItem('_sw_r');
 
         window.addEventListener('load', function() {
             navigator.serviceWorker.register('./sw.js')
                 .then(function(reg) {
-                    console.log('[PWA] SW registered');
                     _swReg = reg;
                     if (Notification.permission === 'granted') scheduleDailyReminder(reg);
+                    setInterval(function(){ reg.update(); }, 30000);
 
-                    // Check for updates every 30s
-                    setInterval(function() { reg.update(); }, 30000);
-
-                    function activateWaiting(worker) {
-                        worker.postMessage({ type: 'SKIP_WAITING' });
-                    }
-
-                    // New SW already waiting (e.g. user had app open while update deployed)
-                    if (reg.waiting) activateWaiting(reg.waiting);
-
-                    // New SW found during this session
-                    reg.addEventListener('updatefound', function() {
+                    function wake(w){ w.postMessage({ type: 'SKIP_WAITING' }); }
+                    if (reg.waiting) wake(reg.waiting);
+                    reg.addEventListener('updatefound', function(){
                         var w = reg.installing;
                         if (!w) return;
-                        w.addEventListener('statechange', function() {
-                            if (w.state === 'installed' && navigator.serviceWorker.controller) {
-                                activateWaiting(w);
-                            }
+                        w.addEventListener('statechange', function(){
+                            if (w.state === 'installed' && navigator.serviceWorker.controller) wake(w);
                         });
                     });
-
-                    // SW took over all clients — reload once to get fresh assets
-                    navigator.serviceWorker.addEventListener('controllerchange', function() {
-                        if (_swRefreshing || _justReloaded) return;
-                        _swRefreshing = true;
-                        sessionStorage.setItem(_swReloadKey, '1');
-                        console.log('[PWA] New SW active — reloading');
+                    // Reload once when new SW takes over (prevents loop with _swPrev guard)
+                    navigator.serviceWorker.addEventListener('controllerchange', function(){
+                        if (_swDone || _swPrev) return;
+                        _swDone = true;
+                        sessionStorage.setItem('_sw_r','1');
                         window.location.reload();
                     });
-
-                    // Message from SW (e.g. SW_ACTIVATED broadcast)
-                    navigator.serviceWorker.addEventListener('message', function(ev) {
-                        if (ev.data && ev.data.type === 'SW_ACTIVATED' && !_swRefreshing && !_justReloaded) {
-                            _swRefreshing = true;
-                            sessionStorage.setItem(_swReloadKey, '1');
-                            window.location.reload();
-                        }
-                    });
                 })
-                .catch(function(err) {
-                    console.warn('[PWA] SW registration failed:', err);
-                });
+                .catch(function(e){ console.warn('[SW]', e); });
         });
 
-        // ── Return-from-background blank screen recovery ──
-        // iOS can kill the SW while app is in background; on resume the app may be blank.
-        // Pull-to-refresh (already implemented) will also fix this, but this is a safety net.
-        document.addEventListener('visibilitychange', function() {
+        // Return-from-background: reload if app is blank
+        document.addEventListener('visibilitychange', function(){
             if (document.visibilityState !== 'visible') return;
-            // Small delay to let React re-render after resume before checking
-            setTimeout(function() {
+            setTimeout(function(){
                 var mc = document.getElementById('main-content');
-                if (mc && mc.children.length === 0) {
-                    console.warn('[PWA] Blank on resume — reloading');
-                    window.location.reload();
-                }
-            }, 800);
+                if (mc && mc.children.length === 0) window.location.reload();
+            }, 1000);
         });
     }
 
