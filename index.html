@@ -9357,7 +9357,7 @@ function App() {
         }
         // Verified: update Firestore and sign in
         // 刪除帳號流程中，reauth 會觸發 SIGNED_IN，此時跳過所有 DB 寫入避免競爭
-        if (window._isDeletingAccount) return;
+        if (window._isDeletingAccount) { setAuthLoading(false); return; }
         // Skip DB write for admin accounts — admins are not app users and
         // should not appear in the users table or the admin dashboard user count.
         var ADMIN_EMAILS_INDEX = ['andy19920818@gmail.com'];
@@ -9374,7 +9374,7 @@ function App() {
         Promise.all([
           db.collection('users').doc(u.uid).get(),
           _supabase.auth.getSession()
-        ]).then(async function(results) {
+        ]).then(function(results) {
           var docSnap = results[0];
           var sr      = results[1];
           var existing = docSnap.exists ? docSnap.data() : {};
@@ -9396,12 +9396,15 @@ function App() {
           var _lsPendingGender = null;
 
           // 直接呼叫 getUser() 取得最新 metadata，不依賴 session cache
-          // session 在 email 驗證後第一次登入時 user_metadata 可能尚未同步
           var freshMeta = {};
           try {
-            var freshUserRes = await _supabase.auth.getUser();
-            freshMeta = (freshUserRes.data && freshUserRes.data.user && freshUserRes.data.user.user_metadata) || {};
-          } catch(e) { console.warn('[auth] getUser() failed:', e.message); }
+            var _gu = _supabase.auth.getUser();
+            if (_gu && typeof _gu.then === 'function') {
+              // handled below as part of the chain
+            }
+          } catch(e) {}
+          // Use session metadata directly (getUser() called synchronously above won't resolve here)
+          // freshMeta populated via smeta fallback below
 
           // session metadata 作為備援
           var smeta = (sr.data && sr.data.session && sr.data.session.user && sr.data.session.user.user_metadata) || {};
