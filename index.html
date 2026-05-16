@@ -9556,6 +9556,18 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
                         console.log('[PWA] L2: controller changed — reloading');
                         window.location.reload();
                     });
+
+                    // Listen for SW_ACTIVATED message from new SW
+                    // This fires when a new SW takes over and notifies all clients
+                    navigator.serviceWorker.addEventListener('message', function(event) {
+                        if (event.data && event.data.type === 'SW_ACTIVATED') {
+                            console.log('[PWA] L2: SW_ACTIVATED received — reloading for fresh content');
+                            if (!refreshing) {
+                                refreshing = true;
+                                window.location.reload();
+                            }
+                        }
+                    });
                 })
                 .catch(function(err) {
                     console.warn('[PWA] SW failed:', err);

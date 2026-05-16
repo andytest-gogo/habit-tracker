@@ -1,106 +1,73 @@
-// ── Cache version: bump this string whenever you deploy a new build ──
-// Format: 'healthy-habits-vYYYYMMDD-N' (date + deploy number)
-const CACHE_VERSION = 'healthy-habits-v20250516-1';
+// ── 每次部署改這個 ──
+const CACHE_VERSION = 'ht-v20250516-3';
 
-// Static assets to pre-cache on install (never changes between deploys)
-const STATIC_ASSETS = [
-  '/manifest.json',
-];
+// SW 啟動後，通知所有已開啟的 client 重新整理
+function notifyClientsToReload() {
+  self.clients.matchAll({ type: 'window' }).then(clients => {
+    clients.forEach(client => {
+      client.postMessage({ type: 'SW_ACTIVATED', version: CACHE_VERSION });
+    });
+  });
+}
 
-// ── Install: pre-cache static assets only ──
-// Do NOT cache index.html here — always fetch it fresh from network
 self.addEventListener('install', event => {
-  console.log('[SW] Installing', CACHE_VERSION);
+  console.log('[SW] install', CACHE_VERSION);
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => {
-        // Take over immediately without waiting for old SW to be released
-        return self.skipWaiting();
-      })
+      .then(c => c.addAll(['/manifest.json']))
+      .then(() => self.skipWaiting())
   );
 });
 
-// ── Activate: delete all old caches ──
 self.addEventListener('activate', event => {
-  console.log('[SW] Activating', CACHE_VERSION);
+  console.log('[SW] activate', CACHE_VERSION);
   event.waitUntil(
-    caches.keys().then(cacheNames =>
-      Promise.all(
-        cacheNames
-          .filter(name => name !== CACHE_VERSION)
-          .map(name => {
-            console.log('[SW] Deleting old cache:', name);
-            return caches.delete(name);
-          })
-      )
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
+      .then(() => notifyClientsToReload())
   );
 });
 
-// ── Fetch: different strategies for different request types ──
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // 1. Cross-origin requests (Supabase, APIs, CDNs) → always network, no cache
-  if (url.origin !== self.location.origin) {
-    return; // Let browser handle normally
-  }
-
-  // 2. HTML pages (index.html, /) → Network-first, fallback to cache
-  // This ensures users always get the latest version of the app
-  if (
-    event.request.mode === 'navigate' ||
-    event.request.headers.get('accept')?.includes('text/html')
-  ) {
+  // HTML → network-first, no-store
+  if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Got a fresh response — update cache and return it
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
-          }
-          return response;
+      fetch(event.request, { cache: 'no-store' })
+        .then(res => {
+          if (res && res.status === 200)
+            caches.open(CACHE_VERSION).then(c => c.put(event.request, res.clone()));
+          return res;
         })
-        .catch(() => {
-          // Network failed (offline) — serve cached HTML as fallback
-          console.warn('[SW] Network failed for HTML, serving cache');
-          return caches.match(event.request)
-            .then(cached => cached || caches.match('/index.html'));
-        })
+        .catch(() => caches.match(event.request)
+          .then(cached => cached || caches.match('/index.html'))
+        )
     );
     return;
   }
 
-  // 3. Static assets (JS, CSS, images, fonts) → Cache-first, fallback to network
-  // These don't change often; cache-first is safe and fast
-  if (
-    url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/)
-  ) {
+  // 靜態資源 → cache-first
+  if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(url.pathname)) {
     event.respondWith(
       caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        return fetch(event.request).then(response => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
-          }
-          return response;
+        const net = fetch(event.request).then(res => {
+          if (res && res.status === 200)
+            caches.open(CACHE_VERSION).then(c => c.put(event.request, res.clone()));
+          return res;
         });
+        return cached || net;
       })
     );
-    return;
   }
-
-  // 4. Everything else → network only
 });
 
-// ── Message handler: receive SKIP_WAITING from index.html ──
-// index.html calls: serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('[SW] Received SKIP_WAITING — taking over immediately');
-    self.skipWaiting();
-  }
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'GET_VERSION')
+    event.source?.postMessage({ type: 'SW_VERSION', version: CACHE_VERSION });
 });
