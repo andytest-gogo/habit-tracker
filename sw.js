@@ -1,95 +1,106 @@
-/* ══════════════════════════════════
-   健康習慣追蹤 Pro — Service Worker
-   版本：1.0.0
-   ══════════════════════════════════ */
+// ── Cache version: bump this string whenever you deploy a new build ──
+// Format: 'healthy-habits-vYYYYMMDD-N' (date + deploy number)
+const CACHE_VERSION = 'healthy-habits-v20250516-1';
 
-const CACHE_NAME = 'habit-pro-v1';
-const OFFLINE_URL = './index.html';
-
-// 預先快取的資源
-const PRE_CACHE = [
-  './index.html',
-  './manifest.json',
-  './icons/icon-192x192.png',
-  './icons/icon-512x512.png',
+// Static assets to pre-cache on install (never changes between deploys)
+const STATIC_ASSETS = [
+  '/manifest.json',
 ];
 
-/* ── 安裝：預先快取核心資源 ── */
-self.addEventListener('install', (event) => {
+// ── Install: pre-cache static assets only ──
+// Do NOT cache index.html here — always fetch it fresh from network
+self.addEventListener('install', event => {
+  console.log('[SW] Installing', CACHE_VERSION);
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRE_CACHE);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_VERSION)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => {
+        // Take over immediately without waiting for old SW to be released
+        return self.skipWaiting();
+      })
   );
 });
 
-/* ── 啟動：清除舊快取 ── */
-self.addEventListener('activate', (event) => {
+// ── Activate: delete all old caches ──
+self.addEventListener('activate', event => {
+  console.log('[SW] Activating', CACHE_VERSION);
   event.waitUntil(
-    caches.keys().then((keys) =>
+    caches.keys().then(cacheNames =>
       Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        cacheNames
+          .filter(name => name !== CACHE_VERSION)
+          .map(name => {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
+          })
       )
     ).then(() => self.clients.claim())
   );
 });
 
-/* ── 攔截請求：Network First，失敗才用快取 ── */
-self.addEventListener('fetch', (event) => {
-  // 只處理 GET 請求
-  if (event.request.method !== 'GET') return;
-  // 不快取 Cloudinary / Firebase / 外部 API
+// ── Fetch: different strategies for different request types ──
+self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  if (url.hostname.includes('cloudinary') ||
-      url.hostname.includes('firebase') ||
-      url.hostname.includes('googleapis') ||
-      url.hostname.includes('unpkg') ||
-      url.hostname.includes('fonts')) return;
 
-  event.respondWith(
-    fetch(event.request)
-      .then((res) => {
-        // 成功就更新快取
-        const clone = res.clone();
-        caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
-        return res;
+  // 1. Cross-origin requests (Supabase, APIs, CDNs) → always network, no cache
+  if (url.origin !== self.location.origin) {
+    return; // Let browser handle normally
+  }
+
+  // 2. HTML pages (index.html, /) → Network-first, fallback to cache
+  // This ensures users always get the latest version of the app
+  if (
+    event.request.mode === 'navigate' ||
+    event.request.headers.get('accept')?.includes('text/html')
+  ) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Got a fresh response — update cache and return it
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Network failed (offline) — serve cached HTML as fallback
+          console.warn('[SW] Network failed for HTML, serving cache');
+          return caches.match(event.request)
+            .then(cached => cached || caches.match('/index.html'));
+        })
+    );
+    return;
+  }
+
+  // 3. Static assets (JS, CSS, images, fonts) → Cache-first, fallback to network
+  // These don't change often; cache-first is safe and fast
+  if (
+    url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/)
+  ) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        });
       })
-      .catch(() => {
-        // 網路失敗，從快取取
-        return caches.match(event.request)
-          .then(cached => cached || caches.match(OFFLINE_URL));
-      })
-  );
+    );
+    return;
+  }
+
+  // 4. Everything else → network only
 });
 
-/* ── 推播通知：接收 Push 事件 ── */
-self.addEventListener('push', (event) => {
-  let data = { title: '健康習慣追蹤', body: '記得完成今日習慣！', icon: './icons/icon-192x192.png' };
-  try { data = { ...data, ...event.data.json() }; } catch(e) {}
-
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon || './icons/icon-192x192.png',
-      badge: './icons/icon-72x72.png',
-      vibrate: [200, 100, 200],
-      data: { url: data.url || './' },
-      actions: [
-        { action: 'open', title: '立即查看' },
-        { action: 'close', title: '稍後再說' }
-      ]
-    })
-  );
-});
-
-/* ── 點擊通知 ── */
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  if (event.action === 'close') return;
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      if (list.length > 0) return list[0].focus();
-      return clients.openWindow(event.notification.data?.url || './');
-    })
-  );
+// ── Message handler: receive SKIP_WAITING from index.html ──
+// index.html calls: serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[SW] Received SKIP_WAITING — taking over immediately');
+    self.skipWaiting();
+  }
 });
