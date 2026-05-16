@@ -9264,10 +9264,17 @@ function App() {
     _useState110 = _slicedToArray(_useState109, 2),
     user = _useState110[0],
     setUser = _useState110[1];
+  // authLoading: true while we wait for onAuthStateChanged first callback
+  // Prevents flash of login page before we know if user is logged in
+  var _useStateAuthLoading = useState(true),
+    _useStateAuthLoadingArr = _slicedToArray(_useStateAuthLoading, 2),
+    authLoading = _useStateAuthLoadingArr[0],
+    setAuthLoading = _useStateAuthLoadingArr[1];
   useEffect(function () {
     if (!isFirebaseConfigured) {
       var u = localStorage.getItem('demoUser');
       if (u) setUser(JSON.parse(u));
+      setAuthLoading(false);
       return;
     }
     var unsub = auth.onAuthStateChanged(function (u) {
@@ -9275,9 +9282,8 @@ function App() {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         var verified = isGoogle || u.emailVerified;
         if (!verified) {
-          // Unverified email account: sign out immediately, do not update user state
-          // If registration is in progress (_registering), let it handle signOut
-          // 加入延遲確認，避免 sendEmailVerification() 前被搶先 signOut
+          // Unverified — sign out, but still mark auth as done loading
+          setAuthLoading(false);
           if (!_registering) {
             setTimeout(function() {
               if (!_registering) auth.signOut();
@@ -9293,6 +9299,7 @@ function App() {
         var ADMIN_EMAILS_INDEX = ['andy19920818@gmail.com'];
         if (ADMIN_EMAILS_INDEX.indexOf((u.email || '').toLowerCase().trim()) !== -1) {
           setUser(u);
+          setAuthLoading(false);
           return;
         }
         // Fetch existing user doc to avoid overwriting custom avatar.
@@ -9446,12 +9453,16 @@ function App() {
           return Promise.all(writePromises);
         }).then(function() {
           setUser(u); // setUser AFTER all writes — UI always gets correct data
+          setAuthLoading(false);
         }).catch(function(e) {
           console.warn('[auth] DB write failed:', e.message);
           setUser(u); // still set user even if DB write failed
+          setAuthLoading(false);
         });
       } else {
+        // No user — auth is resolved (logged out)
         setUser(null);
+        setAuthLoading(false);
       }
     });
     return function () { unsub(); };
@@ -9462,6 +9473,8 @@ function App() {
       setUser(null);
     } else auth.signOut();
   };
+  // Show nothing while auth state is resolving — prevents flash of login page
+  if (authLoading) return null;
   return user ? /*#__PURE__*/React.createElement(MainApp, {
     user: user,
     onLogout: handleLogout
@@ -9479,51 +9492,17 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
     /* 1. Register Service Worker */
     if ('serviceWorker' in navigator) {
 
-        // ════ LAYER 1: Pre-load white-screen guard ════
-        // Runs immediately, detects blank app within 3s, nukes caches + reloads.
-        // Crash counter prevents infinite loops; after 3 crashes shows manual Fix button.
-        (function() {
-            var CRASH_KEY  = '_ht_crash';
-            var RELOAD_KEY = '_ht_rl';
-            if (sessionStorage.getItem(RELOAD_KEY)) { sessionStorage.removeItem(RELOAD_KEY); return; }
-            var crashes = parseInt(localStorage.getItem(CRASH_KEY) || '0', 10);
-            if (crashes >= 3) {
-                localStorage.removeItem(CRASH_KEY);
-                window.addEventListener('DOMContentLoaded', function() {
-                    var r = document.getElementById('root');
-                    if (r && r.children.length > 0) return;
-                    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;color:#fff;font-family:sans-serif;padding:24px;text-align:center"><div style="font-size:36px;margin-bottom:16px">&#128267;</div><div style="font-size:17px;font-weight:700;margin-bottom:8px">Something went wrong</div><div style="font-size:13px;color:#888;margin-bottom:28px">The app could not load. Tap below to fix it.</div><button id="_fix_btn" style="background:#fff;color:#000;border:none;padding:14px 36px;font-size:14px;font-weight:700;cursor:pointer;border-radius:4px">Fix &amp; Reload</button></div>';
-                    document.getElementById('_fix_btn').addEventListener('click', function() {
-                        var go = function() { window.location.href = window.location.pathname + '?v=' + Date.now(); };
-                        if ('caches' in window) {
-                            caches.keys().then(function(ks) { return Promise.all(ks.map(function(k) { return caches.delete(k); })); }).then(function() {
-                                if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-                                    navigator.serviceWorker.getRegistrations().then(function(rs) { Promise.all(rs.map(function(r) { return r.unregister(); })).then(go); });
-                                } else { go(); }
-                            }).catch(go);
-                        } else { go(); }
-                    });
-                });
-                return;
-            }
-            setTimeout(function() {
-                var r = document.getElementById('root');
-                if (r && r.children.length > 0) { localStorage.removeItem(CRASH_KEY); return; }
-                console.warn('[PWA] L1: white screen @ 3s — nuking caches');
-                localStorage.setItem(CRASH_KEY, String(crashes + 1));
-                sessionStorage.setItem(RELOAD_KEY, '1');
-                var go = function() { window.location.replace(window.location.pathname + '?v=' + Date.now()); };
-                if ('caches' in window) {
-                    caches.keys().then(function(ks) { return Promise.all(ks.map(function(k) { return caches.delete(k); })); }).then(function() {
-                        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-                            navigator.serviceWorker.getRegistrations().then(function(rs) { Promise.all(rs.map(function(r) { return r.unregister(); })).then(go); }).catch(go);
-                        } else { go(); }
-                    }).catch(go);
-                } else { go(); }
-            }, 3000);
-        })();
+        // ── SW registration + instant update takeover ──
+        // Uses skipWaiting so new SW activates immediately without waiting for tabs to close.
+        // controllerchange fires after new SW takes over → reload once to get fresh HTML.
+        var _swRefreshing = false;
 
-        // ════ LAYER 2: SW registration + instant update takeover ════
+        // Guard: only allow one auto-reload per session to prevent reload loops
+        // If we just did a SW-triggered reload, don't do it again immediately
+        var _swReloadKey = '_ht_sw_reload';
+        var _justReloaded = sessionStorage.getItem(_swReloadKey);
+        if (_justReloaded) sessionStorage.removeItem(_swReloadKey);
+
         window.addEventListener('load', function() {
             navigator.serviceWorker.register('./sw.js')
                 .then(function(reg) {
@@ -9531,63 +9510,63 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
                     _swReg = reg;
                     if (Notification.permission === 'granted') scheduleDailyReminder(reg);
 
+                    // Check for updates every 30s
                     setInterval(function() { reg.update(); }, 30000);
 
-                    function activate(worker) {
+                    function activateWaiting(worker) {
                         worker.postMessage({ type: 'SKIP_WAITING' });
                     }
-                    if (reg.waiting) activate(reg.waiting);
 
+                    // New SW already waiting (e.g. user had app open while update deployed)
+                    if (reg.waiting) activateWaiting(reg.waiting);
+
+                    // New SW found during this session
                     reg.addEventListener('updatefound', function() {
                         var w = reg.installing;
                         if (!w) return;
                         w.addEventListener('statechange', function() {
                             if (w.state === 'installed' && navigator.serviceWorker.controller) {
-                                console.log('[PWA] L2: new SW ready — activating');
-                                activate(w);
+                                activateWaiting(w);
                             }
                         });
                     });
 
-                    var refreshing = false;
+                    // SW took over all clients — reload once to get fresh assets
                     navigator.serviceWorker.addEventListener('controllerchange', function() {
-                        if (refreshing) return;
-                        refreshing = true;
-                        console.log('[PWA] L2: controller changed — reloading');
+                        if (_swRefreshing || _justReloaded) return;
+                        _swRefreshing = true;
+                        sessionStorage.setItem(_swReloadKey, '1');
+                        console.log('[PWA] New SW active — reloading');
                         window.location.reload();
                     });
 
-                    // Listen for SW_ACTIVATED message from new SW
-                    // This fires when a new SW takes over and notifies all clients
-                    navigator.serviceWorker.addEventListener('message', function(event) {
-                        if (event.data && event.data.type === 'SW_ACTIVATED') {
-                            console.log('[PWA] L2: SW_ACTIVATED received — reloading for fresh content');
-                            if (!refreshing) {
-                                refreshing = true;
-                                window.location.reload();
-                            }
+                    // Message from SW (e.g. SW_ACTIVATED broadcast)
+                    navigator.serviceWorker.addEventListener('message', function(ev) {
+                        if (ev.data && ev.data.type === 'SW_ACTIVATED' && !_swRefreshing && !_justReloaded) {
+                            _swRefreshing = true;
+                            sessionStorage.setItem(_swReloadKey, '1');
+                            window.location.reload();
                         }
                     });
                 })
                 .catch(function(err) {
-                    console.warn('[PWA] SW failed:', err);
-                    navigator.serviceWorker.getRegistrations().then(function(regs) {
-                        Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
-                            if (regs.length > 0) window.location.reload();
-                        });
-                    });
+                    console.warn('[PWA] SW registration failed:', err);
                 });
         });
 
-        // ════ LAYER 3: Visibility recovery ════
-        // When returning from background, check app is still alive (iOS kills SW in bg)
+        // ── Return-from-background blank screen recovery ──
+        // iOS can kill the SW while app is in background; on resume the app may be blank.
+        // Pull-to-refresh (already implemented) will also fix this, but this is a safety net.
         document.addEventListener('visibilitychange', function() {
             if (document.visibilityState !== 'visible') return;
-            var r = document.getElementById('root');
-            if (!r || r.children.length === 0) {
-                console.warn('[PWA] L3: blank on resume — reloading');
-                window.location.reload();
-            }
+            // Small delay to let React re-render after resume before checking
+            setTimeout(function() {
+                var mc = document.getElementById('main-content');
+                if (mc && mc.children.length === 0) {
+                    console.warn('[PWA] Blank on resume — reloading');
+                    window.location.reload();
+                }
+            }, 800);
         });
     }
 
