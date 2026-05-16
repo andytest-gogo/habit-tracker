@@ -309,32 +309,46 @@
         /* Pull-to-refresh indicator */
         #_ptr_indicator {
             position: fixed;
-            top: 12px;
+            top: 0;
             left: 50%;
-            transform: translateX(-50%) translateY(0);
+            transform: translateX(-50%) translateY(-56px);
             z-index: 9999;
-            background: var(--black);
-            color: var(--white);
-            border-radius: 20px;
-            padding: 6px 14px;
-            font-size: 11px;
+            background: #fff;
+            color: #000;
+            border-radius: 0 0 20px 20px;
+            padding: 10px 20px 8px;
+            font-size: 12px;
             font-weight: 700;
-            letter-spacing: .6px;
+            letter-spacing: .4px;
             font-family: var(--font);
-            opacity: 0;
+            opacity: 1;
             pointer-events: none;
-            transition: opacity .15s, transform .15s;
+            transition: transform .2s cubic-bezier(.4,0,.2,1);
             white-space: nowrap;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            min-width: 140px;
+            justify-content: center;
         }
-        #_ptr_indicator.refreshing {
+        #_ptr_indicator.visible {
+            transform: translateX(-50%) translateY(0);
+        }
+        #_ptr_indicator .ptr-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #ddd;
+            border-top-color: #000;
+            border-radius: 50%;
+            display: none;
+        }
+        #_ptr_indicator.refreshing .ptr-spinner {
+            display: block;
             animation: _ptrSpin .7s linear infinite;
         }
         @keyframes _ptrSpin {
-            from { transform: translateX(-50%) translateY(32px) rotate(0deg); }
-            to   { transform: translateX(-50%) translateY(32px) rotate(360deg); }
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
         }
 
         /* ── TAB BAR ── */
@@ -1234,7 +1248,7 @@
 <body>
 <!-- ── EU Accessibility Act: Skip Navigation Link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-<div id="_ptr_indicator" aria-live="polite" aria-label="Refreshing">↻ Refreshing…</div>
+<div id="_ptr_indicator" aria-live="polite" aria-label="Refreshing"><div class="ptr-spinner"></div><span id="_ptr_text">Pull to refresh</span></div>
 <div id="main-content" role="main"></div>
 
 <!-- HIDDEN FILE INPUTS for iOS PWA compatibility.
@@ -6474,13 +6488,11 @@ function MainApp(_ref16) {
     var ind = document.getElementById('_ptr_indicator');
     if (!ind) return;
     if (isPtrRefreshing) {
+      ind.classList.add('visible');
       ind.classList.add('refreshing');
-      ind.style.opacity = '1';
-      ind.style.transform = 'translateX(-50%) translateY(32px)';
     } else {
       ind.classList.remove('refreshing');
-      ind.style.opacity = '0';
-      ind.style.transform = 'translateX(-50%) translateY(0)';
+      setTimeout(function() { ind.classList.remove('visible'); }, 300);
     }
   }, [isPtrRefreshing]);
 
@@ -6505,15 +6517,20 @@ function MainApp(_ref16) {
     var _startY = 0;
     var _pulling = false;
 
-    function _showInd(opacity, dy) {
+    function _showInd(show, text) {
       var ind = document.getElementById('_ptr_indicator');
+      var txt = document.getElementById('_ptr_text');
       if (!ind) return;
-      ind.style.opacity = String(opacity);
-      ind.style.transform = 'translateX(-50%) translateY(' + (dy || 0) + 'px)';
+      if (show) {
+        ind.classList.add('visible');
+      } else {
+        ind.classList.remove('visible');
+        ind.classList.remove('refreshing');
+      }
+      if (txt && text) txt.textContent = text;
     }
 
     function _onTouchStart(e) {
-      // Only start pull if truly at top of page
       if (window.scrollY === 0) {
         _startY = e.touches[0].clientY;
         _pulling = true;
@@ -6523,9 +6540,8 @@ function MainApp(_ref16) {
     function _onTouchMove(e) {
       if (!_pulling || window.scrollY > 0) return;
       var dy = e.touches[0].clientY - _startY;
-      if (dy > 0) {
-        var pct = Math.min(dy / 80, 1);
-        _showInd(pct, Math.min(dy * 0.4, 32));
+      if (dy > 8) {
+        _showInd(true, dy > 70 ? 'Release to refresh' : 'Pull to refresh');
       }
     }
 
@@ -6533,15 +6549,17 @@ function MainApp(_ref16) {
       if (!_pulling) return;
       var dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : _startY) - _startY;
       _pulling = false;
-      if (dy > 80 && window.scrollY === 0) {
+      if (dy > 70 && window.scrollY === 0) {
+        var ind = document.getElementById('_ptr_indicator');
+        if (ind) ind.classList.add('refreshing');
+        _showInd(true, 'Refreshing…');
         setIsPtrRefreshing(true);
-        _showInd(1, 32);
         fetchAllNow().then(function() {
           setIsPtrRefreshing(false);
-          _showInd(0, 0);
+          _showInd(false, 'Pull to refresh');
         });
       } else {
-        _showInd(0, 0);
+        _showInd(false, 'Pull to refresh');
       }
       _startY = 0;
     }
@@ -9464,13 +9482,74 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
             navigator.serviceWorker.register('./sw.js')
                 .then(reg => {
                     console.log('[PWA] SW registered:', reg.scope);
-                    _swReg = reg; // Store for contextual notification use
-                    // Also schedule reminders if already granted
+                    _swReg = reg;
                     if (Notification.permission === 'granted') {
                         scheduleDailyReminder(reg);
                     }
+
+                    // ── Auto-update: check for new SW version every 60s ──
+                    // Fixes PWA white screen caused by stale cached index.html
+                    setInterval(() => reg.update(), 60000);
+
+                    // When a new SW is waiting, activate it immediately
+                    function _activateWaiting(worker) {
+                        worker.addEventListener('statechange', () => {
+                            if (worker.state === 'activated') {
+                                console.log('[PWA] New SW activated — reloading for fresh cache');
+                                window.location.reload();
+                            }
+                        });
+                        worker.postMessage({ type: 'SKIP_WAITING' });
+                    }
+
+                    if (reg.waiting) {
+                        _activateWaiting(reg.waiting);
+                    }
+
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        if (!newWorker) return;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('[PWA] New version available — activating');
+                                _activateWaiting(newWorker);
+                            }
+                        });
+                    });
+
+                    // If controller changes (new SW took over), reload once
+                    let _refreshing = false;
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        if (_refreshing) return;
+                        _refreshing = true;
+                        window.location.reload();
+                    });
                 })
                 .catch(err => console.warn('[PWA] SW failed:', err));
+        });
+
+        // ── Hard recovery: if page is blank after 8s, clear all caches and reload ──
+        // This catches cases where SW serves a fatally broken cached file
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const root = document.getElementById('root');
+                const isEmpty = !root || root.children.length === 0 || root.innerHTML.trim() === '';
+                if (isEmpty) {
+                    console.warn('[PWA] White screen detected — clearing caches and reloading');
+                    if ('caches' in window) {
+                        caches.keys().then(keys =>
+                            Promise.all(keys.map(k => caches.delete(k)))
+                        ).then(() => {
+                            if (navigator.serviceWorker.controller) {
+                                navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                            window.location.reload(true);
+                        });
+                    } else {
+                        window.location.reload(true);
+                    }
+                }
+            }, 8000);
         });
     }
 
