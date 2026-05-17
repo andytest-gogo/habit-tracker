@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="Habit Tracker Pro - Community Edition">
     <meta name="theme-color" content="#000000">
     <!-- ── Content Security Policy (NIS2 / NIST / OWASP baseline) ──
@@ -87,24 +87,74 @@
             --font: 'DM Sans', sans-serif;
             --mono: 'DM Mono', monospace;
             --din: 'Barlow Condensed', 'DM Mono', monospace;
+            --bg: #ffffff;
+            --bg-card: #ffffff;
+            --bg-subtle: #f8f8f8;
+            --border-dk: #f0f0f0;
+            --text-primary: #0a0a0a;
+            --text-secondary: #9a9a9a;
         }
-        html { background: var(--white); }
+        body[data-theme="dark"] {
+            --bg: #0a0a0a;
+            --bg-card: #111111;
+            --bg-subtle: #1a1a1a;
+            --border-dk: #1e1e1e;
+            --text-primary: #ffffff;
+            --text-secondary: #555555;
+        }
+        html { background: var(--bg, var(--white)); }
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
             font-family: var(--font);
-            background: var(--white);
-            color: var(--black);
+            background: var(--bg, var(--white));
+            color: var(--text-primary, var(--black));
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
             overscroll-behavior-y: auto;
+            transition: background .2s, color .2s;
         }
         .app-container {
             max-width: 480px;
             margin: 0 auto;
-            background: var(--white);
+            background: var(--bg, var(--white));
             min-height: 100vh;
             position: relative;
         }
+        /* Dark mode surface overrides */
+        body[data-theme="dark"] .habit-card,
+        body[data-theme="dark"] .pair-card,
+        body[data-theme="dark"] .feed-card,
+        body[data-theme="dark"] .history-entry,
+        body[data-theme="dark"] .archive-item,
+        body[data-theme="dark"] .privacy-settings-entry { background:var(--bg-card); border-color:var(--border-dk); }
+        body[data-theme="dark"] .nav-bar,
+        body[data-theme="dark"] .tab-bar { background:var(--bg-card); border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .nav-tab,
+        body[data-theme="dark"] .tab-item { color:var(--text-secondary); }
+        body[data-theme="dark"] .nav-tab.active,
+        body[data-theme="dark"] .tab-item.active { color:var(--text-primary); }
+        body[data-theme="dark"] .section-title { color:var(--text-secondary); }
+        body[data-theme="dark"] .form-input,
+        body[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+        body[data-theme="dark"] select,
+        body[data-theme="dark"] textarea { background:var(--bg-subtle); color:var(--text-primary); border-color:var(--border-dk); }
+        body[data-theme="dark"] .modal-box,
+        body[data-theme="dark"] .add-modal { background:var(--bg-card); }
+        body[data-theme="dark"] .pill { background:var(--bg-subtle); color:var(--text-secondary); border-color:var(--border-dk); }
+        body[data-theme="dark"] .pill.selected { background:var(--text-primary); color:var(--bg); }
+        body[data-theme="dark"] .pw-chat { background:var(--bg); }
+        body[data-theme="dark"] .pw-mbub { background:var(--bg-subtle); color:var(--text-primary); border-color:var(--border-dk); }
+        body[data-theme="dark"] .pw-msg.me .pw-mbub { background:var(--text-primary); color:var(--bg); }
+        body[data-theme="dark"] .pw-input-bar { background:var(--bg-card); border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .history-page,
+        body[data-theme="dark"] .profile-header { background:var(--bg); }
+        body[data-theme="dark"] .history-nav { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .section-divider { background:var(--border-dk); }
+        body[data-theme="dark"] .feed-content { background:var(--bg); }
+        /* Auth page dark */
+        body[data-theme="dark"] .auth-box,
+        body[data-theme="dark"] .auth-card { background:var(--bg-card); }
+        body[data-theme="dark"] .login-box { background:var(--bg); }
 
 
         /* ── HISTORY PAGE ── */
@@ -1299,6 +1349,7 @@
 <a href="#main-content" class="skip-link">Skip to main content</a>
 <div id="_ptr_indicator"><div class="ptr-spinner"></div><span id="_ptr_text">Pull to refresh</span></div>
 <div id="main-content" role="main"></div>
+<script>(function(){try{var t=localStorage.getItem('_ht_theme');if(t)document.body.setAttribute('data-theme',t);}catch(e){}})()</script>
 <script>
 /* ── Native pull-to-refresh ──────────────────────────────────────────
    Runs before React. Works on white screen. Down-swipe from top of
@@ -5616,9 +5667,8 @@ function AddHabitModal(_ref12) {
       fontSize: 12
     },
     value: startDate,
-    onChange: function onChange(e) {
-      return setStartDate(e.target.value);
-    }
+    onChange: function onChange(e) { return setStartDate(e.target.value); },
+    onFocus: function(e) { try{e.target.showPicker();}catch(err){} }
   }), /*#__PURE__*/React.createElement("span", {
     className: "date-sep"
   }, "\u2192"), /*#__PURE__*/React.createElement("input", {
@@ -5630,9 +5680,8 @@ function AddHabitModal(_ref12) {
       fontSize: 12
     },
     value: endDate,
-    onChange: function onChange(e) {
-      return setEndDate(e.target.value);
-    }
+    onChange: function onChange(e) { return setEndDate(e.target.value); },
+    onFocus: function(e) { try{e.target.showPicker();}catch(err){} }
   }))), /*#__PURE__*/React.createElement("div", {
     className: "section-divider"
   }), /*#__PURE__*/React.createElement("div", {
@@ -6229,10 +6278,30 @@ function HistoryPage(_ref15) {
 function MainApp(_ref16) {
   var user = _ref16.user,
     onLogout = _ref16.onLogout;
-  var _useState57 = useState('home'),
-    _useState58 = _slicedToArray(_useState57, 2),
-    activeTab = _useState58[0],
-    setActiveTab = _useState58[1];
+  var _useStateTAB = useState(function(){
+    try{return localStorage.getItem('_ht_tab')||'home';}catch(e){return 'home';}
+  }),
+    _useStateTABa = _slicedToArray(_useStateTAB, 2),
+    activeTab = _useStateTABa[0],
+    _setActiveTabRaw = _useStateTABa[1];
+  var setActiveTab = React.useCallback(function(tab){
+    _setActiveTabRaw(tab);
+    try{localStorage.setItem('_ht_tab',tab);}catch(e){}
+  },[]);
+  var _useStateTHEME = useState(function(){
+    try{return localStorage.getItem('_ht_theme')||'light';}catch(e){return 'light';}
+  }),
+    _useStateTHEMEa = _slicedToArray(_useStateTHEME, 2),
+    appTheme = _useStateTHEMEa[0],
+    setAppTheme = _useStateTHEMEa[1];
+  useEffect(function(){
+    document.body.setAttribute('data-theme', appTheme);
+  },[appTheme]);
+  var toggleTheme = React.useCallback(function(theme){
+    setAppTheme(theme);
+    document.body.setAttribute('data-theme', theme);
+    try{localStorage.setItem('_ht_theme',theme);}catch(e){}
+  },[]);
   var _useState59 = useState(false),
     _useState60 = _slicedToArray(_useState59, 2),
     deleteModal = _useState60[0],
@@ -8982,7 +9051,30 @@ function MainApp(_ref16) {
         borderTop: '1px solid var(--gray-100)',
         paddingTop: 20
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    },
+    React.createElement("div", { style: { margin: "24px 0 12px", borderTop: "1px solid var(--border-dk)", paddingTop: 20 } },
+      React.createElement("div", { className: "section-title", style: { marginBottom: 12 } }, "Appearance"),
+      React.createElement("div", { style: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", border:"1px solid var(--border-dk)", background:"var(--bg-card)" } },
+        React.createElement("div", { style: { display:"flex", alignItems:"center", gap:10 } },
+          React.createElement("div", { style: { width:36, height:36, background:"var(--bg-subtle)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 } }, appTheme==='dark' ? '\ud83c\udf19' : '\u2600\ufe0f'),
+          React.createElement("div", null,
+            React.createElement("strong", { style:{ display:"block", fontSize:13, fontWeight:700, color:"var(--text-primary)" } }, "Theme"),
+            React.createElement("span", { style:{ fontSize:11, color:"var(--text-secondary)" } }, appTheme==='dark' ? 'Dark mode' : 'Light mode')
+          )
+        ),
+        React.createElement("div", { style:{ display:"flex", gap:6 } },
+          React.createElement("button", {
+            onClick: function(){ toggleTheme('light'); },
+            style:{ padding:"5px 12px", fontSize:11, fontWeight:700, fontFamily:"var(--font)", border:"1px solid "+(appTheme==='light'?"var(--black)":"var(--border-dk)"), background:appTheme==='light'?"var(--black)":"var(--bg-subtle)", color:appTheme==='light'?"var(--white)":"var(--text-secondary)", cursor:"pointer", borderRadius:4, transition:".15s" }
+          }, "Light"),
+          React.createElement("button", {
+            onClick: function(){ toggleTheme('dark'); },
+            style:{ padding:"5px 12px", fontSize:11, fontWeight:700, fontFamily:"var(--font)", border:"1px solid "+(appTheme==='dark'?"#fff":"var(--border-dk)"), background:appTheme==='dark'?"#fff":"var(--bg-subtle)", color:appTheme==='dark'?"#000":"var(--text-secondary)", cursor:"pointer", borderRadius:4, transition:".15s" }
+          }, "Dark")
+        )
+      )
+    ),
+    /*#__PURE__*/React.createElement("div", {
       className: "section-title",
       style: { marginBottom: 12 }
     }, "Privacy"), /*#__PURE__*/React.createElement("button", {
