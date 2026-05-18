@@ -6906,7 +6906,7 @@ function MainApp(_ref16) {
     var _sb = window._supabaseClient || (window.supabase && window.supabase.createClient ? null : null);
     // Fall back to db shim — will only work if RLS allows public habit reads
     var q = _sb
-      ? _sb.from('habits').select('*').neq('user_id', user.uid).gt('streak', 0).lt('streak', PARTNER_UNLOCK_DAYS).neq('challenge_visibility', 'private')
+      ? _sb.from('habits').select('*').neq('user_id', user.uid).gte('streak', 1).lt('streak', PARTNER_UNLOCK_DAYS).or('challenge_visibility.is.null,challenge_visibility.neq.private')
       : null;
     var promise = q
       ? q.then(function(r) {
@@ -6927,8 +6927,9 @@ function MainApp(_ref16) {
           snap.docs.forEach(function(d) {
             var h = Object.assign({ id: d.id }, d.data());
             if (h.userId === user.uid) return;
-            if (!h.streak || h.streak <= 0) return;
+            if (!h.streak || h.streak < 1) return;
             if (h.streak >= PARTNER_UNLOCK_DAYS) return;
+            // NULL or undefined challengeVisibility = public (treat as visible)
             if (h.challengeVisibility === 'private') return;
             list.push(h);
           });
@@ -7062,6 +7063,7 @@ function MainApp(_ref16) {
       checkedDates: [],
       todayCounts: {},
       streak: 0,
+      challengeVisibility: 'public',
       createdAt: new Date().toISOString()
     };
     if (!isFirebaseConfigured) {

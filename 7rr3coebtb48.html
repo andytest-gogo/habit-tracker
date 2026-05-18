@@ -616,6 +616,9 @@ CREATE POLICY "habits_challengers_read" ON habits FOR SELECT
     auth.role() = 'authenticated'
     AND (challenge_visibility IS NULL OR challenge_visibility != 'private')
   );
+-- ⚠️ 一次性資料修正：將現有習慣的 challenge_visibility NULL 值補為 'public'
+-- （新習慣建立時已自動寫入 'public'，此 SQL 只需執行一次）
+UPDATE habits SET challenge_visibility = 'public' WHERE challenge_visibility IS NULL;
 
 -- ── posts ─────────────────────────────────────────────────────────────────
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
