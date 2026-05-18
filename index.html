@@ -1352,71 +1352,268 @@
 <body>
 <!-- ── EU Accessibility Act: Skip Navigation Link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-<div id="_ptr_indicator"><div class="ptr-spinner"></div><span id="_ptr_text">Pull to refresh</span></div>
+<div id="_ptr_indicator"><div class="ptr-spinner"></div><span id="_ptr_text">下拉重新整理</span></div>
 <div id="main-content" role="main"></div>
 <script>(function(){try{var t=localStorage.getItem('_ht_theme');if(t)document.body.setAttribute('data-theme',t);}catch(e){}})()</script>
 <script>
-/* ── Native pull-to-refresh ──────────────────────────────────────────
-   Runs before React. Works on white screen. Down-swipe from top of
-   page → shows indicator → clears all SW caches → hard reloads.
-   Uses passive touch listeners (required for iOS Safari).
-──────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   UNIFIED PTR + WHITE SCREEN GUARD
+   ─ 單一 touch listener，React 層只負責 data refresh
+   ─ 白頁偵測：12秒無渲染 → 顯示「下拉重新整理」引導
+   ─ JS crash → 同樣顯示引導畫面而非技術錯誤
+   ─ 回前台空白 → 自動 reload（最多3次/5分鐘）
+══════════════════════════════════════════════════════════════════ */
 (function(){
+
+  /* ── 常數 ── */
+  var THR             = 68;          // px，觸發 refresh 的下拉距離
+  var RENDER_TIMEOUT  = 12000;       // ms，等待 React 渲染的最長時間
+  var MAX_AUTO_RELOAD = 3;           // 自動 reload 上限
+  var RELOAD_WIN      = 5 * 60000;   // 5分鐘計算視窗
+  var SK_COUNT        = 'wsg_rc';
+  var SK_TS           = 'wsg_ts';
+
+  /* ── PTR 狀態 ── */
+  var sy = 0, sx = 0, pulling = false, released = false;
+  var _reactPtrReady  = false;  // React 掛載後設為 true，由 React 接管 data refresh
+  var _refreshing     = false;  // 防止重複觸發
+
+  /* ── DOM refs ── */
   var ind = document.getElementById('_ptr_indicator');
   var txt = document.getElementById('_ptr_text');
-  var sy = 0, sx = 0, pulling = false, fired = false;
-  var THR = 72;
 
-  function move(dy) {
+  /* ────────────────────────────────────────────────
+     1. PTR 視覺動畫（純 CSS transform，不 setState）
+  ──────────────────────────────────────────────── */
+  function ptrMove(dy) {
     if (!ind) return;
-    ind.style.transform = 'translateX(-50%) translateY(' + (Math.min(dy/THR,1)*64-64) + 'px)';
+    var pct = Math.min(dy / THR, 1);
+    ind.style.transform = 'translateX(-50%) translateY(' + (pct * 64 - 64) + 'px)';
     ind.classList.add('visible');
-    if (txt) txt.textContent = dy >= THR ? 'Release to refresh' : 'Pull to refresh';
+    ind.classList.remove('refreshing');
+    if (txt) txt.textContent = dy >= THR ? '放開重新整理' : '下拉重新整理';
   }
-  function reset() {
+  function ptrReset() {
     if (!ind) return;
     ind.classList.remove('visible','refreshing');
     ind.style.transform = '';
-    if (txt) txt.textContent = 'Pull to refresh';
+    if (txt) txt.textContent = '下拉重新整理';
+    _refreshing = false;
   }
-  function go() {
-    if (ind) {
-      ind.classList.add('visible','refreshing');
-      ind.style.transform = 'translateX(-50%) translateY(0)';
-      if (txt) txt.textContent = 'Refreshing…';
-    }
-    setTimeout(function(){
-      if ('caches' in window) {
-        caches.keys().then(function(ks){
-          Promise.all(ks.map(function(k){ return caches.delete(k); }))
-            .then(function(){ window.location.href = window.location.pathname+'?r='+Date.now(); })
-            .catch(function(){ window.location.reload(true); });
-        }).catch(function(){ window.location.reload(true); });
-      } else { window.location.reload(true); }
-    }, 500);
+  function ptrSpinning(msg) {
+    if (!ind) return;
+    ind.classList.add('visible','refreshing');
+    ind.style.transform = 'translateX(-50%) translateY(0)';
+    if (txt) txt.textContent = msg || '重新整理中…';
   }
 
+  /* ────────────────────────────────────────────────
+     2. 實際 refresh 動作
+        - React 已掛載 → 呼叫 window._ptrDoRefresh()（由 React 注入）
+        - React 未掛載（白頁狀態）→ 清 cache + hard reload
+  ──────────────────────────────────────────────── */
+  function doRefresh() {
+    if (_refreshing) return;
+    _refreshing = true;
+    ptrSpinning('重新整理中…');
+
+    if (_reactPtrReady && typeof window._ptrDoRefresh === 'function') {
+      // React 正常運作：只做 data refresh，不 reload
+      window._ptrDoRefresh(function() { ptrReset(); });
+    } else {
+      // React 未掛載（白頁）：清 SW cache + hard reload
+      setTimeout(function(){
+        hardReload();
+      }, 400);
+    }
+  }
+
+  function hardReload() {
+    var p = ('caches' in window)
+      ? caches.keys().then(function(ks){
+          return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+        })
+      : Promise.resolve();
+    p.catch(function(){}).then(function(){
+      window.location.href = window.location.pathname + '?_r=' + Date.now();
+    });
+  }
+
+  /* ────────────────────────────────────────────────
+     3. 唯一的 touch listener（取代舊 native PTR 和 React PTR）
+  ──────────────────────────────────────────────── */
   document.addEventListener('touchstart', function(e){
     if (window.scrollY > 2) return;
-    sy = e.touches[0].clientY; sx = e.touches[0].clientX;
-    pulling = true; fired = false;
-  },{passive:true});
+    sy = e.touches[0].clientY;
+    sx = e.touches[0].clientX;
+    pulling = true;
+    released = false;
+  }, { passive: true });
+
   document.addEventListener('touchmove', function(e){
     if (!pulling) return;
     var dy = e.touches[0].clientY - sy;
     var dx = Math.abs(e.touches[0].clientX - sx);
-    if (dx > dy*0.8) { pulling=false; reset(); return; }
-    if (dy > 4 && window.scrollY === 0) { move(dy); if (dy>=THR) fired=true; }
-  },{passive:true});
-  document.addEventListener('touchend', function(){
-    if (!pulling) return;
+    // 橫向滑動不觸發
+    if (dx > dy * 0.75) { pulling = false; ptrReset(); return; }
+    if (dy > 6 && window.scrollY === 0) {
+      ptrMove(dy);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e){
+    if (!pulling || released) return;
+    released = true;
     pulling = false;
-    if (fired) { go(); } else { reset(); }
-    sy=0; sx=0; fired=false;
-  },{passive:true});
+    var dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : sy) - sy;
+    if (dy >= THR && window.scrollY === 0) {
+      doRefresh();
+    } else {
+      ptrReset();
+    }
+    sy = 0; sx = 0;
+  }, { passive: true });
+
   document.addEventListener('touchcancel', function(){
-    pulling=false; fired=false; sy=0; sx=0; reset();
-  },{passive:true});
+    pulling = false; released = false;
+    sy = 0; sx = 0;
+    ptrReset();
+  }, { passive: true });
+
+  /* ────────────────────────────────────────────────
+     4. 白頁引導畫面（取代舊的 ⚠️ 技術錯誤 UI）
+  ──────────────────────────────────────────────── */
+  function showPullGuide(reason) {
+    if (document.getElementById('_wsg_guide')) return;
+    var div = document.createElement('div');
+    div.id = '_wsg_guide';
+    div.style.cssText = [
+      'position:fixed;inset:0;background:#fff;z-index:99999;',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;',
+      'padding:40px 32px;font-family:-apple-system,sans-serif;text-align:center;',
+      'user-select:none;-webkit-user-select:none;'
+    ].join('');
+    div.innerHTML = [
+      '<div style="font-size:52px;margin-bottom:24px;animation:_wsgBounce 1.6s ease-in-out infinite;">↓</div>',
+      '<div style="font-size:20px;font-weight:800;color:#0a0a0a;margin-bottom:10px;letter-spacing:-.3px;">',
+        '下拉重新整理',
+      '</div>',
+      '<div style="font-size:14px;color:#737373;line-height:1.7;max-width:260px;margin-bottom:36px;">',
+        '從頁面頂端往下拉<br>即可重新載入 APP',
+      '</div>',
+      '<div style="width:48px;height:3px;background:#e0e0e0;border-radius:2px;overflow:hidden;margin-bottom:32px;">',
+        '<div style="height:100%;background:#0a0a0a;border-radius:2px;animation:_wsgSlide 1.6s ease-in-out infinite;"></div>',
+      '</div>',
+      '<button onclick="(function(){',
+        'document.getElementById(\'_wsg_guide\').remove();',
+        'if(window.clearAndReload)window.clearAndReload();',
+        'else window.location.reload();',
+      '})()" style="padding:14px 0;background:#0a0a0a;color:#fff;border:none;',
+        'font-size:14px;font-weight:700;cursor:pointer;border-radius:2px;',
+        'letter-spacing:.3px;width:100%;max-width:280px;">',
+        '立即重新載入',
+      '</button>',
+      '<style>',
+        '@keyframes _wsgBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}',
+        '@keyframes _wsgSlide{0%{width:0%;margin-left:0}60%{width:100%;margin-left:0}100%{width:0%;margin-left:100%}}',
+      '</style>'
+    ].join('');
+    var root = document.getElementById('main-content') || document.body;
+    root.appendChild(div);
+    // 白頁時 PTR 也要能正常 dismiss 引導畫面
+    _reactPtrReady = false;
+  }
+
+  /* ────────────────────────────────────────────────
+     5. 全域 JS 錯誤攔截 → 顯示下拉引導（不顯示技術錯誤）
+  ──────────────────────────────────────────────── */
+  window.addEventListener('error', function(e) {
+    // 忽略圖片/資源載入失敗（不是 React crash）
+    if (e.target && e.target.tagName && e.target.tagName !== 'SCRIPT') return;
+    console.error('[WSG] error:', e.message);
+    showPullGuide('js_error');
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || '');
+    // 網路失敗類不顯示 UI（background fetch 常發生）
+    if (/failed to fetch|networkerror|load failed|aborted/i.test(msg)) return;
+    console.error('[WSG] rejection:', msg);
+    showPullGuide('promise_rejection');
+  });
+
+  /* ────────────────────────────────────────────────
+     6. 渲染逾時偵測：12秒後 #main-content 還空白 → 顯示引導
+  ──────────────────────────────────────────────── */
+  var _renderTimer = setTimeout(function(){
+    var mc = document.getElementById('main-content');
+    if (!mc || mc.children.length === 0) {
+      console.warn('[WSG] render timeout');
+      showPullGuide('render_timeout');
+    }
+  }, RENDER_TIMEOUT);
+
+  // React 掛載成功後呼叫此函數取消計時器
+  window._wsgOnReactReady = function() {
+    clearTimeout(_renderTimer);
+    _reactPtrReady = true;
+    var guide = document.getElementById('_wsg_guide');
+    if (guide) guide.remove();
+  };
+
+  /* ────────────────────────────────────────────────
+     7. 回前台偵測：空白則自動 reload（最多3次/5分鐘）
+  ──────────────────────────────────────────────── */
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState !== 'visible') return;
+    setTimeout(function(){
+      var mc = document.getElementById('main-content');
+      if (!mc || mc.children.length === 0) {
+        try {
+          var ts  = parseInt(sessionStorage.getItem(SK_TS)  || '0');
+          var cnt = parseInt(sessionStorage.getItem(SK_COUNT)|| '0');
+          if (Date.now() - ts > RELOAD_WIN) { cnt = 0; }
+          if (cnt < MAX_AUTO_RELOAD) {
+            sessionStorage.setItem(SK_COUNT, String(cnt + 1));
+            sessionStorage.setItem(SK_TS,    String(Date.now()));
+            hardReload();
+          } else {
+            showPullGuide('bg_blank');
+          }
+        } catch(e){ hardReload(); }
+      }
+    }, 800);
+  });
+
+  /* ────────────────────────────────────────────────
+     8. localStorage 損壞自動清理
+  ──────────────────────────────────────────────── */
+  try {
+    for (var _i = localStorage.length - 1; _i >= 0; _i--) {
+      var _k = localStorage.key(_i);
+      if (_k && (_k.startsWith('habits_') || _k.startsWith('archived_habits_'))) {
+        try { JSON.parse(localStorage.getItem(_k)); }
+        catch(e) { console.warn('[WSG] corrupt localStorage removed:', _k); localStorage.removeItem(_k); }
+      }
+    }
+  } catch(e){}
+
+  /* ────────────────────────────────────────────────
+     9. 清除快取並重載（白頁引導按鈕用）
+  ──────────────────────────────────────────────── */
+  window.clearAndReload = function() {
+    try {
+      if ('caches' in window) caches.keys().then(function(ns){ ns.forEach(function(n){ caches.delete(n); }); });
+      if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function(rs){ rs.forEach(function(r){ r.unregister(); }); });
+      var keep = ['sb-app-session','sb-admin-session','ht-gdpr-choice','ht-age-confirmed','ht-age-confirmed-year'];
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (k && keep.indexOf(k) === -1 && !k.startsWith('avatar_')) localStorage.removeItem(k);
+      }
+      sessionStorage.clear();
+    } catch(e){}
+    window.location.href = window.location.pathname + '?_r=' + Date.now();
+  };
+
 })();
 </script>
 
@@ -1986,6 +2183,7 @@ if (isFirebaseConfigured) {
   _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: { storageKey: 'sb-app-session' }
   });
+  window._supabaseClient = _supabase; // expose for direct queries (e.g. loadChallengers)
 
   /* ─────────────────────────────────────────────────
      AUTH SHIM  — maps old firebase.auth() API calls
@@ -2227,7 +2425,11 @@ if (isFirebaseConfigured) {
       'public_ids':'publicIds','username_changed_at':'usernameChangedAt',
       'avatar_public_id':'avatarPublicId','deleted_at':'deletedAt','deleted_by':'deletedBy',
       'age_verified':'ageVerified','age_verified_at':'ageVerifiedAt',
-      'avatar_url':'avatarUrl'
+      'avatar_url':'avatarUrl',
+      'checked_dates':'checkedDates','streak':'streak',
+      'user_name':'userName','user_avatar':'userAvatar','user_avatar_url':'userAvatarUrl',
+      'challenge_visibility':'challengeVisibility','final_rate':'finalRate',
+      'archived_at':'archivedAt','archived_habits':'archivedHabits'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];
@@ -2239,7 +2441,7 @@ if (isFirebaseConfigured) {
 
     // ── Convert ISO timestamp strings → Firebase-like {toDate, seconds} objects ──
     ['created_at','updated_at','createdAt','updatedAt','lastSeen','lastUploadAt',
-     'reportedAt','reviewedAt','dismissedAt','deletedAt','archivedAt',
+     'reportedAt','reviewedAt','dismissedAt','deletedAt','archivedAt','archived_at',
      'ageVerifiedAt','usernameChangedAt'].forEach(function(k) {
       if (data[k] && typeof data[k] === 'string') {
         var d = new Date(data[k]);
@@ -2591,7 +2793,10 @@ if (isFirebaseConfigured) {
       'dismissedAt': 'dismissed_at', 'dismissedReason': 'dismissed_reason',
       'postText': 'post_text', 'isComment': 'is_comment', 'mediaType': 'media_type',
       'publicIds': 'public_ids', 'usernameChangedAt': 'username_changed_at',
-      'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by'
+      'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by',
+      'checkedDates': 'checked_dates', 'userName': 'user_name', 'userAvatar': 'user_avatar',
+      'userAvatarUrl': 'user_avatar_url', 'challengeVisibility': 'challenge_visibility',
+      'finalRate': 'final_rate', 'archivedAt': 'archived_at'
     };
     return map[str] || str.replace(/([A-Z])/g, function(m) { return '_' + m.toLowerCase(); });
   }
@@ -4151,17 +4356,19 @@ function FeedCard(_ref5) {
               break;
             }
             _context3.n = 3;
-            return db.collection('posts').doc(post.id).collection('comments').add({
+            var _commentData = {
               text: commentText.trim(),
               userId: currentUser.uid,
               userName: currentUser.displayName || 'User',
               userAvatar: ((_ref7 = currentUser.displayName || currentUser.email) === null || _ref7 === void 0 || (_ref7 = _ref7[0]) === null || _ref7 === void 0 ? void 0 : _ref7.toUpperCase()) || 'U',
-              userAvatarUrl: localStorage.getItem('avatar_' + currentUser.uid) || null,
               likes: 0,
               likedBy: [],
               postId: post.id,
               createdAt: FieldValue.serverTimestamp()
-            });
+            };
+            var _avatarUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('avatar_' + currentUser.uid) : null;
+            if (_avatarUrl) _commentData.userAvatarUrl = _avatarUrl;
+            return db.collection('posts').doc(post.id).collection('comments').add(_commentData);
           case 3:
             _context3.n = 4;
             return db.collection('posts').doc(post.id).update({
@@ -4204,7 +4411,19 @@ function FeedCard(_ref5) {
               });
               setCommentText('');
             } else {
+              // For any other DB error (e.g. missing column), still show locally as fallback
               console.error('[Comment] Failed:', _t3.message);
+              setComments(function (prev) {
+                var _ref8c;
+                return [].concat(_toConsumableArray(prev), [{
+                  id: Date.now().toString(),
+                  text: commentText.trim(),
+                  userName: currentUser.displayName || 'User',
+                  userAvatar: ((_ref8c = currentUser.displayName || currentUser.email) === null || _ref8c === void 0 || (_ref8c = _ref8c[0]) === null || _ref8c === void 0 ? void 0 : _ref8c.toUpperCase()) || 'U',
+                  createdAt: null
+                }]);
+              });
+              setCommentText('');
             }
           case 8:
             _context3.p = 8;
@@ -6648,12 +6867,6 @@ function MainApp(_ref16) {
     return function() { try { if (_bc2) _bc2.close(); } catch(e) {} };
   }, [user]);
 
-  // PTR refreshing state
-  var _useStatePTR = useState(false),
-    _useStatePTRa = _slicedToArray(_useStatePTR, 2),
-    isPtrRefreshing = _useStatePTRa[0],
-    setIsPtrRefreshing = _useStatePTRa[1];
-
   // Challengers + PTR state
   var [feedSubTab, setFeedSubTab] = React.useState('community');
   var [challengers, setChallengers] = React.useState([]);
@@ -6688,16 +6901,40 @@ function MainApp(_ref16) {
   // Load challengers
   var loadChallengers = React.useCallback(function() {
     if (!isFirebaseConfigured || !user) return;
-    db.collection('habits').get().then(function(snap) {
-      var list = [];
-      snap.docs.forEach(function(d) {
-        var h = Object.assign({ id: d.id }, d.data());
-        if (h.userId === user.uid) return;
-        if (!h.streak || h.streak <= 0) return;
-        if (h.streak >= PARTNER_UNLOCK_DAYS) return;
-        if (h.challengeVisibility === 'private') return;
-        list.push(h);
-      });
+    // Use direct Supabase query to read all non-private habits from other users
+    // (requires RLS policy: habits_challengers FOR SELECT USING (challenge_visibility != 'private' AND auth.role()='authenticated'))
+    var _sb = window._supabaseClient || (window.supabase && window.supabase.createClient ? null : null);
+    // Fall back to db shim — will only work if RLS allows public habit reads
+    var q = _sb
+      ? _sb.from('habits').select('*').neq('user_id', user.uid).gt('streak', 0).lt('streak', PARTNER_UNLOCK_DAYS).neq('challenge_visibility', 'private')
+      : null;
+    var promise = q
+      ? q.then(function(r) {
+          if (r.error) throw r.error;
+          // Convert snake_case to camelCase manually
+          return (r.data || []).map(function(row) {
+            return {
+              id: String(row.id),
+              userId: row.user_id, name: row.name, category: row.category,
+              streak: row.streak || 0, challengeVisibility: row.challenge_visibility,
+              todayCheerCount: row.today_cheer_count || 0,
+              displayName: row.display_name || ''
+            };
+          });
+        })
+      : db.collection('habits').get().then(function(snap) {
+          var list = [];
+          snap.docs.forEach(function(d) {
+            var h = Object.assign({ id: d.id }, d.data());
+            if (h.userId === user.uid) return;
+            if (!h.streak || h.streak <= 0) return;
+            if (h.streak >= PARTNER_UNLOCK_DAYS) return;
+            if (h.challengeVisibility === 'private') return;
+            list.push(h);
+          });
+          return list;
+        });
+    promise.then(function(list) {
       list.sort(function(a, b) {
         var ac = a.todayCheerCount || 0, bc = b.todayCheerCount || 0;
         if (ac !== bc) return ac - bc;
@@ -6743,24 +6980,9 @@ function MainApp(_ref16) {
     }).catch(function(e) { console.warn('cheer error', e); });
   }, [user, cheerMap, isFirebaseConfigured, todayPick]);
 
-  // Toggle spinner class on PTR indicator
-  useEffect(function() {
-    var ind = document.getElementById('_ptr_indicator');
-    if (!ind) return;
-    if (isPtrRefreshing) {
-      ind.classList.add('visible');
-      ind.classList.add('refreshing');
-    } else {
-      ind.classList.remove('refreshing');
-      setTimeout(function() { ind.classList.remove('visible'); }, 300);
-    }
-  }, [isPtrRefreshing]);
-
-  // ── Pull-to-refresh: 所有頁面頂部往下拉觸發更新（像 IG）──
-  // 根據 activeTab 決定要 refresh 哪些資料
+  // ── fetchAllNow: PTR data refresh（touch 動畫由 native PTR script 處理）──
   var fetchAllNow = React.useCallback(function() {
     var jobs = [ fetchHabitsNow() ];
-    // 同時重抓 feed（重新觸發 onSnapshot 等效的一次性 get）
     if (isFirebaseConfigured) {
       var feedJob = db.collection('posts').orderBy('createdAt', 'desc').limit(FEED_PAGE_SIZE).get().then(function(snap) {
         var posts = snap.docs.map(docToPost);
@@ -6773,69 +6995,19 @@ function MainApp(_ref16) {
     return Promise.all(jobs);
   }, [fetchHabitsNow, user]);
 
+  // ── 注入 window._ptrDoRefresh，讓 native PTR script 能呼叫 React data refresh ──
   useEffect(function() {
-    var _startY = 0;
-    var _pulling = false;
-
-    function _showInd(show, text) {
-      var ind = document.getElementById('_ptr_indicator');
-      var txt = document.getElementById('_ptr_text');
-      if (!ind) return;
-      if (show) {
-        ind.classList.add('visible');
-      } else {
-        ind.classList.remove('visible');
-        ind.classList.remove('refreshing');
-      }
-      if (txt && text) txt.textContent = text;
-    }
-
-    function _onTouchStart(e) {
-      if (window.scrollY === 0) {
-        _startY = e.touches[0].clientY;
-        _pulling = true;
-      }
-    }
-
-    function _onTouchMove(e) {
-      if (!_pulling || window.scrollY > 0) return;
-      var dy = e.touches[0].clientY - _startY;
-      if (dy > 8) {
-        _showInd(true, dy > 70 ? 'Release to refresh' : 'Pull to refresh');
-      }
-    }
-
-    function _onTouchEnd(e) {
-      if (!_pulling) return;
-      var dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : _startY) - _startY;
-      _pulling = false;
-      if (dy > 70 && window.scrollY === 0) {
-        var ind = document.getElementById('_ptr_indicator');
-        if (ind) ind.classList.add('refreshing');
-        _showInd(true, 'Refreshing…');
-        setIsPtrRefreshing(true);
-        fetchAllNow().then(function() {
-          setIsPtrRefreshing(false);
-          _showInd(false, 'Pull to refresh');
-        });
-      } else {
-        _showInd(false, 'Pull to refresh');
-      }
-      _startY = 0;
-    }
-
-    document.addEventListener('touchstart', _onTouchStart, { passive: true });
-    document.addEventListener('touchmove',  _onTouchMove,  { passive: true });
-    document.addEventListener('touchend',   _onTouchEnd,   { passive: true });
-    return function() {
-      document.removeEventListener('touchstart', _onTouchStart);
-      document.removeEventListener('touchmove',  _onTouchMove);
-      document.removeEventListener('touchend',   _onTouchEnd);
-      _showInd(0, 0);
+    window._ptrDoRefresh = function(done) {
+      fetchAllNow().then(function() {
+        if (typeof done === 'function') done();
+      }).catch(function() {
+        if (typeof done === 'function') done();
+      });
     };
+    return function() { window._ptrDoRefresh = null; };
   }, [fetchAllNow]);
 
-  // ── visibilitychange 也用 fetchAllNow 重抓所有資料 ──
+  // ── visibilitychange 回前台重抓資料 ──
   useEffect(function() {
     function _onVisible() {
       if (document.visibilityState === 'visible') fetchAllNow();
@@ -6970,10 +7142,36 @@ function MainApp(_ref16) {
   }, [habits, archivedHabits, loading]);
   var deleteHabit = function deleteHabit(habitId) {
     // 先從本地 state 移除（optimistic update）
+    var habitToArchive = habits.find(function(h) { return h.id === habitId; });
     setHabits(function(prev) { return prev.filter(function(h) { return h.id !== habitId; }); });
+    // 同步更新 archivedHabits state，讓 Habit History 立即顯示
+    if (habitToArchive) {
+      var archiveEntry = Object.assign({}, habitToArchive, {
+        archivedAt: toISODay(),
+        finalRate: calcCompletionRate(habitToArchive)
+      });
+      setArchivedHabits(function(prev) {
+        // 避免重複
+        if (prev.some(function(h) { return h.id === habitId; })) return prev;
+        return [archiveEntry].concat(prev);
+      });
+    }
     if (!isFirebaseConfigured) return;
     // temp- ID 表示尚未存進資料庫（insert 還在 pending），不需要刪除
     if (!habitId || habitId.toString().startsWith('temp-')) return;
+    // 先存入 archived_habits，再刪除原習慣
+    if (habitToArchive) {
+      var _archiveData = Object.assign({}, habitToArchive, {
+        archivedAt: toISODay(),
+        finalRate: calcCompletionRate(habitToArchive),
+        userId: habitToArchive.userId || (user && user.uid)
+      });
+      // Remove the id field (will be auto-generated)
+      delete _archiveData.id;
+      db.collection('archived_habits').add(_archiveData).catch(function(e) {
+        console.warn('[deleteHabit] archive failed:', e.message);
+      });
+    }
     db.collection('habits').doc(habitId).delete().catch(function(err) {
       console.error('[deleteHabit] failed:', err.message);
     });
@@ -8369,6 +8567,12 @@ function MainApp(_ref16) {
       var isQualified = streak >= PARTNER_UNLOCK_DAYS;
       var unlockPct = Math.min(Math.round((streak / PARTNER_UNLOCK_DAYS) * 100), 100);
       var daysLeft = Math.max(PARTNER_UNLOCK_DAYS - streak, 0);
+      // Bug fix: don't show unlock progress bar if habit total duration < 21 days
+      var _habitTr = parseTimeRange(habit.timeRange);
+      var _habitDuration = (_habitTr.start && _habitTr.end)
+        ? Math.round((dateFromISO(_habitTr.end) - dateFromISO(_habitTr.start)) / 86400000) + 1
+        : 999;
+      var habitTooShort = _habitDuration < PARTNER_UNLOCK_DAYS;
       var habitCheerData = habitCheers[habit.id] || null;
       return /*#__PURE__*/React.createElement("div", {
         key: habit.id,
@@ -8446,7 +8650,7 @@ function MainApp(_ref16) {
           return e.stopPropagation();
         }
       },
-      !isQualified && React.createElement("div", {
+      !isQualified && !habitTooShort && React.createElement("div", {
         className: "unlock-progress-wrap",
         onClick: function(e) { e.stopPropagation(); }
       },
@@ -9891,6 +10095,8 @@ function App() {
 }
 var _root = ReactDOM.createRoot(document.getElementById('main-content'));
 _root.render(/*#__PURE__*/React.createElement(App, null));
+// 通知 White Screen Guard：React 已成功掛載
+if (typeof window._wsgOnReactReady === 'function') window._wsgOnReactReady();
 
 </script>
 <!-- ── PWA: Service Worker + Install Prompt + Push Notifications ── -->
@@ -9929,14 +10135,8 @@ _root.render(/*#__PURE__*/React.createElement(App, null));
                 .catch(function(e){ console.warn('[SW]', e); });
         });
 
-        // Return-from-background: reload if app is blank
-        document.addEventListener('visibilitychange', function(){
-            if (document.visibilityState !== 'visible') return;
-            setTimeout(function(){
-                var mc = document.getElementById('main-content');
-                if (mc && mc.children.length === 0) window.location.reload();
-            }, 1000);
-        });
+        // Return-from-background blank check is now handled by WSG (White Screen Guard)
+        // with auto-reload rate limiting (max 3 times per 5 minutes).
     }
 
     /* 2. Intercept install prompt event */

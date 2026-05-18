@@ -610,6 +610,12 @@ CREATE POLICY "users_delete" ON users FOR DELETE USING (auth.uid()=id OR is_admi
 ALTER TABLE habits ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "habits_own"   ON habits FOR ALL   USING (auth.uid()=user_id);
 CREATE POLICY "habits_admin" ON habits FOR SELECT USING (is_admin());
+-- Challengers feature: allow reading non-private habits from other users
+CREATE POLICY "habits_challengers_read" ON habits FOR SELECT
+  USING (
+    auth.role() = 'authenticated'
+    AND (challenge_visibility IS NULL OR challenge_visibility != 'private')
+  );
 
 -- ── posts ─────────────────────────────────────────────────────────────────
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
