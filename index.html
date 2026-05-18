@@ -6965,6 +6965,10 @@ function MainApp(_ref16) {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
       loadChallengers(); loadMyHabitCheers();
     }
+    // 切回 Home 時也重新載入 cheer 資料，讓首頁習慣卡片的 cheer pill 顯示正確
+    if (activeTab === 'home') {
+      loadMyHabitCheers();
+    }
   }, [activeTab, feedSubTab]);
 
   var handleCheer = React.useCallback(function(challengerUid, habitId) {
@@ -7247,6 +7251,12 @@ function MainApp(_ref16) {
               todayCounts: counts,
               checkedDates: checkedDates,
               streak: streak
+            }).catch(function(err) {
+              // 常見原因：checked_dates / streak 欄位不存在於 Supabase habits 表
+              // 請到 Supabase SQL Editor 執行：
+              // ALTER TABLE habits ADD COLUMN IF NOT EXISTS checked_dates JSONB DEFAULT '[]';
+              // ALTER TABLE habits ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0;
+              console.error('[countHabit] DB update failed:', err && err.message);
             });
           case 3:
             return _context5.a(2);

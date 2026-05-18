@@ -620,6 +620,15 @@ CREATE POLICY "habits_challengers_read" ON habits FOR SELECT
 -- （新習慣建立時已自動寫入 'public'，此 SQL 只需執行一次）
 UPDATE habits SET challenge_visibility = 'public' WHERE challenge_visibility IS NULL;
 
+-- ⚠️ Streak / checkedDates 相關欄位（若 streak 卡住請執行）
+-- 確保 habits 表有以下欄位，否則打卡進度不會累計
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS checked_dates JSONB DEFAULT '[]';
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0;
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS today_counts JSONB DEFAULT '{}';
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS challenge_visibility TEXT DEFAULT 'public';
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS final_rate INTEGER DEFAULT 0;
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS archived_at TEXT;
+
 -- ── posts ─────────────────────────────────────────────────────────────────
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "posts_read"   ON posts FOR SELECT USING (auth.role()='authenticated');
