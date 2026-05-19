@@ -1565,9 +1565,12 @@
   ──────────────────────────────────────────────── */
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState !== 'visible') return;
+    // iOS 從背景回來時 React re-hydrate + Supabase reconnect 可能需要 1-3 秒，
+    // 延長至 2000ms 並加強判斷（offsetHeight < 50 避免 React root 存在但內容空白的誤判）
     setTimeout(function(){
       var mc = document.getElementById('main-content');
-      if (!mc || mc.children.length === 0) {
+      var isEmpty = !mc || mc.children.length === 0 || mc.offsetHeight < 50;
+      if (isEmpty) {
         try {
           var ts  = parseInt(sessionStorage.getItem(SK_TS)  || '0');
           var cnt = parseInt(sessionStorage.getItem(SK_COUNT)|| '0');
@@ -1581,7 +1584,7 @@
           }
         } catch(e){ hardReload(); }
       }
-    }, 800);
+    }, 2000);
   });
 
   /* ────────────────────────────────────────────────
@@ -9897,7 +9900,21 @@ function App() {
       setAuthLoading(false);
       return;
     }
+    // ── Auth Timeout Guard ──────────────────────────────────────────────────────
+    // 如果 Supabase onAuthStateChange 在 8 秒內沒有回應（例如 iOS 清除 session、
+    // 網路超時、token 損壞），強制結束 loading 狀態，顯示登入頁面，避免永久白屏。
+    var _authResolved = false;
+    var _authTimeoutId = setTimeout(function() {
+      if (!_authResolved) {
+        console.warn('[Auth] onAuthStateChange timeout — forcing auth page to prevent white screen');
+        _authResolved = true;
+        setAuthLoading(false);
+        setUser(null);
+      }
+    }, 8000);
     var unsub = auth.onAuthStateChanged(function (u) {
+      _authResolved = true;
+      clearTimeout(_authTimeoutId);
       if (u) {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         var verified = isGoogle || u.emailVerified;
@@ -10088,7 +10105,7 @@ function App() {
         setAuthLoading(false);
       }
     });
-    return function () { unsub(); };
+    return function () { unsub(); clearTimeout(_authTimeoutId); };
   }, []);
   var handleLogout = function handleLogout() {
     if (!isFirebaseConfigured) {
