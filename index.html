@@ -95,12 +95,16 @@
             --text-secondary: #9a9a9a;
         }
         body[data-theme="dark"] {
-            --bg: #0a0a0a;
-            --bg-card: #111111;
-            --bg-subtle: #1a1a1a;
-            --border-dk: #1e1e1e;
-            --text-primary: #ffffff;
-            --text-secondary: #555555;
+            --bg: #080c14;
+            --bg-card: #0d1526;
+            --bg-subtle: #0e1f3a;
+            --border-dk: #0e1f3a;
+            --text-primary: #c8ddf5;
+            --text-secondary: #2a4a6a;
+            /* blue accent tokens */
+            --blue-accent: #4d9ef7;
+            --blue-dim: #163558;
+            --blue-muted: #2a4a6a;
         }
         html { background: var(--bg, var(--white)); }
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -126,13 +130,12 @@
         body[data-theme="dark"] .feed-card,
         body[data-theme="dark"] .history-entry,
         body[data-theme="dark"] .archive-item,
-        body[data-theme="dark"] .privacy-settings-entry { background:var(--bg-card); border-color:var(--border-dk); }
         body[data-theme="dark"] .nav-bar,
         body[data-theme="dark"] .tab-bar { background:var(--bg-card); border-top-color:var(--border-dk); }
         body[data-theme="dark"] .nav-tab,
         body[data-theme="dark"] .tab-item { color:var(--text-secondary); }
         body[data-theme="dark"] .nav-tab.active,
-        body[data-theme="dark"] .tab-item.active { color:var(--text-primary); }
+        body[data-theme="dark"] .tab-item.active { color:var(--blue-accent); }
         body[data-theme="dark"] .section-title { color:var(--text-secondary); }
         body[data-theme="dark"] .form-input,
         body[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
@@ -148,6 +151,40 @@
         body[data-theme="dark"] .pw-input-bar { background:var(--bg-card); border-top-color:var(--border-dk); }
         body[data-theme="dark"] .history-page,
         body[data-theme="dark"] .profile-header { background:var(--bg); }
+        /* ── PROFILE DARK BLUE ACCENTS ── */
+        body[data-theme="dark"] .profile-stats { border-color:var(--border-dk); }
+        body[data-theme="dark"] .profile-stat { border-right-color:var(--border-dk); }
+        body[data-theme="dark"] .profile-stat-value { color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-avatar { background:var(--bg-subtle); border-color:var(--blue-dim); color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-header { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .section-title { color:var(--blue-muted) !important; border-left:2px solid var(--blue-accent); padding-left:8px; }
+        body[data-theme="dark"] .history-entry-btn { background:var(--bg-card); border-color:var(--border-dk); }
+        body[data-theme="dark"] .history-entry-btn:hover { background:var(--bg-subtle); border-color:var(--blue-accent); }
+        body[data-theme="dark"] .history-entry-icon { background:var(--bg-subtle); border:1px solid var(--blue-dim); }
+        body[data-theme="dark"] .history-entry-text strong { color:var(--text-primary); }
+        body[data-theme="dark"] .history-entry-text span { color:var(--blue-muted); }
+        body[data-theme="dark"] .history-entry-arrow { color:var(--blue-dim); }
+        body[data-theme="dark"] .privacy-settings-entry { background:var(--bg-card); border-color:var(--border-dk); }
+        body[data-theme="dark"] .privacy-settings-entry:hover { border-color:var(--blue-accent); background:var(--bg-subtle); }
+        body[data-theme="dark"] .privacy-settings-entry-icon { background:var(--bg-subtle); border:1px solid var(--blue-dim); }
+        body[data-theme="dark"] .privacy-settings-entry-text strong { color:var(--text-primary); }
+        body[data-theme="dark"] .privacy-settings-entry-text span { color:var(--blue-muted); }
+        body[data-theme="dark"] .composer-wrap { border-color:var(--border-dk); }
+        body[data-theme="dark"] .composer-toolbar { background:var(--bg-card); border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .composer-media-btn { background:var(--bg-card); border-color:var(--border-dk); color:var(--blue-muted); }
+        body[data-theme="dark"] .composer-media-btn:hover { border-color:var(--blue-accent); color:var(--blue-accent); }
+        body[data-theme="dark"] .delete-account-btn { border-color:#3a1010; color:#e05555; background:var(--bg-card); }
+        body[data-theme="dark"] .delete-account-btn:hover { background:#1a0808; border-color:#e05555; }
+        body[data-theme="dark"] .profile-privacy-section { border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .privacy-toggle-row { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .toggle-slider { background:var(--bg-subtle); }
+        body[data-theme="dark"] .toggle-switch input:checked + .toggle-slider { background:var(--blue-accent); }
+        body[data-theme="dark"] .my-posts-section .section-title,
+        body[data-theme="dark"] .section-title { color:var(--blue-muted) !important; }
+        body[data-theme="dark"] .view-all-posts-btn { background:var(--bg-subtle); color:var(--blue-accent); border:1px solid var(--border-dk); }
+        body[data-theme="dark"] .view-all-posts-btn:hover { border-color:var(--blue-accent); background:var(--bg-card); }
+        body[data-theme="dark"] .cheer-detail-panel { background:var(--bg-subtle); border:1px solid var(--border-dk); }
+        body[data-theme="dark"] .cheer-detail-big { color:var(--blue-accent); }
         body[data-theme="dark"] .history-nav { border-bottom-color:var(--border-dk); }
         body[data-theme="dark"] .section-divider { background:var(--border-dk); }
         body[data-theme="dark"] .feed-content { background:var(--bg); }
@@ -503,25 +540,47 @@
         .cheer-btn { padding:7px 18px; background:#fff; color:#000; border:none; border-radius:20px; font-size:11px; font-weight:700; font-family:var(--font); cursor:pointer; transition:.15s; letter-spacing:.3px; }
         .cheer-btn:hover { opacity:.85; }
         .cheer-btn.done { background:rgba(255,255,255,.15); color:rgba(255,255,255,.55); cursor:default; }
-        .challengers-seg-label { font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--gray-400); display:flex; align-items:center; gap:8px; margin:14px 0 8px; }
+        .challengers-seg-label { font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--gray-400); display:flex; align-items:center; gap:8px; margin:16px 0 10px; }
         .challengers-seg-label::after { content:""; flex:1; height:1px; background:var(--gray-100); }
+        .challenger-card { border:1px solid var(--gray-200); background:var(--bg-card); margin-bottom:10px; transition:border-color .15s; }
+        .challenger-card:hover { border-color:var(--gray-500); }
+        body[data-theme="dark"] .challenger-card { border-color:var(--border-dk); }
+        .challenger-card-top { display:flex; align-items:center; gap:10px; padding:12px 14px 8px; }
+        .challenger-av { width:36px; height:36px; border-radius:50%; background:var(--gray-200); border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--gray-600); flex-shrink:0; overflow:hidden; }
+        .challenger-av img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+        body[data-theme="dark"] .challenger-av { background:var(--bg-subtle); border-color:var(--blue-dim); color:var(--blue-accent); }
+        .challenger-card-info { flex:1; min-width:0; }
+        .challenger-card-user { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .challenger-card-name { font-size:13px; font-weight:700; color:var(--text-primary); line-height:1.2; }
+        .challenger-card-uid { font-size:9px; color:var(--gray-400); font-family:var(--mono); background:var(--gray-100); padding:1px 5px; }
+        body[data-theme="dark"] .challenger-card-uid { background:var(--bg-subtle); color:var(--blue-muted); }
+        .challenger-card-habit { font-size:12px; color:var(--text-secondary); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .challenger-card-progress { padding:0 14px 10px; }
+        .challenger-card-prog-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+        .challenger-card-prog-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--gray-400); }
+        .challenger-card-prog-count { font-size:12px; font-weight:700; font-family:var(--din); color:var(--text-primary); }
+        body[data-theme="dark"] .challenger-card-prog-count { color:var(--blue-accent); }
+        .challenger-card-bar-track { height:3px; background:var(--gray-100); overflow:hidden; }
+        body[data-theme="dark"] .challenger-card-bar-track { background:var(--bg-subtle); }
+        .challenger-card-bar-fill { height:100%; background:var(--gray-400); transition:width .4s cubic-bezier(.4,0,.2,1); }
+        .challenger-card-bar-fill.near-end { background:#16a34a; }
+        .challenger-card-bar-fill.just-started { background:var(--gray-300); }
+        body[data-theme="dark"] .challenger-card-bar-fill { background:var(--blue-dim); }
+        body[data-theme="dark"] .challenger-card-bar-fill.near-end { background:#16a34a; }
+        .challenger-card-footer { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; border-top:1px solid var(--gray-100); }
+        body[data-theme="dark"] .challenger-card-footer { border-top-color:var(--border-dk); }
+        .challenger-card-stage { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--gray-400); }
+        body[data-theme="dark"] .challenger-card-stage { color:var(--blue-muted); }
+        .challenger-cheer-btn { display:flex; align-items:center; gap:5px; padding:6px 12px; border:1px solid var(--gray-200); background:var(--bg-card); cursor:pointer; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--gray-500); font-family:var(--font); transition:.15s; }
+        .challenger-cheer-btn:hover:not(.done) { border-color:var(--black); color:var(--black); }
+        .challenger-cheer-btn.done { background:#fff7ed; border-color:#fed7aa; color:#ea580c; cursor:default; }
+        body[data-theme="dark"] .challenger-cheer-btn { border-color:var(--border-dk); color:var(--blue-muted); }
+        body[data-theme="dark"] .challenger-cheer-btn:hover:not(.done) { border-color:var(--blue-accent); color:var(--blue-accent); }
+        body[data-theme="dark"] .challenger-cheer-btn.done { background:#2d1a0a; border-color:#7c3800; color:#fb923c; }
         .challenger-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--gray-100); }
         .challenger-row:last-child { border-bottom:none; }
-        .challenger-av { width:32px; height:32px; border-radius:50%; background:var(--gray-100); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--gray-600); flex-shrink:0; }
-        .challenger-info { flex:1; min-width:0; }
-        .challenger-name { font-size:13px; font-weight:700; color:var(--black); }
-        .challenger-sub { font-size:10px; color:var(--gray-400); margin-top:1px; }
-        .challenger-bar-track { height:2px; background:var(--gray-100); border-radius:1px; overflow:hidden; margin-top:5px; }
-        .challenger-bar-fill { height:100%; border-radius:1px; background:var(--gray-400); }
-        .challenger-bar-fill.sprint { background:#16a34a; }
-        .challenger-day { font-size:13px; font-weight:700; color:var(--gray-600); flex-shrink:0; min-width:40px; text-align:right; }
-        .challenger-cheer-btn { width:30px; height:30px; border-radius:50%; background:var(--gray-100); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:.15s; }
-        .challenger-cheer-btn:hover { background:var(--gray-200); }
-        .challenger-cheer-btn.done { background:#fff7ed; }
-        .challenger-cheer-btn i { font-size:15px; color:var(--gray-400); }
-        .challenger-cheer-btn.done i { color:#ea580c; }
-        .cheer-detail-panel { background:var(--gray-100); border-radius:8px; padding:14px 16px; margin:6px 0; }
-        .cheer-detail-big { font-size:32px; font-weight:700; color:var(--black); line-height:1; }
+        .cheer-detail-panel { background:var(--gray-100); padding:14px 16px; margin:6px 0; }
+        .cheer-detail-big { font-size:32px; font-weight:700; color:var(--text-primary); line-height:1; }
         .cheer-detail-sub { font-size:11px; color:var(--gray-500); margin-top:4px; line-height:1.7; }
 
         /* ── AI MATCHING MODAL ── */
@@ -8576,12 +8635,17 @@ function MainApp(_ref16) {
       className: "empty-state"
     }, /*#__PURE__*/React.createElement(HomeIcon, null), /*#__PURE__*/React.createElement("h3", null, "No habits yet"), /*#__PURE__*/React.createElement("p", null, "Tap + Create your first habit")) : activeHabits.map(function (habit) {
       var todayKey = currentDay;
-      // Home bar: cumulative completion rate (supports custom intervalDays)
       var progPct = calcCompletionRate(habit);
       var streak = habit.streak || 0;
-      var isQualified = streak >= PARTNER_UNLOCK_DAYS;
-      var unlockPct = Math.min(Math.round((streak / PARTNER_UNLOCK_DAYS) * 100), 100);
-      var daysLeft = Math.max(PARTNER_UNLOCK_DAYS - streak, 0);
+      // BUG FIX: 21-day progress = checkedDates.length (total days), NOT streak (consecutive).
+      var _nc21 = (habit.checkedDates || []).map(function(d) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+        var p = new Date(d); return isNaN(p) ? null : toISODay(p);
+      }).filter(Boolean);
+      var daysCompleted = new Set(_nc21).size;
+      var isQualified = daysCompleted >= PARTNER_UNLOCK_DAYS;
+      var unlockPct = Math.min(Math.round((daysCompleted / PARTNER_UNLOCK_DAYS) * 100), 100);
+      var daysLeft = Math.max(PARTNER_UNLOCK_DAYS - daysCompleted, 0);
       // Bug fix: don't show unlock progress bar if habit total duration < 21 days
       var _habitTr = parseTimeRange(habit.timeRange);
       var _habitDuration = (_habitTr.start && _habitTr.end)
@@ -8671,7 +8735,7 @@ function MainApp(_ref16) {
       },
         React.createElement("div", { className: "unlock-progress-row" },
           React.createElement("span", { className: "unlock-progress-label" }, daysLeft + " days to unlock partner"),
-          React.createElement("span", { className: "unlock-progress-days" }, streak + "/" + PARTNER_UNLOCK_DAYS)
+          React.createElement("span", { className: "unlock-progress-days" }, daysCompleted + "/" + PARTNER_UNLOCK_DAYS)
         ),
         React.createElement("div", { className: "unlock-progress-track" },
           React.createElement("div", { className: "unlock-progress-fill", style: { width: unlockPct + "%" } })
@@ -8681,10 +8745,10 @@ function MainApp(_ref16) {
         className: "find-partner-btn",
         onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
       }, "+ Find Partner"),
-      !isQualified && habitCheerData && habitCheerData.todayCount > 0 && React.createElement("button", {
+      !isQualified && habitCheerData && habitCheerData.totalCount > 0 && React.createElement("button", {
         className: "cheer-pill",
         onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
-      }, "\xe2\x9a\xa1 " + habitCheerData.todayCount + " cheered today"),
+      }, "\xe2\x9a\xa1 " + habitCheerData.totalCount + " cheered for you"),
       /*#__PURE__*/React.createElement("button", {
         className: "card-delete-btn",
         onClick: function onClick() { return deleteHabit(habit.id); }
@@ -8830,69 +8894,59 @@ function MainApp(_ref16) {
     };
 
     var renderChallengersTab = function() {
-      var sprint = challengers.filter(function(c) { return c.streak >= 15; });
-      var momentum = challengers.filter(function(c) { return c.streak >= 8 && c.streak < 15; });
-      var starting = challengers.filter(function(c) { return c.streak < 8; });
-      function ChallengerRow(props) {
+      var nearEnd = challengers.filter(function(c) { return c.streak >= 18; });
+      var buildMomentum = challengers.filter(function(c) { return c.streak >= 8 && c.streak < 18; });
+      var justStarted = challengers.filter(function(c) { return c.streak >= 1 && c.streak <= 3; });
+      var midRange = challengers.filter(function(c) { return c.streak > 3 && c.streak < 8; });
+      function ChallengerCard(props) {
         var c = props.challenger;
         var ckey = c.userId + "_" + c.id;
         var cheered = !!cheerMap[ckey];
         var displayName = c.displayName || "Anonymous";
+        var shortUid = c.userId ? c.userId.slice(0, 8) : "user";
         var habitLabel = c.challengeVisibility === "public" ? (c.name || "Habit challenge") : "Habit challenge";
-        var initials = displayName.slice(0,2).toUpperCase();
+        var initials = displayName.slice(0, 2).toUpperCase();
         var pct = Math.min(Math.round((c.streak / PARTNER_UNLOCK_DAYS) * 100), 100);
-        return React.createElement("div", { className: "challenger-row" },
-          React.createElement("div", { className: "challenger-av" }, initials),
-          React.createElement("div", { className: "challenger-info" },
-            React.createElement("div", { className: "challenger-name" }, displayName),
-            React.createElement("div", { className: "challenger-sub" }, habitLabel),
-            React.createElement("div", { className: "challenger-bar-track" },
-              React.createElement("div", { className: "challenger-bar-fill" + (c.streak >= 15 ? " sprint" : ""), style: { width: pct + "%" } })
+        var isNearEnd = c.streak >= 18;
+        var isJustStarted = c.streak <= 3;
+        var barClass = "challenger-card-bar-fill" + (isNearEnd ? " near-end" : isJustStarted ? " just-started" : "");
+        var daysLeft = PARTNER_UNLOCK_DAYS - c.streak;
+        var stageText = isNearEnd
+          ? "Almost there \u2014 " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left!"
+          : isJustStarted ? "Just getting started"
+          : c.streak >= 8 ? "Building momentum"
+          : "Keep going";
+        return React.createElement("div", { className: "challenger-card" },
+          React.createElement("div", { className: "challenger-card-top" },
+            React.createElement("div", { className: "challenger-av" },
+              c.userAvatar
+                ? React.createElement("img", { src: c.userAvatar, alt: displayName, onError: function(e) { e.target.style.display = "none"; } })
+                : initials
+            ),
+            React.createElement("div", { className: "challenger-card-info" },
+              React.createElement("div", { className: "challenger-card-user" },
+                React.createElement("span", { className: "challenger-card-name" }, displayName),
+                React.createElement("span", { className: "challenger-card-uid" }, "#" + shortUid)
+              ),
+              React.createElement("div", { className: "challenger-card-habit" }, "\u2728 " + habitLabel)
             )
           ),
-          React.createElement("div", { className: "challenger-day" }, "Day " + c.streak),
-          React.createElement("button", {
-            className: "challenger-cheer-btn" + (cheered ? " done" : ""),
-            onClick: function(e) { e.stopPropagation(); if (!cheered) handleCheer(c.userId, c.id); },
-            "aria-label": cheered ? "Cheered!" : "Cheer on"
-          }, React.createElement("i", { className: "ti ti-bolt" }))
-        );
-      }
-      function TodayPickCard() {
-        if (!todayPick) return null;
-        var c = todayPick;
-        var tkey = c.userId + "_" + c.id;
-        var cheered = !!cheerMap[tkey];
-        var displayName = c.displayName || "Anonymous";
-        var habitLabel = c.challengeVisibility === "public" ? (c.name || "Habit challenge") : "Habit challenge";
-        var initials = displayName.slice(0,2).toUpperCase();
-        var pct = Math.min(Math.round((c.streak / PARTNER_UNLOCK_DAYS) * 100), 100);
-        var stageLabel = c.streak >= 15 ? "Sprint stage" : c.streak >= 8 ? "Momentum stage" : "Starting stage";
-        var todayCheerCount = c.todayCheerCount || 0;
-        return React.createElement("div", { className: "today-pick-card" },
-          React.createElement("div", { className: "today-pick-label" }, "Today's pick"),
-          React.createElement("div", { className: "today-pick-row" },
-            React.createElement("div", { className: "today-pick-av" }, initials),
-            React.createElement("div", { className: "today-pick-info" },
-              React.createElement("div", { className: "today-pick-name" }, displayName),
-              React.createElement("div", { className: "today-pick-sub" }, habitLabel + " \xc2\xb7 " + stageLabel)
+          React.createElement("div", { className: "challenger-card-progress" },
+            React.createElement("div", { className: "challenger-card-prog-row" },
+              React.createElement("span", { className: "challenger-card-prog-label" }, "21-Day Challenge"),
+              React.createElement("span", { className: "challenger-card-prog-count" }, c.streak + "/" + PARTNER_UNLOCK_DAYS)
             ),
-            React.createElement("div", null,
-              React.createElement("div", { className: "today-pick-day" }, c.streak),
-              React.createElement("div", { className: "today-pick-daylab" }, "days")
+            React.createElement("div", { className: "challenger-card-bar-track" },
+              React.createElement("div", { className: barClass, style: { width: pct + "%" } })
             )
           ),
-          React.createElement("div", { className: "today-pick-bar-track" },
-            React.createElement("div", { className: "today-pick-bar-fill", style: { width: pct + "%" } })
-          ),
-          React.createElement("div", { className: "today-pick-footer" },
-            React.createElement("div", { className: "today-pick-cheers" },
-              todayCheerCount === 0 ? "Be the first to cheer today" : todayCheerCount + " cheered today"
-            ),
+          React.createElement("div", { className: "challenger-card-footer" },
+            React.createElement("span", { className: "challenger-card-stage" }, stageText),
             React.createElement("button", {
-              className: "cheer-btn" + (cheered ? " done" : ""),
-              onClick: function() { if (!cheered) handleCheer(c.userId, c.id); }
-            }, cheered ? "\xe2\x9c\x93 Cheered" : "Cheer on")
+              className: "challenger-cheer-btn" + (cheered ? " done" : ""),
+              onClick: function(e) { e.stopPropagation(); if (!cheered) handleCheer(c.userId, c.id); },
+              disabled: cheered
+            }, cheered ? "\u2713 Cheered!" : "\u26a1 Cheer on")
           )
         );
       }
@@ -8900,19 +8954,19 @@ function MainApp(_ref16) {
         if (!props.list || props.list.length === 0) return null;
         return React.createElement(React.Fragment, null,
           React.createElement("div", { className: "challengers-seg-label" }, props.label),
-          props.list.map(function(c) { return React.createElement(ChallengerRow, { key: c.id, challenger: c }); })
+          props.list.map(function(c) { return React.createElement(ChallengerCard, { key: c.id + "_" + c.userId, challenger: c }); })
         );
       }
       return React.createElement(React.Fragment, null,
-        React.createElement(TodayPickCard, null),
         challengers.length === 0 && React.createElement("div", { style: { textAlign: "center", padding: "48px 20px", color: "var(--gray-400)", fontSize: 13 } },
-          React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "\xf0\x9f\x8f\x86"),
+          React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "\ud83c\udfc6"),
           React.createElement("div", null, "No active challengers right now"),
-          React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Start a habit streak to appear here!")
+          React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Keep a streak going to appear here!")
         ),
-        React.createElement(SegSection, { label: "Sprint stage \xc2\xb7 Day 15\xe2\x80\x9321", list: sprint }),
-        React.createElement(SegSection, { label: "Momentum stage \xc2\xb7 Day 8\xe2\x80\x9314", list: momentum }),
-        React.createElement(SegSection, { label: "Starting stage \xc2\xb7 Day 1\xe2\x80\x937", list: starting })
+        React.createElement(SegSection, { label: "\ud83d\udd25 Almost there \u00b7 Day 18\u201321", list: nearEnd }),
+        React.createElement(SegSection, { label: "\u26a1 Building momentum \u00b7 Day 8\u201317", list: buildMomentum }),
+        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20133", list: justStarted }),
+        React.createElement(SegSection, { label: "Day 4\u20137", list: midRange })
       );
     };
 
