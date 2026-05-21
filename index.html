@@ -181,6 +181,36 @@
         body[data-theme="dark"] .view-all-posts-btn:hover { border-color:var(--blue-accent); background:var(--bg-card); }
         body[data-theme="dark"] .cheer-detail-panel { background:var(--bg-subtle); border:1px solid var(--border-dk); }
         body[data-theme="dark"] .cheer-detail-big { color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-stats { border-color:var(--border-dk); }
+        body[data-theme="dark"] .profile-stat { border-right-color:var(--border-dk); }
+        body[data-theme="dark"] .profile-stat-value { color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-avatar { background:var(--bg-subtle); border-color:var(--blue-dim); color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-header { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .section-title { color:var(--blue-muted) !important; border-left:2px solid var(--blue-accent); padding-left:8px; }
+        body[data-theme="dark"] .history-entry-btn { background:var(--bg-card); border-color:var(--border-dk); }
+        body[data-theme="dark"] .history-entry-btn:hover { background:var(--bg-subtle); border-color:var(--blue-accent); }
+        body[data-theme="dark"] .history-entry-icon { background:var(--bg-subtle); border:1px solid var(--blue-dim); }
+        body[data-theme="dark"] .history-entry-text strong { color:var(--text-primary); }
+        body[data-theme="dark"] .history-entry-text span { color:var(--blue-muted); }
+        body[data-theme="dark"] .history-entry-arrow { color:var(--blue-dim); }
+        body[data-theme="dark"] .privacy-settings-entry:hover { border-color:var(--blue-accent); background:var(--bg-subtle); }
+        body[data-theme="dark"] .privacy-settings-entry-icon { background:var(--bg-subtle); border:1px solid var(--blue-dim); }
+        body[data-theme="dark"] .privacy-settings-entry-text strong { color:var(--text-primary); }
+        body[data-theme="dark"] .privacy-settings-entry-text span { color:var(--blue-muted); }
+        body[data-theme="dark"] .composer-wrap { border-color:var(--border-dk); }
+        body[data-theme="dark"] .composer-toolbar { background:var(--bg-card); border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .composer-media-btn { background:var(--bg-card); border-color:var(--border-dk); color:var(--blue-muted); }
+        body[data-theme="dark"] .composer-media-btn:hover { border-color:var(--blue-accent); color:var(--blue-accent); }
+        body[data-theme="dark"] .delete-account-btn { border-color:#3a1010; color:#e05555; background:var(--bg-card); }
+        body[data-theme="dark"] .delete-account-btn:hover { background:#1a0808; border-color:#e05555; }
+        body[data-theme="dark"] .profile-privacy-section { border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .privacy-toggle-row { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .toggle-slider { background:var(--bg-subtle); }
+        body[data-theme="dark"] .toggle-switch input:checked + .toggle-slider { background:var(--blue-accent); }
+        body[data-theme="dark"] .view-all-posts-btn { background:var(--bg-subtle); color:var(--blue-accent); border:1px solid var(--border-dk); }
+        body[data-theme="dark"] .view-all-posts-btn:hover { border-color:var(--blue-accent); background:var(--bg-card); }
+        body[data-theme="dark"] .cheer-detail-panel { background:var(--bg-subtle); border:1px solid var(--border-dk); }
+        body[data-theme="dark"] .cheer-detail-big { color:var(--blue-accent); }
         /* ── PROFILE DARK BLUE ACCENTS ── */
         body[data-theme="dark"] .profile-stats { border-color:var(--border-dk); }
         body[data-theme="dark"] .profile-stat { border-right-color:var(--border-dk); }
@@ -2301,8 +2331,15 @@ if (isFirebaseConfigured) {
       // the callback and leave the UI stuck on the login page forever.
       var { data: { subscription } } = _supabase.auth.onAuthStateChange(function(event, session) {
         if (event === 'TOKEN_REFRESHED') return;
-        // Keep _cachedUser in sync so auth.currentUser is always accurate
-        auth._cachedUser = session ? _makeUser(session.user) : null;
+        // Build user from the session's user object — session.user has the most
+        // up-to-date confirmed_at / email_confirmed_at from Supabase.
+        var rawUser = session && session.user ? session.user : null;
+        // Extra safety: if session exists but email_confirmed_at is missing,
+        // patch it from confirmed_at so _makeUser sees it as verified.
+        if (rawUser && !rawUser.email_confirmed_at && rawUser.confirmed_at) {
+          rawUser = Object.assign({}, rawUser, { email_confirmed_at: rawUser.confirmed_at });
+        }
+        auth._cachedUser = rawUser ? _makeUser(rawUser) : null;
         cb(auth._cachedUser);
       });
       return function() { subscription.unsubscribe(); };
@@ -2379,7 +2416,12 @@ if (isFirebaseConfigured) {
       email: u.email,
       displayName: (u.user_metadata && (u.user_metadata.signup_display_name || u.user_metadata.full_name || u.user_metadata.name)) || (u.email ? u.email.split('@')[0] : ''),
       photoURL: u.user_metadata && u.user_metadata.avatar_url || null,
-      emailVerified: !!u.email_confirmed_at,
+      // Supabase sometimes returns email_confirmed_at=null on signInWithPassword
+      // even for confirmed users. Check all available fields.
+      emailVerified: !!(u.email_confirmed_at || u.confirmed_at ||
+        (u.app_metadata && u.app_metadata.provider && u.app_metadata.provider !== "email") ||
+        (u.identities && u.identities.length > 0 && u.identities.some(function(i){ return i.identity_data && i.identity_data.email_verified; }))
+      ),
       providerData: [{ providerId: u.app_metadata && u.app_metadata.provider || 'email' }],
       getIdToken: function() { return auth.getIdToken(); },
       getIdTokenResult: function(force) {
@@ -3910,16 +3952,16 @@ function AuthPage(_ref2) {
     try {
       if (isLogin) {
         // ── Sign In ──
+        // Call signInWithPassword — if it succeeds, Supabase fires onAuthStateChange(SIGNED_IN)
+        // which is handled by AppWrapper's onAuthStateChanged → setUser → navigate to app.
+        // We do NOT check emailVerified here because signInWithPassword already enforces it
+        // server-side (unconfirmed accounts get an "Email not confirmed" error from Supabase).
+        // Checking it client-side from _makeUser is unreliable (email_confirmed_at can be null).
         var r = await auth.signInWithEmailAndPassword(email, password);
-        if (r.user.emailVerified || (r.user.providerData && r.user.providerData.some(function(p){ return p.providerId === 'google.com'; }))) {
-          // verified — onAuthStateChanged handles navigation
-        } else {
-          // Not verified → sign out and show verification screen
-          await auth.signOut();
-          setSentEmail(email);
-          setVerificationSent(true);
-          startCooldown();
-        }
+        // signInWithEmailAndPassword only resolves if credentials are correct AND email is confirmed.
+        // onAuthStateChanged will receive the SIGNED_IN event and handle navigation.
+        // Nothing more to do here — setLoading(false) runs in finally{}.
+        void r; // suppress unused variable warning
       } else {
         // ── Sign Up ──
         // 1. Block early if inline checks already detected conflicts
@@ -10005,12 +10047,33 @@ function App() {
         var isGoogle = u.providerData && u.providerData.some(function(p){ return p.providerId === 'google.com'; });
         var verified = isGoogle || u.emailVerified;
         if (!verified) {
-          // Unverified — sign out, but still mark auth as done loading
+          // emailVerified=false can be a stale/incomplete user object from Supabase.
+          // Supabase server already blocks unconfirmed users from signing in, so if
+          // we receive a SIGNED_IN event the user IS confirmed. Only auto-signOut on
+          // INITIAL_SESSION (page load with a pre-existing session that is truly unconfirmed).
+          // We detect this via _registering: during active login, never auto-signOut.
           setAuthLoading(false);
           if (!_registering) {
-            setTimeout(function() {
-              if (!_registering) auth.signOut();
-            }, 500);
+            // Re-fetch fresh session to double-check before signing out
+            _supabase.auth.getSession().then(function(sr) {
+              var freshUser = sr.data && sr.data.session && sr.data.session.user;
+              var freshVerified = freshUser && !!(freshUser.email_confirmed_at || freshUser.confirmed_at);
+              if (!freshVerified && !_registering) {
+                auth.signOut();
+              } else if (freshVerified) {
+                // Was a stale object — patch and re-run the callback with fresh data
+                var patched = Object.assign({}, freshUser, {
+                  email_confirmed_at: freshUser.email_confirmed_at || freshUser.confirmed_at
+                });
+                var patchedUser = _makeUser(patched);
+                patchedUser && (u = patchedUser);
+                // Re-trigger by calling the outer handler inline
+                // (just set the user directly since we know they're verified)
+                if (patchedUser && !window._isDeletingAccount) {
+                  setUser(patchedUser);
+                }
+              }
+            }).catch(function() { /* network error — leave user on login page */ });
           }
           return;
         }
