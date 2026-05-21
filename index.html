@@ -151,6 +151,36 @@
         body[data-theme="dark"] .pw-input-bar { background:var(--bg-card); border-top-color:var(--border-dk); }
         body[data-theme="dark"] .history-page,
         body[data-theme="dark"] .profile-header { background:var(--bg); }
+        body[data-theme="dark"] .profile-stats { border-color:var(--border-dk); }
+        body[data-theme="dark"] .profile-stat { border-right-color:var(--border-dk); }
+        body[data-theme="dark"] .profile-stat-value { color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-avatar { background:var(--bg-subtle); border-color:var(--blue-dim); color:var(--blue-accent); }
+        body[data-theme="dark"] .profile-header { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .section-title { color:var(--blue-muted) !important; border-left:2px solid var(--blue-accent); padding-left:8px; }
+        body[data-theme="dark"] .history-entry-btn { background:var(--bg-card); border-color:var(--border-dk); }
+        body[data-theme="dark"] .history-entry-btn:hover { background:var(--bg-subtle); border-color:var(--blue-accent); }
+        body[data-theme="dark"] .history-entry-icon { background:var(--bg-subtle); border:1px solid var(--blue-dim); }
+        body[data-theme="dark"] .history-entry-text strong { color:var(--text-primary); }
+        body[data-theme="dark"] .history-entry-text span { color:var(--blue-muted); }
+        body[data-theme="dark"] .history-entry-arrow { color:var(--blue-dim); }
+        body[data-theme="dark"] .privacy-settings-entry:hover { border-color:var(--blue-accent); background:var(--bg-subtle); }
+        body[data-theme="dark"] .privacy-settings-entry-icon { background:var(--bg-subtle); border:1px solid var(--blue-dim); }
+        body[data-theme="dark"] .privacy-settings-entry-text strong { color:var(--text-primary); }
+        body[data-theme="dark"] .privacy-settings-entry-text span { color:var(--blue-muted); }
+        body[data-theme="dark"] .composer-wrap { border-color:var(--border-dk); }
+        body[data-theme="dark"] .composer-toolbar { background:var(--bg-card); border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .composer-media-btn { background:var(--bg-card); border-color:var(--border-dk); color:var(--blue-muted); }
+        body[data-theme="dark"] .composer-media-btn:hover { border-color:var(--blue-accent); color:var(--blue-accent); }
+        body[data-theme="dark"] .delete-account-btn { border-color:#3a1010; color:#e05555; background:var(--bg-card); }
+        body[data-theme="dark"] .delete-account-btn:hover { background:#1a0808; border-color:#e05555; }
+        body[data-theme="dark"] .profile-privacy-section { border-top-color:var(--border-dk); }
+        body[data-theme="dark"] .privacy-toggle-row { border-bottom-color:var(--border-dk); }
+        body[data-theme="dark"] .toggle-slider { background:var(--bg-subtle); }
+        body[data-theme="dark"] .toggle-switch input:checked + .toggle-slider { background:var(--blue-accent); }
+        body[data-theme="dark"] .view-all-posts-btn { background:var(--bg-subtle); color:var(--blue-accent); border:1px solid var(--border-dk); }
+        body[data-theme="dark"] .view-all-posts-btn:hover { border-color:var(--blue-accent); background:var(--bg-card); }
+        body[data-theme="dark"] .cheer-detail-panel { background:var(--bg-subtle); border:1px solid var(--border-dk); }
+        body[data-theme="dark"] .cheer-detail-big { color:var(--blue-accent); }
         /* ── PROFILE DARK BLUE ACCENTS ── */
         body[data-theme="dark"] .profile-stats { border-color:var(--border-dk); }
         body[data-theme="dark"] .profile-stat { border-right-color:var(--border-dk); }
@@ -1474,13 +1504,17 @@
   function doRefresh() {
     if (_refreshing) return;
     _refreshing = true;
-    ptrSpinning('重新整理中…');
 
     if (_reactPtrReady && typeof window._ptrDoRefresh === 'function') {
       // React 正常運作：只做 data refresh，不 reload
+      ptrSpinning('重新整理中…');
       window._ptrDoRefresh(function() { ptrReset(); });
+    } else if (_reactPtrReady) {
+      // React 已掛載但 _ptrDoRefresh 未注入 → 使用者在登入頁，不做任何事
+      ptrReset();
     } else {
-      // React 未掛載（白頁）：清 SW cache + hard reload
+      // React 完全未掛載（白頁）：清 SW cache + hard reload
+      ptrSpinning('重新整理中…');
       setTimeout(function(){
         hardReload();
       }, 400);
@@ -2261,14 +2295,12 @@ if (isFirebaseConfigured) {
     _cachedUser: null,
     onAuthStateChanged: function(cb) {
       // Use onAuthStateChange exclusively — avoids double-firing with getSession().
-      // INITIAL_SESSION fires once on load with persisted session.
       // TOKEN_REFRESHED is skipped (silent JWT rotation, not a real state change).
-      var _lastUid = null;
+      // NOTE: do NOT deduplicate SIGNED_IN by uid — if the user logs in while an
+      // INITIAL_SESSION already set _lastUid to the same uid, the dedup would block
+      // the callback and leave the UI stuck on the login page forever.
       var { data: { subscription } } = _supabase.auth.onAuthStateChange(function(event, session) {
         if (event === 'TOKEN_REFRESHED') return;
-        var uid = session && session.user && session.user.id;
-        if (event === 'SIGNED_IN' && uid && uid === _lastUid) return; // deduplicate
-        _lastUid = uid || null;
         // Keep _cachedUser in sync so auth.currentUser is always accurate
         auth._cachedUser = session ? _makeUser(session.user) : null;
         cb(auth._cachedUser);
