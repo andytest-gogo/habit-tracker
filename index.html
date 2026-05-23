@@ -1542,8 +1542,10 @@
       ptrSpinning('Refreshing…');
       window._ptrDoRefresh(function() { ptrReset(); });
     } else if (_reactPtrReady) {
-      // React mounted but _ptrDoRefresh not injected → user is on login page, do nothing
-      ptrReset();
+      // React mounted but _ptrDoRefresh not injected → user is on login page
+      // Do a hard reload so they can force a fresh load if stuck
+      ptrSpinning('Refreshing…');
+      setTimeout(function(){ hardReload(); }, 400);
     } else {
       // React not mounted at all (white page): clear SW cache + hard reload
       ptrSpinning('Refreshing…');
@@ -3966,16 +3968,15 @@ function AuthPage(_ref2) {
     try {
       if (isLogin) {
         // ── Sign In ──
-        // Call signInWithPassword — if it succeeds, Supabase fires onAuthStateChange(SIGNED_IN)
-        // which triggers App's onAuthStateChanged → DB writes → setUser → navigate to app.
-        // IMPORTANT: on mobile PWA those DB writes can take 2-5s on a slow connection.
-        // We intentionally keep loading=true after a successful sign-in so the button
-        // stays "Processing…" while DB writes complete — prevents the user from thinking
-        // it failed and tapping again, causing the "Processing → Sign In → stuck" loop.
-        // setLoading(false) only runs: (a) in catch{} on error, or (b) the 15s safety timeout.
+        // Set _registering=true to prevent onAuthStateChanged from auto-signing out the user
+        // if Supabase returns email_confirmed_at=null (a known Supabase mobile bug).
+        // Supabase server already rejects unconfirmed accounts, so if signInWithPassword
+        // resolves, the user IS confirmed — we just can't trust the client-side field.
+        _registering = true;
         await auth.signInWithEmailAndPassword(email, password);
-        // Credentials accepted — set flag so finally{} skips setLoading(false).
-        // Keep loading=true until App's onAuthStateChanged navigates away (looks right on mobile).
+        // Credentials accepted — keep loading=true so button stays "Processing…"
+        // while App's onAuthStateChanged runs DB writes and calls setUser().
+        // _registering stays true until onAuthStateChanged resets it after setUser().
         _signInSuccess = true;
       } else {
         // ── Sign Up ──
@@ -4127,6 +4128,7 @@ function AuthPage(_ref2) {
         }
       }
     } catch (err) {
+      _registering = false; // reset on any error
       if (err.code === 'auth/email-already-in-use') {
         setEmailStatus('taken');
         setError('This email is already registered. Please sign in instead.');
@@ -10261,10 +10263,12 @@ function App() {
 
           return Promise.all(writePromises);
         }).then(function() {
+          _registering = false; // reset sign-in guard
           setUser(u); // setUser AFTER all writes — UI always gets correct data
           setAuthLoading(false);
         }).catch(function(e) {
           console.warn('[auth] DB write failed:', e.message);
+          _registering = false; // reset even on error
           setUser(u); // still set user even if DB write failed
           setAuthLoading(false);
         });
