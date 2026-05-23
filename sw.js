@@ -1,7 +1,7 @@
-const CACHE_VERSION = 'ht-v20250516-6';
+const CACHE_VERSION = 'ht-v20260523-1';
 
 self.addEventListener('install', event => {
-  // 不預快取任何東西，直接接管
+  // Skip waiting immediately so new SW activates without waiting for old tabs to close
   event.waitUntil(self.skipWaiting());
 });
 
@@ -18,19 +18,19 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 跨域不攔截
+  // Don't intercept cross-origin requests
   if (url.origin !== self.location.origin) return;
 
-  // HTML 導航 → 永遠從網路取，不快取
+  // HTML navigation → always network-first, never serve stale HTML
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-store' })
         .catch(() => caches.match(event.request))
     );
     return;
   }
 
-  // 圖片字型 → cache-first
+  // Images & fonts → cache-first (these don't change often)
   if (/\.(png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(url.pathname)) {
     event.respondWith(
       caches.match(event.request).then(cached => {
@@ -46,7 +46,8 @@ self.addEventListener('fetch', event => {
     );
     return;
   }
-  // 其他 → 直接網路
+
+  // Everything else → network only (JS, API calls, etc.)
 });
 
 self.addEventListener('message', event => {

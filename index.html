@@ -10307,11 +10307,19 @@ if (typeof window._wsgOnReactReady === 'function') window._wsgOnReactReady();
         if (_swPrev) sessionStorage.removeItem('_sw_r');
 
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('./sw.js')
+            navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
                 .then(function(reg) {
                     _swReg = reg;
                     if (Notification.permission === 'granted') scheduleDailyReminder(reg);
+
+                    // Check for SW update immediately on load (don't wait 24h)
+                    reg.update();
+                    // Also check every 30s while app is open
                     setInterval(function(){ reg.update(); }, 30000);
+                    // And check whenever user returns from background
+                    document.addEventListener('visibilitychange', function() {
+                        if (document.visibilityState === 'visible') reg.update();
+                    });
 
                     function wake(w){ w.postMessage({ type: 'SKIP_WAITING' }); }
                     if (reg.waiting) wake(reg.waiting);
