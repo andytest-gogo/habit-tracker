@@ -108,6 +108,8 @@
         }
         html { background: var(--bg, var(--white)); }
         * { margin:0; padding:0; box-sizing:border-box; }
+        /* iOS Safari PWA resets: prevent system blue from leaking into button SVGs */
+        button { color: inherit; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: var(--font);
             background: var(--bg, var(--white));
@@ -2981,7 +2983,8 @@ var HomeIcon = function HomeIcon() {
   return /*#__PURE__*/React.createElement("svg", {
     fill: "none",
     viewBox: "0 0 24 24",
-    stroke: "currentColor"
+    stroke: "currentColor",
+    style: { color: "inherit" }
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap: "round",
     strokeLinejoin: "round",
@@ -3005,7 +3008,8 @@ var FeedIcon = function FeedIcon() {
   return /*#__PURE__*/React.createElement("svg", {
     fill: "none",
     viewBox: "0 0 24 24",
-    stroke: "currentColor"
+    stroke: "currentColor",
+    style: { color: "inherit" }
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap: "round",
     strokeLinejoin: "round",
@@ -3017,7 +3021,8 @@ var ProfileIcon = function ProfileIcon() {
   return /*#__PURE__*/React.createElement("svg", {
     fill: "none",
     viewBox: "0 0 24 24",
-    stroke: "currentColor"
+    stroke: "currentColor",
+    style: { color: "inherit" }
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap: "round",
     strokeLinejoin: "round",
@@ -3951,6 +3956,7 @@ function AuthPage(_ref2) {
     }
 
     setLoading(true);
+    var _signInSuccess = false; // set to true on successful sign-in to skip finally{} reset
 
     // Safety net: if the finally block doesn't fire (e.g. unmount race), reset loading after 15s
     var _loadingTimeout = setTimeout(function() { setLoading(false); }, 15000);
@@ -3961,21 +3967,16 @@ function AuthPage(_ref2) {
       if (isLogin) {
         // ── Sign In ──
         // Call signInWithPassword — if it succeeds, Supabase fires onAuthStateChange(SIGNED_IN)
-        // which is handled by AppWrapper's onAuthStateChanged → setUser → navigate to app.
-        // We do NOT check emailVerified here because signInWithPassword already enforces it
-        // server-side (unconfirmed accounts get an "Email not confirmed" error from Supabase).
-        // Checking it client-side from _makeUser is unreliable (email_confirmed_at can be null).
-        var r = await auth.signInWithEmailAndPassword(email, password);
-        // signInWithEmailAndPassword only resolves if credentials are correct AND email is confirmed.
-        // onAuthStateChanged will receive the SIGNED_IN event and handle navigation.
-        // Keep loading=true until navigation happens (looks smoother), but cap it so we don't hang.
-        void r; // suppress unused variable warning — setLoading(false) fires in finally
-        // Checking it client-side from _makeUser is unreliable (email_confirmed_at can be null).
-        var r = await auth.signInWithEmailAndPassword(email, password);
-        // signInWithEmailAndPassword only resolves if credentials are correct AND email is confirmed.
-        // onAuthStateChanged will receive the SIGNED_IN event and handle navigation.
-        // Nothing more to do here — setLoading(false) runs in finally{}.
-        void r; // suppress unused variable warning
+        // which triggers App's onAuthStateChanged → DB writes → setUser → navigate to app.
+        // IMPORTANT: on mobile PWA those DB writes can take 2-5s on a slow connection.
+        // We intentionally keep loading=true after a successful sign-in so the button
+        // stays "Processing…" while DB writes complete — prevents the user from thinking
+        // it failed and tapping again, causing the "Processing → Sign In → stuck" loop.
+        // setLoading(false) only runs: (a) in catch{} on error, or (b) the 15s safety timeout.
+        await auth.signInWithEmailAndPassword(email, password);
+        // Credentials accepted — set flag so finally{} skips setLoading(false).
+        // Keep loading=true until App's onAuthStateChanged navigates away (looks right on mobile).
+        _signInSuccess = true;
       } else {
         // ── Sign Up ──
         // 1. Block early if inline checks already detected conflicts
@@ -4133,8 +4134,12 @@ function AuthPage(_ref2) {
         setError((firebaseErrMsg(err.code) || err.message) + ' [code: ' + (err.code||'none') + ']');
       }
     } finally {
-      clearTimeout(_loadingTimeout);
-      setLoading(false);
+      // On successful sign-in, keep loading=true — App will navigate away once
+      // onAuthStateChanged fires and DB writes complete. On error, reset immediately.
+      if (!_signInSuccess) {
+        clearTimeout(_loadingTimeout);
+        setLoading(false);
+      }
     }
   };
 
@@ -9640,7 +9645,7 @@ function MainApp(_ref16) {
     onClick: function onClick() { return setActiveTab('buddies'); }
   }, /*#__PURE__*/React.createElement("svg", {
     fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2,
-    width: "20", height: "20", style: { display:'block', margin:'0 auto 3px' }
+    width: "20", height: "20", style: { display:'block', margin:'0 auto 3px', color:'inherit' }
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap: "round", strokeLinejoin: "round",
     d: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
