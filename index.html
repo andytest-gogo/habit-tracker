@@ -1471,7 +1471,7 @@
 <body>
 <!-- ── EU Accessibility Act: Skip Navigation Link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-<div id="_ptr_indicator"><div class="ptr-spinner"></div><span id="_ptr_text">下拉重新整理</span></div>
+<div id="_ptr_indicator"><div class="ptr-spinner"></div><span id="_ptr_text">Pull to refresh</span></div>
 <div id="main-content" role="main"></div>
 <script>(function(){try{var t=localStorage.getItem('_ht_theme');if(t)document.body.setAttribute('data-theme',t);}catch(e){}})()</script>
 <script>
@@ -1510,20 +1510,20 @@
     ind.style.transform = 'translateX(-50%) translateY(' + (pct * 64 - 64) + 'px)';
     ind.classList.add('visible');
     ind.classList.remove('refreshing');
-    if (txt) txt.textContent = dy >= THR ? '放開重新整理' : '下拉重新整理';
+    if (txt) txt.textContent = dy >= THR ? 'Release to refresh' : 'Pull to refresh';
   }
   function ptrReset() {
     if (!ind) return;
     ind.classList.remove('visible','refreshing');
     ind.style.transform = '';
-    if (txt) txt.textContent = '下拉重新整理';
+    if (txt) txt.textContent = 'Pull to refresh';
     _refreshing = false;
   }
   function ptrSpinning(msg) {
     if (!ind) return;
     ind.classList.add('visible','refreshing');
     ind.style.transform = 'translateX(-50%) translateY(0)';
-    if (txt) txt.textContent = msg || '重新整理中…';
+    if (txt) txt.textContent = msg || 'Refreshing…';
   }
 
   /* ────────────────────────────────────────────────
@@ -1537,14 +1537,14 @@
 
     if (_reactPtrReady && typeof window._ptrDoRefresh === 'function') {
       // React 正常運作：只做 data refresh，不 reload
-      ptrSpinning('重新整理中…');
+      ptrSpinning('Refreshing…');
       window._ptrDoRefresh(function() { ptrReset(); });
     } else if (_reactPtrReady) {
-      // React 已掛載但 _ptrDoRefresh 未注入 → 使用者在登入頁，不做任何事
+      // React mounted but _ptrDoRefresh not injected → user is on login page, do nothing
       ptrReset();
     } else {
-      // React 完全未掛載（白頁）：清 SW cache + hard reload
-      ptrSpinning('重新整理中…');
+      // React not mounted at all (white page): clear SW cache + hard reload
+      ptrSpinning('Refreshing…');
       setTimeout(function(){
         hardReload();
       }, 400);
@@ -1619,10 +1619,10 @@
     div.innerHTML = [
       '<div style="font-size:52px;margin-bottom:24px;animation:_wsgBounce 1.6s ease-in-out infinite;">↓</div>',
       '<div style="font-size:20px;font-weight:800;color:#0a0a0a;margin-bottom:10px;letter-spacing:-.3px;">',
-        '下拉重新整理',
+        'Pull to Refresh',
       '</div>',
       '<div style="font-size:14px;color:#737373;line-height:1.7;max-width:260px;margin-bottom:36px;">',
-        '從頁面頂端往下拉<br>即可重新載入 APP',
+        'Pull down from the top of the page<br>to reload the app',
       '</div>',
       '<div style="width:48px;height:3px;background:#e0e0e0;border-radius:2px;overflow:hidden;margin-bottom:32px;">',
         '<div style="height:100%;background:#0a0a0a;border-radius:2px;animation:_wsgSlide 1.6s ease-in-out infinite;"></div>',
@@ -1634,7 +1634,7 @@
       '})()" style="padding:14px 0;background:#0a0a0a;color:#fff;border:none;',
         'font-size:14px;font-weight:700;cursor:pointer;border-radius:2px;',
         'letter-spacing:.3px;width:100%;max-width:280px;">',
-        '立即重新載入',
+        'Reload Now',
       '</button>',
       '<style>',
         '@keyframes _wsgBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}',
@@ -1651,15 +1651,20 @@
      5. 全域 JS 錯誤攔截 → 顯示下拉引導（不顯示技術錯誤）
   ──────────────────────────────────────────────── */
   window.addEventListener('error', function(e) {
-    // 忽略圖片/資源載入失敗（不是 React crash）
+    // Ignore image/resource load failures (not a React crash)
     if (e.target && e.target.tagName && e.target.tagName !== 'SCRIPT') return;
+    // Only show the guide if React hasn't mounted yet (genuine white page)
+    if (_reactPtrReady) return;
     console.error('[WSG] error:', e.message);
     showPullGuide('js_error');
   });
   window.addEventListener('unhandledrejection', function(e) {
     var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || '');
-    // 網路失敗類不顯示 UI（background fetch 常發生）
+    // Never show the guide for auth/network/API errors — these are app-level, not white-page
     if (/failed to fetch|networkerror|load failed|aborted/i.test(msg)) return;
+    if (/auth\/|supabase|invalid.*credential|email.*confirm|sign.?in|log.?in|password|token|session/i.test(msg)) return;
+    // Only show guide if React has NOT mounted (true white-page scenario)
+    if (_reactPtrReady) return;
     console.error('[WSG] rejection:', msg);
     showPullGuide('promise_rejection');
   });
@@ -2326,11 +2331,11 @@ if (isFirebaseConfigured) {
     onAuthStateChanged: function(cb) {
       // Use onAuthStateChange exclusively — avoids double-firing with getSession().
       // TOKEN_REFRESHED is skipped (silent JWT rotation, not a real state change).
-      // NOTE: do NOT deduplicate SIGNED_IN by uid — if the user logs in while an
-      // INITIAL_SESSION already set _lastUid to the same uid, the dedup would block
-      // the callback and leave the UI stuck on the login page forever.
+      // INITIAL_SESSION with no session is also skipped — it fires on page load when
+      // the user is logged out and would needlessly reset any in-progress auth state.
       var { data: { subscription } } = _supabase.auth.onAuthStateChange(function(event, session) {
         if (event === 'TOKEN_REFRESHED') return;
+        if (event === 'INITIAL_SESSION' && !session) return;
         // Build user from the session's user object — session.user has the most
         // up-to-date confirmed_at / email_confirmed_at from Supabase.
         var rawUser = session && session.user ? session.user : null;
@@ -3947,7 +3952,10 @@ function AuthPage(_ref2) {
 
     setLoading(true);
 
-    if (!isFirebaseConfigured) { handleDemoLogin(); return; }
+    // Safety net: if the finally block doesn't fire (e.g. unmount race), reset loading after 15s
+    var _loadingTimeout = setTimeout(function() { setLoading(false); }, 15000);
+
+    if (!isFirebaseConfigured) { clearTimeout(_loadingTimeout); handleDemoLogin(); return; }
 
     try {
       if (isLogin) {
@@ -3956,6 +3964,12 @@ function AuthPage(_ref2) {
         // which is handled by AppWrapper's onAuthStateChanged → setUser → navigate to app.
         // We do NOT check emailVerified here because signInWithPassword already enforces it
         // server-side (unconfirmed accounts get an "Email not confirmed" error from Supabase).
+        // Checking it client-side from _makeUser is unreliable (email_confirmed_at can be null).
+        var r = await auth.signInWithEmailAndPassword(email, password);
+        // signInWithEmailAndPassword only resolves if credentials are correct AND email is confirmed.
+        // onAuthStateChanged will receive the SIGNED_IN event and handle navigation.
+        // Keep loading=true until navigation happens (looks smoother), but cap it so we don't hang.
+        void r; // suppress unused variable warning — setLoading(false) fires in finally
         // Checking it client-side from _makeUser is unreliable (email_confirmed_at can be null).
         var r = await auth.signInWithEmailAndPassword(email, password);
         // signInWithEmailAndPassword only resolves if credentials are correct AND email is confirmed.
@@ -4119,6 +4133,7 @@ function AuthPage(_ref2) {
         setError((firebaseErrMsg(err.code) || err.message) + ' [code: ' + (err.code||'none') + ']');
       }
     } finally {
+      clearTimeout(_loadingTimeout);
       setLoading(false);
     }
   };
