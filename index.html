@@ -1495,7 +1495,7 @@
   /* ── 常數 ── */
   var THR             = 68;          // px，觸發 refresh 的下拉距離
   var RENDER_TIMEOUT  = 12000;       // ms，等待 React 渲染的最長時間
-  var MAX_AUTO_RELOAD = 3;           // 自動 reload 上限
+  var MAX_AUTO_RELOAD = 2;           // auto-reload cap (manual 'Reload Now' counts too)
   var RELOAD_WIN      = 5 * 60000;   // 5分鐘計算視窗
   var SK_COUNT        = 'wsg_rc';
   var SK_TS           = 'wsg_ts';
@@ -1684,9 +1684,18 @@
   ──────────────────────────────────────────────── */
   var _renderTimer = setTimeout(function(){
     var mc = document.getElementById('main-content');
-    if (!mc || mc.children.length === 0) {
-      console.warn('[WSG] render timeout');
-      showPullGuide('render_timeout');
+    // Only show guide if truly empty AND not already showing the guide itself
+    if (!mc || (mc.children.length === 0) ||
+        (mc.children.length === 1 && mc.children[0].id === '_wsg_guide')) {
+      // Double-check after another 3s before giving up
+      setTimeout(function() {
+        var mc2 = document.getElementById('main-content');
+        var guideOnly = mc2 && mc2.children.length === 1 && mc2.children[0].id === '_wsg_guide';
+        if (!mc2 || mc2.children.length === 0 || guideOnly) {
+          console.warn('[WSG] render timeout');
+          showPullGuide('render_timeout');
+        }
+      }, 3000);
     }
   }, RENDER_TIMEOUT);
 
@@ -1701,13 +1710,22 @@
   /* ────────────────────────────────────────────────
      7. 回前台偵測：空白則自動 reload（最多3次/5分鐘）
   ──────────────────────────────────────────────── */
+  var _hiddenAt = 0;
   document.addEventListener('visibilitychange', function(){
-    if (document.visibilityState !== 'visible') return;
-    // iOS 從背景回來時 React re-hydrate + Supabase reconnect 可能需要 1-3 秒，
-    // 延長至 2000ms 並加強判斷（offsetHeight < 50 避免 React root 存在但內容空白的誤判）
+    if (document.visibilityState === 'hidden') {
+      _hiddenAt = Date.now();
+      return;
+    }
+    // Only check for blank page if app was hidden for >8s
+    // Short alt-tab / window switches on desktop should never trigger a reload
+    var hiddenMs = Date.now() - _hiddenAt;
+    if (hiddenMs < 8000) return;
+
     setTimeout(function(){
+      // If React is already mounted and healthy, do nothing
+      if (_reactPtrReady) return;
       var mc = document.getElementById('main-content');
-      var isEmpty = !mc || mc.children.length === 0 || mc.offsetHeight < 50;
+      var isEmpty = !mc || mc.children.length === 0 || mc.offsetHeight < 100;
       if (isEmpty) {
         try {
           var ts  = parseInt(sessionStorage.getItem(SK_TS)  || '0');
@@ -1750,7 +1768,17 @@
         var k = localStorage.key(i);
         if (k && keep.indexOf(k) === -1 && !k.startsWith('avatar_')) localStorage.removeItem(k);
       }
+      // Preserve reload counter and SW reload guard so we don't loop after clearing
+      var _rc = sessionStorage.getItem('wsg_rc');
+      var _rt = sessionStorage.getItem('wsg_ts');
+      var _sr = sessionStorage.getItem('_sw_r');
       sessionStorage.clear();
+      // Bump the counter so manual "Reload Now" counts toward the cap
+      var _cnt = parseInt(_rc || '0', 10) + 1;
+      var _ts  = _rt || String(Date.now());
+      sessionStorage.setItem('wsg_rc', String(_cnt));
+      sessionStorage.setItem('wsg_ts', _ts);
+      if (_sr) sessionStorage.setItem('_sw_r', _sr);
     } catch(e){}
     window.location.href = window.location.pathname + '?_r=' + Date.now();
   };
