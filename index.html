@@ -1258,8 +1258,14 @@
         /* today counter buttons */
         .counter-wrap { display:flex; align-items:center; gap:0; margin-top:8px; border:1px solid var(--gray-200); width:fit-content; }
         .counter-btn { width:30px; height:30px; border:none; background:var(--white); font-size:16px; cursor:pointer; color:var(--gray-600); display:flex; align-items:center; justify-content:center; transition:.15s; font-family:var(--font); font-weight:700; }
-        .counter-btn:hover { background:var(--black); color:var(--white); }
+        .counter-btn:hover:not(:disabled) { background:var(--black); color:var(--white); }
+        .counter-btn:disabled { background:var(--gray-50); color:var(--gray-300); cursor:not-allowed; }
         .counter-val { min-width:30px; text-align:center; font-size:13px; font-weight:700; font-family:var(--mono); border-left:1px solid var(--gray-200); border-right:1px solid var(--gray-200); padding:0 4px; line-height:30px; }
+        .counter-val:disabled { background:var(--gray-50); color:var(--gray-400); cursor:not-allowed; }
+        .counter-wrap.goal-met { background:var(--gray-50); border-color:var(--gray-100); }
+        .counter-done-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:#16a34a; margin-top:6px; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px; }
+        .counter-undo-btn { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--gray-400); border:none; background:none; cursor:pointer; text-decoration:underline; margin-left:6px; font-family:var(--font); padding:0; }
+        .counter-undo-btn:hover { color:var(--gray-600); }
 
         /* delete row at bottom of card */
         .card-delete-row {
@@ -5576,13 +5582,33 @@ function HabitDetailView(_ref11) {
   var _habitForCalc = Object.assign({}, habit, { todayCounts: _mergedCounts });
   var completionRate = calcCompletionRate(_habitForCalc);
 
+  // Track the value before today's last +1 that completed the goal (for Undo)
+  var _prevDoneRef = useRef(done);
+  var _lastUndoVal = useRef(null); // value to restore on Undo
+
   // Wrapped counter: update local state immediately, then sync to parent
   var handleCount = function handleCount(id, delta) {
     var next = Math.min(target, Math.max(0, done + delta));
+    // If this tap will complete the goal, remember the "before" value for Undo
+    if (delta > 0 && next >= target && done < target) {
+      _lastUndoVal.current = done;
+    }
     setLocalDone(next);
     setInputVal(String(next));
     onCount(id, delta);
   };
+
+  // Undo: revert to the value before the goal-completing tap
+  var handleUndo = function handleUndo(id) {
+    var revertTo = _lastUndoVal.current !== null ? _lastUndoVal.current : Math.max(0, done - 1);
+    var delta = revertTo - done;
+    _lastUndoVal.current = null;
+    setLocalDone(revertTo);
+    setInputVal(String(revertTo));
+    onCount(id, delta);
+  };
+
+  var goalMet = done >= target;
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
     className: "back-nav",
     onClick: onBack
@@ -5673,57 +5699,34 @@ function HabitDetailView(_ref11) {
       transition: 'width .4s'
     }
   })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 0,
-      marginTop: 14
-    }
+    style: { display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 14 }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "counter-wrap",
-    style: {
-      width: '100%',
-      justifyContent: 'center'
-    }
+    className: "counter-wrap" + (goalMet ? " goal-met" : ""),
+    style: { width: '100%', justifyContent: 'center' }
   }, /*#__PURE__*/React.createElement("button", {
     className: "counter-btn",
-    style: {
-      flex: 1,
-      height: 44
-    },
-    onClick: function onClick() {
-      return handleCount(habit.id, -1);
-    }
+    style: { flex: 1, height: 44 },
+    disabled: goalMet || done <= 0,
+    onClick: function onClick() { return handleCount(habit.id, -1); }
   }, "\u2212"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    min: "0",
+    type: "number", min: "0",
     className: "counter-val",
+    disabled: goalMet,
     style: {
-      flex: 2,
-      height: 44,
-      fontSize: 18,
-      textAlign: 'center',
+      flex: 2, height: 44, fontSize: 18, textAlign: 'center',
       border: 'none',
       borderLeft: '1px solid var(--gray-200)',
       borderRight: '1px solid var(--gray-200)',
-      outline: 'none',
-      fontFamily: 'var(--din)',
-      fontWeight: 700,
-      background: 'var(--white)',
-      cursor: 'text',
+      outline: 'none', fontFamily: 'var(--din)', fontWeight: 700,
+      background: goalMet ? 'var(--gray-50)' : 'var(--white)',
+      cursor: goalMet ? 'not-allowed' : 'text',
       MozAppearance: 'textfield'
     },
     value: inputVal,
     onChange: function onChange(e) {
+      if (goalMet) return;
       var raw = e.target.value;
-      // Allow empty string while typing
-      if (raw === '') {
-        setInputVal('');
-        handleCount(habit.id, -done);
-        return;
-      }
-      // Strip leading zeros: "011" -> "11", "09" -> "9"
+      if (raw === '') { setInputVal(''); handleCount(habit.id, -done); return; }
       var stripped = raw.replace(/^0+(\d)/, '$1');
       var v = parseInt(stripped, 10);
       if (!isNaN(v) && v >= 0) {
@@ -5731,20 +5734,25 @@ function HabitDetailView(_ref11) {
         handleCount(habit.id, Math.min(target, v) - done);
       }
     },
-    onBlur: function onBlur() {
-      // On blur, if empty restore to current done value
-      if (inputVal === '') setInputVal(String(done));
-    }
+    onBlur: function onBlur() { if (inputVal === '') setInputVal(String(done)); }
   }), /*#__PURE__*/React.createElement("button", {
     className: "counter-btn",
-    style: {
-      flex: 1,
-      height: 44
-    },
-    onClick: function onClick() {
-      return handleCount(habit.id, +1);
-    }
-  }, "\uFF0B"))))));
+    style: { flex: 1, height: 44 },
+    disabled: goalMet,
+    onClick: function onClick() { return handleCount(habit.id, +1); }
+  }, "\uFF0B")),
+  goalMet
+    ? /*#__PURE__*/React.createElement("div", { className: "counter-done-label" },
+        "\u2713 Done for today!",
+        /*#__PURE__*/React.createElement("button", {
+          className: "counter-undo-btn",
+          onClick: function() { handleUndo(habit.id); }
+        }, "Undo")
+      )
+    : /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 6, textAlign: 'center' }
+      }, "Resets at midnight \u00b7 " + (target - done) + " more to complete today")
+  )));
 }
 
 /* ── PRESETS (defined outside component, stable object references) ── */
@@ -7059,24 +7067,73 @@ function MainApp(_ref16) {
   // Load challengers
   var loadChallengers = React.useCallback(function() {
     if (!isFirebaseConfigured || !user) return;
-    // Use direct Supabase query to read all non-private habits from other users
-    // (requires RLS policy: habits_challengers FOR SELECT USING (challenge_visibility != 'private' AND auth.role()='authenticated'))
     var _sb = window._supabaseClient || (window.supabase && window.supabase.createClient ? null : null);
-    // Fall back to db shim — will only work if RLS allows public habit reads
+    var todayISO = toISODay(); // e.g. "2026-05-24"
+
+    // ── Helper: recalculate streak from checked_dates ──────────────────────
+    // The stored `streak` field can be stale (only updated when the owner checks in).
+    // We recalculate it from checked_dates so Challenger page always shows live data.
+    function calcStreak(checkedDates) {
+      if (!checkedDates || !checkedDates.length) return 0;
+      var set = new Set(checkedDates);
+      var streak = 0;
+      var cur = new Date();
+      cur.setHours(0, 0, 0, 0);
+      while (set.has(toISODay(cur))) {
+        streak++;
+        cur.setDate(cur.getDate() - 1);
+      }
+      return streak;
+    }
+
+    // ── Helper: pick one habit per user with round-robin fairness ──────────
+    // Groups habits by userId, then deterministically picks one per user using
+    // a daily rotating index (date-seeded) so every habit gets equal exposure.
+    function pickOnePerUser(habits) {
+      // Group by userId
+      var byUser = {};
+      habits.forEach(function(h) {
+        if (!byUser[h.userId]) byUser[h.userId] = [];
+        byUser[h.userId].push(h);
+      });
+      var todayNum = parseInt(todayISO.replace(/-/g, ''), 10); // e.g. 20260524
+      var result = [];
+      Object.keys(byUser).forEach(function(uid) {
+        var arr = byUser[uid];
+        // Sort by habit id for deterministic order, then pick by daily rotation
+        arr.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
+        var idx = todayNum % arr.length;
+        result.push(arr[idx]);
+      });
+      return result;
+    }
+
     var q = _sb
-      ? _sb.from('habits').select('*').neq('user_id', user.uid).gte('streak', 1).lt('streak', PARTNER_UNLOCK_DAYS).or('challenge_visibility.is.null,challenge_visibility.neq.private')
+      ? _sb.from('habits')
+           .select('id, user_id, name, category, streak, challenge_visibility, today_cheer_count, display_name, checked_dates, user_avatar')
+           .neq('user_id', user.uid)
+           .lt('streak', PARTNER_UNLOCK_DAYS)
+           .or('challenge_visibility.is.null,challenge_visibility.neq.private')
       : null;
+
     var promise = q
       ? q.then(function(r) {
           if (r.error) throw r.error;
-          // Convert snake_case to camelCase manually
           return (r.data || []).map(function(row) {
+            // Recalculate streak from checked_dates for accuracy
+            var checkedDates = Array.isArray(row.checked_dates) ? row.checked_dates : [];
+            var liveStreak = calcStreak(checkedDates);
             return {
               id: String(row.id),
-              userId: row.user_id, name: row.name, category: row.category,
-              streak: row.streak || 0, challengeVisibility: row.challenge_visibility,
+              userId: row.user_id,
+              name: row.name,
+              category: row.category,
+              streak: liveStreak,
+              checkedDates: checkedDates,
+              challengeVisibility: row.challenge_visibility,
               todayCheerCount: row.today_cheer_count || 0,
-              displayName: row.display_name || ''
+              displayName: row.display_name || '',
+              userAvatar: row.user_avatar || null
             };
           });
         })
@@ -7085,20 +7142,36 @@ function MainApp(_ref16) {
           snap.docs.forEach(function(d) {
             var h = Object.assign({ id: d.id }, d.data());
             if (h.userId === user.uid) return;
-            if (!h.streak || h.streak < 1) return;
-            if (h.streak >= PARTNER_UNLOCK_DAYS) return;
-            // NULL or undefined challengeVisibility = public (treat as visible)
             if (h.challengeVisibility === 'private') return;
+            var liveStreak = calcStreak(h.checkedDates || []);
+            h.streak = liveStreak;
             list.push(h);
           });
           return list;
         });
+
     promise.then(function(list) {
+      // ── Filter 1: must have checked in TODAY (streak not broken) ──────────
+      // If today is not in checkedDates, the streak is broken → remove from challenger page
+      list = list.filter(function(h) {
+        return (h.checkedDates || []).includes(todayISO);
+      });
+
+      // ── Filter 2: live streak must be 1–20 ───────────────────────────────
+      list = list.filter(function(h) {
+        return h.streak >= 1 && h.streak < PARTNER_UNLOCK_DAYS;
+      });
+
+      // ── Filter 3: one habit per user, fair daily rotation ────────────────
+      list = pickOnePerUser(list);
+
+      // ── Sort: least cheered first, near-end prioritised ──────────────────
       list.sort(function(a, b) {
         var ac = a.todayCheerCount || 0, bc = b.todayCheerCount || 0;
         if (ac !== bc) return ac - bc;
         return (b.streak >= 15 ? 1 : 0) - (a.streak >= 15 ? 1 : 0);
       });
+
       setChallengers(list);
       if (list.length > 0) setTodayPick(list[0]);
     }).catch(function(e) { console.warn('loadChallengers', e); });
