@@ -5780,7 +5780,7 @@ function HabitDetailView(_ref11) {
     : /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 6, textAlign: 'center' }
       }, "Resets at midnight \u00b7 " + (target - done) + " more to complete today")
-  )));
+  ))));
 }
 
 /* ── PRESETS (defined outside component, stable object references) ── */
@@ -7066,6 +7066,7 @@ function MainApp(_ref16) {
   var [challengers, setChallengers] = React.useState([]);
   var [cheerMap, setCheerMap] = React.useState({});
   var [habitCheers, setHabitCheers] = React.useState({});
+  var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
   var PARTNER_UNLOCK_DAYS = 21;
@@ -7210,13 +7211,19 @@ function MainApp(_ref16) {
     var todayKey = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0,10);
     db.collection('habit_cheers').where('recipientId', '==', user.uid).get().then(function(snap) {
       var counts = {};
+      var uniqueSenders = new Set();
       snap.docs.forEach(function(d) {
         var data = d.data();
         if (!counts[data.habitId]) counts[data.habitId] = { todayCount: 0, totalCount: 0 };
         counts[data.habitId].totalCount++;
         if (data.date === todayKey) counts[data.habitId].todayCount++;
+        if (data.senderId) uniqueSenders.add(data.senderId);
       });
       setHabitCheers(counts);
+      // Compute profile-level totals
+      var totalCheers = snap.docs.length;
+      var uniqueCount = uniqueSenders.size;
+      setProfileCheerStats({ total: totalCheers, supporters: uniqueCount });
     }).catch(function(){});
   }, [user, isFirebaseConfigured]);
 
@@ -7224,8 +7231,11 @@ function MainApp(_ref16) {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
       loadChallengers(); loadMyHabitCheers();
     }
-    // 切回 Home 時也重新載入 cheer 資料，讓首頁習慣卡片的 cheer pill 顯示正確
     if (activeTab === 'home') {
+      loadMyHabitCheers();
+    }
+    // Load cheer stats when profile tab is opened
+    if (activeTab === 'profile') {
       loadMyHabitCheers();
     }
   }, [activeTab, feedSubTab]);
@@ -9260,25 +9270,27 @@ function MainApp(_ref16) {
       className: "profile-email"
     }, user.email), /*#__PURE__*/React.createElement("div", {
       className: "profile-stats"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat-value"
-    }, habits.length), /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat-label"
-    }, "Habits")), /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat-value"
-    }, myPosts.length), /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat-label"
-    }, "Post")), /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat-value"
-    }, rate, "%"), /*#__PURE__*/React.createElement("div", {
-      className: "profile-stat-label"
-    }, "Completion Rate")))), /*#__PURE__*/React.createElement("div", {
+    },
+    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, habits.length),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Habits")
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, myPosts.length),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Posts")
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, rate, "%"),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Completion")
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, profileCheerStats.total),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Cheers")
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, profileCheerStats.supporters),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Supporters")
+    ))), /*#__PURE__*/React.createElement("div", {
       className: "composer-wrap"
     }, /*#__PURE__*/React.createElement("textarea", {
       className: "composer-textarea",

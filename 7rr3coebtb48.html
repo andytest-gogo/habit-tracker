@@ -266,9 +266,9 @@ tr:hover td{background:var(--g50)}
       <div class="pg-sub" id="lastUpdated">Loading...</div>
       <div class="stat-grid">
         <div class="stat dark"><div class="stat-lbl">Total Users</div><div class="stat-val" id="sUsers">—</div><div class="stat-note">Registered</div></div>
-        <div class="stat"><div class="stat-lbl">Total Posts</div><div class="stat-val" id="sPosts">—</div><div class="stat-note">Community feed</div></div>
-        <div class="stat"><div class="stat-lbl">Total Habits</div><div class="stat-val" id="sHabits">—</div><div class="stat-note">Active</div></div>
-        <div class="stat"><div class="stat-lbl">Total Comments</div><div class="stat-val" id="sComments">—</div><div class="stat-note">All comments</div></div>
+        <div class="stat" style="border-left:3px solid #4ade80"><div class="stat-lbl">Active Pairs</div><div class="stat-val" id="sActivePairs" style="color:#16a34a">—</div><div class="stat-note">Live partnerships</div></div>
+        <div class="stat" style="border-left:3px solid #60a5fa"><div class="stat-lbl">Today's Check-ins</div><div class="stat-val" id="sTodayCheckins" style="color:#2563eb">—</div><div class="stat-note">Habit logs today</div></div>
+        <div class="stat" style="border-left:3px solid #f97316"><div class="stat-lbl">Challengers Active</div><div class="stat-val" id="sChallengers" style="color:#ea580c">—</div><div class="stat-note">In 21-day challenge</div></div>
       </div>
       <div class="chart-row">
         <div class="chart-box"><div class="chart-ttl">Habit Category Distribution</div><div class="chart-wrap"><canvas id="chartCat"></canvas></div></div>
@@ -447,8 +447,8 @@ tr:hover td{background:var(--g50)}
 
       <!-- Info banner -->
       <div style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.7">
-        <strong>📋 說明：</strong> 此頁面列出所有 <strong>已註冊但尚未驗證 Email</strong> 的帳號（殭屍帳號）。這類帳號會佔用 username，導致其他用戶無法使用相同名稱。
-        <br>點擊「Delete DB Data」可自動清除 <code>users</code>、<code>usernames</code>、<code>upload_quotas</code> 三筆資料，並自動開啟 Supabase Dashboard 讓你完成 Auth 帳號刪除。
+        <strong>📋 Note:</strong> Lists all <strong>registered but unverified</strong> accounts (zombie accounts). These accounts occupy usernames, causing other users from using the same name。
+        <br>Click "Delete DB Data" to automatically clear <code>users</code>, <code>usernames</code>, <code>upload_quotas</code> records and open Supabase Dashboard so you can complete Auth account deletion.
       </div>
 
       <div class="tbl-card">
@@ -477,20 +477,20 @@ tr:hover td{background:var(--g50)}
 
       <!-- Step guide -->
       <div class="tbl-card" style="padding:18px;margin-top:4px">
-        <div class="chart-ttl" style="margin-bottom:12px">📋 刪除殭屍帳號流程（兩步驟）</div>
+        <div class="chart-ttl" style="margin-bottom:12px">📋 Delete zombie accounts (2 steps)</div>
         <div style="font-size:12px;color:var(--g500);line-height:2">
-          <div><strong style="color:#059669">Step 1 — 自動：刪除 Supabase DB 資料</strong>（本頁面一鍵完成）<br>
-          點擊每一行的「Delete DB Data」按鈕，自動清除 <code>users</code>、<code>usernames</code>（釋放 username）、<code>upload_quotas</code> 三筆資料，並自動開啟 Supabase Dashboard。</div>
-          <div style="margin-top:10px"><strong style="color:#dc2626">Step 2 — 手動：在 Supabase Dashboard 刪除 Auth 帳號</strong>（約 5 秒）<br>
-          Dashboard 會自動開啟。到 Auth → Users 搜尋 UID，找到帳號後點擊「Delete」即可。<br>
-          若使用「Delete All」批次刪除，結束後會顯示所有 UID 清單供你複製貼上搜尋。</div>
+          <div><strong style="color:#059669">Step 1 — Auto: Delete Supabase DB data</strong>(one-click on this page)<br>
+          Click "Delete DB Data" on each row to automatically clear <code>users</code>、<code>usernames</code>(frees up username)、<code>upload_quotas</code> records and open Supabase Dashboard automatically.</div>
+          <div style="margin-top:10px"><strong style="color:#dc2626">Step 2 — Manual: Delete Auth account in Supabase Dashboard</strong>(~5 seconds)<br>
+          Dashboard opens automatically. Go to Auth → Users, search by UID, then click "Delete".<br>
+          If using "Delete All" batch delete, a list of all UIDs will appear for copy-paste searching.</div>
         </div>
       </div>
 
       <!-- Orphaned Usernames Scanner -->
       <div class="tbl-card" style="padding:18px;margin-top:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div class="chart-ttl" style="margin:0">🔍 孤立 Username 掃描器</div>
+          <div class="chart-ttl" style="margin:0">🔍 Orphaned Username Scanner</div>
           <div style="display:flex;gap:8px">
             <button class="refresh" onclick="scanOrphanedUsernames()">Scan</button>
             <button id="deleteOrphansBtn" onclick="deleteAllOrphans()"
@@ -500,7 +500,7 @@ tr:hover td{background:var(--g50)}
           </div>
         </div>
         <div style="font-size:11px;color:var(--g500);margin-bottom:12px">
-          掃描 <code>usernames</code> collection 中沒有對應 <code>users</code> doc 的孤立記錄。這些記錄會導致新用戶無法使用已被刪除帳號的 username。
+          Scans <code>usernames</code> collection for records with no matching <code>users</code> doc. These block new users from claimingthe username.
         </div>
         <div id="orphanStatus" style="font-size:11px;color:var(--g400);margin-bottom:8px"></div>
         <table>
@@ -517,7 +517,7 @@ tr:hover td{background:var(--g50)}
       <!-- Orphaned Upload Quota Scanner -->
       <div class="tbl-card" style="padding:18px;margin-top:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div class="chart-ttl" style="margin:0">🗂 孤立 Upload Quota 掃描器</div>
+          <div class="chart-ttl" style="margin:0">🗂 Orphaned Upload Quota Scanner</div>
           <div style="display:flex;gap:8px">
             <button class="refresh" onclick="scanOrphanedQuotas()">Scan</button>
             <button id="deleteOrphanQuotasBtn" onclick="deleteAllOrphanQuotas()"
@@ -527,7 +527,7 @@ tr:hover td{background:var(--g50)}
           </div>
         </div>
         <div style="font-size:11px;color:var(--g500);margin-bottom:12px">
-          掃描 <code>upload_quotas</code> collection 中沒有對應 <code>users</code> doc 的孤立記錄。這些記錄通常是帳號刪除後未清除的殘留資料，會佔用統計數字並造成混淆。
+          Scans <code>upload_quotas</code> collection for records with no matching <code>users</code> doc. These are usually left over after account deletion.，which skews stats and causes confusion。
         </div>
         <div id="orphanQuotaStatus" style="font-size:11px;color:var(--g400);margin-bottom:8px"></div>
         <table>
@@ -616,12 +616,12 @@ CREATE POLICY "habits_challengers_read" ON habits FOR SELECT
     auth.role() = 'authenticated'
     AND (challenge_visibility IS NULL OR challenge_visibility != 'private')
   );
--- ⚠️ 一次性資料修正：將現有習慣的 challenge_visibility NULL 值補為 'public'
--- （新習慣建立時已自動寫入 'public'，此 SQL 只需執行一次）
+-- ⚠️ One-time fix: set challenge_visibility NULL → 'public' for existing habits
+-- (New habits set 'public' automatically — run this SQL once only)
 UPDATE habits SET challenge_visibility = 'public' WHERE challenge_visibility IS NULL;
 
--- ⚠️ Streak / checkedDates 相關欄位（若 streak 卡住請執行）
--- 確保 habits 表有以下欄位，否則打卡進度不會累計
+-- ⚠️ Streak / checkedDates fields (run if streak is stuck)
+-- Ensure habits table has these columns, otherwise check-in progress won't accumulate
 ALTER TABLE habits ADD COLUMN IF NOT EXISTS checked_dates JSONB DEFAULT '[]';
 ALTER TABLE habits ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0;
 ALTER TABLE habits ADD COLUMN IF NOT EXISTS today_counts JSONB DEFAULT '{}';
@@ -780,10 +780,10 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
       <div class="pg-title">Matching Stats</div>
       <div class="pg-sub" id="matchingUpdated">Loading...</div>
       <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Today's Requests</div><div class="stat-val" id="mTodayReqs">—</div><div class="stat-note">配對請求次數</div></div>
-        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Success Rate</div><div class="stat-val" id="mSuccessRate" style="color:#059669">—</div><div class="stat-note">今日成功率</div></div>
-        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Failed</div><div class="stat-val" id="mFailed" style="color:#d97706">—</div><div class="stat-note">今日失敗次數</div></div>
-        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Unique Users</div><div class="stat-val" id="mUniqueUsers">—</div><div class="stat-note">今日使用人數</div></div>
+        <div class="stat dark"><div class="stat-lbl">Today's Requests</div><div class="stat-val" id="mTodayReqs">—</div><div class="stat-note">Match requests today</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Success Rate</div><div class="stat-val" id="mSuccessRate" style="color:#059669">—</div><div class="stat-note">Today success rate</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Failed</div><div class="stat-val" id="mFailed" style="color:#d97706">—</div><div class="stat-note">Today's failures</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Unique Users</div><div class="stat-val" id="mUniqueUsers">—</div><div class="stat-note">Today's unique users</div></div>
       </div>
       <div class="tbl-card">
         <div class="tbl-hd">
@@ -807,11 +807,11 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
     <!-- ══ PAIRS PAGE ══ -->
     <div class="pg" id="pg-pairs">
       <div class="pg-title">Pairs</div>
-      <div class="pg-sub">習慣夥伴配對管理</div>
+      <div class="pg-sub">Habit partner pair management</div>
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Active Pairs</div><div class="stat-val" id="pActive">—</div><div class="stat-note">目前活躍配對</div></div>
-        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Pending</div><div class="stat-val" id="pPending" style="color:#d97706">—</div><div class="stat-note">等待接受</div></div>
-        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Avg Match Score</div><div class="stat-val" id="pAvgScore">—</div><div class="stat-note">平均配對分數</div></div>
+        <div class="stat dark"><div class="stat-lbl">Active Pairs</div><div class="stat-val" id="pActive">—</div><div class="stat-note">Currently active</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Pending</div><div class="stat-val" id="pPending" style="color:#d97706">—</div><div class="stat-note">Awaiting acceptance</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Avg Match Score</div><div class="stat-val" id="pAvgScore">—</div><div class="stat-note">Avg match score</div></div>
       </div>
       <div class="tbl-card">
         <div class="tbl-hd">
@@ -827,8 +827,8 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
           </div>
         </div>
         <table>
-          <thead><tr><th>User</th><th>Partner</th><th>Habit</th><th>Score</th><th>Status</th><th>Created</th></tr></thead>
-          <tbody id="pairsTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
+          <thead><tr><th>User</th><th>Partner</th><th>Habit</th><th>Score</th><th>Status</th><th>Last Post</th><th>Ended Reason</th><th>Created</th></tr></thead>
+          <tbody id="pairsTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -836,18 +836,18 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
     <!-- ══ TOKEN USAGE PAGE ══ -->
     <div class="pg" id="pg-tokens">
       <div class="pg-title">Token Usage</div>
-      <div class="pg-sub">Claude API 用量與費用估算</div>
+      <div class="pg-sub">Claude API usage & cost estimate</div>
       <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">This Month</div><div class="stat-val" id="tMonthCalls">—</div><div class="stat-note">本月呼叫次數</div></div>
-        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Est. Cost</div><div class="stat-val" id="tEstCost" style="color:#059669">—</div><div class="stat-note">本月估算費用</div></div>
-        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Today</div><div class="stat-val" id="tTodayCalls" style="color:#d97706">—</div><div class="stat-note">今日呼叫次數</div></div>
-        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Avg / User</div><div class="stat-val" id="tAvgPerUser">—</div><div class="stat-note">每用戶平均次數</div></div>
+        <div class="stat dark"><div class="stat-lbl">This Month</div><div class="stat-val" id="tMonthCalls">—</div><div class="stat-note">Monthly calls</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Est. Cost</div><div class="stat-val" id="tEstCost" style="color:#059669">—</div><div class="stat-note">Est. cost this month</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Today</div><div class="stat-val" id="tTodayCalls" style="color:#d97706">—</div><div class="stat-note">Today's calls</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Avg / User</div><div class="stat-val" id="tAvgPerUser">—</div><div class="stat-note">Avg requests per user</div></div>
       </div>
       <div class="tbl-card" style="padding:16px 18px;margin-bottom:16px;background:#fffbe6;border:1px solid #e0c060">
-        <div class="chart-ttl" style="margin-bottom:6px;color:#7a6000">💡 費用計算說明</div>
+        <div class="chart-ttl" style="margin-bottom:6px;color:#7a6000">💡 Cost calculation notes</div>
         <p style="font-size:12px;color:#7a6000;line-height:1.8;margin:0">
-          使用 <strong>Claude Haiku</strong> 模型，每次配對約消耗 <strong>1,000 tokens</strong>，費用約 <strong>$0.001 USD</strong>。<br>
-          本頁費用為估算值，實際費用請至 <a href="https://console.anthropic.com" target="_blank" style="color:#7a6000;font-weight:700">Anthropic Console ↗</a> 查看。
+          Uses <strong>Claude Haiku</strong> model. Each match consumes ~<strong>1,000 tokens</strong>, costing ~<strong>$0.001 USD</strong>.<br>
+          Costs shown are estimates. For actual usage, visit <a href="https://console.anthropic.com" target="_blank" style="color:#7a6000;font-weight:700">Anthropic Console ↗</a>.
         </p>
       </div>
       <div class="tbl-card">
@@ -862,12 +862,12 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
     <!-- ══ SUBSCRIPTIONS PAGE ══ -->
     <div class="pg" id="pg-subscriptions">
       <div class="pg-title">Subscriptions</div>
-      <div class="pg-sub">付費用戶管理 · Partner Matching $3/月</div>
+      <div class="pg-sub">Paid user management · Partner Matching $3/mo</div>
       <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Active Subs</div><div class="stat-val" id="subActive">—</div><div class="stat-note">目前付費用戶</div></div>
-        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Monthly Revenue</div><div class="stat-val" id="subRevenue" style="color:#059669">—</div><div class="stat-note">本月預估收入</div></div>
-        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Cancelled</div><div class="stat-val" id="subCancelled" style="color:#d97706">—</div><div class="stat-note">已取消</div></div>
-        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Net Profit Est.</div><div class="stat-val" id="subProfit">—</div><div class="stat-note">收入 - API費用</div></div>
+        <div class="stat dark"><div class="stat-lbl">Active Subs</div><div class="stat-val" id="subActive">—</div><div class="stat-note">Currently subscribed</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Monthly Revenue</div><div class="stat-val" id="subRevenue" style="color:#059669">—</div><div class="stat-note">Est. monthly revenue</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Cancelled</div><div class="stat-val" id="subCancelled" style="color:#d97706">—</div><div class="stat-note">Cancelled</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Net Profit Est.</div><div class="stat-val" id="subProfit">—</div><div class="stat-note">Revenue minus API cost</div></div>
       </div>
       <div class="tbl-card">
         <div class="tbl-hd">
@@ -961,20 +961,20 @@ if(typeof window.supabase === 'undefined'){
 }
 
 /* ══════════════════════════════════════════════════
-   ★ SUPABASE 設定 — 請填入你的 Supabase 資訊 ★
+   ★ SUPABASE CONFIG — fill in your Supabase credentials ★
    ══════════════════════════════════════════════════ */
 var SUPABASE_URL         = 'https://nvyyneoiocyjxbtcyxyi.supabase.co';
 var SUPABASE_ANON_KEY    = 'sb_publishable_1Qa7KHluDoNyeW2cKRk9pw_BX4JjvYC';
 var SUPABASE_PROJECT_REF = 'nvyyneoiocyjxbtcyxyi';
 
-// Supabase JS v2 新版封鎖在瀏覽器使用 service_role key。
-// 改用 anon key + RLS admin policy 讓已登入的 admin 讀寫所有資料。
+// Supabase JS v2 blocks service_role key in browser.
+// Use anon key + RLS admin policy to let signed-in admin read/write all data.
 var _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { detectSessionInUrl: true, flowType: 'pkce', persistSession: true, storageKey: 'sb-admin-session' }
 });
-var _supabase = _authClient; // 同一個 client，由 RLS admin policy 控制權限
+var _supabase = _authClient; // Same client, access controlled by RLS admin policy
 
-/* ─── Auth shim — 使用 _authClient (anon key) ───── */
+/* ─── Auth shim — using _authClient (anon key) ───── */
 var auth = {
   currentUser: null,
   onAuthStateChanged: function(cb) {
@@ -1021,7 +1021,7 @@ function _mkUser(u) {
             var base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
             var padded = base64 + '=='.slice(0, (4 - base64.length % 4) % 4);
             var decoded = JSON.parse(atob(padded));
-            // admin claim 放在 user_metadata 裡
+            // admin claim stored in user_metadata
             claims = decoded.user_metadata || {};
           }
         } catch(e) { console.warn('[getIdTokenResult] JWT decode failed:', e); }
@@ -1321,7 +1321,7 @@ var authSafetyTimer = setTimeout(function(){
     authResolved = true;
     document.getElementById('loadingScreen').style.display='none';
     document.getElementById('loginWrap').style.display='flex';
-    if(hasOAuthCallback) showAdminError('登入逾時，請重試。(Auth timeout — please try again)');
+    if(hasOAuthCallback) showAdminError('Session expired, please try again. (Auth timeout)');
   }
 }, hasOAuthCallback ? 20000 : 5000);
 
@@ -1570,7 +1570,7 @@ function _doLoadAll(){
     console.warn('[Admin] loadAll() error:', e);
     _loadAllDone = true;
   });
-  // Quota & Reports 獨立載入
+  // Quota & Reports load independently
   loadQuota();
   loadReports();
 }
@@ -1844,7 +1844,6 @@ function buildUsers(){
 
 function renderStats(){
   document.getElementById('sUsers').textContent=allUsers.length;
-  /* Also update activity stat cards if on users page */
   var counts={active:0,idle:0,dormant:0,never:0};
   allUsers.forEach(function(u){ counts[userActivity(u.lastSeen)]++; });
   var el;
@@ -1853,10 +1852,25 @@ function renderStats(){
   el=document.getElementById('uStatIdle');    if(el) el.textContent=counts.idle;
   el=document.getElementById('uStatDormant'); if(el) el.textContent=counts.dormant;
   el=document.getElementById('uStatNever');   if(el) el.textContent=counts.never;
-  document.getElementById('sPosts').textContent=allPosts.length;
-  document.getElementById('sHabits').textContent=allHabits.length;
-  var c=allPosts.reduce(function(s,p){ return s+(p.commentCount||0); },0);
-  document.getElementById('sComments').textContent=c;
+  // New dashboard stats from Supabase
+  var todayISO = new Date().toISOString().slice(0,10);
+  Promise.all([
+    _supabase.from('pairs').select('id', { count: 'exact', head: true }).eq('status','active'),
+    _supabase.from('habits').select('id', { count: 'exact', head: true }).gte('streak',1).lt('streak',21),
+    _supabase.from('habits').select('checked_dates').neq('checked_dates', null)
+  ]).then(function(results) {
+    el=document.getElementById('sActivePairs');
+    if(el) el.textContent = results[0].count || 0;
+    el=document.getElementById('sChallengers');
+    if(el) el.textContent = results[1].count || 0;
+    // Count today's check-ins across all habits
+    var todayCheckins = 0;
+    (results[2].data||[]).forEach(function(h) {
+      if (Array.isArray(h.checked_dates) && h.checked_dates.includes(todayISO)) todayCheckins++;
+    });
+    el=document.getElementById('sTodayCheckins');
+    if(el) el.textContent = todayCheckins;
+  }).catch(function(){});
 }
 
 function renderCharts(){
@@ -2309,10 +2323,10 @@ function renderQuota(){
     var orphanBadge = isOrphan
       ? ' <span style="display:inline-block;padding:1px 6px;font-size:9px;font-weight:700;'
         + 'text-transform:uppercase;letter-spacing:.5px;background:#fee2cc;color:#b45309;'
-        + 'border:1px solid #f5b97a;border-radius:2px;vertical-align:middle">已刪除帳號</span>'
+        + 'border:1px solid #f5b97a;border-radius:2px;vertical-align:middle">Deleted account</span>'
       : '';
     var orphanNote = isOrphan
-      ? '<div style="font-size:10px;color:#b45309;margin-top:3px">⚠️ Supabase DB 用戶資料已刪除，此為孤立 quota 記錄</div>'
+      ? '<div style="font-size:10px;color:#b45309;margin-top:3px">⚠️ Supabase DB user data deleted — this is an orphaned quota record</div>'
       : '';
     var actionCell = isOrphan
       ? '<button class="del" style="background:#c00;color:#fff;border-color:#c00" '
@@ -2560,12 +2574,12 @@ function deleteFirestoreData(uid, usernameLower, idx) {
     if (btn) { btn.disabled = false; btn.textContent = 'Delete DB Data'; }
     var msg = e.message || '';
     if (msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1) {
-      alert('❌ 刪除失敗。\n\n請確認 Supabase service_role key 已正確設定，\n或到 Supabase Dashboard → SQL Editor 確認 RLS policies。\n\n' +
+      alert('❌ Delete failed.\n\nCheck that the Supabase service_role key is correct,\nor go to Supabase Dashboard → SQL Editor to verify RLS policies.\n\n' +
         'match /users/{userId} {\n' +
         '  allow delete: if isAdmin();\n' +
         '}\n\nmatch /usernames/{username} {\n' +
         '  allow delete: if ... || isAdmin();\n' +
-        '}\n\n詳細規則請見 Admin → Security & Rules 頁面。');
+        '}\n\nSee Admin → Security & Rules page for details.');
     } else {
       alert('Failed to delete Firestore data: ' + msg);
     }
@@ -2643,7 +2657,7 @@ function cleanupAllFirestore() {
       '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7a6000;margin-bottom:10px">' +
       '⚠ Step 2 — Delete ' + zombieSnapshot.length + ' Supabase Auth Account(s)</div>' +
       '<div style="font-size:11px;color:#7a6000;margin-bottom:10px">' +
-      'Supabase DB 資料已清除。請前往 Supabase Dashboard 逐一刪除 Auth 帳號（搜尋 UID）：</div>' +
+      'Supabase DB data cleared. Go to Supabase Dashboard to delete Auth accounts individually (search by UID):</div>' +
       '<a href="' + consoleBase + '" target="_blank">' +
       '<button style="padding:8px 16px;background:#dc2626;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;margin-bottom:12px">' +
       '→ Open Supabase Auth Console</button></a>' +
@@ -3629,22 +3643,28 @@ async function loadPairs() {
 
     var tbody = document.getElementById('pairsTbody');
     if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">No pairs yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--g400)">No pairs yet</td></tr>';
       return;
     }
     tbody.innerHTML = data.map(function(p) {
       var statusColor = p.status === 'active' ? '#059669' : p.status === 'pending' ? '#d97706' : '#9ca3af';
+      var endedLabel = '—';
+      if (p.ended_reason === 'inactivity') endedLabel = '<span style="color:#d97706;font-size:10px">⏱ 7-day inactivity</span>';
+      else if (p.ended_reason === 'user_request') endedLabel = '<span style="color:#6b7280;font-size:10px">👤 User ended</span>';
+      var lastPost = p.last_post_at ? new Date(p.last_post_at).toLocaleDateString() : '<span style="color:var(--g300)">—</span>';
       return '<tr>' +
         '<td style="font-size:11px">' + (p.user_id||'').slice(0,8) + '...</td>' +
         '<td style="font-size:11px">' + (p.partner_id||'').slice(0,8) + '...</td>' +
         '<td>' + (p.habit_name||'—') + '</td>' +
         '<td>' + (p.match_score||0) + '%</td>' +
         '<td><span class="badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + p.status + '</span></td>' +
+        '<td style="font-size:11px;color:var(--g400)">' + lastPost + '</td>' +
+        '<td style="font-size:11px">' + endedLabel + '</td>' +
         '<td style="font-size:11px;color:var(--g400)">' + new Date(p.created_at).toLocaleDateString() + '</td>' +
       '</tr>';
     }).join('');
   } catch(e) {
-    document.getElementById('pairsTbody').innerHTML = '<tr><td colspan="6">Error: ' + e.message + '</td></tr>';
+    document.getElementById('pairsTbody').innerHTML = '<tr><td colspan="8">Error: ' + e.message + '</td></tr>';
   }
 }
 
