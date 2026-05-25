@@ -5780,7 +5780,7 @@ function HabitDetailView(_ref11) {
     : /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 6, textAlign: 'center' }
       }, "Resets at midnight \u00b7 " + (target - done) + " more to complete today")
-  ))));
+  )));
 }
 
 /* ── PRESETS (defined outside component, stable object references) ── */
@@ -9789,14 +9789,94 @@ function PairWallPage(_ref_pw) {
   var _smt = useState('image'); var mediaType = _smt[0]; var setMediaType = _smt[1];
   var _spub = useState(false); var publishing = _spub[0]; var setPublishing = _spub[1];
   var msgsEndRef = React.useRef(null);
+  var _sla = useState(null); var partnerLastActive = _sla[0]; var setPartnerLastActive = _sla[1];
+  var _sep = useState(false); var showEndConfirm = _sep[0]; var setShowEndConfirm = _sep[1];
+  var _send = useState(false); var ending = _send[0]; var setEnding = _send[1];
+
+  /* Format last active time */
+  function fmtLastActive(ts) {
+    if (!ts) return null;
+    var diff = Math.floor((Date.now() - new Date(ts)) / 1000);
+    if (diff < 60) return 'active just now';
+    if (diff < 3600) return 'active ' + Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return 'active ' + Math.floor(diff/3600) + 'h ago';
+    if (diff < 604800) return 'active ' + Math.floor(diff/86400) + 'd ago';
+    return null;
+  }
+
+  /* Check 7-day inactivity → auto end */
+  function checkInactivityEnd(p) {
+    if (!p || p.status !== 'active') return;
+    var lastActivity = p.last_post_at || p.created_at;
+    if (!lastActivity) return;
+    var daysSilent = Math.floor((Date.now() - new Date(lastActivity)) / 86400000);
+    if (daysSilent >= 7) {
+      _supabase.from('pairs').update({ status: 'ended', ended_reason: 'inactivity' })
+        .eq('id', p.id)
+        .then(function() {
+          // Send notification to both users
+          var notifBase = { type: 'partnership_ended', pair_id: p.id, message: 'Your partnership has ended due to 7 days of inactivity.' };
+          Promise.all([
+            _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: p.user_id })),
+            _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: p.partner_id }))
+          ]).catch(function(){});
+        }).catch(function(){});
+    }
+  }
+
+  /* End partnership manually */
+  function endPartnership() {
+    if (ending) return;
+    setEnding(true);
+    _supabase.from('pairs').update({ status: 'ended', ended_reason: 'user_request' })
+      .eq('id', pair.id)
+      .then(function() {
+        var notifBase = { type: 'partnership_ended', pair_id: pair.id, message: 'Your partnership has ended.' };
+        return Promise.all([
+          _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: pair.user_id })),
+          _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: pair.partner_id }))
+        ]);
+      })
+      .then(function() { setEnding(false); onBack(); })
+      .catch(function() { setEnding(false); });
+  }
+
+  /* Mark messages as read */
+  function markMessagesRead() {
+    var unread = messages.filter(function(m) { return m.sender_id !== user.uid && !m.read_at; });
+    if (!unread.length) return;
+    _supabase.from('pair_messages').update({ read_at: new Date().toISOString() })
+      .eq('pair_id', pair.id).eq('sender_id', partnerId).is('read_at', null)
+      .then(function() {
+        setMessages(function(prev) {
+          return prev.map(function(m) {
+            return (m.sender_id !== user.uid && !m.read_at)
+              ? Object.assign({}, m, { read_at: new Date().toISOString() })
+              : m;
+          });
+        });
+      }).catch(function(){});
+  }
+
+  /* Update my last_active on mount */
+  React.useEffect(function() {
+    if (!user) return;
+    _supabase.from('users').update({ last_active: new Date().toISOString() }).eq('id', user.uid).catch(function(){});
+  }, [user]);
 
   /* load posts + messages */
   useEffect(function() {
     if (!user || !pair) return;
     setLoading(true);
+    var todayStart = toISODay() + 'T00:00:00';
+    var todayEnd   = toISODay() + 'T23:59:59';
     Promise.all([
-      _supabase.from('pair_posts').select('*').eq('pair_id', pair.id).order('created_at', { ascending: false }),
-      _supabase.from('pair_messages').select('*').eq('pair_id', pair.id).order('created_at', { ascending: true })
+      _supabase.from('pair_posts').select('*').eq('pair_id', pair.id)
+        .gte('created_at', todayStart).lte('created_at', todayEnd)
+        .order('created_at', { ascending: false }),
+      _supabase.from('pair_messages').select('*').eq('pair_id', pair.id)
+        .order('created_at', { ascending: true }),
+      _supabase.from('users').select('last_active').eq('id', partnerId).single()
     ]).then(function(results) {
       var posts = results[0].data || [];
       var myP = posts.find(function(p) { return p.user_id === user.uid; });
@@ -9804,19 +9884,42 @@ function PairWallPage(_ref_pw) {
       setMyPost(myP || null);
       setPartnerPost(theirP || null);
       setMessages(results[1].data || []);
+      var lastActiveRaw = results[2].data && results[2].data.last_active;
+      setPartnerLastActive(lastActiveRaw || null);
       setLoading(false);
+      // Check 7-day inactivity → auto end partnership
+      checkInactivityEnd(pair);
     }).catch(function() { setLoading(false); });
   }, [user, pair]);
 
-  /* realtime messages */
+  /* realtime messages + read receipt updates */
   useEffect(function() {
     if (!pair) return;
     var ch = _supabase.channel('pw_msgs_' + pair.id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pair_messages', filter: 'pair_id=eq.' + pair.id },
-        function(payload) { setMessages(function(prev) { return prev.concat([payload.new]); }); }
-      ).subscribe();
+        function(payload) {
+          setMessages(function(prev) { return prev.concat([payload.new]); });
+          // Auto-mark as read if it's from partner
+          if (payload.new.sender_id !== user.uid) {
+            setTimeout(function() { markMessagesRead(); }, 500);
+          }
+        }
+      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pair_messages', filter: 'pair_id=eq.' + pair.id },
+        function(payload) {
+          setMessages(function(prev) {
+            return prev.map(function(m) { return m.id === payload.new.id ? payload.new : m; });
+          });
+        }
+      )
+      .subscribe();
     return function() { _supabase.removeChannel(ch); };
   }, [pair]);
+
+  /* Mark messages read when chat comes into view */
+  useEffect(function() {
+    if (messages.length > 0) markMessagesRead();
+  }, [messages.length]);
 
   /* scroll to bottom on new messages */
   useEffect(function() {
@@ -9868,6 +9971,8 @@ function PairWallPage(_ref_pw) {
         setPreviewUrl(null);
         setCaption('');
         setPublishing(false);
+        // Update pair's last_post_at for inactivity tracking
+        _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).catch(function(){});
       })
       .catch(function(e) { alert('Upload failed: ' + e.message); setPublishing(false); });
   }
@@ -9886,7 +9991,7 @@ function PairWallPage(_ref_pw) {
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  var canChat = !!(partnerPost || myPost);
+  var canChat = !!(partnerPost && myPost); // both must post today to unlock chat
 
   /* UPLOAD OVERLAY */
   function renderUpload() {
@@ -9902,7 +10007,8 @@ function PairWallPage(_ref_pw) {
           : React.createElement('div', { className: 'pw-upload-dashed' },
               React.createElement('div', { className: 'pw-upload-icon' }, '↑'),
               React.createElement('div', { className: 'pw-upload-hint' }, 'Tap to select photo or video'),
-              React.createElement('div', { className: 'pw-upload-hint2' }, 'JPG · MP4 · MOV')
+              React.createElement('div', { className: 'pw-upload-hint2' }, 'JPG · MP4 · MOV'),
+              React.createElement('div', { className: 'pw-upload-hint2', style: { marginTop: 6, color: 'var(--gray-500)', fontStyle: 'italic' } }, 'No need to show your face — capture your habit in action')
             ),
         React.createElement('input', { type: 'file', id: 'pw-file-input', accept: 'image/*,video/*', onChange: handleFileSelect })
       ),
@@ -9958,6 +10064,29 @@ function PairWallPage(_ref_pw) {
   return React.createElement('div', { className: 'pw-page' },
     showUpload && renderUpload(),
 
+    /* END PARTNERSHIP CONFIRM MODAL */
+    showEndConfirm && React.createElement('div', {
+      style: { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }
+    },
+      React.createElement('div', { style: { background:'var(--white)', borderRadius:8, padding:'24px 20px', width:'100%', maxWidth:320 } },
+        React.createElement('div', { style: { fontSize:14, fontWeight:700, color:'var(--black)', marginBottom:8 } }, 'End Partnership?'),
+        React.createElement('div', { style: { fontSize:12, color:'var(--gray-500)', lineHeight:1.6, marginBottom:20 } },
+          'This will end your partnership and remove the shared space. Both of you will be notified. This cannot be undone.'
+        ),
+        React.createElement('div', { style: { display:'flex', gap:8 } },
+          React.createElement('button', {
+            style: { flex:1, padding:'10px', background:'var(--white)', border:'1px solid var(--gray-200)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' },
+            onClick: function(){ setShowEndConfirm(false); }
+          }, 'Cancel'),
+          React.createElement('button', {
+            style: { flex:1, padding:'10px', background:'#dc2626', color:'#fff', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' },
+            disabled: ending,
+            onClick: endPartnership
+          }, ending ? 'Ending...' : 'End Partnership')
+        )
+      )
+    ),
+
     /* HEADER */
     React.createElement('div', { className: 'pw-hdr' },
       React.createElement('div', { className: 'pw-identity' },
@@ -9967,53 +10096,67 @@ function PairWallPage(_ref_pw) {
         ),
         React.createElement('div', { className: 'pw-pair-info' },
           React.createElement('div', { className: 'pw-pair-name' }, 'YOU × ' + partnerInitials),
-          React.createElement('div', { className: 'pw-pair-sub' }, habitName)
+          React.createElement('div', { className: 'pw-pair-sub' }, habitName),
+          fmtLastActive(partnerLastActive) && React.createElement('div', {
+            style: { fontSize:9, color:'rgba(255,255,255,0.45)', marginTop:2, display:'flex', alignItems:'center', gap:4 }
+          },
+            React.createElement('span', { style: { width:5, height:5, borderRadius:'50%', background: fmtLastActive(partnerLastActive) && fmtLastActive(partnerLastActive).includes('just now') || fmtLastActive(partnerLastActive) && fmtLastActive(partnerLastActive).includes('m ago') ? '#4ade80' : 'rgba(255,255,255,0.3)', display:'inline-block' } }),
+            'Partner ' + partnerInitials + ' · ' + fmtLastActive(partnerLastActive)
+          )
         ),
-        React.createElement('div', { className: 'pw-badge' }, daysSince + '-Day Pair'),
+        React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 } },
+          React.createElement('div', { className: 'pw-badge' }, daysSince + '-Day Pair'),
+          React.createElement('button', {
+            style: { fontSize:9, color:'rgba(255,255,255,0.4)', background:'none', border:'none', cursor:'pointer', fontFamily:'var(--font)', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', padding:0 },
+            onClick: function(){ setShowEndConfirm(true); }
+          }, 'End Partnership')
+        ),
         React.createElement('button', { className: 'pw-back', onClick: onBack }, '← Back')
       )
     ),
 
     /* CONTENT */
-    /* State 1: nobody posted */
+    /* State 1: nobody posted today */
     !partnerPost && !myPost && React.createElement(React.Fragment, null,
-      React.createElement('div', { className: 'pw-wait' },
-        React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-text' }, 'Waiting for partner\'s update')
-      ),
       React.createElement('div', { className: 'pw-empty' },
         React.createElement('div', { className: 'pw-empty-box' }, '↑'),
-        React.createElement('div', { className: 'pw-empty-title' }, 'Post Your First Update'),
-        React.createElement('div', { className: 'pw-empty-sub' }, 'Upload today\'s habit photo or video to start the conversation.'),
+        React.createElement('div', { className: 'pw-empty-title' }, 'Post Today\'s Habit'),
+        React.createElement('div', { className: 'pw-empty-sub' }, 'Both of you need to post today\'s habit update to unlock the chat.'),
         React.createElement('button', { className: 'pw-empty-btn', onClick: function(){ setShowUpload(true); } }, "Post Today's Habit →")
       )
     ),
 
-    /* State 2+3: partner posted */
-    partnerPost && React.createElement(React.Fragment, null,
+    /* State 2: partner posted, waiting for me */
+    partnerPost && !myPost && React.createElement(React.Fragment, null,
       renderMediaBlock(partnerPost, false),
-      !myPost && React.createElement('div', { className: 'pw-nudge' },
-        React.createElement('div', { className: 'pw-nudge-txt' }, 'Share your update too'),
-        React.createElement('button', { className: 'pw-nudge-btn', onClick: function(){ setShowUpload(true); } }, 'Post →')
+      React.createElement('div', { className: 'pw-nudge' },
+        React.createElement('div', { className: 'pw-nudge-txt' }, '🔒 Post your update to unlock today\'s chat'),
+        React.createElement('button', { className: 'pw-nudge-btn', onClick: function(){ setShowUpload(true); } }, 'Post Now →')
+      ),
+      React.createElement('div', { style: { background:'var(--gray-50)', borderTop:'1px solid var(--gray-100)', padding:'16px', textAlign:'center' } },
+        React.createElement('div', { style: { fontSize:11, color:'var(--gray-400)', marginBottom:4 } }, 'Chat unlocks when you post your habit too'),
+        React.createElement('div', { style: { fontSize:10, color:'var(--gray-300)' } }, 'Partnership ends after 7 days without activity')
       )
     ),
 
-    /* Your post (when both posted) */
-    myPost && partnerPost && React.createElement(React.Fragment, null,
-      React.createElement('div', { className: 'pw-divider' }, 'Your Update'),
-      renderMediaBlock(myPost, true)
-    ),
-
-    /* Your post only (no partner post yet) */
+    /* State 3: I posted, waiting for partner */
     myPost && !partnerPost && React.createElement(React.Fragment, null,
       React.createElement('div', { className: 'pw-wait' },
         React.createElement('div', { className: 'pw-wait-dot' }),
         React.createElement('div', { className: 'pw-wait-dot' }),
         React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-text' }, "Waiting for partner's update")
+        React.createElement('div', { className: 'pw-wait-text' }, 'Waiting for partner\'s update to unlock chat')
       ),
+      renderMediaBlock(myPost, true),
+      React.createElement('div', { style: { background:'var(--gray-50)', borderTop:'1px solid var(--gray-100)', padding:'16px', textAlign:'center' } },
+        React.createElement('div', { style: { fontSize:11, color:'var(--gray-400)' } }, '🔒 Chat unlocks once your partner posts today\'s habit')
+      )
+    ),
+
+    /* State 4: both posted — show both + chat */
+    myPost && partnerPost && React.createElement(React.Fragment, null,
+      renderMediaBlock(partnerPost, false),
+      React.createElement('div', { className: 'pw-divider' }, 'Your Update'),
       renderMediaBlock(myPost, true)
     ),
 
@@ -10023,12 +10166,21 @@ function PairWallPage(_ref_pw) {
       messages.length === 0
         ? React.createElement('div', { style:{ padding:'16px', fontSize:11, color:'var(--gray-400)', textAlign:'center' } }, 'No messages yet. Say something.')
         : React.createElement('div', { className: 'pw-msgs' },
-            messages.map(function(m) {
+            messages.map(function(m, idx) {
               var isMe = m.sender_id === user.uid;
+              var isLast = idx === messages.length - 1;
+              var isRead = isMe && m.read_at;
               return React.createElement('div', { key: m.id, className: 'pw-msg' + (isMe ? ' me' : '') },
                 React.createElement('div', { className: 'pw-mav' + (isMe ? '' : ' dk') }, isMe ? 'YOU' : partnerInitials),
-                React.createElement('div', { className: 'pw-mbub' }, m.content),
-                React.createElement('div', { className: 'pw-mt' }, fmtTime(m.created_at))
+                React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start' } },
+                  React.createElement('div', { className: 'pw-mbub' }, m.content),
+                  React.createElement('div', { style: { display:'flex', alignItems:'center', gap:4, marginTop:2 } },
+                    React.createElement('div', { className: 'pw-mt' }, fmtTime(m.created_at)),
+                    isMe && isLast && React.createElement('div', {
+                      style: { fontSize:9, color: isRead ? '#4ade80' : 'var(--gray-300)', fontWeight:700 }
+                    }, isRead ? '✓✓ Read' : '✓ Sent')
+                  )
+                )
               );
             }),
             React.createElement('div', { ref: msgsEndRef })
