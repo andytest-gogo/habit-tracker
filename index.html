@@ -8952,10 +8952,29 @@ function MainApp(_ref16) {
         className: "find-partner-btn",
         onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
       }, "+ Find Partner"),
-      !isQualified && habitCheerData && habitCheerData.totalCount > 0 && React.createElement("button", {
-        className: "cheer-pill",
-        onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
-      }, "\xe2\x9a\xa1 " + habitCheerData.totalCount + " cheered for you"),
+      habitCheerData && habitCheerData.totalCount > 0 && React.createElement(React.Fragment, null,
+        /* Completed 21 days */
+        isQualified && React.createElement("button", {
+          className: "cheer-pill",
+          style: { background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' },
+          onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
+        }, "\u2764 " + habitCheerData.totalCount + " people cheered your journey"),
+        /* Still challenging */
+        !isQualified && habit.streak > 0 && React.createElement("button", {
+          className: "cheer-pill",
+          onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
+        }, "\xe2\x9a\xa1 " + habitCheerData.totalCount + " cheered for you"),
+        /* Challenge failed (streak broken) */
+        !isQualified && habit.streak === 0 && React.createElement("div", {
+          style: { display:'flex', flexDirection:'column', gap:3 }
+        },
+          React.createElement("button", {
+            className: "cheer-pill",
+            style: { background: '#fafafa', color: '#9ca3af', borderColor: '#e5e7eb', cursor: 'pointer' },
+            onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
+          }, "\xe2\x9a\xa1 " + habitCheerData.totalCount + " cheered — restart to get back")
+        )
+      ),
       /*#__PURE__*/React.createElement("button", {
         className: "card-delete-btn",
         onClick: function onClick() { return deleteHabit(habit.id); }
@@ -8977,11 +8996,22 @@ function MainApp(_ref16) {
     var ph = habits.find(function(h) { return h.id === cheerPanelHabitId; });
     if (!ph) return null;
     var pc = habitCheers[cheerPanelHabitId] || { todayCount: 0, totalCount: 0 };
+    var isQualifiedHabit = (function() {
+      var nc = (ph.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
+      return new Set(nc).size >= PARTNER_UNLOCK_DAYS;
+    })();
+    var panelMsg = isQualifiedHabit
+      ? 'People who cheered your completed journey'
+      : ph.streak === 0
+        ? 'You had their support — restart your habit to get back on Challenger'
+        : 'People cheering you on today';
     return React.createElement("div", { className: "cheer-detail-panel" },
-      React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } }, "Today's encouragement"),
-      React.createElement("div", { className: "cheer-detail-big" }, pc.todayCount || 0),
+      React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } },
+        isQualifiedHabit ? 'Journey completed' : ph.streak === 0 ? 'Challenge ended' : "Today's encouragement"
+      ),
+      React.createElement("div", { className: "cheer-detail-big" }, isQualifiedHabit ? pc.totalCount : pc.todayCount || 0),
       React.createElement("div", { className: "cheer-detail-sub" },
-        "people cheered you on today",
+        panelMsg,
         React.createElement("br", null),
         "Total all-time cheers: " + (pc.totalCount || 0)
       )
@@ -10659,40 +10689,38 @@ if (typeof window._wsgOnReactReady === 'function') window._wsgOnReactReady();
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     if (isIOS && !isInStandalone && !localStorage.getItem('ios-hint-shown')) {
+        // Wait for SW to activate before showing hint — ensures real PWA install, not bookmark
         setTimeout(() => {
             const hint = document.createElement('div');
             hint.id = 'ios-pwa-hint';
-            hint.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);max-width:340px;width:calc(100% - 32px);background:#0a0a0a;color:#fff;padding:14px 16px;font-size:12px;line-height:1.6;z-index:500;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.3)';
+            hint.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#0a0a0a;color:#fff;padding:16px 20px 28px;font-size:12px;line-height:1.6;z-index:500;text-align:center;box-shadow:0 -2px 20px rgba(0,0,0,.4)';
             hint.innerHTML = `
-                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📲 Add to Home Screen</div>
-                <div id="ios-hint-summary" style="opacity:.75">Tap <strong style="opacity:1">Share ↑</strong> → "Add to Home Screen" to install as an app</div>
-                <div id="ios-hint-steps" style="display:none;text-align:left;opacity:.9;margin-top:8px;">
-                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
-                        <span style="background:rgba(255,255,255,.15);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">1</span>
-                        <span>Tap the <strong>Share</strong> button (↑) at the bottom of Safari</span>
+                <div style="width:36px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 14px;"></div>
+                <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Install Habit Tracker Pro</div>
+                <div style="opacity:.6;font-size:11px;margin-bottom:14px;">Open this page in Safari first, then follow these steps:</div>
+                <div id="ios-hint-steps" style="text-align:left;margin-bottom:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <span style="background:rgba(255,255,255,.12);border-radius:50%;width:24px;height:24px;min-width:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">1</span>
+                        <span>Tap the <strong>Share</strong> button
+                            <svg style="display:inline-block;vertical-align:middle;margin:0 2px" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                        at the bottom of your browser</span>
                     </div>
-                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
-                        <span style="background:rgba(255,255,255,.15);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">2</span>
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <span style="background:rgba(255,255,255,.12);border-radius:50%;width:24px;height:24px;min-width:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">2</span>
                         <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
                     </div>
-                    <div style="display:flex;align-items:flex-start;gap:8px;">
-                        <span style="background:rgba(255,255,255,.15);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">3</span>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="background:rgba(255,255,255,.12);border-radius:50%;width:24px;height:24px;min-width:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">3</span>
                         <span>Tap <strong>"Add"</strong> in the top right corner</span>
                     </div>
                 </div>
-                <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
-                    <button id="ios-hint-view-steps" onclick="
-                        var s=document.getElementById('ios-hint-steps');
-                        var sum=document.getElementById('ios-hint-summary');
-                        var btn=document.getElementById('ios-hint-view-steps');
-                        if(s.style.display==='none'){s.style.display='block';sum.style.display='none';btn.textContent='Hide Steps';}
-                        else{s.style.display='none';sum.style.display='block';btn.textContent='View Steps';}
-                    " style="background:#4ade80;color:#0a0a0a;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">View Steps</button>
-                    <button onclick="document.getElementById('ios-pwa-hint').remove();localStorage.setItem('ios-hint-shown','1')" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:6px 16px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px">Dismiss</button>
+                <div style="background:rgba(255,165,0,.12);border:1px solid rgba(255,165,0,.3);padding:8px 12px;font-size:10px;color:rgba(255,200,100,.9);margin-bottom:14px;text-align:left;">
+                    ⚠️ Must be opened in <strong>Safari</strong> — Chrome and other browsers on iOS cannot install PWAs.
                 </div>
+                <button onclick="document.getElementById('ios-pwa-hint').remove();localStorage.setItem('ios-hint-shown','1')" style="width:100%;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);padding:10px;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px;font-family:inherit">Got it — dismiss</button>
             `;
             document.body.appendChild(hint);
-        }, 3000);
+        }, 4000); // 4s — enough time for SW to activate so iOS treats it as a real PWA install
     }
 
     /* 5. Push notification request — CONTEXTUAL: triggered after user completes first habit,
