@@ -5877,7 +5877,51 @@ function AddHabitModal(_ref12) {
     freqIntervalDays = _useState56[0],
     setFreqIntervalDays = _useState56[1]; // Every N days
 
+  var _useStateValidating = useState(false),
+    _useStateValidatingArr = _slicedToArray(_useStateValidating, 2),
+    validating = _useStateValidatingArr[0],
+    setValidating = _useStateValidatingArr[1];
+  var _useStateNameError = useState(''),
+    _useStateNameErrorArr = _slicedToArray(_useStateNameError, 2),
+    nameError = _useStateNameErrorArr[0],
+    setNameError = _useStateNameErrorArr[1];
+
   var categories = ['Fitness', 'Nutrition', 'Skincare', 'Sleep', 'Mindfulness', 'Hydration', 'Learning', 'Other'];
+
+  // ── Layer 1: Front-end rules (free, instant) ─────────────────────────────
+  var BLACKLIST = ['test','aaa','bbb','ccc','abc','123','xxx','zzz','asdf','qwerty','the','a','b','c'];
+  function layer1Check(val) {
+    var v = val.trim();
+    if (v.length < 3) return '習慣名稱至少需要 3 個字元';
+    if (/^[a-zA-Z]$/.test(v)) return '請輸入更具體的習慣名稱';
+    if (/^[!-\/:-@[-`{-~\s]+$/.test(v)) return '名稱不能只包含符號';
+    if (BLACKLIST.indexOf(v.toLowerCase()) !== -1) return '請輸入更具體的習慣名稱，例如「每天跑步30分鐘」';
+    return null; // pass
+  }
+
+  // ── Layer 2: Claude Haiku validation via Supabase Edge Function ─────────
+  // API key stays safely on the server, never exposed to the browser.
+  async function layer2Check(val) {
+    try {
+      var session = await _supabase.auth.getSession();
+      var token = session.data.session && session.data.session.access_token;
+      if (!token) return null; // not logged in, fail open
+      var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/validate-habit-name', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ habitName: val })
+      });
+      if (!res.ok) return null; // fail open on any server error
+      var data = await res.json();
+      if (data.valid === false) return data.reason || '習慣名稱太模糊，請描述得更具體，例如「每天早上跑步20分鐘」';
+      return null; // pass
+    } catch(e) {
+      return null; // fail open on network error
+    }
+  }
 
   /* Calculate frequency params: { timesPerCycle: completions per cycle, intervalDays: days per cycle } */
   var getFreqParams = function getFreqParams() {
@@ -5925,11 +5969,20 @@ function AddHabitModal(_ref12) {
     }
     return durPreset.label;
   };
-  var handleAdd = function handleAdd() {
+  var handleAdd = async function handleAdd() {
     if (!name.trim()) {
-      alert('Please enter a habit name.');
+      setNameError('請輸入習慣名稱');
       return;
     }
+    setNameError('');
+    // ── Layer 1 check ──
+    var l1err = layer1Check(name);
+    if (l1err) { setNameError(l1err); return; }
+    // ── Layer 2 check (Haiku) ──
+    setValidating(true);
+    var l2err = await layer2Check(name);
+    setValidating(false);
+    if (l2err) { setNameError(l2err); return; }
     // Validate frequency is selected
     if (!freqPreset) {
       alert('Please select a frequency.');
@@ -7280,6 +7333,23 @@ function MainApp(_ref16) {
     };
     return function() { window._ptrDoRefresh = null; };
   }, [fetchAllNow]);
+
+  // ── 暴露 tab 切換 & pairs 刷新給外部 script（如 sendPartnerRequest）使用 ──
+  useEffect(function() {
+    window._navigateTab = function(tab) { setActiveTab(tab); };
+    window._refreshPairs = function() {
+      if (!user) return;
+      _supabase.from('pairs').select('*')
+        .or('user_id.eq.' + user.uid + ',partner_id.eq.' + user.uid)
+        .in('status', ['active','pending'])
+        .order('created_at', { ascending: false })
+        .then(function(r) {
+          // BuddiesPage will re-fetch on its own when tab becomes active;
+          // this just ensures the badge/count is up to date globally.
+        });
+    };
+    return function() { window._navigateTab = null; window._refreshPairs = null; };
+  }, [user, setActiveTab]);
 
   // ── visibilitychange 回前台重抓資料 ──
   useEffect(function() {
@@ -10306,20 +10376,54 @@ function BuddiesPage(_ref_buddies) {
         : React.createElement("div", null,
             pairs.map(function(pair) {
               var isUser = pair.user_id === user.uid;
+              var isIncoming = !isUser && pair.status === 'pending'; // partner sent request TO me
               var partnerId = isUser ? pair.partner_id : pair.user_id;
               var habitName = isUser ? pair.habit_name : pair.partner_habit_name;
               var initials = partnerId.toString().slice(0,2).toUpperCase();
-              return React.createElement("div", { key: pair.id, className: "pair-card", onClick: function(){ setSelectedPair(pair); } },
+
+              // Accept / Decline handlers for incoming pending requests
+              function handleAccept(e) {
+                e.stopPropagation();
+                _supabase.from('pairs').update({ status: 'active' }).eq('id', pair.id)
+                  .then(function() {
+                    setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
+                    if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
+                  });
+              }
+              function handleDecline(e) {
+                e.stopPropagation();
+                _supabase.from('pairs').update({ status: 'declined' }).eq('id', pair.id)
+                  .then(function() {
+                    setPairs(function(prev) { return prev.filter(function(p) { return p.id !== pair.id; }); });
+                    if (typeof showToast === 'function') showToast('Request declined.');
+                  });
+              }
+
+              return React.createElement("div", { key: pair.id, className: "pair-card", onClick: function(){ if (!isIncoming) setSelectedPair(pair); } },
                 React.createElement("div", { className: "pair-avs" },
                   React.createElement("div", { className: "pair-av" }, "YOU"),
                   React.createElement("div", { className: "pair-av" }, initials)
                 ),
                 React.createElement("div", { className: "pair-info" },
                   React.createElement("div", { className: "pair-name" }, 'YOU × ' + initials),
-                  React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name)
+                  React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name),
+                  isIncoming && React.createElement("div", { style:{ fontSize:10, color:'#f59e0b', fontWeight:700, marginTop:2 } }, '⏳ Incoming request')
                 ),
-                React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase()),
-                React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
+                isIncoming
+                  ? React.createElement("div", { style:{ display:'flex', gap:6, flexShrink:0 } },
+                      React.createElement("button", {
+                        style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'#16a34a', color:'#fff', border:'none', borderRadius:6, cursor:'pointer' },
+                        onClick: handleAccept
+                      }, "Accept"),
+                      React.createElement("button", {
+                        style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'var(--gray-200)', color:'var(--gray-600)', border:'none', borderRadius:6, cursor:'pointer' },
+                        onClick: handleDecline
+                      }, "Decline")
+                    )
+                  : React.createElement(React.Fragment, null,
+                      React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase()),
+                      React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
+                    )
               );
             })
           )
@@ -11513,7 +11617,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <!-- ══════════════════════════════════════════
      AI MATCHING MODAL
 ══════════════════════════════════════════ -->
-<div id="matchingOverlay" style="display:none;" class="matching-overlay" onclick="if(event.target===this)window.closeMatchingModal()">
+<div id="matchingOverlay" style="display:none;" class="matching-overlay" >
   <div class="matching-sheet" id="matchingSheet">
     <!-- State A: Scanning -->
     <div id="matchingScanning">
@@ -11706,6 +11810,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       var userId = session.data.session && session.data.session.user && session.data.session.user.id;
       if (!userId) return;
 
+      // 1. Insert pair record
       await _supabase.from('pairs').insert({
         user_id: userId,
         partner_id: _currentMatch.userId,
@@ -11715,8 +11820,26 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         status: 'pending'
       });
 
+      // 2. Send notification to partner so they know a request arrived
+      await _supabase.from('notifications').insert({
+        user_id: _currentMatch.userId,
+        type: 'partner_request',
+        title: 'New Partner Request!',
+        body: 'Someone wants to be your habit partner for "' + _currentMatch.habitName + '".',
+        data: JSON.stringify({
+          from_user_id: userId,
+          habit_name: _currentHabit.name,
+          partner_habit_name: _currentMatch.habitName
+        }),
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
+
       window.closeMatchingModal();
-      if (typeof showToast === 'function') showToast('Partner request sent!');
+
+      // 3. Navigate to Buddies tab so user sees the pending request immediately
+      if (typeof window._navigateTab === 'function') window._navigateTab('buddies');
+      if (typeof showToast === 'function') showToast('Partner request sent! 🎉');
     } catch(e) {
       alert('Failed to send request: ' + e.message);
     }

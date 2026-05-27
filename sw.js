@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ht-v20260526-2';
+const CACHE_VERSION = 'ht-v20260527-1';
 
 self.addEventListener('install', event => {
   // Skip waiting immediately so new SW activates without waiting for old tabs to close
