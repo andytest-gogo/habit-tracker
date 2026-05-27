@@ -7069,7 +7069,7 @@ function MainApp(_ref16) {
   var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
-  var PARTNER_UNLOCK_DAYS = 21;
+  var PARTNER_UNLOCK_DAYS = 2;
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
   // 用於 visibilitychange 回前台、pull-to-refresh 觸發
@@ -8853,7 +8853,7 @@ function MainApp(_ref16) {
       var isQualified = daysCompleted >= PARTNER_UNLOCK_DAYS;
       var unlockPct = Math.min(Math.round((daysCompleted / PARTNER_UNLOCK_DAYS) * 100), 100);
       var daysLeft = Math.max(PARTNER_UNLOCK_DAYS - daysCompleted, 0);
-      // Bug fix: don't show unlock progress bar if habit total duration < 21 days
+      // Bug fix: don't show unlock progress bar if habit total duration < 2 days
       var _habitTr = parseTimeRange(habit.timeRange);
       var _habitDuration = (_habitTr.start && _habitTr.end)
         ? Math.round((dateFromISO(_habitTr.end) - dateFromISO(_habitTr.start)) / 86400000) + 1
@@ -9131,7 +9131,7 @@ function MainApp(_ref16) {
     };
 
     var renderChallengersTab = function() {
-      var nearEnd = challengers.filter(function(c) { return c.streak >= 18; });
+      var nearEnd = challengers.filter(function(c) { return c.streak >= 2; });
       var buildMomentum = challengers.filter(function(c) { return c.streak >= 8 && c.streak < 18; });
       var justStarted = challengers.filter(function(c) { return c.streak >= 1 && c.streak <= 3; });
       var midRange = challengers.filter(function(c) { return c.streak > 3 && c.streak < 8; });
@@ -9144,7 +9144,7 @@ function MainApp(_ref16) {
         var habitLabel = c.challengeVisibility === "public" ? (c.name || "Habit challenge") : "Habit challenge";
         var initials = displayName.slice(0, 2).toUpperCase();
         var pct = Math.min(Math.round((c.streak / PARTNER_UNLOCK_DAYS) * 100), 100);
-        var isNearEnd = c.streak >= 18;
+        var isNearEnd = c.streak >= 2;
         var isJustStarted = c.streak <= 3;
         var barClass = "challenger-card-bar-fill" + (isNearEnd ? " near-end" : isJustStarted ? " just-started" : "");
         var daysLeft = PARTNER_UNLOCK_DAYS - c.streak;
@@ -9170,7 +9170,7 @@ function MainApp(_ref16) {
           ),
           React.createElement("div", { className: "challenger-card-progress" },
             React.createElement("div", { className: "challenger-card-prog-row" },
-              React.createElement("span", { className: "challenger-card-prog-label" }, "21-Day Challenge"),
+              React.createElement("span", { className: "challenger-card-prog-label" }, "2-Day Challenge"),
               React.createElement("span", { className: "challenger-card-prog-count" }, c.streak + "/" + PARTNER_UNLOCK_DAYS)
             ),
             React.createElement("div", { className: "challenger-card-bar-track" },
@@ -9200,7 +9200,7 @@ function MainApp(_ref16) {
           React.createElement("div", null, "No active challengers right now"),
           React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Keep a streak going to appear here!")
         ),
-        React.createElement(SegSection, { label: "\ud83d\udd25 Almost there \u00b7 Day 18\u201321", list: nearEnd }),
+        React.createElement(SegSection, { label: "\ud83d\udd25 Almost there \u00b7 Day 2", list: nearEnd }),
         React.createElement(SegSection, { label: "\u26a1 Building momentum \u00b7 Day 8\u201317", list: buildMomentum }),
         React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20133", list: justStarted }),
         React.createElement(SegSection, { label: "Day 4\u20137", list: midRange })
