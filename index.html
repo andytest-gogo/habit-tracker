@@ -6762,6 +6762,19 @@ function MainApp(_ref16) {
     activeTab = _useStateTABa[0],
     _setActiveTabRaw = _useStateTABa[1];
   var setActiveTab = React.useCallback(function(tab){
+    // ── Umami: Community time-on-page tracking ──
+    var _now = Date.now();
+    if (typeof window._communityEnterTime === 'number' && window._activeTabTrack === 'feed') {
+      var _sec = Math.round((_now - window._communityEnterTime) / 1000);
+      if (_sec > 2 && typeof window.umami !== 'undefined') {
+        window.umami.track('community_time_on_page', { seconds: _sec });
+      }
+      window._communityEnterTime = null;
+    }
+    if (tab === 'feed') {
+      window._communityEnterTime = _now;
+    }
+    window._activeTabTrack = tab;
     _setActiveTabRaw(tab);
     try{localStorage.setItem('_ht_tab',tab);}catch(e){}
   },[]);
@@ -9178,6 +9191,30 @@ function MainApp(_ref16) {
   };
   var renderFeed = function renderFeed() {
     var renderCommunityTab = function() {
+      // ── Umami: 貼文瀏覽深度追蹤（記錄最深看到第幾篇，離開時上報）──
+      React.useEffect(function() {
+        if (typeof window.umami === 'undefined') return;
+        var _maxSeen = 0;
+        var _reported = false;
+        var _cards = document.querySelectorAll('.feed-card, [data-feed-card]');
+        if (_cards.length === 0) return;
+        var _observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (!entry.isIntersecting) return;
+            var idx = Array.prototype.indexOf.call(_cards, entry.target) + 1;
+            if (idx > _maxSeen) _maxSeen = idx;
+          });
+        }, { threshold: 0.5 });
+        _cards.forEach(function(c) { _observer.observe(c); });
+        // 離開 community tab 或元件卸載時上報
+        return function() {
+          _observer.disconnect();
+          if (!_reported && _maxSeen > 0) {
+            _reported = true;
+            window.umami.track('community_post_depth', { posts_seen: _maxSeen, total_posts: _cards.length });
+          }
+        };
+      }, [feedPosts.length]);
       return React.createElement(React.Fragment, null,
         feedPosts.length === 0 && React.createElement("div", { className: "empty-state" },
           React.createElement(ChatIcon, null),
@@ -10723,8 +10760,10 @@ if (typeof window._wsgOnReactReady === 'function') window._wsgOnReactReady();
 
                     // Check for SW update immediately on load (don't wait 24h)
                     reg.update();
-                    // Also check every 30s while app is open
-                    setInterval(function(){ reg.update(); }, 30000);
+                    // Poll for SW updates every 10 minutes, only when app is in foreground
+                    setInterval(function(){
+                        if (document.visibilityState === 'visible') reg.update();
+                    }, 10 * 60 * 1000);
                     // And check whenever user returns from background
                     document.addEventListener('visibilitychange', function() {
                         if (document.visibilityState === 'visible') reg.update();
