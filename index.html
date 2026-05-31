@@ -9182,7 +9182,11 @@ function MainApp(_ref16) {
     }));
   };
   var renderFeed = function renderFeed() {
-    var renderCommunityTab = function() {
+    // CommunityTab 是真正的 React 元件，才能合法使用 useEffect
+    var CommunityTab = function(props) {
+      var feedPosts = props.feedPosts;
+      var feedHasMore = props.feedHasMore;
+      var feedLoadingMore = props.feedLoadingMore;
       // ── Umami: 貼文瀏覽深度追蹤（記錄最深看到第幾篇，離開時上報）──
       React.useEffect(function() {
         if (typeof window.umami === 'undefined') return;
@@ -9324,7 +9328,7 @@ function MainApp(_ref16) {
         }, "Challengers")
       ),
       React.createElement("div", { style: { padding: "12px 0" } },
-        feedSubTab === "community" ? renderCommunityTab() : renderChallengersTab()
+        feedSubTab === "community" ? React.createElement(CommunityTab, { feedPosts: feedPosts, feedHasMore: feedHasMore, feedLoadingMore: feedLoadingMore }) : renderChallengersTab()
       )
     );
   };
