@@ -11679,18 +11679,18 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           <span id="matchingStatusText">Searching users...</span>
         </div>
         <div class="match-grid">
-          <div class="match-cell"><div class="match-cell-lbl">Your streak</div><div class="match-cell-val" id="mStreak">—</div><div class="match-cell-sub">days</div></div>
-          <div class="match-cell"><div class="match-cell-lbl">Completion</div><div class="match-cell-val" id="mCompletion">—</div><div class="match-cell-sub">rate</div></div>
-          <div class="match-cell"><div class="match-cell-lbl">Category</div><div class="match-cell-val" id="mCategory" style="font-size:13px;">—</div><div class="match-cell-sub">&nbsp;</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Avg Duration</div><div class="match-cell-val" id="mAvgDur">—</div><div class="match-cell-sub">min / session</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Habit Lifespan</div><div class="match-cell-val" id="mLifespan">—</div><div class="match-cell-sub">days avg</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Mind-Body</div><div class="match-cell-val" id="mMindBody" style="font-size:13px;">—</div><div class="match-cell-sub">balance</div></div>
           <div class="match-cell"><div class="match-cell-lbl">Remaining</div><div class="match-cell-val" id="mRemaining">3</div><div class="match-cell-sub">matches today</div></div>
         </div>
         <div id="matchingProgRows">
-          <div class="prog-row"><div class="prog-lbl">Semantic match</div><div class="prog-track"><div class="prog-fill" id="prog1" style="width:0%"></div></div><div class="prog-val" id="progVal1">—</div></div>
-          <div class="prog-row"><div class="prog-lbl">Schedule align</div><div class="prog-track"><div class="prog-fill" id="prog2" style="width:0%"></div></div><div class="prog-val" id="progVal2">—</div></div>
-          <div class="prog-row"><div class="prog-lbl">Streak parity</div><div class="prog-track"><div class="prog-fill" id="prog3" style="width:0%"></div></div><div class="prog-val" id="progVal3">—</div></div>
-          <div class="prog-row"><div class="prog-lbl">Consistency</div><div class="prog-track"><div class="prog-fill" id="prog4" style="width:0%"></div></div><div class="prog-val" id="progVal4">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Avg Duration</div><div class="prog-track"><div class="prog-fill" id="prog1" style="width:0%"></div></div><div class="prog-val" id="progVal1">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Habit Lifespan</div><div class="prog-track"><div class="prog-fill" id="prog2" style="width:0%"></div></div><div class="prog-val" id="progVal2">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Mind-Body</div><div class="prog-track"><div class="prog-fill" id="prog3" style="width:0%"></div></div><div class="prog-val" id="progVal3">—</div></div>
+          <div class="prog-row"><div class="prog-lbl">Rhythm Score</div><div class="prog-track"><div class="prog-fill" id="prog4" style="width:0%"></div></div><div class="prog-val" id="progVal4">—</div></div>
         </div>
-        <div class="match-note">Claude is comparing habit descriptions, time patterns and consistency profiles to find your best match.</div>
+        <div class="match-note">Claude is analysing your habit duration, lifespan, mind-body balance and rhythm stability to find your best match.</div>
       </div>
     </div>
     <!-- State B: Result -->
@@ -11707,10 +11707,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       </div>
       <div class="result-breakdown">
         <div class="result-breakdown-lbl">Match breakdown</div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Habit Intent</div><div class="prog-track"><div class="prog-fill" id="rProg1" style="width:0%"></div></div><div class="prog-val" id="rVal1">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Consistency</div><div class="prog-track"><div class="prog-fill" id="rProg2" style="width:0%"></div></div><div class="prog-val" id="rVal2">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Schedule</div><div class="prog-track"><div class="prog-fill" id="rProg3" style="width:0%"></div></div><div class="prog-val" id="rVal3">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Streak Parity</div><div class="prog-track"><div class="prog-fill" id="rProg4" style="width:0%"></div></div><div class="prog-val" id="rVal4">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Avg Duration</div><div class="prog-track"><div class="prog-fill" id="rProg1" style="width:0%"></div></div><div class="prog-val" id="rVal1">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Habit Lifespan</div><div class="prog-track"><div class="prog-fill" id="rProg2" style="width:0%"></div></div><div class="prog-val" id="rVal2">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Mind-Body</div><div class="prog-track"><div class="prog-fill" id="rProg3" style="width:0%"></div></div><div class="prog-val" id="rVal3">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Rhythm Score</div><div class="prog-track"><div class="prog-fill" id="rProg4" style="width:0%"></div></div><div class="prog-val" id="rVal4">—</div></div>
       </div>
       <div class="result-ai-section">
         <div class="result-ai-lbl">Why Claude chose this match</div>
@@ -11748,9 +11748,33 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
     // Fill habit info
     document.getElementById('matchingHabitName').textContent = habit.name;
-    document.getElementById('mStreak').textContent = habit.streak || 0;
-    document.getElementById('mCompletion').textContent = (window.calcCompletionRate ? window.calcCompletionRate(habit) : '—') + '%';
-    document.getElementById('mCategory').textContent = habit.category || '—';
+
+    // ── 計算平均習慣時長（從 durLabel 解析分鐘數）──
+    function parseDurMins(label) {
+      if (!label) return null;
+      var m = label.match(/([\d.]+)\s*hr/i);
+      if (m) return Math.round(parseFloat(m[1]) * 60);
+      m = label.match(/([\d.]+)\s*min/i);
+      if (m) return Math.round(parseFloat(m[1]));
+      return null;
+    }
+    var durMins = parseDurMins(habit.durLabel);
+    document.getElementById('mAvgDur').textContent = durMins !== null ? durMins : '—';
+
+    // ── 計算習慣壽命（end - start 天數）──
+    function habitLifespanDays(h) {
+      if (!h.timeRange) return null;
+      var parts = h.timeRange.split('～').map(function(s){ return s.trim(); });
+      if (parts.length < 2) return null;
+      var s = new Date(parts[0]), e = new Date(parts[1]);
+      if (isNaN(s) || isNaN(e)) return null;
+      return Math.round((e - s) / 86400000) + 1;
+    }
+    var lifespan = habitLifespanDays(habit);
+    document.getElementById('mLifespan').textContent = lifespan !== null ? lifespan : '—';
+
+    // Mind-Body 等 API 回來再填，先顯示分析中
+    document.getElementById('mMindBody').textContent = '...';
     document.getElementById('matchingStatusText').textContent = 'Searching users...';
 
     // Animate progress bars
@@ -11791,7 +11815,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           habitId: habit.id,
           habitName: habit.name,
           habitCategory: habit.category || '',
-          habitStreak: habit.streak || 0
+          habitStreak: habit.streak || 0,
+          habitDurLabel: habit.durLabel || '',
+          habitTimeRange: habit.timeRange || '',
+          checkedDates: habit.checkedDates || []
         })
       });
 
@@ -11824,11 +11851,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('resultScoreBar').style.width = (match.score || 0) + '%';
     document.getElementById('resultReason').textContent = match.reason || '—';
 
+    // 填入 mind-body balance（從 API 回傳）
+    if (match.mindBody) document.getElementById('mMindBody').textContent = match.mindBody;
+
     var bd = match.breakdown || {};
-    [['rProg1','rVal1', bd.habitIntent||0],
-     ['rProg2','rVal2', bd.consistency||0],
-     ['rProg3','rVal3', bd.schedule||0],
-     ['rProg4','rVal4', bd.streakParity||0]].forEach(function(r) {
+    [['rProg1','rVal1', bd.avgDuration||0],
+     ['rProg2','rVal2', bd.habitLifespan||0],
+     ['rProg3','rVal3', bd.mindBody||0],
+     ['rProg4','rVal4', bd.rhythmScore||0]].forEach(function(r) {
       document.getElementById(r[0]).style.width = r[2] + '%';
       document.getElementById(r[1]).textContent = r[2] + '%';
     });
