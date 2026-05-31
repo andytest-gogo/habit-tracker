@@ -547,7 +547,8 @@
         .habit-info { flex:1; }
         .habit-title { font-size:14px; font-weight:600; color:var(--black); margin-bottom:6px; }
         .habit-meta { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
-        .habit-category { display:inline-block; padding:2px 7px; font-size:9px; background:var(--gray-100); color:var(--gray-600); font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+        .habit-category { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; font-size:9px; background:var(--gray-100); color:var(--gray-600); font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+        .habit-category-spark { font-size:8px; opacity:.65; font-style:normal; }
         .habit-streak { display:flex; align-items:center; gap:4px; font-size:12px; font-weight:700; color:var(--gray-600); }
         .habit-time-range { font-size:10px; color:var(--gray-400); font-family:var(--din); }
 
@@ -5837,10 +5838,10 @@ function AddHabitModal(_ref12) {
     _useState38 = _slicedToArray(_useState37, 2),
     name = _useState38[0],
     setName = _useState38[1];
-  var _useState39 = useState('Fitness'),
+  var _useState39 = useState(null),
     _useState40 = _slicedToArray(_useState39, 2),
-    category = _useState40[0],
-    setCategory = _useState40[1];
+    aiCategory = _useState40[0],
+    setAiCategory = _useState40[1];
 
   // Start/End Date (date string for <input type="date">)
   var todayStr = toISODay(now); // use local date, not UTC
@@ -5887,8 +5888,6 @@ function AddHabitModal(_ref12) {
     nameError = _useStateNameErrorArr[0],
     setNameError = _useStateNameErrorArr[1];
 
-  var categories = ['Fitness', 'Nutrition', 'Skincare', 'Sleep', 'Mindfulness', 'Hydration', 'Learning', 'Other'];
-
   // ── Layer 1: Front-end rules (free, instant) ─────────────────────────────
   var BLACKLIST = ['test','aaa','bbb','ccc','abc','123','xxx','zzz','asdf','qwerty','the','a','b','c'];
   function layer1Check(val) {
@@ -5900,13 +5899,14 @@ function AddHabitModal(_ref12) {
     return null; // pass
   }
 
-  // ── Layer 2: Claude Haiku validation via Supabase Edge Function ─────────
+  // ── Layer 2: Claude Haiku — validate + categorize in ONE Edge Function call ─
+  // Returns { error: string|null, category: string }
   // API key stays safely on the server, never exposed to the browser.
   async function layer2Check(val) {
     try {
       var session = await _supabase.auth.getSession();
       var token = session.data.session && session.data.session.access_token;
-      if (!token) return null; // not logged in, fail open
+      if (!token) return { error: null, category: 'Other' }; // not logged in, fail open
       var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/validate-habit-name', {
         method: 'POST',
         headers: {
@@ -5915,12 +5915,18 @@ function AddHabitModal(_ref12) {
         },
         body: JSON.stringify({ habitName: val })
       });
-      if (!res.ok) return null; // fail open on any server error
       var data = await res.json();
-      if (data.valid === false) return data.reason || '習慣名稱太模糊，請描述得更具體，例如「每天早上跑步20分鐘」';
-      return null; // pass
+      // 429 = daily limit reached
+      if (res.status === 429) {
+        return { error: data.reason || '今日 AI 輔助次數已達上限，請明天再試。', category: 'Other', limitReached: true };
+      }
+      if (!res.ok) return { error: null, category: 'Other' }; // fail open on other server errors
+      if (data.valid === false) {
+        return { error: data.reason || '習慣名稱太模糊，請描述得更具體，例如「每天早上跑步20分鐘」', category: data.category || 'Other' };
+      }
+      return { error: null, category: data.category || 'Other' };
     } catch(e) {
-      return null; // fail open on network error
+      return { error: null, category: 'Other' }; // fail open on network error
     }
   }
 
@@ -5979,11 +5985,12 @@ function AddHabitModal(_ref12) {
     // ── Layer 1 check ──
     var l1err = layer1Check(name);
     if (l1err) { setNameError(l1err); return; }
-    // ── Layer 2 check (Haiku) ──
+    // ── Layer 2 check (Haiku) — validates name + infers category in one call ──
     setValidating(true);
-    var l2err = await layer2Check(name);
+    var l2result = await layer2Check(name);
     setValidating(false);
-    if (l2err) { setNameError(l2err); return; }
+    if (l2result.error) { setNameError(l2result.error); return; }
+    var inferredCategory = l2result.category || 'Other';
     // Validate frequency is selected
     if (!freqPreset) {
       alert('Please select a frequency.');
@@ -6070,7 +6077,7 @@ function AddHabitModal(_ref12) {
       intervalDays = _getFreqParams.intervalDays;
     onAdd({
       name: name.trim(),
-      category: category,
+      category: inferredCategory,
       timeRange: timeRange,
       freqLabel: freqLabel,
       durLabel: durLabel,
@@ -6106,24 +6113,9 @@ function AddHabitModal(_ref12) {
     style: nameError ? { borderColor: '#dc2626' } : {}
   }), validating && /*#__PURE__*/React.createElement("div", {
     style: { color: 'var(--gray-500)', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }
-  }, /*#__PURE__*/React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid var(--gray-400)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' } }), "Claude 驗證習慣名稱中..."), nameError && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid var(--gray-400)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' } }), "Claude 正在驗證名稱並歸納類別..."), nameError && /*#__PURE__*/React.createElement("div", {
     style: { color: '#dc2626', fontSize: 12, marginTop: 4, fontWeight: 500 }
   }, nameError)), /*#__PURE__*/React.createElement("div", {
-    className: "form-group"
-  }, /*#__PURE__*/React.createElement("label", {
-    className: "form-label"
-  }, "Category"), /*#__PURE__*/React.createElement("select", {
-    className: "form-input",
-    value: category,
-    onChange: function onChange(e) {
-      return setCategory(e.target.value);
-    }
-  }, categories.map(function (c) {
-    return /*#__PURE__*/React.createElement("option", {
-      key: c,
-      value: c
-    }, c);
-  }))), /*#__PURE__*/React.createElement("div", {
     className: "section-divider"
   }), /*#__PURE__*/React.createElement("div", {
     className: "form-group"
@@ -8965,7 +8957,7 @@ function MainApp(_ref16) {
         className: "habit-meta"
       }, /*#__PURE__*/React.createElement("span", {
         className: "habit-category"
-      }, habit.category), habit.streak > 0 && /*#__PURE__*/React.createElement("div", {
+      }, /*#__PURE__*/React.createElement("i", { className: "habit-category-spark" }, "\u2728"), habit.category), habit.streak > 0 && /*#__PURE__*/React.createElement("div", {
         className: "habit-streak"
       }, /*#__PURE__*/React.createElement(FlameIcon, null), /*#__PURE__*/React.createElement("span", null, habit.streak))), /*#__PURE__*/React.createElement("div", {
         style: {
