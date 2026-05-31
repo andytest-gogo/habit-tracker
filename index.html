@@ -5889,13 +5889,20 @@ function AddHabitModal(_ref12) {
     setNameError = _useStateNameErrorArr[1];
 
   // ── Layer 1: Front-end rules (free, instant) ─────────────────────────────
-  var BLACKLIST = ['test','aaa','bbb','ccc','abc','123','xxx','zzz','asdf','qwerty','the','a','b','c'];
+  var BLACKLIST = ['test','aaa','bbb','ccc','abc','123','xxx','zzz','asdf','qwerty','the','a','b','c','hi','ok','no','yes','do','go'];
   function layer1Check(val) {
     var v = val.trim();
-    if (v.length < 3) return '習慣名稱至少需要 3 個字元';
-    if (/^[a-zA-Z]$/.test(v)) return '請輸入更具體的習慣名稱';
-    if (/^[!-\/:-@[-`{-~\s]+$/.test(v)) return '名稱不能只包含符號';
-    if (BLACKLIST.indexOf(v.toLowerCase()) !== -1) return '請輸入更具體的習慣名稱，例如「每天跑步30分鐘」';
+    if (v.length < 4) return 'Habit name must be at least 4 characters.';
+    if (/^[!-\/:-@[-`{-~\s]+$/.test(v)) return 'Name cannot contain only symbols.';
+    if (BLACKLIST.indexOf(v.toLowerCase()) !== -1) return 'Please be more specific, e.g. "Run 30 minutes every morning".';
+    if (/^[a-zA-Z]+$/.test(v)) {
+      var vowels = (v.match(/[aeiouAEIOU]/g) || []).length;
+      var ratio = vowels / v.length;
+      if (vowels === 0 && v.length > 3) return 'Please enter a meaningful habit name.';
+      if (v.length >= 5 && ratio < 0.15) return 'Please enter a meaningful habit name.';
+      if (v.length < 5 && !v.match(/\s/)) return 'Please be more specific, e.g. "Run 30 minutes every morning".';
+    }
+    if (/^\d+$/.test(v)) return 'Please enter a meaningful habit name.';
     return null; // pass
   }
 
@@ -5918,11 +5925,11 @@ function AddHabitModal(_ref12) {
       var data = await res.json();
       // 429 = daily limit reached
       if (res.status === 429) {
-        return { error: data.reason || '今日 AI 輔助次數已達上限，請明天再試。', category: 'Other', limitReached: true };
+        return { error: data.reason || 'Daily AI limit reached. Please try again tomorrow.', category: 'Other', limitReached: true };
       }
-      if (!res.ok) return { error: null, category: 'Other' }; // fail open on other server errors
+      if (!res.ok) return { error: null, category: 'Other' };
       if (data.valid === false) {
-        return { error: data.reason || '習慣名稱太模糊，請描述得更具體，例如「每天早上跑步20分鐘」', category: data.category || 'Other' };
+        return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other' };
       }
       return { error: null, category: data.category || 'Other' };
     } catch(e) {
@@ -5978,7 +5985,7 @@ function AddHabitModal(_ref12) {
   };
   var handleAdd = async function handleAdd() {
     if (!name.trim()) {
-      setNameError('請輸入習慣名稱');
+      setNameError('Please enter a habit name.');
       return;
     }
     setNameError('');
@@ -6113,7 +6120,7 @@ function AddHabitModal(_ref12) {
     style: nameError ? { borderColor: '#dc2626' } : {}
   }), validating && /*#__PURE__*/React.createElement("div", {
     style: { color: 'var(--gray-500)', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }
-  }, /*#__PURE__*/React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid var(--gray-400)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' } }), "Claude 正在驗證名稱並歸納類別..."), nameError && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid var(--gray-400)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' } }), "Claude is validating and categorizing..."), nameError && /*#__PURE__*/React.createElement("div", {
     style: { color: '#dc2626', fontSize: 12, marginTop: 4, fontWeight: 500 }
   }, nameError)), /*#__PURE__*/React.createElement("div", {
     className: "section-divider"
