@@ -6108,14 +6108,14 @@ function AddHabitModal(_ref12) {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
     className: "form-label"
-  }, "Habit Name"), /*#__PURE__*/React.createElement("input", {
+  }, "Habit Name"), /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--gray-400)", marginBottom: 6, lineHeight: 1.5 } }, "💡 Specific names = better partner matches. Try: "每天跑步30分鐘", "Read 20 min before bed", "Drink 2L water daily""), /*#__PURE__*/React.createElement("input", {
     type: "text",
     className: "form-input",
     value: name,
     onChange: function onChange(e) {
       return setName(e.target.value);
     },
-    placeholder: "e.g. Morning Run",
+    placeholder: "e.g. 每天跑步30分鐘 / Run 30 min daily",
     autoFocus: true,
     style: nameError ? { borderColor: '#dc2626' } : {}
   }), validating && /*#__PURE__*/React.createElement("div", {
@@ -11720,6 +11720,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         <div class="result-ai-text" id="resultReason">—</div>
       </div>
       <div class="result-actions">
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin-bottom:10px;line-height:1.5;">⚠️ Check the habit name above — only send requests to users with <strong style="color:rgba(255,255,255,0.8)">clear, specific habit names</strong>.</div>
         <button class="result-cta" onclick="window.sendPartnerRequest()">Send Partner Request</button>
         <button class="result-skip" onclick="window.closeMatchingModal()">See other matches later</button>
       </div>
