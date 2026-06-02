@@ -1629,6 +1629,8 @@
         })
       : Promise.resolve();
     p.catch(function(){}).then(function(){
+      // Set SW guard so controllerchange won't trigger another reload on top of this one
+      try { sessionStorage.setItem('_sw_r', '1'); } catch(e){}
       window.location.href = window.location.pathname + '?_r=' + Date.now();
     });
   }
@@ -1832,14 +1834,15 @@
       // Preserve reload counter and SW reload guard so we don't loop after clearing
       var _rc = sessionStorage.getItem('wsg_rc');
       var _rt = sessionStorage.getItem('wsg_ts');
-      var _sr = sessionStorage.getItem('_sw_r');
       sessionStorage.clear();
       // Bump the counter so manual "Reload Now" counts toward the cap
       var _cnt = parseInt(_rc || '0', 10) + 1;
       var _ts  = _rt || String(Date.now());
       sessionStorage.setItem('wsg_rc', String(_cnt));
       sessionStorage.setItem('wsg_ts', _ts);
-      if (_sr) sessionStorage.setItem('_sw_r', _sr);
+      // Always set SW guard — whether or not it was set before —
+      // so that a pending controllerchange after cache-clear doesn't cause another reload loop
+      sessionStorage.setItem('_sw_r', '1');
     } catch(e){}
     window.location.href = window.location.pathname + '?_r=' + Date.now();
   };
