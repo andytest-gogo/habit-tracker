@@ -538,19 +538,79 @@
         .section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:14px; color:var(--gray-500); }
 
         /* ── HABIT CARDS (list) ── */
+        /* category colour tokens */
+        :root {
+          --cat-fitness:#16a34a; --cat-fitness-bg:#f0fdf4; --cat-fitness-text:#15803d; --cat-fitness-bd:#bbf7d0;
+          --cat-nutrition:#d97706; --cat-nutrition-bg:#fffbeb; --cat-nutrition-text:#b45309; --cat-nutrition-bd:#fde68a;
+          --cat-skincare:#ec4899; --cat-skincare-bg:#fdf2f8; --cat-skincare-text:#be185d; --cat-skincare-bd:#fbcfe8;
+          --cat-sleep:#7c3aed; --cat-sleep-bg:#f5f3ff; --cat-sleep-text:#6d28d9; --cat-sleep-bd:#ddd6fe;
+          --cat-mindfulness:#0284c7; --cat-mindfulness-bg:#f0f9ff; --cat-mindfulness-text:#0369a1; --cat-mindfulness-bd:#bae6fd;
+          --cat-hydration:#0891b2; --cat-hydration-bg:#ecfeff; --cat-hydration-text:#0e7490; --cat-hydration-bd:#a5f3fc;
+          --cat-learning:#2563eb; --cat-learning-bg:#eff6ff; --cat-learning-text:#1d4ed8; --cat-learning-bd:#bfdbfe;
+          --cat-other:#6b7280; --cat-other-bg:#f9fafb; --cat-other-text:#4b5563; --cat-other-bd:#e5e7eb;
+        }
         .habit-card {
-            border:1px solid var(--gray-200); padding:14px 16px;
-            margin-bottom:10px; transition:.2s; cursor:pointer;
+            border:1px solid var(--gray-200); padding:0;
+            margin-bottom:10px; transition:.2s; cursor:pointer; overflow:hidden;
         }
         .habit-card:hover { border-color:var(--black); }
+        .habit-card-accent { height:3px; width:100%; }
+        .habit-card-body { padding:14px 16px 0; }
+        .habit-card-divider { height:1px; background:var(--gray-100); margin:0 16px; }
+        .habit-card-footer { padding:9px 16px 11px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
         .habit-header { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
         .habit-info { flex:1; }
         .habit-title { font-size:14px; font-weight:600; color:var(--black); margin-bottom:6px; }
-        .habit-meta { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
-        .habit-category { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; font-size:9px; background:var(--gray-100); color:var(--gray-600); font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+        .habit-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+        .habit-category { display:inline-flex; align-items:center; gap:3px; padding:3px 9px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-radius:20px; border:1px solid transparent; }
         .habit-category-spark { font-size:8px; opacity:.65; font-style:normal; }
         .habit-streak { display:flex; align-items:center; gap:4px; font-size:12px; font-weight:700; color:var(--gray-600); }
-        .habit-time-range { font-size:10px; color:var(--gray-400); font-family:var(--din); }
+        .habit-time-range { font-size:12px; color:var(--gray-500); display:flex; align-items:center; gap:5px; margin-top:4px; }
+        /* pill tags for freq/dur */
+        .habit-tag-pill { display:inline-flex; align-items:center; padding:3px 8px; border-radius:20px; font-size:9px; font-weight:500; letter-spacing:.3px; background:var(--gray-100); color:var(--gray-600); border:1px solid var(--gray-200); }
+        /* cheer row */
+        .cheer-block { display:inline-flex; align-items:center; gap:6px; cursor:pointer; flex-shrink:0; }
+        .cheer-av-stack { display:flex; }
+        .cheer-av { width:20px; height:20px; border-radius:50%; border:2px solid var(--white); display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:500; margin-left:-6px; flex-shrink:0; }
+        .cheer-av:first-child { margin-left:0; }
+        .cheer-total { font-size:11px; font-weight:700; color:#c2410c; display:inline-flex; align-items:baseline; gap:2px; }
+        .cheer-sep { width:1px; height:10px; background:var(--gray-200); flex-shrink:0; }
+        .cheer-today-badge { display:inline-flex; align-items:center; background:#c2410c; color:#fff; border-radius:6px; padding:1px 6px; font-size:8px; font-weight:700; white-space:nowrap; }
+        .cheer-roll-wrap { display:inline-block; position:relative; overflow:hidden; height:14px; line-height:14px; min-width:10px; vertical-align:bottom; }
+        .cheer-roll-num { display:block; position:absolute; left:0; right:0; transition:transform .38s cubic-bezier(.4,0,.2,1),opacity .38s; }
+        /* completed habit / matching credits */
+        .completed-section-label { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gray-400); margin:20px 0 8px; display:flex; align-items:center; gap:8px; }
+        .completed-section-label::after { content:""; flex:1; height:1px; background:var(--gray-200); }
+        .completed-done-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:9px; font-weight:700; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; white-space:nowrap; flex-shrink:0; }
+        .completed-cheer-static { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff7ed; border:1px solid #fed7aa; border-radius:20px; font-size:10px; font-weight:700; color:#c2410c; }
+        /* seek block */
+        .seek-block { border:1px solid var(--gray-200); border-radius:8px; overflow:hidden; margin-bottom:10px; }
+        .seek-top { padding:11px 13px; display:flex; align-items:center; gap:10px; }
+        .seek-icon { width:34px; height:34px; border-radius:50%; background:var(--gray-100); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+        .seek-title { font-size:12px; font-weight:600; color:var(--black); margin-bottom:2px; }
+        .seek-sub { font-size:10px; color:var(--gray-500); line-height:1.4; }
+        .seek-footer { padding:7px 13px; background:var(--gray-50,#fafafa); border-top:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        /* credit pill */
+        .credit-pill { display:inline-flex; align-items:center; gap:6px; background:var(--black); color:var(--white); border-radius:20px; padding:4px 11px; }
+        .credit-pill-num { font-size:15px; font-weight:700; line-height:1; }
+        .credit-pill-txt { font-size:8px; font-weight:500; letter-spacing:.5px; text-transform:uppercase; opacity:.65; line-height:1.3; }
+        .seek-find-btn { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; background:var(--black); color:var(--white); border:none; padding:6px 12px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+        /* ended block */
+        .ended-block { border:1px solid var(--gray-200); border-radius:8px; overflow:hidden; margin-bottom:10px; }
+        .ended-top { padding:11px 13px; display:flex; align-items:center; gap:10px; }
+        .ended-icon { width:34px; height:34px; border-radius:50%; background:var(--gray-50,#fafafa); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+        .ended-title { font-size:12px; font-weight:600; color:var(--gray-700,#374151); margin-bottom:2px; }
+        .ended-sub { font-size:10px; color:var(--gray-400); line-height:1.4; }
+        .ended-footer { padding:7px 13px; background:var(--gray-50,#fafafa); border-top:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        /* active partner block */
+        .partner-block { border:1px solid #dbeafe; border-radius:8px; overflow:hidden; background:#f8faff; margin-bottom:10px; }
+        .partner-top { padding:11px 13px; display:flex; align-items:center; gap:10px; }
+        .partner-av { width:34px; height:34px; border-radius:50%; background:#bfdbfe; color:#1e3a8a; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; }
+        .partner-name { font-size:12px; font-weight:700; color:#1e40af; }
+        .partner-habit-txt { font-size:11px; color:var(--gray-500); margin-top:2px; }
+        .partner-footer { padding:7px 13px; background:#eff6ff; border-top:1px solid #dbeafe; display:flex; align-items:center; justify-content:space-between; }
+        .partner-days { font-size:10px; color:#3b82f6; font-weight:600; }
+        .partner-end-btn { font-size:9px; color:var(--gray-400); background:var(--white); border:1px solid var(--gray-200); padding:3px 9px; border-radius:4px; cursor:pointer; }
 
         /* habit progress bar (replaces check button) */
         .habit-progress-section { flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
@@ -582,8 +642,7 @@
         .unlock-progress-track { height:3px; background:var(--gray-100); border-radius:2px; overflow:hidden; }
         .unlock-progress-fill { height:100%; border-radius:2px; background:var(--black); transition:width .3s; }
         .unlock-progress-fill.done { background:#16a34a; }
-        .cheer-pill { display:flex; align-items:center; gap:4px; background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; border-radius:12px; padding:3px 10px; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; }
-        .cheer-pill:hover { background:#ffedd5; }
+        .cheer-pill { display:none; } /* replaced by .cheer-block */
         .feed-subtabs { display:flex; border-bottom:1px solid var(--gray-100); margin-bottom:0; }
         .feed-subtab { flex:1; padding:10px 0; text-align:center; font-size:12px; font-weight:700; letter-spacing:.5px; color:var(--gray-400); cursor:pointer; border-bottom:2px solid transparent; transition:.15s; font-family:var(--font); }
         .feed-subtab.active { color:var(--black); border-bottom-color:var(--black); }
@@ -7137,6 +7196,7 @@ function MainApp(_ref16) {
   var [challengers, setChallengers] = React.useState([]);
   var [cheerMap, setCheerMap] = React.useState({});
   var [habitCheers, setHabitCheers] = React.useState({});
+  var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
   var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
@@ -7277,6 +7337,39 @@ function MainApp(_ref16) {
     }).catch(function(e) { console.warn('loadChallengers', e); });
   }, [user, isFirebaseConfigured]);
 
+
+  // ── category colour helper ──────────────────────────────────────────────
+  function getCatColours(cat) {
+    var map = {
+      'Fitness':     { bar:'#16a34a', bg:'#f0fdf4', text:'#15803d', bd:'#bbf7d0' },
+      'Nutrition':   { bar:'#d97706', bg:'#fffbeb', text:'#b45309', bd:'#fde68a' },
+      'Skincare':    { bar:'#ec4899', bg:'#fdf2f8', text:'#be185d', bd:'#fbcfe8' },
+      'Sleep':       { bar:'#7c3aed', bg:'#f5f3ff', text:'#6d28d9', bd:'#ddd6fe' },
+      'Mindfulness': { bar:'#0284c7', bg:'#f0f9ff', text:'#0369a1', bd:'#bae6fd' },
+      'Hydration':   { bar:'#0891b2', bg:'#ecfeff', text:'#0e7490', bd:'#a5f3fc' },
+      'Learning':    { bar:'#2563eb', bg:'#eff6ff', text:'#1d4ed8', bd:'#bfdbfe' },
+    };
+    return map[cat] || { bar:'#6b7280', bg:'#f9fafb', text:'#4b5563', bd:'#e5e7eb' };
+  }
+  // ── cheer number roll animation ─────────────────────────────────────────
+  function rollCheerNum(el, val) {
+    if (!el) return;
+    var wrap = el.parentNode;
+    if (wrap) wrap.style.minWidth = Math.max(10, String(val).length * 8) + 'px';
+    var old = el.cloneNode(true);
+    old.style.cssText = 'display:block;position:absolute;left:0;right:0;transition:none;transform:translateY(0);opacity:1;';
+    el.parentNode.appendChild(old);
+    el.textContent = val;
+    el.style.cssText = 'display:block;position:absolute;left:0;right:0;transition:none;transform:translateY(100%);opacity:0;';
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      el.style.transition='transform .38s cubic-bezier(.4,0,.2,1),opacity .38s';
+      el.style.transform='translateY(0)'; el.style.opacity='1';
+      old.style.transition='transform .38s cubic-bezier(.4,0,.2,1),opacity .38s';
+      old.style.transform='translateY(-100%)'; old.style.opacity='0';
+      setTimeout(function(){if(old.parentNode)old.parentNode.removeChild(old);},440);
+    });});
+  }
+
   var loadMyHabitCheers = React.useCallback(function() {
     if (!isFirebaseConfigured || !user) return;
     var todayKey = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0,10);
@@ -7298,12 +7391,58 @@ function MainApp(_ref16) {
     }).catch(function(){});
   }, [user, isFirebaseConfigured]);
 
+  // ── Load + daily-login credit logic ─────────────────────────────────────
+  var loadMatchingCredits = React.useCallback(function() {
+    if (!isFirebaseConfigured || !user) return;
+    db.collection('matching_credits').where('userId', '==', user.uid).get().then(function(snap) {
+      var credits = {};
+      snap.docs.forEach(function(d) { credits[d.data().habitId] = d.data().credits || 0; });
+      setMatchingCredits(credits);
+    }).catch(function(){});
+  }, [user, isFirebaseConfigured]);
+
+  var awardDailyLoginCredit = React.useCallback(function() {
+    if (!isFirebaseConfigured || !user) return;
+    var todayKey = toISODay();
+    // For each completed habit that has no active partner, award +1 if not awarded today
+    habits.forEach(function(h) {
+      var _nc = (h.checkedDates||[]).map(function(d){
+        if(/\d{4}-\d{2}-\d{2}/.test(d)) return d;
+        var p = new Date(d); return isNaN(p)?null:toISODay(p);
+      }).filter(Boolean);
+      var isCompleted = new Set(_nc).size >= PARTNER_UNLOCK_DAYS;
+      if (!isCompleted) return;
+      // Check if already awarded today
+      db.collection('matching_credits')
+        .where('userId','==',user.uid)
+        .where('habitId','==',h.id)
+        .limit(1).get().then(function(snap) {
+          if (snap.empty) {
+            // First time: award 10 credits for completing challenge
+            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: 10, lastAwardDate: todayKey });
+            setMatchingCredits(function(prev){ var n={}; n[h.id]=(prev[h.id]||0)+10; return Object.assign({},prev,n); });
+          } else {
+            var doc = snap.docs[0];
+            var data = doc.data();
+            if (data.lastAwardDate !== todayKey) {
+              // Daily +1 login credit (only if no active partner for this habit)
+              var newCredits = (data.credits||0) + 1;
+              doc.ref.update({ credits: newCredits, lastAwardDate: todayKey });
+              setMatchingCredits(function(prev){ var n={}; n[h.id]=newCredits; return Object.assign({},prev,n); });
+            }
+          }
+        }).catch(function(){});
+    });
+  }, [user, isFirebaseConfigured, habits]);
+
   useEffect(function() {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
       loadChallengers(); loadMyHabitCheers();
     }
     if (activeTab === 'home') {
       loadMyHabitCheers();
+      loadMatchingCredits();
+      awardDailyLoginCredit();
     }
     // Load cheer stats when profile tab is opened
     if (activeTab === 'profile') {
@@ -7407,9 +7546,18 @@ function MainApp(_ref16) {
       dailyTarget = _ref19.dailyTarget,
       intervalDays = _ref19.intervalDays;
     var _today0 = toISODay();
-    var _activeCount0 = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_today0; }).length;
-    if (_activeCount0 >= 30) {
-      alert('You can have at most 30 active habits at a time.');
+    var _today0str = _today0;
+    var _activeCount0 = habits.filter(function(h){
+      var e=parseTimeRange(h.timeRange).end;
+      if (!e||e>=_today0str) {
+        // only count as active if NOT completed (checkedDates < PARTNER_UNLOCK_DAYS)
+        var _nc = (h.checkedDates||[]).map(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
+        return new Set(_nc).size < PARTNER_UNLOCK_DAYS;
+      }
+      return false;
+    }).length;
+    if (_activeCount0 >= 3) {
+      alert('You can have at most 3 active habits at a time. Complete a 21-day challenge to free up a slot!');
       return;
     }
     var habit = {
@@ -8920,15 +9068,28 @@ function MainApp(_ref16) {
         textTransform: 'uppercase',
         letterSpacing: .8
       }
-    }, habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=toISODay(); }).length, "/30")), (function(){
+    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; if(!e||e>=t){ var nc=(h.checkedDates||[]).filter(Boolean); return new Set(nc).size < PARTNER_UNLOCK_DAYS; } return false; }).length; })(), " / 3 active")), (function(){
       var _today = toISODay();
-      var activeHabits = habits.filter(function(h) {
+      // Split habits: in-progress vs completed (>= PARTNER_UNLOCK_DAYS checkedDates)
+      var allActive = habits.filter(function(h) {
         var _end = parseTimeRange(h.timeRange).end;
         return !_end || _end >= _today;
       });
-      return activeHabits.length === 0 ? /*#__PURE__*/React.createElement("div", {
-      className: "empty-state"
-    }, /*#__PURE__*/React.createElement(HomeIcon, null), /*#__PURE__*/React.createElement("h3", null, "No habits yet"), /*#__PURE__*/React.createElement("p", null, "Tap + Create your first habit")) : activeHabits.map(function (habit) {
+      var inProgressHabits = allActive.filter(function(h) {
+        var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
+        return new Set(_nc).size < PARTNER_UNLOCK_DAYS;
+      });
+      var completedHabits = habits.filter(function(h) {
+        var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
+        return new Set(_nc).size >= PARTNER_UNLOCK_DAYS;
+      });
+      return React.createElement(React.Fragment, null,
+        inProgressHabits.length === 0 && completedHabits.length === 0 ? React.createElement("div", { className: "empty-state" },
+          React.createElement(HomeIcon, null), React.createElement("h3", null, "No habits yet"), React.createElement("p", null, "Tap + Create your first habit")
+        ) : null,
+        inProgressHabits.length > 0 && React.createElement(React.Fragment, null,
+          React.createElement("div", { className: "completed-section-label" }, "Active (" + inProgressHabits.length + " / 3)"),
+          inProgressHabits.map(function (habit) {
       var todayKey = currentDay;
       var progPct = calcCompletionRate(habit);
       var streak = habit.streak || 0;
@@ -8948,135 +9109,220 @@ function MainApp(_ref16) {
         : 999;
       var habitTooShort = _habitDuration < PARTNER_UNLOCK_DAYS;
       var habitCheerData = habitCheers[habit.id] || null;
+      var _catCol = getCatColours(habit.category);
+      var _cheerUid = habit.id + '-cheer';
       return /*#__PURE__*/React.createElement("div", {
         key: habit.id,
         className: "habit-card",
-        onClick: function onClick() {
-          return setSelectedHabit(habit.id);
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "habit-header"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "habit-info"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "habit-title"
-      }, habit.name), /*#__PURE__*/React.createElement("div", {
-        className: "habit-meta"
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "habit-category"
-      }, /*#__PURE__*/React.createElement("i", { className: "habit-category-spark" }, "\u2728"), habit.category), habit.streak > 0 && /*#__PURE__*/React.createElement("div", {
-        className: "habit-streak"
-      }, /*#__PURE__*/React.createElement(FlameIcon, null), /*#__PURE__*/React.createElement("span", null, habit.streak))), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          gap: 6,
-          flexWrap: 'wrap',
-          marginTop: 4
-        }
-      }, habit.freqLabel && /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 9,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: .5,
-          padding: '2px 6px',
-          background: 'var(--gray-100)',
-          color: 'var(--gray-600)'
-        }
-      }, habit.freqLabel), habit.durLabel && /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 9,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: .5,
-          padding: '2px 6px',
-          background: 'var(--gray-100)',
-          color: 'var(--gray-600)'
-        }
-      }, habit.durLabel)), habit.timeRange && /*#__PURE__*/React.createElement("div", {
-        className: "habit-time-range",
-        style: {
-          marginTop: 4
-        }
-      }, habit.timeRange)), /*#__PURE__*/React.createElement("div", {
-        className: "habit-progress-section",
-        onClick: function onClick(e) {
-          return e.stopPropagation();
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "habit-progress-bar-wrap"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "habit-prog-label"
-      }, /*#__PURE__*/React.createElement("span", null, "Done"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontFamily: 'var(--din)'
-        }
-      }, progPct, "%")), /*#__PURE__*/React.createElement("div", {
-        className: "habit-prog-track"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "habit-prog-fill".concat(progPct >= 100 ? ' done' : ''),
-        style: {
-          width: "".concat(progPct, "%")
-        }
-      }))))), /*#__PURE__*/React.createElement("div", {
-        className: "card-delete-row",
-        onClick: function onClick(e) {
-          return e.stopPropagation();
-        }
+        onClick: function onClick() { return setSelectedHabit(habit.id); }
       },
-      !isQualified && !habitTooShort && React.createElement("div", {
-        className: "unlock-progress-wrap",
+      /* ── top colour bar ── */
+      React.createElement("div", { className: "habit-card-accent", style: { background: _catCol.bar } }),
+      /* ── card body ── */
+      React.createElement("div", { className: "habit-card-body" },
+        React.createElement("div", { className: "habit-header" },
+          React.createElement("div", { className: "habit-info" },
+            React.createElement("div", { className: "habit-title" }, habit.name),
+            React.createElement("div", { className: "habit-meta" },
+              React.createElement("span", {
+                className: "habit-category",
+                style: { background: _catCol.bg, color: _catCol.text, borderColor: _catCol.bd }
+              }, React.createElement("i", { className: "habit-category-spark" }, "\u2728"), habit.category),
+              habit.streak > 0 && React.createElement("div", { className: "habit-streak" },
+                React.createElement(FlameIcon, null), React.createElement("span", null, habit.streak)
+              ),
+              habit.freqLabel && React.createElement("span", { className: "habit-tag-pill" }, habit.freqLabel),
+              habit.durLabel  && React.createElement("span", { className: "habit-tag-pill" }, habit.durLabel)
+            ),
+            habit.timeRange && React.createElement("div", { className: "habit-time-range", style: { marginTop: 4 } },
+              React.createElement("svg", { width:12, height:12, viewBox:"0 0 16 16", fill:"none", style:{flexShrink:0} },
+                React.createElement("rect", { x:1, y:3, width:14, height:12, rx:2, stroke:"currentColor", strokeWidth:1.5 }),
+                React.createElement("path", { d:"M5 1v3M11 1v3M1 7h14", stroke:"currentColor", strokeWidth:1.5, strokeLinecap:"round" })
+              ),
+              habit.timeRange
+            )
+          ),
+          React.createElement("div", {
+            className: "habit-progress-section",
+            onClick: function(e) { e.stopPropagation(); }
+          },
+            React.createElement("div", { className: "habit-progress-bar-wrap" },
+              React.createElement("div", { className: "habit-prog-label" },
+                React.createElement("span", null, "Done"),
+                React.createElement("span", { style:{ fontFamily:'var(--din)' } }, progPct, "%")
+              ),
+              React.createElement("div", { className: "habit-prog-track" },
+                React.createElement("div", {
+                  className: "habit-prog-fill".concat(progPct >= 100 ? ' done' : ''),
+                  style: { width: progPct + "%" }
+                })
+              )
+            )
+          )
+        )
+      ),
+      /* ── divider ── */
+      React.createElement("div", { className: "habit-card-divider" }),
+      /* ── card footer ── */
+      React.createElement("div", {
+        className: "habit-card-footer",
         onClick: function(e) { e.stopPropagation(); }
       },
-        React.createElement("div", { className: "unlock-progress-row" },
-          React.createElement("span", { className: "unlock-progress-label" }, daysLeft + " days to unlock partner"),
-          React.createElement("span", { className: "unlock-progress-days" }, daysCompleted + "/" + PARTNER_UNLOCK_DAYS)
-        ),
-        React.createElement("div", { className: "unlock-progress-track" },
-          React.createElement("div", { className: "unlock-progress-fill", style: { width: unlockPct + "%" } })
-        )
-      ),
-      isQualified && React.createElement("button", {
-        className: "find-partner-btn",
-        onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
-      }, "+ Find Partner"),
-      habitCheerData && habitCheerData.totalCount > 0 && React.createElement(React.Fragment, null,
-        /* Completed 21 days */
-        isQualified && React.createElement("button", {
-          className: "cheer-pill",
-          style: { background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' },
-          onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
-        }, "\u2764 " + habitCheerData.totalCount + " people cheered your journey"),
-        /* Still challenging */
-        !isQualified && habit.streak > 0 && React.createElement("button", {
-          className: "cheer-pill",
-          onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
-        }, "\xe2\x9a\xa1 " + habitCheerData.totalCount + " cheered for you"),
-        /* Challenge failed (streak broken) */
-        !isQualified && habit.streak === 0 && React.createElement("div", {
-          style: { display:'flex', flexDirection:'column', gap:3 }
-        },
+        /* left side: unlock bar OR find partner btn */
+        React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 } },
+          !isQualified && !habitTooShort && React.createElement("div", {
+            className: "unlock-progress-wrap", style:{ margin:0, flex:1 },
+            onClick: function(e) { e.stopPropagation(); }
+          },
+            React.createElement("div", { className: "unlock-progress-row" },
+              React.createElement("span", { className: "unlock-progress-label" }, daysLeft + " days to unlock partner"),
+              React.createElement("span", { className: "unlock-progress-days" }, daysCompleted + "/" + PARTNER_UNLOCK_DAYS)
+            ),
+            React.createElement("div", { className: "unlock-progress-track" },
+              React.createElement("div", { className: "unlock-progress-fill", style:{ width: unlockPct + "%" } })
+            )
+          ),
+          isQualified && React.createElement("button", {
+            className: "find-partner-btn",
+            onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
+          }, "+ Find Partner"),
           React.createElement("button", {
-            className: "cheer-pill",
-            style: { background: '#fafafa', color: '#9ca3af', borderColor: '#e5e7eb', cursor: 'pointer' },
-            onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
-          }, "\xe2\x9a\xa1 " + habitCheerData.totalCount + " cheered — restart to get back")
+            className: "card-delete-btn",
+            style: { marginLeft:'auto', flexShrink:0 },
+            onClick: function(e) { e.stopPropagation(); deleteHabit(habit.id); }
+          }, React.createElement("svg", { fill:"none", viewBox:"0 0 24 24", stroke:"currentColor", strokeWidth:2 },
+            React.createElement("path", { strokeLinecap:"round", strokeLinejoin:"round", d:"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" })
+          ), "Delete Habit")
+        ),
+        /* right side: cheer block */
+        habitCheerData && habitCheerData.totalCount > 0 && React.createElement("div", {
+          className: "cheer-block",
+          onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
+        },
+          React.createElement("div", { className: "cheer-av-stack" },
+            React.createElement("div", { className: "cheer-av", style:{ background:'#fde68a', color:'#92400e' } }, "💪")
+          ),
+          React.createElement("div", { className: "cheer-total" },
+            "💪\u00a0",
+            React.createElement("span", { className: "cheer-roll-wrap" },
+              React.createElement("span", {
+                className: "cheer-roll-num",
+                id: _cheerUid
+              }, habitCheerData.totalCount)
+            )
+          ),
+          React.createElement("div", { className: "cheer-sep" }),
+          React.createElement("span", { className: "cheer-today-badge" },
+            "+", habitCheerData.todayCount || 0, "\u00a0today"
+          )
         )
-      ),
-      /*#__PURE__*/React.createElement("button", {
-        className: "card-delete-btn",
-        onClick: function onClick() { return deleteHabit(habit.id); }
-      }, /*#__PURE__*/React.createElement("svg", {
-        fill: "none",
-        viewBox: "0 0 24 24",
-        stroke: "currentColor",
-        strokeWidth: 2
-      }, /*#__PURE__*/React.createElement("path", {
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-      })), "Delete Habit")));
-    });
+      ));
+    }) // end inProgressHabits.map
+        ), // end inProgressHabits section
+        /* ── COMPLETED CHALLENGES SECTION ── */
+        completedHabits.length > 0 && React.createElement(React.Fragment, null,
+          React.createElement("div", { className: "completed-section-label" }, "✓ Completed Challenges (" + completedHabits.length + ")"),
+          completedHabits.map(function(habit) {
+            var _catCol2 = getCatColours(habit.category);
+            var habitCheerData2 = habitCheers[habit.id] || null;
+            var credits = matchingCredits[habit.id] || 0;
+            // Find active pair for this habit
+            // We use pairs from Buddies tab — check window._myPairs if available
+            var _activePair = null;
+            if (typeof window._myPairs !== 'undefined') {
+              _activePair = window._myPairs.find(function(p) {
+                return (p.habit_id === habit.id || p.partner_habit_id === habit.id) && p.status === 'active';
+              }) || null;
+            }
+            var _endedPair = null;
+            if (typeof window._myPairs !== 'undefined') {
+              _endedPair = window._myPairs.find(function(p) {
+                return (p.habit_id === habit.id || p.partner_habit_id === habit.id) && p.status === 'ended';
+              }) || null;
+            }
+            return React.createElement("div", { key: habit.id, className: "habit-card", onClick: function(){ setSelectedHabit(habit.id); } },
+              React.createElement("div", { className: "habit-card-accent", style:{ background: _catCol2.bar } }),
+              React.createElement("div", { className: "habit-card-body" },
+                /* title + done badge */
+                React.createElement("div", { className: "habit-title", style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
+                  habit.name,
+                  React.createElement("span", { className: "completed-done-badge" }, "✓ 21 days")
+                ),
+                React.createElement("div", { className: "habit-meta", style:{ marginTop:6 } },
+                  React.createElement("span", { className: "habit-category", style:{ background:_catCol2.bg, color:_catCol2.text, borderColor:_catCol2.bd } },
+                    React.createElement("i", { className: "habit-category-spark" }, "✨"), habit.category
+                  ),
+                  habit.freqLabel && React.createElement("span", { className: "habit-tag-pill" }, habit.freqLabel),
+                  habit.durLabel  && React.createElement("span", { className: "habit-tag-pill" }, habit.durLabel)
+                ),
+                habit.timeRange && React.createElement("div", { className: "habit-time-range", style:{ marginTop:6, marginBottom:10 } },
+                  React.createElement("svg", { width:11, height:11, viewBox:"0 0 16 16", fill:"none", style:{flexShrink:0} },
+                    React.createElement("rect", { x:1, y:3, width:14, height:12, rx:2, stroke:"currentColor", strokeWidth:1.5 }),
+                    React.createElement("path", { d:"M5 1v3M11 1v3M1 7h14", stroke:"currentColor", strokeWidth:1.5, strokeLinecap:"round" })
+                  ),
+                  habit.timeRange
+                ),
+                /* partner state block */
+                _activePair
+                  ? /* Has active partner */
+                    React.createElement("div", { className: "partner-block", onClick: function(e){ e.stopPropagation(); } },
+                      React.createElement("div", { className: "partner-top" },
+                        React.createElement("div", { className: "partner-av" }, (_activePair.partner_username||'?')[0].toUpperCase()),
+                        React.createElement("div", null,
+                          React.createElement("div", { className: "partner-name" }, _activePair.partner_username || 'Partner'),
+                          React.createElement("div", { className: "partner-habit-txt" }, "📖 " + (_activePair.partner_habit_name || ''))
+                        )
+                      ),
+                      React.createElement("div", { className: "partner-footer" },
+                        React.createElement("span", { className: "partner-days" }, "🔥 Partnership · Day " + (_activePair.days_together || 1)),
+                        React.createElement("button", { className: "partner-end-btn", onClick: function(e){ e.stopPropagation(); } }, "End Partnership")
+                      )
+                    )
+                  : _endedPair
+                  ? /* Partnership ended */
+                    React.createElement("div", { className: "ended-block", onClick: function(e){ e.stopPropagation(); } },
+                      React.createElement("div", { className: "ended-top" },
+                        React.createElement("div", { className: "ended-icon" }, "👋"),
+                        React.createElement("div", null,
+                          React.createElement("div", { className: "ended-title" }, "Your previous partnership has ended"),
+                          React.createElement("div", { className: "ended-sub" }, "Ready to find someone new who shares this habit?")
+                        )
+                      ),
+                      React.createElement("div", { className: "ended-footer" },
+                        React.createElement("div", { className: "credit-pill" },
+                          React.createElement("span", { className: "credit-pill-num" }, credits),
+                          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
+                        ),
+                        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ e.stopPropagation(); window.openMatchingModal(habit); } }, "Find New Partner")
+                      )
+                    )
+                  : /* No partner yet — seeking */
+                    React.createElement("div", { className: "seek-block", onClick: function(e){ e.stopPropagation(); } },
+                      React.createElement("div", { className: "seek-top" },
+                        React.createElement("div", { className: "seek-icon" }, "🔍"),
+                        React.createElement("div", null,
+                          React.createElement("div", { className: "seek-title" }, "Looking for your accountability partner"),
+                          React.createElement("div", { className: "seek-sub" }, "Log in daily to earn +1 credit and keep searching")
+                        )
+                      ),
+                      React.createElement("div", { className: "seek-footer" },
+                        React.createElement("div", { className: "credit-pill" },
+                          React.createElement("span", { className: "credit-pill-num" }, credits),
+                          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
+                        ),
+                        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ e.stopPropagation(); window.openMatchingModal(habit); } }, "Find Partner")
+                      )
+                    )
+              ),
+              /* cheer static */
+              habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { className: "habit-card-divider" }),
+              habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { style:{ padding:'9px 15px 10px' } },
+                React.createElement("span", { className: "completed-cheer-static" }, "💪 " + habitCheerData2.totalCount + " people cheered this journey")
+              )
+            );
+          }) // end completedHabits.map
+        ) // end completed section
+      ); // end Fragment
     }()));
   };
   function CheerDetailPanel() {
@@ -9866,9 +10112,16 @@ function MainApp(_ref16) {
     },
     onClick: function onClick() {
       var _todayChk = toISODay();
-      var _activeCnt = habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_todayChk; }).length;
-      if (_activeCnt >= 30) {
-        alert('Max 30 active habits. Wait for habits to expire or delete one.');
+      var _activeCnt = habits.filter(function(h){
+        var e=parseTimeRange(h.timeRange).end;
+        if(!e||e>=_todayChk){
+          var _nc2=(h.checkedDates||[]).map(function(d){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;var p=new Date(d);return isNaN(p)?null:toISODay(p);}).filter(Boolean);
+          return new Set(_nc2).size < PARTNER_UNLOCK_DAYS;
+        }
+        return false;
+      }).length;
+      if (_activeCnt >= 3) {
+        alert('Max 3 active habits. Complete a 21-day challenge to free up a slot!');
         return;
       }
       setShowModal(true);
@@ -10372,6 +10625,8 @@ function BuddiesPage(_ref_buddies) {
   var habits = _ref_buddies.habits || [];
   var _useState_pairs = useState([]);
   var pairs = _useState_pairs[0], setPairs = _useState_pairs[1];
+  // Expose pairs to window so home section can read active/ended pair status
+  React.useEffect(function(){ window._myPairs = pairs; }, [pairs]);
   var _useState_loading = useState(true);
   var pairsLoading = _useState_loading[0], setPairsLoading = _useState_loading[1];
   var _useState_selected = useState(null);
@@ -11721,6 +11976,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       </div>
       <div class="result-actions">
         <div style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin-bottom:10px;line-height:1.5;">⚠️ Check the habit name above — only send requests to users with <strong style="color:rgba(255,255,255,0.8)">clear, specific habit names</strong>.</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin-bottom:10px;line-height:1.6;">⚠️ Check their habit name — only connect with users who have <strong style="color:rgba(255,255,255,0.85)">clear, specific habit names</strong>.</div>
         <button class="result-cta" onclick="window.sendPartnerRequest()">Send Partner Request</button>
         <button class="result-skip" onclick="window.closeMatchingModal()">See other matches later</button>
       </div>
@@ -11742,6 +11998,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var _currentMatch = null;
 
   window.openMatchingModal = function(habit) {
+    // Deduct 1 matching credit
+    if (window._supabaseClient && window._currentUser) {
+      var _uid = window._currentUser.uid;
+      window._supabaseClient.from('matching_credits')
+        .select('*').eq('userId', _uid).eq('habitId', habit.id).limit(1).single()
+        .then(function(r) {
+          if (r.data && r.data.credits > 0) {
+            window._supabaseClient.from('matching_credits')
+              .update({ credits: r.data.credits - 1 })
+              .eq('id', r.data.id).then(function(){});
+          }
+        }).catch(function(){});
+    }
     _currentHabit = habit;
     _currentMatch = null;
 
