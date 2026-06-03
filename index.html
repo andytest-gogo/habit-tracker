@@ -1081,30 +1081,47 @@
         .feed-action-report:hover { opacity:1; color:#dc2626 !important; }
 
         /* ── REPORT POST MODAL ── */
-        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.6); z-index:10003; display:flex; align-items:center; justify-content:center; padding:20px; }
-        .report-box { background:var(--white); width:100%; max-width:480px; border-top:3px solid #dc2626; animation:lmSlideUp .25s cubic-bezier(.4,0,.2,1); max-height:90vh; overflow-y:auto; }
-        .report-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--gray-100); }
-        .report-header-title { font-family:var(--din); font-size:14px; font-weight:800; color:#dc2626; text-transform:uppercase; letter-spacing:.5px; }
-        .report-header-close { background:none; border:none; cursor:pointer; font-size:20px; color:var(--gray-400); line-height:1; padding:4px 8px; min-height:auto; }
-        .report-header-close:hover { color:var(--black); }
-        .report-body { padding:16px 20px 8px; }
-        .report-preview { background:var(--gray-50); border:1px solid var(--gray-200); padding:10px 14px; margin-bottom:14px; }
-        .report-preview-user { font-size:11px; font-weight:700; color:var(--black); margin-bottom:3px; }
-        .report-preview-text { font-size:12px; color:var(--gray-600); line-height:1.5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-        .report-reasons { display:flex; flex-direction:column; gap:5px; }
-        .report-reason { width:100%; text-align:left; padding:11px 14px; border:1px solid var(--gray-200); background:var(--white); font-size:12px; font-weight:600; color:var(--gray-700); cursor:pointer; font-family:var(--font); transition:.15s; display:flex; align-items:center; gap:10px; min-height:auto; }
-        .report-reason:hover { border-color:#dc2626; color:#dc2626; background:#fff8f8; }
-        .report-reason.selected { border-color:#dc2626; color:#dc2626; background:#fff0f0; }
-        .report-reason-icon { font-size:15px; flex-shrink:0; width:20px; text-align:center; }
+        .report-overlay { position:fixed; inset:0; background:rgba(10,10,10,.55); z-index:10003; display:flex; align-items:flex-end; justify-content:center; }
+        .report-box { background:var(--bg-card); width:100%; max-width:480px; border-top:2px solid var(--text-primary); border-radius:12px 12px 0 0; animation:lmSlideUp .28s cubic-bezier(.4,0,.2,1); max-height:92vh; overflow-y:auto; }
+        .report-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 13px; border-bottom:1px solid var(--border-dk, var(--gray-100)); }
+        .report-header-title { font-family:var(--font); font-size:11px; font-weight:600; color:var(--text-primary); text-transform:uppercase; letter-spacing:.12em; display:flex; align-items:center; gap:8px; }
+        .report-header-title svg { opacity:.55; }
+        .report-header-close { width:28px; height:28px; border-radius:50%; border:1px solid var(--border-dk, var(--gray-200)); background:var(--bg-subtle); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-secondary); transition:.15s; min-height:auto; }
+        .report-header-close:hover { border-color:var(--text-primary); color:var(--text-primary); }
+        .report-body { padding:14px 20px 10px; }
+        .report-preview { background:var(--bg-subtle); border-left:2px solid var(--gray-300); padding:10px 13px; margin-bottom:14px; border-radius:0 4px 4px 0; }
+        .report-preview-user { font-size:10px; font-weight:600; color:var(--text-secondary); margin-bottom:3px; text-transform:uppercase; letter-spacing:.06em; }
+        .report-preview-text { font-size:12px; color:var(--text-secondary); line-height:1.55; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+        .report-section-label { font-size:9px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.14em; margin-bottom:8px; }
+        .report-reasons { display:flex; flex-direction:column; gap:4px; }
+        .report-reason { width:100%; text-align:left; padding:10px 13px; border:1px solid var(--border-dk, var(--gray-200)); border-radius:8px; background:var(--bg-card); font-size:12px; font-weight:400; color:var(--text-primary); cursor:pointer; font-family:var(--font); transition:.15s; display:flex; align-items:center; gap:11px; min-height:auto; }
+        .report-reason:hover { border-color:var(--text-primary); background:var(--bg-subtle); }
+        .report-reason.selected { border-color:var(--text-primary); background:var(--bg-subtle); font-weight:500; }
+        .report-reason-icon-wrap { width:28px; height:28px; border-radius:50%; background:var(--bg-subtle); border:1px solid var(--border-dk, var(--gray-200)); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:.15s; }
+        .report-reason.selected .report-reason-icon-wrap { background:var(--text-primary); border-color:var(--text-primary); }
+        .report-reason-icon { font-size:13px; opacity:.7; line-height:1; }
+        .report-reason.selected .report-reason-icon { opacity:1; filter:invert(1); }
+        .report-reason-radio { width:16px; height:16px; border-radius:50%; border:1px solid var(--border-dk, var(--gray-300)); background:var(--bg-card); margin-left:auto; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:.15s; }
+        .report-reason.selected .report-reason-radio { background:var(--text-primary); border-color:var(--text-primary); }
+        .report-reason-radio-dot { width:6px; height:6px; border-radius:50%; background:var(--bg-card); display:none; }
+        .report-reason.selected .report-reason-radio-dot { display:block; }
+        .report-feedback-wrap { margin:12px 0 4px; }
+        .report-feedback-label { font-size:9px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.14em; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+        .report-feedback-optional { background:var(--bg-subtle); color:var(--text-secondary); font-size:9px; padding:2px 7px; border-radius:20px; border:1px solid var(--border-dk, var(--gray-200)); text-transform:none; font-weight:400; letter-spacing:0; }
+        .report-feedback-textarea { width:100%; border:1px solid var(--border-dk, var(--gray-200)); border-radius:8px; padding:10px 12px; font-size:12px; font-family:var(--font); color:var(--text-primary); background:var(--bg-card); resize:none; height:64px; box-sizing:border-box; outline:none; line-height:1.5; transition:border-color .15s; }
+        .report-feedback-textarea:focus { border-color:var(--text-primary); }
+        .report-feedback-hint { font-size:10px; color:var(--text-secondary); margin-top:4px; }
+        .report-char-count { font-size:10px; color:var(--text-secondary); text-align:right; margin-top:3px; }
         .report-footer { padding:12px 20px 28px; display:flex; gap:8px; }
-        .report-submit { flex:1; padding:12px; background:#dc2626; color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); min-height:auto; }
-        .report-submit:hover { background:#b91c1c; }
-        .report-submit:disabled { background:var(--gray-300); cursor:not-allowed; }
-        .report-cancel { padding:12px 16px; background:none; border:1px solid var(--gray-200); font-size:11px; font-weight:600; cursor:pointer; font-family:var(--font); color:var(--gray-500); min-height:auto; }
-        .report-success { padding:28px 20px; text-align:center; }
-        .report-success-icon { font-size:38px; margin-bottom:12px; }
-        .report-success-title { font-family:var(--din); font-size:17px; font-weight:800; margin-bottom:6px; }
-        .report-success-desc { font-size:12px; color:var(--gray-500); line-height:1.6; margin-bottom:20px; }
+        .report-submit { flex:1; padding:12px; background:var(--text-primary); color:var(--bg); border:none; border-radius:8px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; cursor:pointer; font-family:var(--font); min-height:auto; transition:opacity .15s; }
+        .report-submit:hover { opacity:.85; }
+        .report-submit:disabled { background:var(--gray-200); color:var(--gray-400); cursor:not-allowed; opacity:1; }
+        .report-cancel { padding:12px 16px; background:none; border:1px solid var(--border-dk, var(--gray-200)); border-radius:8px; font-size:11px; font-weight:500; cursor:pointer; font-family:var(--font); color:var(--text-secondary); min-height:auto; transition:.15s; }
+        .report-cancel:hover { border-color:var(--text-primary); color:var(--text-primary); }
+        .report-success { padding:36px 20px; text-align:center; }
+        .report-success-icon { font-size:32px; margin-bottom:14px; }
+        .report-success-title { font-family:var(--font); font-size:15px; font-weight:600; margin-bottom:6px; color:var(--text-primary); }
+        .report-success-desc { font-size:12px; color:var(--text-secondary); line-height:1.7; margin-bottom:24px; }
         .feed-action { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--gray-500); cursor:pointer; transition:color .15s; font-weight:600; }
         .feed-action:hover { color:var(--black); }
         .feed-action svg { width:15px; height:15px; }
@@ -9120,7 +9137,7 @@ function MainApp(_ref16) {
         onClick: function onClick() { return setSelectedHabit(habit.id); }
       },
       /* ── top colour bar ── */
-      React.createElement("div", { className: "habit-card-accent", style: { background: _catCol.bar } }),
+      React.createElement("div", { className: "habit-card-accent" }),
       /* ── card body ── */
       React.createElement("div", { className: "habit-card-body" },
         React.createElement("div", { className: "habit-header" },
@@ -9244,7 +9261,7 @@ function MainApp(_ref16) {
               }) || null;
             }
             return React.createElement("div", { key: habit.id, className: "habit-card", onClick: function(){ setSelectedHabit(habit.id); } },
-              React.createElement("div", { className: "habit-card-accent", style:{ background: _catCol2.bar } }),
+              React.createElement("div", { className: "habit-card-accent" }),
               React.createElement("div", { className: "habit-card-body" },
                 /* title + done badge */
                 React.createElement("div", { className: "habit-title", style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
@@ -11744,10 +11761,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     <!-- Header -->
     <div class="report-header">
       <span class="report-header-title" id="reportTitle">
-        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="vertical-align:-1px;margin-right:5px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
-        Report Post
+        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6H12.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+        Report content
       </span>
-      <button class="report-header-close" onclick="window.closeReportModal()" aria-label="Close">&#10005;</button>
+      <button class="report-header-close" onclick="window.closeReportModal()" aria-label="Close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l10 10M11 1L1 11"/></svg>
+      </button>
     </div>
 
     <!-- Step 1: Choose reason -->
@@ -11758,32 +11777,42 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           <div class="report-preview-user" id="reportPreviewUser"></div>
           <div class="report-preview-text" id="reportPreviewText"></div>
         </div>
-        <p style="font-size:11px;color:var(--gray-500);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Why are you reporting this post?</p>
+        <p class="report-section-label">Select a reason</p>
         <div class="report-reasons" role="radiogroup" aria-label="Select reason">
-          <button class="report-reason" data-reason="spam"          onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">📢</span>Spam or unwanted advertising</button>
-          <button class="report-reason" data-reason="harassment"    onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">😡</span>Harassment or bullying</button>
-          <button class="report-reason" data-reason="hate_speech"   onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">🚫</span>Hate speech or discrimination</button>
-          <button class="report-reason" data-reason="misinformation" onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">⚠️</span>False or misleading information</button>
-          <button class="report-reason" data-reason="inappropriate" onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">🔞</span>Inappropriate or offensive content</button>
-          <button class="report-reason" data-reason="other"         onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon" aria-hidden="true">📝</span>Other</button>
+          <button class="report-reason" data-reason="spam"           onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">📢</span></span><span>Spam or unwanted advertising</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+          <button class="report-reason" data-reason="harassment"     onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">😡</span></span><span>Harassment or bullying</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+          <button class="report-reason" data-reason="hate_speech"    onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🚫</span></span><span>Hate speech or discrimination</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+          <button class="report-reason" data-reason="misinformation"  onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">⚠️</span></span><span>False or misleading information</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+          <button class="report-reason" data-reason="inappropriate"  onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🔞</span></span><span>Inappropriate or offensive content</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+          <button class="report-reason" data-reason="other"          onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">📝</span></span><span>Other</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+        </div>
+        <!-- User feedback textarea -->
+        <div class="report-feedback-wrap">
+          <div class="report-feedback-label">
+            Additional feedback
+            <span class="report-feedback-optional">optional</span>
+          </div>
+          <textarea class="report-feedback-textarea" id="reportFeedbackText" placeholder="Describe the issue in your own words..." maxlength="300" oninput="window.updateReportCharCount()"></textarea>
+          <div class="report-char-count"><span id="reportCharCount">0</span> / 300</div>
+          <div class="report-feedback-hint">Your feedback helps us improve community standards.</div>
         </div>
       </div>
       <div class="report-footer">
         <button class="report-cancel" onclick="window.closeReportModal()">Cancel</button>
-        <button class="report-submit" id="reportSubmitBtn" onclick="window.submitReport()" disabled aria-disabled="true">Submit Report</button>
+        <button class="report-submit" id="reportSubmitBtn" onclick="window.submitReport()" disabled aria-disabled="true">Submit report</button>
       </div>
     </div>
 
     <!-- Step 2: Success -->
     <div id="reportStep2" style="display:none;">
       <div class="report-success">
-        <div class="report-success-icon" aria-hidden="true">✅</div>
-        <div class="report-success-title">Report Submitted</div>
+        <div class="report-success-icon" aria-hidden="true">✓</div>
+        <div class="report-success-title">Report submitted</div>
         <div class="report-success-desc">
           Thank you for helping keep this community safe.<br>
-          Our team will review this post and take action<br>if it violates our Terms of Service.
+          Our team will review and take action if it violates our guidelines.
         </div>
-        <button class="report-submit" onclick="window.closeReportModal()" style="background:var(--black);max-width:160px;margin:0 auto;display:block;">Done</button>
+        <button class="report-submit" onclick="window.closeReportModal()" style="max-width:160px;margin:0 auto;display:block;">Done</button>
       </div>
     </div>
 
@@ -11795,35 +11824,41 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
    REPORT MODAL LOGIC
 ══════════════════════════════════════════ */
 (function() {
-  var _post = null;      // current post being reported
-  var _reason = null;    // selected reason string
+  var _post = null;
+  var _reason = null;
 
-  /* openReportModal — called from React FeedCard onReport */
+  window.updateReportCharCount = function() {
+    var ta = document.getElementById('reportFeedbackText');
+    var cnt = document.getElementById('reportCharCount');
+    if (ta && cnt) cnt.textContent = ta.value.length;
+  };
+
   window.openReportModal = function(post) {
     _post   = post;
     _reason = null;
 
-    // Populate preview
     document.getElementById('reportPreviewUser').textContent = post.user || post.displayName || 'Unknown user';
     var txt = (post.text || '').trim();
     document.getElementById('reportPreviewText').textContent = txt.length > 140 ? txt.slice(0,140)+'…' : (txt || '(no text)');
 
-    // Reset state
     document.querySelectorAll('.report-reason').forEach(function(b){
       b.classList.remove('selected');
       b.setAttribute('aria-checked','false');
     });
+    var ta = document.getElementById('reportFeedbackText');
+    if (ta) { ta.value = ''; }
+    var cnt = document.getElementById('reportCharCount');
+    if (cnt) cnt.textContent = '0';
     var submitBtn = document.getElementById('reportSubmitBtn');
     submitBtn.disabled = true;
     submitBtn.setAttribute('aria-disabled','true');
     document.getElementById('reportStep1').style.display = '';
     document.getElementById('reportStep2').style.display = 'none';
 
-    // Show overlay
     var overlay = document.getElementById('reportOverlay');
     overlay.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    setTimeout(function(){ 
+    setTimeout(function(){
       var closeBtn = overlay.querySelector('.report-header-close');
       if (closeBtn) closeBtn.focus();
     }, 50);
@@ -11855,29 +11890,31 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     btn.disabled = true;
     btn.textContent = 'Submitting…';
 
-    // Determine current user uid
     var reporterUid = 'anonymous';
-    if (auth && auth.currentUser) {
+    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
       reporterUid = auth.currentUser.uid;
     }
 
+    var feedbackEl = document.getElementById('reportFeedbackText');
+    var feedbackText = feedbackEl ? feedbackEl.value.trim().slice(0, 300) : '';
+
     var reportDoc = {
-      postId:          _post.postId || _post.id   || '',
-      postText:        (_post.text || '').slice(0, 500),
+      postId:           _post.postId || _post.id   || '',
+      postText:         (_post.text || '').slice(0, 500),
       reportedUserName: _post.user || _post.displayName || '',
-      reportedUserId:  _post.userId || '',
-      reason:          _reason,
-      status:          'pending',
-      reporterUid:     reporterUid,
-      mediaUrl:        _post.mediaUrl || '',
-      hasImage:        !!(_post.hasImage),
-      hasVideo:        !!(_post.hasVideo),
-      mediaType:       _post.mediaType || '',
-      reportedAt:      (typeof FieldValue !== 'undefined')
-                         ? FieldValue.serverTimestamp()
-                         : new Date().toISOString()
+      reportedUserId:   _post.userId || '',
+      reason:           _reason,
+      feedbackText:     feedbackText,
+      status:           'pending',
+      reporterUid:      reporterUid,
+      mediaUrl:         _post.mediaUrl || '',
+      hasImage:         !!(_post.hasImage),
+      hasVideo:         !!(_post.hasVideo),
+      mediaType:        _post.mediaType || '',
+      reportedAt:       (typeof FieldValue !== 'undefined')
+                          ? FieldValue.serverTimestamp()
+                          : new Date().toISOString()
     };
-    // If reporting a comment, include commentId and isComment flag
     if (_post.isComment && _post.commentId) {
       reportDoc.commentId = _post.commentId;
       reportDoc.isComment = true;
@@ -11891,11 +11928,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     function onError(e) {
       console.error('[Report] Error:', e);
       btn.disabled = false;
-      btn.textContent = 'Submit Report';
-      onSuccess(); // show success UI to user anyway
+      btn.textContent = 'Submit report';
+      onSuccess();
     }
 
-    // Write report to Firestore — deduplicate: same reporter + same post/comment
     if (typeof db !== 'undefined' && db) {
       var dupQuery = db.collection('reports')
         .where('reporterUid', '==', reporterUid)
@@ -11904,10 +11940,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         dupQuery = dupQuery.where('commentId', '==', reportDoc.commentId);
       }
       dupQuery.get().then(function(snap) {
-        if (!snap.empty) {
-          onSuccess(); // already reported — silently skip duplicate
-          return;
-        }
+        if (!snap.empty) { onSuccess(); return; }
         db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);
       }).catch(function() {
         db.collection('reports').add(reportDoc).then(onSuccess).catch(onError);

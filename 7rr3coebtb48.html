@@ -930,13 +930,14 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
         <table>
           <thead>
             <tr>
-              <th style="width:130px">Reported User</th>
+              <th style="width:120px">Reported User</th>
               <th>Content</th>
-              <th style="width:65px">Type</th>
-              <th style="width:110px">Reason</th>
-              <th style="width:80px">Status</th>
-              <th style="width:115px">Reported At</th>
-              <th style="width:180px">Actions</th>
+              <th style="width:55px">Type</th>
+              <th style="width:100px">Reason</th>
+              <th style="width:160px">User Feedback</th>
+              <th style="width:70px">Status</th>
+              <th style="width:105px">Reported At</th>
+              <th style="width:160px">Actions</th>
           </thead>
           <tbody id="reportsTbody">
             <tr class="loading-row"><td colspan="7">Loading reports...</td></tr>
@@ -2883,15 +2884,20 @@ function renderReports(){
       actionBtns += '<button class="del" style="font-size:9px" '
         + 'onclick="setReportStatus(\'' + rid + '\',\'pending\')">Reopen</button>';
     }
+    var feedbackPreview = r.feedbackText ? htmlEsc(r.feedbackText.slice(0, 120)) + (r.feedbackText.length > 120 ? '…' : '') : '';
+    var feedbackCell = feedbackPreview
+      ? '<div style="font-size:11px;color:var(--g600);line-height:1.45;font-style:italic">“' + feedbackPreview + '”</div>'
+      : '<span style="font-size:10px;color:var(--g300)">—</span>';
     return '<tr>'
       + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
       + '<div><strong style="font-size:12px">'+reportedUser+'</strong>'
       + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono)">'+htmlEsc(r.reportedUserId||'').slice(0,16)+'</div></div></div></td>'
-      + '<td style="max-width:220px"><div class="ptxt" title="'+htmlEsc(r.postText||'')+'">'+contentPreview+'</div>'
+      + '<td style="max-width:200px"><div class="ptxt" title="'+htmlEsc(r.postText||'')+'">'+contentPreview+'</div>'
       + mediaPreviewHtml
       + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono);margin-top:2px">ID: '+htmlEsc(contentId)+'</div></td>'
       + '<td>'+typeLabel+'</td>'
       + '<td style="font-size:11px">'+reasonLabel+'</td>'
+      + '<td style="max-width:160px">'+feedbackCell+'</td>'
       + '<td><span class="badge" style="'+statusStyle+'">'+statusLabel+'</span></td>'
       + '<td style="font-size:10px;color:var(--g400)">'+timeStr+'</td>'
       + '<td>'+actionBtns+'</td>'
