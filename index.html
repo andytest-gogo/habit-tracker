@@ -776,6 +776,25 @@
             text-transform:uppercase; color:#2a2a2a; line-height:1.7;
             border-top:1px solid #1a1a1a; padding-top:14px;
         }
+        .age-pref-btn {
+            font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+            padding:5px 10px; border:1px solid #333; background:transparent; color:#555;
+            cursor:pointer; transition:.15s; font-family:var(--font);
+        }
+        .age-pref-btn:hover { border-color:#666; color:#888; }
+        .age-pref-btn.active { border-color:#fff; color:#fff; background:#111; }
+        .pref-btn {
+            font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+            padding:9px 16px; border:1px solid #2a2a2a; background:transparent; color:#555;
+            cursor:pointer; transition:.15s; font-family:var(--font); flex:1;
+        }
+        .pref-btn:hover { border-color:#555; color:#888; }
+        .pref-btn.active { border-color:#fff; color:#fff; background:#111; }
+        .fallback-banner {
+            font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+            background:#1a1200; border:1px solid #3a2e00; color:#c8a800;
+            padding:8px 12px; line-height:1.6; margin-top:10px;
+        }
         /* Result sheet */
         .result-hdr {
             background:#0a0a0a; padding:16px 18px 14px;
@@ -12003,6 +12022,48 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 </script>
 
 <!-- ══════════════════════════════════════════
+     MATCH PREFERENCE MODAL (step 0)
+══════════════════════════════════════════ -->
+<div id="matchPrefOverlay" style="display:none;" class="matching-overlay">
+  <div class="matching-sheet" id="matchPrefSheet" style="max-height:80vh;overflow-y:auto;">
+    <div class="matching-top" style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="matching-label">Find a partner for</div>
+        <div class="matching-habit-name" id="prefHabitName">—</div>
+      </div>
+      <button onclick="window.closeMatchPrefModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
+    </div>
+    <div style="height:1px;background:#1a1a1a;"></div>
+    <div style="padding:20px;">
+
+      <!-- Gender preference -->
+      <div style="margin-bottom:22px;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#666;margin-bottom:10px;">Partner gender</div>
+        <div style="display:flex;gap:8px;">
+          <button class="pref-btn active" data-pref="gender" data-val="any" onclick="window._setPref('gender',this)">Any</button>
+          <button class="pref-btn" data-pref="gender" data-val="male" onclick="window._setPref('gender',this)">Male</button>
+          <button class="pref-btn" data-pref="gender" data-val="female" onclick="window._setPref('gender',this)">Female</button>
+        </div>
+      </div>
+
+      <!-- Age preference -->
+      <div style="margin-bottom:28px;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#666;margin-bottom:10px;">Partner age range</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="pref-btn active" data-pref="age" data-val="any" onclick="window._setPref('age',this)">Any age</button>
+          <button class="pref-btn" data-pref="age" data-val="18-24" onclick="window._setPref('age',this)">18–24</button>
+          <button class="pref-btn" data-pref="age" data-val="25-34" onclick="window._setPref('age',this)">25–34</button>
+          <button class="pref-btn" data-pref="age" data-val="35-50" onclick="window._setPref('age',this)">35–50</button>
+        </div>
+      </div>
+
+      <button onclick="window._startMatchingWithPrefs()" style="width:100%;background:#fff;color:#000;border:none;padding:13px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer;">Find My Match →</button>
+      <div style="font-size:9px;color:#333;text-align:center;margin-top:10px;line-height:1.6;">These preferences help narrow your results.<br>A wider range finds matches faster.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      AI MATCHING MODAL
 ══════════════════════════════════════════ -->
 <div id="matchingOverlay" style="display:none;" class="matching-overlay" >
@@ -12033,7 +12094,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           <div class="prog-row"><div class="prog-lbl">Mind-Body</div><div class="prog-track"><div class="prog-fill" id="prog3" style="width:0%"></div></div><div class="prog-val" id="progVal3">—</div></div>
           <div class="prog-row"><div class="prog-lbl">Rhythm Score</div><div class="prog-track"><div class="prog-fill" id="prog4" style="width:0%"></div></div><div class="prog-val" id="progVal4">—</div></div>
         </div>
-        <div class="match-note">Claude is analysing your habit duration, lifespan, mind-body balance and rhythm stability to find your best match.</div>
+        <div class="match-note" id="matchNote">Claude is analysing your habit duration, lifespan, mind-body balance and rhythm stability to find your best match.</div>
       </div>
     </div>
     <!-- State B: Result -->
@@ -12081,8 +12142,57 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var EDGE_URL = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/match-partner';
   var _currentHabit = null;
   var _currentMatch = null;
+  var _selectedAgePref = 'any';
+  var _selectedGenderPref = 'any';
 
+  // ── Age preference selector (legacy, kept for reset) ────────────────────
+  window._setAgePref = function(btn) {
+    _selectedAgePref = btn.getAttribute('data-age');
+    document.querySelectorAll('.age-pref-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+  };
+
+  // ── Unified pref selector for the new pref modal ────────────────────────
+  window._setPref = function(type, btn) {
+    var val = btn.getAttribute('data-val');
+    if (type === 'gender') _selectedGenderPref = val;
+    if (type === 'age')    _selectedAgePref    = val;
+    document.querySelectorAll('.pref-btn[data-pref="' + type + '"]').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+  };
+
+  // ── Open preference modal (step 0, before matching) ─────────────────────
   window.openMatchingModal = function(habit) {
+    _currentHabit = habit;
+    _currentMatch = null;
+
+    // Show pref modal first
+    document.getElementById('prefHabitName').textContent = habit.name;
+
+    // Reset pref buttons to reflect current selections
+    document.querySelectorAll('.pref-btn[data-pref="gender"]').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-val') === _selectedGenderPref);
+    });
+    document.querySelectorAll('.pref-btn[data-pref="age"]').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-val') === _selectedAgePref);
+    });
+
+    document.getElementById('matchPrefOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.closeMatchPrefModal = function() {
+    document.getElementById('matchPrefOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    _currentHabit = null;
+  };
+
+  // ── "Find My Match →" button — close pref modal, open matching modal ────
+  window._startMatchingWithPrefs = function() {
+    if (!_currentHabit) return;
+    var habit = _currentHabit;
+    document.getElementById('matchPrefOverlay').style.display = 'none';
+
     // Deduct 1 matching credit
     if (window._supabaseClient && window._currentUser) {
       var _uid = window._currentUser.uid;
@@ -12096,46 +12206,175 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           }
         }).catch(function(){});
     }
-    _currentHabit = habit;
+
+    _openScanningModal(habit);
+  };
+
+  // ── Helper: get already-paired user IDs (to exclude from results) ────────
+  function getAlreadyPairedIds() {
+    var ids = new Set();
+    if (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) {
+      window._myPairs.forEach(function(p) {
+        if (p.user_id) ids.add(p.user_id);
+        if (p.partner_id) ids.add(p.partner_id);
+      });
+    }
+    return ids;
+  }
+
+  // ── Helper: parse duration label → minutes ───────────────────────────────
+  function parseDurMins(label) {
+    if (!label) return null;
+    var m = label.match(/([\d.]+)\s*hr/i);
+    if (m) return Math.round(parseFloat(m[1]) * 60);
+    m = label.match(/([\d.]+)\s*min/i);
+    if (m) return Math.round(parseFloat(m[1]));
+    return null;
+  }
+
+  // ── Helper: habit lifespan in days ───────────────────────────────────────
+  function habitLifespanDays(h) {
+    if (!h.timeRange) return null;
+    var parts = h.timeRange.split('～').map(function(s){ return s.trim(); });
+    if (parts.length < 2) return null;
+    var s = new Date(parts[0]), e = new Date(parts[1]);
+    if (isNaN(s) || isNaN(e)) return null;
+    return Math.round((e - s) / 86400000) + 1;
+  }
+
+  // ── Helper: parse age range string → {min, max} ──────────────────────────
+  function parseAgeRange(pref) {
+    if (!pref || pref === 'any') return null;
+    var p = pref.split('-');
+    return { min: parseInt(p[0], 10), max: parseInt(p[1], 10) };
+  }
+
+  // ── FALLBACK: pure code-based matching ──────────────────────────────────
+  async function runFallbackMatch(habit) {
+    try {
+      var session = await _supabase.auth.getSession();
+      var myUserId = session.data.session && session.data.session.user && session.data.session.user.id;
+      var alreadyPaired = getAlreadyPairedIds();
+      var ageRange = parseAgeRange(_selectedAgePref);
+
+      // Fetch candidate users from Supabase
+      var candidatesQuery = _supabase.from('users').select('id, displayName, signup_age, signup_gender, habits').neq('id', myUserId || '');
+      var { data: candidates } = await candidatesQuery;
+      if (!candidates || candidates.length === 0) throw new Error('No candidates');
+
+      // Filter out already-paired, age, and gender
+      candidates = candidates.filter(function(u) {
+        if (alreadyPaired.has(u.id)) return false;
+        if (ageRange && u.signup_age) {
+          var age = parseInt(u.signup_age, 10);
+          if (!isNaN(age) && (age < ageRange.min || age > ageRange.max)) return false;
+        }
+        if (_selectedGenderPref !== 'any' && u.signup_gender) {
+          if (u.signup_gender.toLowerCase() !== _selectedGenderPref) return false;
+        }
+        return true;
+      });
+
+      if (candidates.length === 0) throw new Error('No candidates after filter');
+
+      var myDur = parseDurMins(habit.durLabel) || 30;
+      var myLifespan = habitLifespanDays(habit) || 30;
+      var myStreak = habit.streak || 0;
+      var myChecked = Array.isArray(habit.checkedDates) ? habit.checkedDates.length : 0;
+      var myCategory = (habit.category || '').toLowerCase();
+
+      // Determine mind-body type for the current user's habit
+      var mindBodyKeywords = { mind: ['read','study','meditat','journal','learn','write','code'], body: ['run','gym','workout','exercise','walk','yoga','swim','lift','stretch'] };
+      function getMindBody(name) {
+        var n = (name || '').toLowerCase();
+        var isMind = mindBodyKeywords.mind.some(function(k){ return n.includes(k); });
+        var isBody = mindBodyKeywords.body.some(function(k){ return n.includes(k); });
+        if (isMind && !isBody) return 'mind';
+        if (isBody && !isMind) return 'body';
+        return 'balance';
+      }
+      var myMindBody = getMindBody(habit.name);
+
+      // Score each candidate
+      var scored = candidates.map(function(u) {
+        var uHabits = [];
+        try { uHabits = typeof u.habits === 'string' ? JSON.parse(u.habits) : (u.habits || []); } catch(e) {}
+        if (!Array.isArray(uHabits) || uHabits.length === 0) return null;
+
+        // Pick their best-match habit (highest streak)
+        var uHabit = uHabits.reduce(function(best, h) { return (h.streak||0) > (best.streak||0) ? h : best; }, uHabits[0]);
+
+        var uDur = parseDurMins(uHabit.durLabel) || 30;
+        var uLifespan = habitLifespanDays(uHabit) || 30;
+        var uStreak = uHabit.streak || 0;
+        var uMindBody = getMindBody(uHabit.name);
+
+        // ── 4 indicators, each 0-100, weighted ───────────────────────────
+        // 1. Avg Duration similarity (30%)
+        var durDiff = Math.abs(myDur - uDur);
+        var durScore = Math.max(0, 100 - Math.round(durDiff / Math.max(myDur, uDur) * 100));
+
+        // 2. Habit Lifespan similarity (25%)
+        var lifeDiff = Math.abs(myLifespan - uLifespan);
+        var lifeScore = Math.max(0, 100 - Math.round(lifeDiff / Math.max(myLifespan, uLifespan) * 100));
+
+        // 3. Mind-Body balance (20%) — same type gets 100, complementary gets 75, opposite gets 50
+        var mbScore = myMindBody === uMindBody ? 100 : (uMindBody === 'balance' || myMindBody === 'balance') ? 75 : 50;
+
+        // 4. Rhythm / consistency score (25%) — streak ratio
+        var rhythmScore = uStreak > 0 && myStreak > 0 ? Math.round(Math.min(uStreak, myStreak) / Math.max(uStreak, myStreak) * 100) : 50;
+
+        var overall = Math.round(durScore * 0.30 + lifeScore * 0.25 + mbScore * 0.20 + rhythmScore * 0.25);
+
+        return {
+          userId: u.id,
+          displayName: u.displayName || 'user',
+          habitName: uHabit.name || '—',
+          streak: uStreak,
+          score: overall,
+          mindBody: uMindBody,
+          breakdown: { avgDuration: durScore, habitLifespan: lifeScore, mindBody: mbScore, rhythmScore: rhythmScore }
+        };
+      }).filter(Boolean);
+
+      if (scored.length === 0) throw new Error('No valid candidates');
+
+      // Pick the best match
+      scored.sort(function(a, b) { return b.score - a.score; });
+      var best = scored[0];
+
+      // Show the fallback banner in the result
+      best._isFallback = true;
+      best.reason = 'Matched by duration similarity (' + best.breakdown.avgDuration + '%), habit lifespan (' + best.breakdown.habitLifespan + '%), mind-body alignment, and consistency rhythm.';
+      return best;
+    } catch(e) {
+      throw e;
+    }
+  }
+
+  function _openScanningModal(habit) {
     _currentMatch = null;
 
     // Reset states
     document.getElementById('matchingScanning').style.display = '';
     document.getElementById('matchingResult').style.display = 'none';
     document.getElementById('matchingError').style.display = 'none';
+    var oldBanner = document.getElementById('matchFallbackBanner');
+    if (oldBanner) oldBanner.remove();
 
     // Fill habit info
     document.getElementById('matchingHabitName').textContent = habit.name;
 
-    // ── 計算平均習慣時長（從 durLabel 解析分鐘數）──
-    function parseDurMins(label) {
-      if (!label) return null;
-      var m = label.match(/([\d.]+)\s*hr/i);
-      if (m) return Math.round(parseFloat(m[1]) * 60);
-      m = label.match(/([\d.]+)\s*min/i);
-      if (m) return Math.round(parseFloat(m[1]));
-      return null;
-    }
     var durMins = parseDurMins(habit.durLabel);
     document.getElementById('mAvgDur').textContent = durMins !== null ? durMins : '—';
 
-    // ── 計算習慣壽命（end - start 天數）──
-    function habitLifespanDays(h) {
-      if (!h.timeRange) return null;
-      var parts = h.timeRange.split('～').map(function(s){ return s.trim(); });
-      if (parts.length < 2) return null;
-      var s = new Date(parts[0]), e = new Date(parts[1]);
-      if (isNaN(s) || isNaN(e)) return null;
-      return Math.round((e - s) / 86400000) + 1;
-    }
     var lifespan = habitLifespanDays(habit);
     document.getElementById('mLifespan').textContent = lifespan !== null ? lifespan : '—';
 
-    // Mind-Body 等 API 回來再填，先顯示分析中
     document.getElementById('mMindBody').textContent = '...';
     document.getElementById('matchingStatusText').textContent = 'Searching users...';
+    document.getElementById('matchNote').textContent = 'Claude is analysing your habit duration, lifespan, mind-body balance and rhythm stability to find your best match.';
 
-    // Animate progress bars
     var progs = [['prog1','progVal1',94],['prog2','progVal2',81],['prog3','progVal3',76],['prog4','progVal4',89]];
     progs.forEach(function(p, i) {
       setTimeout(function() {
@@ -12151,11 +12390,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('matchingOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    // Call Edge Function
     callMatchPartner(habit);
-  };
+  }
 
   async function callMatchPartner(habit) {
+    var AI_TIMEOUT_MS = 3000; // 3s — if Claude doesn't respond, use fallback
+
     try {
       document.getElementById('matchingStatusText').textContent = 'Claude is analysing...';
 
@@ -12163,7 +12403,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       var token = session.data.session && session.data.session.access_token;
       if (!token) throw new Error('Not logged in');
 
-      var res = await fetch(EDGE_URL, {
+      var alreadyPaired = getAlreadyPairedIds();
+      var ageRange = parseAgeRange(_selectedAgePref);
+
+      // Wrap fetch in a timeout race
+      var fetchPromise = fetch(EDGE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -12176,26 +12420,57 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           habitStreak: habit.streak || 0,
           habitDurLabel: habit.durLabel || '',
           habitTimeRange: habit.timeRange || '',
-          checkedDates: habit.checkedDates || []
+          checkedDates: habit.checkedDates || [],
+          excludeUserIds: Array.from(alreadyPaired),
+          ageRange: ageRange,
+          genderPref: _selectedGenderPref
         })
       });
 
+      var timeoutPromise = new Promise(function(_, reject) {
+        setTimeout(function(){ reject(new Error('AI_TIMEOUT')); }, AI_TIMEOUT_MS);
+      });
+
+      var res = await Promise.race([fetchPromise, timeoutPromise]);
       var data = await res.json();
 
       if (!res.ok) {
         if (res.status === 429) {
           showMatchingError('Daily limit reached', data.message || 'You have used all 3 matches for today. Try again tomorrow.');
         } else {
-          showMatchingError('No matches found', data.message || 'Could not find a suitable match right now.');
+          // Non-429 API error → try fallback
+          throw new Error('API_ERROR');
         }
         return;
+      }
+
+      // Filter out already-paired users from AI result just in case
+      if (data.match && alreadyPaired.has(data.match.userId)) {
+        throw new Error('AI returned already-paired user');
       }
 
       _currentMatch = data.match;
       document.getElementById('mRemaining').textContent = data.remaining !== undefined ? data.remaining : '—';
       showMatchingResult(data.match);
+
     } catch(err) {
-      showMatchingError('Connection error', 'Please check your internet and try again.');
+      var isTimeout = err.message === 'AI_TIMEOUT';
+      var isApiErr  = err.message === 'API_ERROR' || /fetch|network|failed to fetch/i.test(err.message);
+      var needsFallback = isTimeout || isApiErr || err.message.includes('already-paired');
+
+      if (needsFallback) {
+        document.getElementById('matchingStatusText').textContent = 'Switching to algorithm match...';
+        try {
+          var fbMatch = await runFallbackMatch(habit);
+          _currentMatch = fbMatch;
+          fbMatch._isFallback = true;
+          showMatchingResult(fbMatch);
+        } catch(fbErr) {
+          showMatchingError('No matches found', 'Could not find a suitable match right now. Please try again later.');
+        }
+      } else {
+        showMatchingError('Connection error', 'Please check your internet and try again.');
+      }
     }
   }
 
@@ -12209,7 +12484,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('resultScoreBar').style.width = (match.score || 0) + '%';
     document.getElementById('resultReason').textContent = match.reason || '—';
 
-    // 填入 mind-body balance（從 API 回傳）
     if (match.mindBody) document.getElementById('mMindBody').textContent = match.mindBody;
 
     var bd = match.breakdown || {};
@@ -12220,6 +12494,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       document.getElementById(r[0]).style.width = r[2] + '%';
       document.getElementById(r[1]).textContent = r[2] + '%';
     });
+
+    // Show fallback banner if AI was unavailable
+    if (match._isFallback) {
+      var existing = document.getElementById('matchFallbackBanner');
+      if (!existing) {
+        var banner = document.createElement('div');
+        banner.id = 'matchFallbackBanner';
+        banner.className = 'fallback-banner';
+        banner.textContent = '⚡ Our AI matching is temporarily unavailable — we\'ve matched you using our algorithm instead.';
+        var actionsEl = document.querySelector('.result-actions');
+        if (actionsEl) actionsEl.parentNode.insertBefore(banner, actionsEl);
+      }
+    }
   }
 
   function showMatchingError(title, msg) {
