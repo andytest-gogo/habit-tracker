@@ -2014,7 +2014,7 @@
                         · Transfers under Standard Contractual Clauses (SCCs)
                     </li>
                     <li>
-                        <strong>Supabase</strong> (資料庫 &amp; 媒體儲存) —
+                        <strong>Supabase</strong> (Database &amp; Media Storage) —
                         <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy ↗</a>
                         · EU data residency available
                     </li>
@@ -4035,11 +4035,11 @@ function AuthPage(_ref2) {
             _t = _context.v;
             _registering = false; // always reset on error
             var _resendErrCodes = {
-              'auth/unauthorized-continue-uri': '驗證信發送失敗：網域未授權，請聯絡管理員。',
-              'auth/too-many-requests': '請求過於頻繁，請稍後再試。',
-              'auth/network-request-failed': '網路錯誤，請檢查網路連線後再試。',
-              'auth/user-not-found': '找不到帳號，請重新確認 email。',
-              'auth/wrong-password': '密碼錯誤，請重新輸入。',
+              'auth/unauthorized-continue-uri': 'Verification email failed: unauthorized domain. Please contact support.',
+              'auth/too-many-requests': 'Too many requests. Please try again later.',
+              'auth/network-request-failed': 'Network error. Please check your connection and try again.',
+              'auth/user-not-found': 'Account not found. Please check your email address.',
+              'auth/wrong-password': 'Incorrect password. Please try again.',
             };
             setError(_resendErrCodes[_t.code] || firebaseErrMsg(_t.code) || _t.message || 'Failed to send email. Please check your password and try again.');
           case 7:
@@ -4209,14 +4209,14 @@ function AuthPage(_ref2) {
           } catch (emailErr) {
             console.error('[signup] sendEmailVerification failed — code:', emailErr.code, '| message:', emailErr.message);
             var _emailErrCodes = {
-              'auth/unauthorized-continue-uri': '⚠️ 驗證信發送失敗：網域未授權。請聯絡管理員將此網站加入 Firebase Authorized Domains。',
-              'auth/invalid-continue-uri': '⚠️ 驗證信發送失敗：無效的回傳網址，請聯絡管理員。',
-              'auth/missing-continue-uri': '⚠️ 驗證信發送失敗：缺少回傳網址。',
-              'auth/too-many-requests': '⚠️ 驗證信發送失敗：請求過於頻繁，請稍後再試。',
-              'auth/network-request-failed': '⚠️ 驗證信發送失敗：網路錯誤，請檢查網路連線後點選下方「Resend」重新發送。',
+              'auth/unauthorized-continue-uri': '⚠️ Verification email failed: unauthorized domain. Please contact support to add this site to Firebase Authorized Domains.',
+              'auth/invalid-continue-uri': '⚠️ Verification email failed: invalid redirect URL. Please contact support.',
+              'auth/missing-continue-uri': '⚠️ Verification email failed: missing redirect URL.',
+              'auth/too-many-requests': '⚠️ Verification email failed: too many requests. Please try again later.',
+              'auth/network-request-failed': '⚠️ Verification email failed: network error. Please check your connection and click Resend below.',
             };
             _emailErrMsg = _emailErrCodes[emailErr.code] ||
-              ('⚠️ 驗證信發送失敗 [' + (emailErr.code || 'unknown') + ']：請點選下方「Resend」重新發送。');
+              ('⚠️ Verification email failed [' + (emailErr.code || 'unknown') + ']. Please click Resend below.');
           }
 
           // 7. Sign out — AFTER attempting to send email
@@ -5921,6 +5921,10 @@ function AddHabitModal(_ref12) {
     _useState40 = _slicedToArray(_useState39, 2),
     aiCategory = _useState40[0],
     setAiCategory = _useState40[1];
+  var _useStateManualCat = useState(''),
+    _useStateManualCatArr = _slicedToArray(_useStateManualCat, 2),
+    manualCategory = _useStateManualCatArr[0],
+    setManualCategory = _useStateManualCatArr[1];
 
   // Start/End Date (date string for <input type="date">)
   var todayStr = toISODay(now); // use local date, not UTC
@@ -6076,7 +6080,7 @@ function AddHabitModal(_ref12) {
     var l2result = await layer2Check(name);
     setValidating(false);
     if (l2result.error) { setNameError(l2result.error); return; }
-    var inferredCategory = l2result.category || 'Other';
+    var inferredCategory = manualCategory || l2result.category || 'Other';
     // Validate frequency is selected
     if (!freqPreset) {
       alert('Please select a frequency.');
@@ -6187,14 +6191,14 @@ function AddHabitModal(_ref12) {
     className: "form-group"
   }, /*#__PURE__*/React.createElement("label", {
     className: "form-label"
-  }, "Habit Name"), /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--gray-400)", marginBottom: 6, lineHeight: 1.5 } }, "💡 Specific names = better partner matches. Try: \"每天跑步30分鐘\", \"Read 20 min before bed\", \"Drink 2L water daily\""), /*#__PURE__*/React.createElement("input", {
+  }, "Habit Name"), /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--gray-400)", marginBottom: 6, lineHeight: 1.5 } }, "💡 Be specific — better names find better partners. Try: \"Run 30 min daily\", \"Read 20 min before bed\", \"Drink 2L water daily\""), /*#__PURE__*/React.createElement("input", {
     type: "text",
     className: "form-input",
     value: name,
     onChange: function onChange(e) {
       return setName(e.target.value);
     },
-    placeholder: "e.g. 每天跑步30分鐘 / Run 30 min daily",
+    placeholder: "e.g. Run 30 min every morning, Read 20 min before bed",
     autoFocus: true,
     style: nameError ? { borderColor: '#dc2626' } : {}
   }), validating && /*#__PURE__*/React.createElement("div", {
@@ -6202,6 +6206,51 @@ function AddHabitModal(_ref12) {
   }, /*#__PURE__*/React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid var(--gray-400)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' } }), "Claude is validating and categorizing..."), nameError && /*#__PURE__*/React.createElement("div", {
     style: { color: '#dc2626', fontSize: 12, marginTop: 4, fontWeight: 500 }
   }, nameError)), /*#__PURE__*/React.createElement("div", {
+    className: "section-divider"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "form-group"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-section-label"
+  }, "Category"),
+  /*#__PURE__*/React.createElement("div", { className: "pill-group" },
+    [
+      { key: 'Fitness',     bar: '#16a34a', bg: '#f0fdf4', text: '#15803d', bd: '#bbf7d0' },
+      { key: 'Nutrition',   bar: '#d97706', bg: '#fffbeb', text: '#b45309', bd: '#fde68a' },
+      { key: 'Sleep',       bar: '#7c3aed', bg: '#f5f3ff', text: '#6d28d9', bd: '#ddd6fe' },
+      { key: 'Mindfulness', bar: '#0284c7', bg: '#f0f9ff', text: '#0369a1', bd: '#bae6fd' },
+      { key: 'Hydration',   bar: '#0891b2', bg: '#ecfeff', text: '#0e7490', bd: '#a5f3fc' },
+      { key: 'Learning',    bar: '#2563eb', bg: '#eff6ff', text: '#1d4ed8', bd: '#bfdbfe' },
+      { key: 'Skincare',    bar: '#ec4899', bg: '#fdf2f8', text: '#be185d', bd: '#fbcfe8' },
+      { key: 'Other',       bar: '#6b7280', bg: '#f9fafb', text: '#4b5563', bd: '#e5e7eb' }
+    ].map(function(cat) {
+      var isSelected = manualCategory === cat.key;
+      return /*#__PURE__*/React.createElement("button", {
+        key: cat.key,
+        type: "button",
+        onClick: function() { setManualCategory(isSelected ? '' : cat.key); },
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '5px 11px',
+          border: '1px solid ' + (isSelected ? cat.bar : 'var(--gray-200)'),
+          borderRadius: 0,
+          background: isSelected ? cat.bg : 'var(--white)',
+          color: isSelected ? cat.text : 'var(--gray-600)',
+          fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          fontFamily: 'var(--font)', textTransform: 'uppercase',
+          letterSpacing: '.5px', whiteSpace: 'nowrap', transition: '.15s'
+        }
+      },
+        /*#__PURE__*/React.createElement("span", {
+          style: { width: 7, height: 7, borderRadius: '50%', background: cat.bar, flexShrink: 0, display: 'inline-block' }
+        }),
+        cat.key
+      );
+    })
+  ),
+  manualCategory === '' && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 6 }
+  }, "Skip to let AI infer the category from your habit name.")),
+  /*#__PURE__*/React.createElement("div", {
     className: "section-divider"
   }), /*#__PURE__*/React.createElement("div", {
     className: "form-group"
