@@ -7303,7 +7303,8 @@ function MainApp(_ref16) {
   var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
-  var PARTNER_UNLOCK_DAYS = 2;
+  var PARTNER_UNLOCK_DAYS = 2;       // 達成 2 天打卡 → 解鎖夥伴配對功能
+  var CHALLENGE_COMPLETE_DAYS = 21;  // 達成 21 天打卡 → 真正完成挑戰，移入 Completed
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
   // 用於 visibilitychange 回前台、pull-to-refresh 觸發
@@ -7421,7 +7422,7 @@ function MainApp(_ref16) {
 
       // ── Filter 2: live streak must be 1–20 ───────────────────────────────
       list = list.filter(function(h) {
-        return h.streak >= 1 && h.streak < PARTNER_UNLOCK_DAYS;
+        return h.streak >= 1 && h.streak < CHALLENGE_COMPLETE_DAYS;
       });
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
@@ -7512,7 +7513,7 @@ function MainApp(_ref16) {
         if(/\d{4}-\d{2}-\d{2}/.test(d)) return d;
         var p = new Date(d); return isNaN(p)?null:toISODay(p);
       }).filter(Boolean);
-      var isCompleted = new Set(_nc).size >= PARTNER_UNLOCK_DAYS;
+      var isCompleted = new Set(_nc).size >= CHALLENGE_COMPLETE_DAYS;
       if (!isCompleted) return;
       // Check if already awarded today
       db.collection('matching_credits')
@@ -7652,9 +7653,9 @@ function MainApp(_ref16) {
     var _activeCount0 = habits.filter(function(h){
       var e=parseTimeRange(h.timeRange).end;
       if (!e||e>=_today0str) {
-        // only count as active if NOT completed (checkedDates < PARTNER_UNLOCK_DAYS)
+        // only count as active if NOT completed (checkedDates < CHALLENGE_COMPLETE_DAYS)
         var _nc = (h.checkedDates||[]).map(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
-        return new Set(_nc).size < PARTNER_UNLOCK_DAYS;
+        return new Set(_nc).size < CHALLENGE_COMPLETE_DAYS;
       }
       return false;
     }).length;
@@ -9170,20 +9171,20 @@ function MainApp(_ref16) {
         textTransform: 'uppercase',
         letterSpacing: .8
       }
-    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; if(!e||e>=t){ var nc=(h.checkedDates||[]).filter(Boolean); return new Set(nc).size < PARTNER_UNLOCK_DAYS; } return false; }).length; })(), " / 3 active")), (function(){
+    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; if(!e||e>=t){ var nc=(h.checkedDates||[]).filter(Boolean); return new Set(nc).size < CHALLENGE_COMPLETE_DAYS; } return false; }).length; })(), " / 3 active")), (function(){
       var _today = toISODay();
-      // Split habits: in-progress vs completed (>= PARTNER_UNLOCK_DAYS checkedDates)
+      // Split habits: in-progress vs completed (>= CHALLENGE_COMPLETE_DAYS checkedDates)
       var allActive = habits.filter(function(h) {
         var _end = parseTimeRange(h.timeRange).end;
         return !_end || _end >= _today;
       });
       var inProgressHabits = allActive.filter(function(h) {
         var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
-        return new Set(_nc).size < PARTNER_UNLOCK_DAYS;
+        return new Set(_nc).size < CHALLENGE_COMPLETE_DAYS;
       });
       var completedHabits = habits.filter(function(h) {
         var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
-        return new Set(_nc).size >= PARTNER_UNLOCK_DAYS;
+        return new Set(_nc).size >= CHALLENGE_COMPLETE_DAYS;
       });
       return React.createElement(React.Fragment, null,
         inProgressHabits.length === 0 && completedHabits.length === 0 ? React.createElement("div", { className: "empty-state" },
@@ -9296,8 +9297,8 @@ function MainApp(_ref16) {
             React.createElement("path", { strokeLinecap:"round", strokeLinejoin:"round", d:"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" })
           ), "Delete Habit")
         ),
-        /* right side: cheer block */
-        habitCheerData && habitCheerData.totalCount > 0 && React.createElement("div", {
+        /* right side: cheer block — always visible */
+        React.createElement("div", {
           className: "cheer-block",
           onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
         },
@@ -9310,12 +9311,12 @@ function MainApp(_ref16) {
               React.createElement("span", {
                 className: "cheer-roll-num",
                 id: _cheerUid
-              }, habitCheerData.totalCount)
+              }, habitCheerData ? habitCheerData.totalCount : 0)
             )
           ),
           React.createElement("div", { className: "cheer-sep" }),
           React.createElement("span", { className: "cheer-today-badge" },
-            "+", habitCheerData.todayCount || 0, "\u00a0today"
+            "+", habitCheerData ? (habitCheerData.todayCount || 0) : 0, "\u00a0today"
           )
         )
       ));
@@ -9434,7 +9435,7 @@ function MainApp(_ref16) {
     var pc = habitCheers[cheerPanelHabitId] || { todayCount: 0, totalCount: 0 };
     var isQualifiedHabit = (function() {
       var nc = (ph.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
-      return new Set(nc).size >= PARTNER_UNLOCK_DAYS;
+      return new Set(nc).size >= CHALLENGE_COMPLETE_DAYS;
     })();
     var panelMsg = isQualifiedHabit
       ? 'People who cheered your completed journey'
@@ -9607,11 +9608,11 @@ function MainApp(_ref16) {
         var shortUid = c.userId ? c.userId.slice(0, 8) : "user";
         var habitLabel = c.challengeVisibility === "public" ? (c.name || "Habit challenge") : "Habit challenge";
         var initials = displayName.slice(0, 2).toUpperCase();
-        var pct = Math.min(Math.round((c.streak / PARTNER_UNLOCK_DAYS) * 100), 100);
-        var isNearEnd = c.streak >= 2;
+        var pct = Math.min(Math.round((c.streak / CHALLENGE_COMPLETE_DAYS) * 100), 100);
+        var isNearEnd = c.streak >= 15;
         var isJustStarted = c.streak <= 3;
         var barClass = "challenger-card-bar-fill" + (isNearEnd ? " near-end" : isJustStarted ? " just-started" : "");
-        var daysLeft = PARTNER_UNLOCK_DAYS - c.streak;
+        var daysLeft = CHALLENGE_COMPLETE_DAYS - c.streak;
         var stageText = isNearEnd
           ? "Almost there \u2014 " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left!"
           : isJustStarted ? "Just getting started"
@@ -9634,8 +9635,8 @@ function MainApp(_ref16) {
           ),
           React.createElement("div", { className: "challenger-card-progress" },
             React.createElement("div", { className: "challenger-card-prog-row" },
-              React.createElement("span", { className: "challenger-card-prog-label" }, "2-Day Challenge"),
-              React.createElement("span", { className: "challenger-card-prog-count" }, c.streak + "/" + PARTNER_UNLOCK_DAYS)
+              React.createElement("span", { className: "challenger-card-prog-label" }, "21-Day Challenge"),
+              React.createElement("span", { className: "challenger-card-prog-count" }, c.streak + "/" + CHALLENGE_COMPLETE_DAYS)
             ),
             React.createElement("div", { className: "challenger-card-bar-track" },
               React.createElement("div", { className: barClass, style: { width: pct + "%" } })
@@ -10218,7 +10219,7 @@ function MainApp(_ref16) {
         var e=parseTimeRange(h.timeRange).end;
         if(!e||e>=_todayChk){
           var _nc2=(h.checkedDates||[]).map(function(d){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;var p=new Date(d);return isNaN(p)?null:toISODay(p);}).filter(Boolean);
-          return new Set(_nc2).size < PARTNER_UNLOCK_DAYS;
+          return new Set(_nc2).size < CHALLENGE_COMPLETE_DAYS;
         }
         return false;
       }).length;
