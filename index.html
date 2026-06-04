@@ -7375,7 +7375,6 @@ function MainApp(_ref16) {
       ? _sb.from('habits')
            .select('id, user_id, name, category, streak, challenge_visibility, today_cheer_count, display_name, checked_dates, user_avatar')
            .neq('user_id', user.uid)
-           .lt('streak', PARTNER_UNLOCK_DAYS)
            .or('challenge_visibility.is.null,challenge_visibility.neq.private')
       : null;
 
