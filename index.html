@@ -3839,10 +3839,10 @@ function AuthPage(_ref2) {
     _useState8 = _slicedToArray(_useState7, 2),
     displayName = _useState8[0],
     setDisplayName = _useState8[1];
-  var _useStateAge1 = useState(''),
-    _useStateAge2 = _slicedToArray(_useStateAge1, 2),
-    ageInput = _useStateAge2[0],
-    setAgeInput = _useStateAge2[1];
+  var _useStateDob1 = useState(''),
+    _useStateDob2 = _slicedToArray(_useStateDob1, 2),
+    dobInput = _useStateDob2[0],
+    setDobInput = _useStateDob2[1];
   var _useStateGender1 = useState(''),
     _useStateGender2 = _slicedToArray(_useStateGender1, 2),
     gender = _useStateGender2[0],
@@ -4125,15 +4125,29 @@ function AuthPage(_ref2) {
         }
 
         // 2. Final check username uniqueness via public `usernames` collection
-        // 年齡驗證（COPPA：13 歲以上）
-        var ageNum = parseInt(ageInput, 10);
-        if (!ageInput || isNaN(ageNum) || ageNum < 1 || ageNum > 120) {
-          setError('Please enter a valid age.');
+        // 年齡驗證（COPPA：13 歲以上）— computed from date of birth
+        if (!dobInput) {
+          setError('Please enter your date of birth.');
           setLoading(false);
           return;
         }
+        var _dob = new Date(dobInput);
+        if (isNaN(_dob.getTime())) {
+          setError('Please enter a valid date of birth.');
+          setLoading(false);
+          return;
+        }
+        var _today = new Date();
+        var ageNum = _today.getFullYear() - _dob.getFullYear();
+        var _mDiff = _today.getMonth() - _dob.getMonth();
+        if (_mDiff < 0 || (_mDiff === 0 && _today.getDate() < _dob.getDate())) ageNum--;
         if (ageNum < 13) {
           setError('You must be at least 13 years old to register (COPPA requirement).');
+          setLoading(false);
+          return;
+        }
+        if (ageNum > 120) {
+          setError('Please enter a valid date of birth.');
           setLoading(false);
           return;
         }
@@ -4191,6 +4205,7 @@ function AuthPage(_ref2) {
             localStorage.setItem('ht-pending-uid', _r.user && _r.user.uid ? _r.user.uid : '');
             localStorage.setItem('ht-pending-email', email.trim().toLowerCase());
             localStorage.setItem('ht-pending-age', String(ageNum));
+            localStorage.setItem('ht-pending-dob', dobInput);
             localStorage.setItem('ht-pending-gender', gender);
           } catch(lsErr) { /* ignore */ }
 
@@ -4201,6 +4216,7 @@ function AuthPage(_ref2) {
                 username_key: usernameKey,
                 signup_display_name: displayName.trim(),
                 signup_age: ageNum,
+                signup_dob: dobInput,
                 signup_gender: gender
               }
             });
@@ -4453,16 +4469,15 @@ function AuthPage(_ref2) {
   }, "Password must be at least 8 chars, with uppercase, lowercase, and a number")),
   !isLogin && /*#__PURE__*/React.createElement("div", { className: "form-group", style: { display: 'flex', gap: 12 } },
     /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
-      /*#__PURE__*/React.createElement("label", { className: "form-label" }, "Age"),
+      /*#__PURE__*/React.createElement("label", { className: "form-label" }, "Date of Birth"),
       /*#__PURE__*/React.createElement("input", {
-        type: "number",
+        type: "date",
         className: "form-input",
-        value: ageInput,
-        onChange: function(e) { setAgeInput(e.target.value); },
-        placeholder: "e.g. 25",
-        min: "13",
-        max: "120",
-        style: { width: '100%' }
+        value: dobInput,
+        onChange: function(e) { setDobInput(e.target.value); },
+        max: (function(){ var d = new Date(); d.setFullYear(d.getFullYear()-13); return d.toISOString().split('T')[0]; })(),
+        min: "1900-01-01",
+        style: { width: '100%', cursor: 'pointer' }
       })
     ),
     /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
@@ -10922,6 +10937,7 @@ function App() {
           // 先宣告所有變數，避免 used-before-declaration 問題
           var signupAge = null;
           var signupGender = null;
+          var _lsPendingDob = null;
           var _lsPendingName = '';
           var _lsPendingKey = '';
           var _lsPendingAge = null;
@@ -10955,6 +10971,7 @@ function App() {
               var _lsAge       = localStorage.getItem('ht-pending-age');
               _lsPendingAge    = _lsAge ? parseInt(_lsAge, 10) : null;
               _lsPendingGender = localStorage.getItem('ht-pending-gender') || null;
+              _lsPendingDob    = localStorage.getItem('ht-pending-dob') || null;
               console.log('[auth] Recovered from localStorage backup — name:', _lsPendingName, 'age:', _lsPendingAge, 'gender:', _lsPendingGender);
             }
           } catch(e) {}
@@ -10965,6 +10982,7 @@ function App() {
           // 安全地賦值 signupAge / signupGender（已在頂部宣告）
           signupAge    = meta.signup_age ? parseInt(meta.signup_age, 10) : (_lsPendingAge || null);
           signupGender = meta.signup_gender || _lsPendingGender || null;
+          var signupDob = meta.signup_dob || _lsPendingDob || null;
 
           // Clear localStorage backup after reading
           try {
@@ -10973,6 +10991,7 @@ function App() {
             localStorage.removeItem('ht-pending-uid');
             localStorage.removeItem('ht-pending-email');
             localStorage.removeItem('ht-pending-age');
+            localStorage.removeItem('ht-pending-dob');
             localStorage.removeItem('ht-pending-gender');
           } catch(e) {}
 
@@ -11000,6 +11019,7 @@ function App() {
             };
             if (signupAge) _repairData.signup_age = signupAge;
             if (signupGender) _repairData.signup_gender = signupGender;
+            if (signupDob) _repairData.signup_dob = signupDob;
             _supabase.auth.updateUser({ data: _repairData }).then(function(r2) {
               if (!r2.error) console.log('[auth] Auto-repaired metadata — name:', resolvedDisplayName, 'age:', signupAge, 'gender:', signupGender);
             }).catch(function(e) { console.warn('[auth] metadata repair failed:', e.message); });
@@ -11016,8 +11036,9 @@ function App() {
             emailVerified: true,
             lastSeen: FieldValue.serverTimestamp()
           };
-          // 只在首次登入時寫入 age 和 gender（不覆蓋已存在的值）
+          // 只在首次登入時寫入 age、dob 和 gender（不覆蓋已存在的值）
           if (signupAge && !existing.age) updateDoc.age = signupAge;
+          if (signupDob && !existing.dob) updateDoc.dob = signupDob;
           if (signupGender && !existing.gender) updateDoc.gender = signupGender;
 
           var writePromises = [
