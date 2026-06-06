@@ -2705,7 +2705,7 @@ if (isFirebaseConfigured) {
       'avatar_public_id':'avatarPublicId','deleted_at':'deletedAt','deleted_by':'deletedBy',
       'age_verified':'ageVerified','age_verified_at':'ageVerifiedAt',
       'avatar_url':'avatarUrl',
-      'checked_dates':'checkedDates','streak':'streak',
+      'checked_dates':'checkedDates','streak':'streak','check_timestamps':'checkTimestamps',
       'user_name':'userName','user_avatar':'userAvatar','user_avatar_url':'userAvatarUrl',
       'challenge_visibility':'challengeVisibility','final_rate':'finalRate',
       'archived_at':'archivedAt','archived_habits':'archivedHabits'
@@ -3073,7 +3073,7 @@ if (isFirebaseConfigured) {
       'postText': 'post_text', 'isComment': 'is_comment', 'mediaType': 'media_type',
       'publicIds': 'public_ids', 'usernameChangedAt': 'username_changed_at',
       'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by',
-      'checkedDates': 'checked_dates', 'userName': 'user_name', 'userAvatar': 'user_avatar',
+      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'userName': 'user_name', 'userAvatar': 'user_avatar',
       'userAvatarUrl': 'user_avatar_url', 'challengeVisibility': 'challenge_visibility',
       'finalRate': 'final_rate', 'archivedAt': 'archived_at'
     };
@@ -7830,6 +7830,19 @@ function MainApp(_ref16) {
               return d !== todayKey;
             });
 
+            // checkTimestamps：記錄每次完成的完整時間戳，供 Rhythm Score 計算打卡時間標準差
+            var checkTimestamps = _toConsumableArray(habit.checkTimestamps || []);
+            if (!wasDone && isDone) {
+              // 完成當下記錄 ISO 時間戳（保留時間資訊）
+              checkTimestamps = [].concat(_toConsumableArray(checkTimestamps), [new Date().toISOString()]);
+            }
+            if (wasDone && !isDone) {
+              // 取消完成時，移除今天的時間戳
+              checkTimestamps = checkTimestamps.filter(function(ts) {
+                return ts.slice(0, 10) !== todayKey;
+              });
+            }
+
             // Streak: strictly counting back from today, 0 if today not done
             streak = 0;
             cur2 = new Date();
@@ -7844,6 +7857,7 @@ function MainApp(_ref16) {
               return h.id === habitId ? _objectSpread(_objectSpread({}, h), {}, {
                 todayCounts: counts,
                 checkedDates: checkedDates,
+                checkTimestamps: checkTimestamps,
                 streak: streak
               }) : h;
             }); });
@@ -7858,12 +7872,14 @@ function MainApp(_ref16) {
             return db.collection('habits').doc(habitId).update({
               todayCounts: counts,
               checkedDates: checkedDates,
+              checkTimestamps: checkTimestamps,
               streak: streak
             }).catch(function(err) {
               // 常見原因：checked_dates / streak 欄位不存在於 Supabase habits 表
               // 請到 Supabase SQL Editor 執行：
-              // ALTER TABLE habits ADD COLUMN IF NOT EXISTS checked_dates JSONB DEFAULT '[]';
+              // ALTER TABLE habits ADD COLUMN IF NOT EXISTS checked_dates JSONB DEFAULT '[]'::jsonb;
               // ALTER TABLE habits ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0;
+              // ALTER TABLE habits ADD COLUMN IF NOT EXISTS check_timestamps JSONB DEFAULT '[]'::jsonb;
               console.error('[countHabit] DB update failed:', err && err.message);
             });
           case 3:
@@ -12300,14 +12316,52 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       var myDur = parseDurMins(habit.durLabel) || 30;
       var myLifespan = habitLifespanDays(habit) || 30;
-      var myStreak = habit.streak || 0;
-      var myChecked = Array.isArray(habit.checkedDates) ? habit.checkedDates.length : 0;
-      var myCategory = (habit.category || '').toLowerCase();
+      var myChecked = Array.isArray(habit.checkedDates) ? new Set(habit.checkedDates).size : 0;
+      var myTimestamps = habit.checkTimestamps || [];
 
-      // Determine mind-body type for the current user's habit
-      var mindBodyKeywords = { mind: ['read','study','meditat','journal','learn','write','code'], body: ['run','gym','workout','exercise','walk','yoga','swim','lift','stretch'] };
+      // ── Mind-Body：中文 + 英文關鍵字雙語支援 ─────────────────────────────
+      var mindBodyKeywords = {
+        mind: ['read','study','meditat','journal','learn','write','code','閱讀','讀書','冥想','靜坐','日記','學習','寫作','程式','語言','正念','感恩','呼吸'],
+        body: ['run','gym','workout','exercise','walk','yoga','swim','lift','stretch','跑步','健身','運動','瑜伽','游泳','深蹲','伸展','散步','重訓','騎車','爬山']
+      };
       function getMindBody(name) {
         var n = (name || '').toLowerCase();
+        var isMind = mindBodyKeywords.mind.some(function(k){ return n.includes(k); });
+        var isBody = mindBodyKeywords.body.some(function(k){ return n.includes(k); });
+        if (isMind && !isBody) return 'mind';
+        if (isBody && !isMind) return 'body';
+        return 'balance';
+      }
+
+      // ── Rhythm Score：打卡時間標準差（越小越規律）───────────────────────
+      function calcRhythmScore(timestamps) {
+        if (!timestamps || timestamps.length < 3) return 50; // 資料不足，給中間分
+        var hours = timestamps.map(function(ts) {
+          var d = new Date(ts);
+          return d.getHours() + d.getMinutes() / 60;
+        });
+        var mean = hours.reduce(function(a, b) { return a + b; }, 0) / hours.length;
+        var variance = hours.reduce(function(s, h) { return s + Math.pow(h - mean, 2); }, 0) / hours.length;
+        var stdDev = Math.sqrt(variance);
+        // stdDev = 0 → 完全規律 → 100分；stdDev = 6小時以上 → 0分
+        return Math.max(0, Math.round(100 - (stdDev / 6) * 100));
+      }
+
+      // ── Habit Lifespan Score：壽命越長越好，但接近 21 天要懲罰 ──────────
+      function calcLifespanScore(myLifespan, uLifespan) {
+        // 壽命接近 21 天（<=25天）懲罰：這類習慣可能是為解鎖刷的
+        var MIN_SERIOUS_DAYS = 25;
+        var myPenalty = myLifespan <= MIN_SERIOUS_DAYS ? 0.6 : 1.0;
+        var uPenalty  = uLifespan  <= MIN_SERIOUS_DAYS ? 0.6 : 1.0;
+        // 兩人壽命差距相似度
+        var lifeDiff = Math.abs(myLifespan - uLifespan);
+        var rawScore = Math.max(0, 100 - Math.round(lifeDiff / Math.max(myLifespan, uLifespan) * 100));
+        // 任一方壽命太短都降分
+        return Math.round(rawScore * Math.min(myPenalty, uPenalty));
+      }
+
+      var myMindBody = getMindBody(habit.name);
+      var myRhythm = calcRhythmScore(myTimestamps);
         var isMind = mindBodyKeywords.mind.some(function(k){ return n.includes(k); });
         var isBody = mindBodyKeywords.body.some(function(k){ return n.includes(k); });
         if (isMind && !isBody) return 'mind';
@@ -12327,23 +12381,27 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
         var uDur = parseDurMins(uHabit.durLabel) || 30;
         var uLifespan = habitLifespanDays(uHabit) || 30;
-        var uStreak = uHabit.streak || 0;
+        var uChecked = Array.isArray(uHabit.checkedDates) ? new Set(uHabit.checkedDates).size : 0;
+        var uTimestamps = uHabit.checkTimestamps || [];
         var uMindBody = getMindBody(uHabit.name);
+        var uRhythm = calcRhythmScore(uTimestamps);
 
         // ── 4 indicators, each 0-100, weighted ───────────────────────────
         // 1. Avg Duration similarity (30%)
         var durDiff = Math.abs(myDur - uDur);
-        var durScore = Math.max(0, 100 - Math.round(durDiff / Math.max(myDur, uDur) * 100));
+        var durScore = myDur > 0 && uDur > 0
+          ? Math.max(0, 100 - Math.round(durDiff / Math.max(myDur, uDur) * 100))
+          : 50; // 任一方沒填時長，給中間分而非假性 100
 
-        // 2. Habit Lifespan similarity (25%)
-        var lifeDiff = Math.abs(myLifespan - uLifespan);
-        var lifeScore = Math.max(0, 100 - Math.round(lifeDiff / Math.max(myLifespan, uLifespan) * 100));
+        // 2. Habit Lifespan（含壽命懲罰）(25%)
+        var lifeScore = calcLifespanScore(myLifespan, uLifespan);
 
-        // 3. Mind-Body balance (20%) — same type gets 100, complementary gets 75, opposite gets 50
+        // 3. Mind-Body balance (20%)
         var mbScore = myMindBody === uMindBody ? 100 : (uMindBody === 'balance' || myMindBody === 'balance') ? 75 : 50;
 
-        // 4. Rhythm / consistency score (25%) — streak ratio
-        var rhythmScore = uStreak > 0 && myStreak > 0 ? Math.round(Math.min(uStreak, myStreak) / Math.max(uStreak, myStreak) * 100) : 50;
+        // 4. Rhythm Score：打卡時間標準差相似度 (25%)
+        var rhythmDiff = Math.abs(myRhythm - uRhythm);
+        var rhythmScore = Math.max(0, 100 - rhythmDiff);
 
         var overall = Math.round(durScore * 0.30 + lifeScore * 0.25 + mbScore * 0.20 + rhythmScore * 0.25);
 
@@ -12351,7 +12409,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           userId: u.id,
           displayName: u.displayName || 'user',
           habitName: uHabit.name || '—',
-          streak: uStreak,
+          checkedCount: uChecked,
           score: overall,
           mindBody: uMindBody,
           breakdown: { avgDuration: durScore, habitLifespan: lifeScore, mindBody: mbScore, rhythmScore: rhythmScore }
