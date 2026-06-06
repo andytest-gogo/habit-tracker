@@ -2705,7 +2705,7 @@ if (isFirebaseConfigured) {
       'avatar_public_id':'avatarPublicId','deleted_at':'deletedAt','deleted_by':'deletedBy',
       'age_verified':'ageVerified','age_verified_at':'ageVerifiedAt',
       'avatar_url':'avatarUrl',
-      'checked_dates':'checkedDates','streak':'streak','check_timestamps':'checkTimestamps',
+      'checked_dates':'checkedDates','streak':'streak','check_timestamps':'checkTimestamps','mind_body':'mindBody',
       'user_name':'userName','user_avatar':'userAvatar','user_avatar_url':'userAvatarUrl',
       'challenge_visibility':'challengeVisibility','final_rate':'finalRate',
       'archived_at':'archivedAt','archived_habits':'archivedHabits'
@@ -3073,7 +3073,7 @@ if (isFirebaseConfigured) {
       'postText': 'post_text', 'isComment': 'is_comment', 'mediaType': 'media_type',
       'publicIds': 'public_ids', 'usernameChangedAt': 'username_changed_at',
       'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by',
-      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'userName': 'user_name', 'userAvatar': 'user_avatar',
+      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'mindBody': 'mind_body', 'userName': 'user_name', 'userAvatar': 'user_avatar',
       'userAvatarUrl': 'user_avatar_url', 'challengeVisibility': 'challenge_visibility',
       'finalRate': 'final_rate', 'archivedAt': 'archived_at'
     };
@@ -6046,11 +6046,11 @@ function AddHabitModal(_ref12) {
       }
       if (!res.ok) return { error: null, category: 'Other' };
       if (data.valid === false) {
-        return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other' };
+        return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other', mindBody: data.mindBody || 'balance' };
       }
-      return { error: null, category: data.category || 'Other' };
+      return { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance' };
     } catch(e) {
-      return { error: null, category: 'Other' }; // fail open on network error
+      return { error: null, category: 'Other', mindBody: 'balance' }; // fail open on network error
     }
   }
 
@@ -6115,6 +6115,7 @@ function AddHabitModal(_ref12) {
     setValidating(false);
     if (l2result.error) { setNameError(l2result.error); return; }
     var inferredCategory = manualCategory || l2result.category || 'Other';
+    var inferredMindBody = l2result.mindBody || 'balance';
     // Validate frequency is selected
     if (!freqPreset) {
       alert('Please select a frequency.');
@@ -6202,6 +6203,7 @@ function AddHabitModal(_ref12) {
     onAdd({
       name: name.trim(),
       category: inferredCategory,
+      mindBody: inferredMindBody,
       timeRange: timeRange,
       freqLabel: freqLabel,
       durLabel: durLabel,
@@ -12492,6 +12494,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           habitId: habit.id,
           habitName: habit.name,
           habitCategory: habit.category || '',
+          habitMindBody: habit.mindBody || null,
           habitStreak: habit.streak || 0,
           habitDurLabel: habit.durLabel || '',
           habitTimeRange: habit.timeRange || '',
