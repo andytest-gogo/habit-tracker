@@ -12347,17 +12347,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         return Math.max(0, Math.round(100 - (stdDev / 6) * 100));
       }
 
-      // ── Habit Lifespan Score：壽命越長越好，但接近 21 天要懲罰 ──────────
-      function calcLifespanScore(myLifespan, uLifespan) {
-        // 壽命接近 21 天（<=25天）懲罰：這類習慣可能是為解鎖刷的
-        var MIN_SERIOUS_DAYS = 25;
-        var myPenalty = myLifespan <= MIN_SERIOUS_DAYS ? 0.6 : 1.0;
-        var uPenalty  = uLifespan  <= MIN_SERIOUS_DAYS ? 0.6 : 1.0;
-        // 兩人壽命差距相似度
-        var lifeDiff = Math.abs(myLifespan - uLifespan);
-        var rawScore = Math.max(0, 100 - Math.round(lifeDiff / Math.max(myLifespan, uLifespan) * 100));
-        // 任一方壽命太短都降分
-        return Math.round(rawScore * Math.min(myPenalty, uPenalty));
+      // ── Habit Lifespan Score：用打卡密度比對，反映真實習慣節奏 ──────────
+      function calcLifespanScore(myChecked, myLifespan, uChecked, uLifespan) {
+        var myDensity = myLifespan > 0 ? myChecked / myLifespan : 0;
+        var uDensity  = uLifespan  > 0 ? uChecked  / uLifespan  : 0;
+        if (myDensity === 0 || uDensity === 0) return 50; // 資料不足給中間分
+        var densityDiff = Math.abs(myDensity - uDensity);
+        return Math.max(0, 100 - Math.round(densityDiff / Math.max(myDensity, uDensity) * 100));
       }
 
       var myMindBody = getMindBody(habit.name);
@@ -12393,8 +12389,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           ? Math.max(0, 100 - Math.round(durDiff / Math.max(myDur, uDur) * 100))
           : 50; // 任一方沒填時長，給中間分而非假性 100
 
-        // 2. Habit Lifespan（含壽命懲罰）(25%)
-        var lifeScore = calcLifespanScore(myLifespan, uLifespan);
+        // 2. Habit Lifespan：打卡密度相似度（平均幾天打卡一次）(25%)
+        var lifeScore = calcLifespanScore(myChecked, myLifespan, uChecked, uLifespan);
 
         // 3. Mind-Body balance (20%)
         var mbScore = myMindBody === uMindBody ? 100 : (uMindBody === 'balance' || myMindBody === 'balance') ? 75 : 50;
