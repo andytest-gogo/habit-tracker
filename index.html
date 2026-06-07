@@ -2089,6 +2089,7 @@
 
 <!-- Supabase SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest" crossorigin="anonymous"></script>
 <!-- React -->
 <script>/* React 18 */
 /**
@@ -3539,10 +3540,92 @@ function _recordUploadFS() {
   }));
   return _recordUploadFS.apply(this, arguments);
 }
-function uploadToCloudinary(file, resourceType, onProgress) {
-  return _uploadToSupabaseStorage(file, resourceType, onProgress);
+/* ── HLS video helper：自動偵測 m3u8 並用 HLS.js 播放 ── */
+function attachHlsVideo(videoEl, src) {
+  if (!videoEl || !src) return;
+  if (src.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
+    var hls = new Hls();
+    hls.loadSource(src);
+    hls.attachMedia(videoEl);
+  } else {
+    videoEl.src = src;
+  }
 }
-async function _uploadToSupabaseStorage(file, resourceType, onProgress) {
+
+
+var BUNNY_STORAGE_ZONE     = 'habitapp-media';
+var BUNNY_STORAGE_API_KEY  = '4ade99f8-7528-4097-9ecc5512b453-872c-4be9';
+var BUNNY_STORAGE_ENDPOINT = 'https://sg.storage.bunnycdn.com';
+var BUNNY_CDN_HOSTNAME     = 'https://habitappmedia.b-cdn.net';
+var BUNNY_STREAM_LIBRARY   = '677933';
+var BUNNY_STREAM_API_KEY   = '77fcc99e-63c1-44a5-85ba0ba53a96-a0c2-416e';
+var BUNNY_STREAM_CDN       = 'https://vz-cc68b17b-afb.b-cdn.net';
+
+/* ── Upload image to Bunny Storage ── */
+async function _uploadToBunnyStorage(file, uid, onProgress) {
+  var _name = file.name || '';
+  var ext = (_name.includes('.') ? _name.split('.').pop() : '') || 'jpg';
+  var path = uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
+  var url = BUNNY_STORAGE_ENDPOINT + '/' + BUNNY_STORAGE_ZONE + '/' + path;
+
+  if (onProgress) onProgress(10);
+
+  var res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'AccessKey': BUNNY_STORAGE_API_KEY,
+      'Content-Type': file.type || 'application/octet-stream'
+    },
+    body: file
+  });
+  if (!res.ok) throw new Error('Bunny Storage upload failed: ' + res.status);
+
+  if (onProgress) onProgress(90);
+
+  var publicUrl = BUNNY_CDN_HOSTNAME + '/' + path;
+  return { url: publicUrl, publicId: path };
+}
+
+/* ── Upload video to Bunny Stream ── */
+async function _uploadToBunnyStream(file, uid, onProgress) {
+  // Step 1: Create video entry
+  var createRes = await fetch('https://video.bunnycdn.com/library/' + BUNNY_STREAM_LIBRARY + '/videos', {
+    method: 'POST',
+    headers: {
+      'AccessKey': BUNNY_STREAM_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ title: uid + '_' + Date.now() })
+  });
+  if (!createRes.ok) throw new Error('Bunny Stream create failed: ' + createRes.status);
+  var videoData = await createRes.json();
+  var videoId = videoData.guid;
+
+  if (onProgress) onProgress(10);
+
+  // Step 2: Upload video file
+  var uploadRes = await fetch('https://video.bunnycdn.com/library/' + BUNNY_STREAM_LIBRARY + '/videos/' + videoId, {
+    method: 'PUT',
+    headers: {
+      'AccessKey': BUNNY_STREAM_API_KEY,
+      'Content-Type': 'application/octet-stream'
+    },
+    body: file
+  });
+  if (!uploadRes.ok) throw new Error('Bunny Stream upload failed: ' + uploadRes.status);
+
+  if (onProgress) onProgress(90);
+
+  // Stream 播放網址格式
+  var publicUrl = BUNNY_STREAM_CDN + '/' + videoId + '/playlist.m3u8';
+  var thumbnailUrl = BUNNY_STREAM_CDN + '/' + videoId + '/thumbnail.jpg';
+  return { url: publicUrl, publicId: videoId, thumbnail: thumbnailUrl, isStream: true };
+}
+
+function uploadToCloudinary(file, resourceType, onProgress) {
+  return _uploadToBunny(file, resourceType, onProgress);
+}
+async function _uploadToBunny(file, resourceType, onProgress) {
   resourceType = resourceType || 'auto';
   onProgress = onProgress || null;
 
@@ -3565,24 +3648,14 @@ async function _uploadToSupabaseStorage(file, resourceType, onProgress) {
   var finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
   await checkQuotaFS(uid, uploadFile, isVideo);
 
-  // ③ Upload to Supabase Storage
-  var bucket = STORAGE_BUCKET_MEDIA; // images and videos both go to 'media' bucket
-  var _uploadName = uploadFile.name || file.name || '';
-  var ext = (_uploadName.includes('.') ? _uploadName.split('.').pop() : '') || (isVideo ? 'mp4' : 'jpg');
-  var path   = uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
-
-  if (onProgress) onProgress(10);
-
-  var { data: uploadData, error: uploadError } = await _supabase.storage
-    .from(bucket)
-    .upload(path, uploadFile, { contentType: uploadFile.type, upsert: false });
-
-  if (uploadError) throw new Error(uploadError.message || 'Upload failed');
-
-  if (onProgress) onProgress(90);
-
-  var { data: urlData } = _supabase.storage.from(bucket).getPublicUrl(path);
-  var publicUrl = urlData.publicUrl;
+  // ③ Upload to Bunny
+  if (onProgress) onProgress(5);
+  var result;
+  if (isVideo) {
+    result = await _uploadToBunnyStream(uploadFile, uid, onProgress);
+  } else {
+    result = await _uploadToBunnyStorage(uploadFile, uid, onProgress);
+  }
 
   // ④ Record quota in DB
   await recordUploadFS(uid, finalMB, isVideo,
@@ -3591,7 +3664,7 @@ async function _uploadToSupabaseStorage(file, resourceType, onProgress) {
 
   if (onProgress) onProgress(100);
 
-  return { url: publicUrl, publicId: path };
+  return result;
 }
 var mockGroups = [{
   id: 1,
@@ -4801,7 +4874,7 @@ function FeedCard(_ref5) {
   }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
   }, /*#__PURE__*/React.createElement("video", {
-    src: post.mediaUrl,
+    ref: function(el){ if(el) attachHlsVideo(el, post.mediaUrl); },
     controls: true,
     playsInline: true,
     preload: "metadata",
@@ -10486,11 +10559,9 @@ function PairWallPage(_ref_pw) {
     setPublishing(true);
     var ext = selectedFile.name.split('.').pop() || (mediaType === 'video' ? 'mp4' : 'jpg');
     var path = 'pair_posts/' + pair.id + '/' + user.uid + '_' + Date.now() + '.' + ext;
-    _supabase.storage.from(STORAGE_BUCKET_MEDIA).upload(path, selectedFile, { contentType: selectedFile.type, upsert: false })
+    _uploadToBunnyStorage(selectedFile, user.uid, null)
       .then(function(r) {
-        if (r.error) throw r.error;
-        var urlData = _supabase.storage.from(STORAGE_BUCKET_MEDIA).getPublicUrl(path);
-        var mediaUrl = urlData.data.publicUrl;
+        var mediaUrl = r.url;
         return _supabase.from('pair_posts').insert({ pair_id: pair.id, user_id: user.uid, media_url: mediaUrl, media_type: mediaType, caption: caption.trim() || null });
       })
       .then(function(r) {
@@ -10574,7 +10645,7 @@ function PairWallPage(_ref_pw) {
       ),
       React.createElement('div', { className: 'pw-media' },
         post.media_type === 'video'
-          ? React.createElement('video', { src: post.media_url, controls: true, playsInline: true, style: { width:'100%', height:'100%', objectFit:'cover' } })
+          ? React.createElement('video', { ref: function(el){ if(el) attachHlsVideo(el, post.media_url); }, controls: true, playsInline: true, style: { width:'100%', height:'100%', objectFit:'cover' } })
           : React.createElement('img', { src: post.media_url, alt: 'habit post', style: { width:'100%', height:'100%', objectFit:'cover' } })
       ),
       post.caption && React.createElement('div', { className: 'pw-caption' },
