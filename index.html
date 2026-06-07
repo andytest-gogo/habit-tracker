@@ -6104,7 +6104,7 @@ function AddHabitModal(_ref12) {
       var session = await _supabase.auth.getSession();
       var token = session.data.session && session.data.session.access_token;
       if (!token) return { skip: true }; // not logged in, skip validation
-      var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/validate-habit-name', {
+      var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/validate-habit-name-ts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
