@@ -6073,6 +6073,8 @@ function AddHabitModal(_ref12) {
     _useStateValidatingArr = _slicedToArray(_useStateValidating, 2),
     validating = _useStateValidatingArr[0],
     setValidating = _useStateValidatingArr[1];
+  // 即時防連點：ref 同步更新，不受 React state 非同步影響
+  var submittingRef = useRef(false);
   var _useStateNameError = useState(''),
     _useStateNameErrorArr = _slicedToArray(_useStateNameError, 2),
     nameError = _useStateNameErrorArr[0],
@@ -6174,6 +6176,10 @@ function AddHabitModal(_ref12) {
     return durPreset.label;
   };
   var handleAdd = async function handleAdd() {
+    // 防連點：若正在送出中，直接忽略後續點擊
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
     if (!name.trim()) {
       setNameError('Please enter a habit name.');
       return;
@@ -6284,6 +6290,10 @@ function AddHabitModal(_ref12) {
       dailyTarget: timesPerCycle,
       intervalDays: intervalDays
     });
+    } finally {
+      // 無論成功、驗證失敗或提前 return，都釋放鎖，避免按鈕永久卡死
+      submittingRef.current = false;
+    }
   };
   var isDurCustom = (durPreset === null || durPreset === void 0 ? void 0 : durPreset.value) === null;
   var isFreqCustom = (freqPreset === null || freqPreset === void 0 ? void 0 : freqPreset.periodUnit) === 'custom';
@@ -6507,8 +6517,9 @@ function AddHabitModal(_ref12) {
     onClick: onClose
   }, "Cancel"), /*#__PURE__*/React.createElement("button", {
     className: "button button-primary",
-    onClick: handleAdd
-  }, "Create"))));
+    onClick: handleAdd,
+    disabled: validating
+  }, validating ? "Creating..." : "Create"))));
 }
 
 /* ── SVG Donut Chart helper ── */
