@@ -6030,7 +6030,7 @@ function AddHabitModal(_ref12) {
     try {
       var session = await _supabase.auth.getSession();
       var token = session.data.session && session.data.session.access_token;
-      if (!token) return { error: null, category: 'Other' }; // not logged in, fail open
+      if (!token) return { skip: true }; // not logged in, skip validation
       var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/validate-habit-name', {
         method: 'POST',
         headers: {
@@ -6040,17 +6040,17 @@ function AddHabitModal(_ref12) {
         body: JSON.stringify({ habitName: val })
       });
       var data = await res.json();
-      // 429 = daily limit reached
-      if (res.status === 429) {
-        return { error: data.reason || 'Daily AI limit reached. Please try again tomorrow.', category: 'Other', limitReached: true };
+      if (!res.ok) return { skip: true }; // 伺服器錯誤，跳過審核讓用戶自行決定
+      // valid: null → Claude 暫時無法審核，跳過不擋
+      if (data.valid === null) {
+        return { skip: true };
       }
-      if (!res.ok) return { error: null, category: 'Other' };
       if (data.valid === false) {
         return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other', mindBody: data.mindBody || 'balance' };
       }
       return { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance' };
     } catch(e) {
-      return { error: null, category: 'Other', mindBody: 'balance' }; // fail open on network error
+      return { skip: true }; // 網路錯誤，跳過審核讓用戶自行決定
     }
   }
 
@@ -6114,6 +6114,7 @@ function AddHabitModal(_ref12) {
     var l2result = await layer2Check(name);
     setValidating(false);
     if (l2result.error) { setNameError(l2result.error); return; }
+    // skip: true → Claude 暫時無法審核，category 和 mindBody 用預設值，讓用戶繼續
     var inferredCategory = manualCategory || l2result.category || 'Other';
     var inferredMindBody = l2result.mindBody || 'balance';
     // Validate frequency is selected
@@ -12516,9 +12517,20 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         if (res.status === 429) {
           showMatchingError('Daily limit reached', data.message || 'You have used all 3 matches for today. Try again tomorrow.');
         } else {
-          // Non-429 API error → try fallback
+          // 503 = Claude 掛掉 → 走程式碼配對
           throw new Error('API_ERROR');
         }
+        return;
+      }
+
+      // ── 新增：處理 Claude 主動拒絕配對的情況 ─────────────────
+      if (data.noMatch) {
+        showMatchingError(
+          'No match found 🔍',
+          data.reason || 'No suitable partner found right now. Try again later.'
+        );
+        document.getElementById('mRemaining').textContent =
+          data.remaining !== undefined ? data.remaining : '—';
         return;
       }
 
