@@ -2706,7 +2706,7 @@ if (isFirebaseConfigured) {
       'avatar_public_id':'avatarPublicId','deleted_at':'deletedAt','deleted_by':'deletedBy',
       'age_verified':'ageVerified','age_verified_at':'ageVerifiedAt',
       'avatar_url':'avatarUrl',
-      'checked_dates':'checkedDates','streak':'streak','check_timestamps':'checkTimestamps','mind_body':'mindBody',
+      'checked_dates':'checkedDates','streak':'streak','check_timestamps':'checkTimestamps','mind_body':'mindBody','activity_type':'activityType',
       'user_name':'userName','user_avatar':'userAvatar','user_avatar_url':'userAvatarUrl',
       'challenge_visibility':'challengeVisibility','final_rate':'finalRate',
       'archived_at':'archivedAt','archived_habits':'archivedHabits'
@@ -3074,7 +3074,7 @@ if (isFirebaseConfigured) {
       'postText': 'post_text', 'isComment': 'is_comment', 'mediaType': 'media_type',
       'publicIds': 'public_ids', 'usernameChangedAt': 'username_changed_at',
       'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by',
-      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'mindBody': 'mind_body', 'userName': 'user_name', 'userAvatar': 'user_avatar',
+      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'mindBody': 'mind_body', 'activityType': 'activity_type', 'userName': 'user_name', 'userAvatar': 'user_avatar',
       'userAvatarUrl': 'user_avatar_url', 'challengeVisibility': 'challenge_visibility',
       'finalRate': 'final_rate', 'archivedAt': 'archived_at'
     };
@@ -6121,9 +6121,9 @@ function AddHabitModal(_ref12) {
         return { skip: true };
       }
       if (data.valid === false) {
-        return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other', mindBody: data.mindBody || 'balance' };
+        return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
       }
-      return { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance' };
+      return { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
     } catch(e) {
       return { skip: true }; // 網路錯誤，跳過審核讓用戶自行決定
     }
@@ -6196,6 +6196,7 @@ function AddHabitModal(_ref12) {
     // skip: true → Claude 暫時無法審核，category 和 mindBody 用預設值，讓用戶繼續
     var inferredCategory = manualCategory || l2result.category || 'Other';
     var inferredMindBody = l2result.mindBody || 'balance';
+    var inferredActivityType = l2result.activityType || 'other';
     // Validate frequency is selected
     if (!freqPreset) {
       alert('Please select a frequency.');
@@ -6284,6 +6285,7 @@ function AddHabitModal(_ref12) {
       name: name.trim(),
       category: inferredCategory,
       mindBody: inferredMindBody,
+      activityType: inferredActivityType,
       timeRange: timeRange,
       freqLabel: freqLabel,
       durLabel: durLabel,
@@ -7730,6 +7732,8 @@ function MainApp(_ref16) {
   var addHabit = function addHabit(_ref19) {
     var name = _ref19.name,
       category = _ref19.category,
+      mindBody = _ref19.mindBody,
+      activityType = _ref19.activityType,
       timeRange = _ref19.timeRange,
       freqLabel = _ref19.freqLabel,
       durLabel = _ref19.durLabel,
@@ -7753,6 +7757,8 @@ function MainApp(_ref16) {
     var habit = {
       name: name,
       category: category,
+      mindBody: mindBody || 'balance',
+      activityType: activityType || 'other',
       timeRange: timeRange,
       freqLabel: freqLabel || '',
       durLabel: durLabel || '',
@@ -12233,10 +12239,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       </div>
       <div class="result-breakdown">
         <div class="result-breakdown-lbl">Match breakdown</div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Avg Duration</div><div class="prog-track"><div class="prog-fill" id="rProg1" style="width:0%"></div></div><div class="prog-val" id="rVal1">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Habit Lifespan</div><div class="prog-track"><div class="prog-fill" id="rProg2" style="width:0%"></div></div><div class="prog-val" id="rVal2">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Activity Fit</div><div class="prog-track"><div class="prog-fill" id="rProg1" style="width:0%"></div></div><div class="prog-val" id="rVal1">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Rhythm Match</div><div class="prog-track"><div class="prog-fill" id="rProg2" style="width:0%"></div></div><div class="prog-val" id="rVal2">—</div></div>
         <div class="prog-row"><div class="prog-lbl" style="color:#555">Mind-Body</div><div class="prog-track"><div class="prog-fill" id="rProg3" style="width:0%"></div></div><div class="prog-val" id="rVal3">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Rhythm Score</div><div class="prog-track"><div class="prog-fill" id="rProg4" style="width:0%"></div></div><div class="prog-val" id="rVal4">—</div></div>
+        <div class="prog-row"><div class="prog-lbl" style="color:#555">Duration Fit</div><div class="prog-track"><div class="prog-fill" id="rProg4" style="width:0%"></div></div><div class="prog-val" id="rVal4">—</div></div>
       </div>
       <div class="result-ai-section">
         <div class="result-ai-lbl">Why Claude chose this match</div>
@@ -12442,14 +12448,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       }
 
       var myMindBody = getMindBody(habit.name);
+      var myActivityType = habit.activityType || 'other';
       var myRhythm = calcRhythmScore(myTimestamps);
-        var isMind = mindBodyKeywords.mind.some(function(k){ return n.includes(k); });
-        var isBody = mindBodyKeywords.body.some(function(k){ return n.includes(k); });
-        if (isMind && !isBody) return 'mind';
-        if (isBody && !isMind) return 'body';
-        return 'balance';
-      }
-      var myMindBody = getMindBody(habit.name);
 
       // Score each candidate
       var scored = candidates.map(function(u) {
@@ -12457,8 +12457,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         try { uHabits = typeof u.habits === 'string' ? JSON.parse(u.habits) : (u.habits || []); } catch(e) {}
         if (!Array.isArray(uHabits) || uHabits.length === 0) return null;
 
-        // Pick their best-match habit (highest streak)
-        var uHabit = uHabits.reduce(function(best, h) { return (h.streak||0) > (best.streak||0) ? h : best; }, uHabits[0]);
+        // ── 硬規則：只保留與申請者相同 activityType 的習慣 ──────────────────
+        var sameActivityHabits = uHabits.filter(function(h) {
+          return (h.activityType || 'other') === myActivityType;
+        });
+        if (sameActivityHabits.length === 0) return null; // 無同活動類型 → 淘汰
+
+        // Pick their best same-activity habit (highest streak)
+        var uHabit = sameActivityHabits.reduce(function(best, h) { return (h.streak||0) > (best.streak||0) ? h : best; }, sameActivityHabits[0]);
 
         var uDur = parseDurMins(uHabit.durLabel) || 30;
         var uLifespan = habitLifespanDays(uHabit) || 30;
@@ -12468,19 +12474,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         var uRhythm = calcRhythmScore(uTimestamps);
 
         // ── 4 indicators, each 0-100, weighted ───────────────────────────
-        // 1. Avg Duration similarity (30%)
+        // 1. Activity Fit / Duration similarity (30%)
         var durDiff = Math.abs(myDur - uDur);
         var durScore = myDur > 0 && uDur > 0
           ? Math.max(0, 100 - Math.round(durDiff / Math.max(myDur, uDur) * 100))
           : 50; // 任一方沒填時長，給中間分而非假性 100
 
-        // 2. Habit Lifespan：打卡密度相似度（平均幾天打卡一次）(25%)
+        // 2. Rhythm Match：打卡密度相似度（平均幾天打卡一次）(25%)
         var lifeScore = calcLifespanScore(myChecked, myLifespan, uChecked, uLifespan);
 
         // 3. Mind-Body balance (20%)
         var mbScore = myMindBody === uMindBody ? 100 : (uMindBody === 'balance' || myMindBody === 'balance') ? 75 : 50;
 
-        // 4. Rhythm Score：打卡時間標準差相似度 (25%)
+        // 4. Duration Fit：打卡時間標準差相似度 (25%)
         var rhythmDiff = Math.abs(myRhythm - uRhythm);
         var rhythmScore = Math.max(0, 100 - rhythmDiff);
 
@@ -12493,7 +12499,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           checkedCount: uChecked,
           score: overall,
           mindBody: uMindBody,
-          breakdown: { avgDuration: durScore, habitLifespan: lifeScore, mindBody: mbScore, rhythmScore: rhythmScore }
+          breakdown: { activityFit: durScore, rhythmScore: lifeScore, mindBody: mbScore, durationFit: rhythmScore }
         };
       }).filter(Boolean);
 
@@ -12505,7 +12511,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       // Show the fallback banner in the result
       best._isFallback = true;
-      best.reason = 'Matched by duration similarity (' + best.breakdown.avgDuration + '%), habit lifespan (' + best.breakdown.habitLifespan + '%), mind-body alignment, and consistency rhythm.';
+      best.reason = 'Matched by same activity type, with similar duration (' + best.breakdown.activityFit + '%), check-in rhythm (' + best.breakdown.rhythmScore + '%), mind-body alignment, and consistency.';
       return best;
     } catch(e) {
       throw e;
@@ -12578,6 +12584,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           habitName: habit.name,
           habitCategory: habit.category || '',
           habitMindBody: habit.mindBody || null,
+          habitActivityType: habit.activityType || 'other',
           habitStreak: habit.streak || 0,
           habitDurLabel: habit.durLabel || '',
           habitTimeRange: habit.timeRange || '',
@@ -12659,10 +12666,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     if (match.mindBody) document.getElementById('mMindBody').textContent = match.mindBody;
 
     var bd = match.breakdown || {};
-    [['rProg1','rVal1', bd.avgDuration||0],
-     ['rProg2','rVal2', bd.habitLifespan||0],
+    [['rProg1','rVal1', (bd.activityFit != null ? bd.activityFit : bd.avgDuration)||0],
+     ['rProg2','rVal2', (bd.rhythmScore != null ? bd.rhythmScore : bd.habitLifespan)||0],
      ['rProg3','rVal3', bd.mindBody||0],
-     ['rProg4','rVal4', bd.rhythmScore||0]].forEach(function(r) {
+     ['rProg4','rVal4', (bd.durationFit != null ? bd.durationFit : bd.rhythmScore)||0]].forEach(function(r) {
       document.getElementById(r[0]).style.width = r[2] + '%';
       document.getElementById(r[1]).textContent = r[2] + '%';
     });
