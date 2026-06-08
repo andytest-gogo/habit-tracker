@@ -6032,6 +6032,11 @@ function AddHabitModal(_ref12) {
     _useStateManualCatArr = _slicedToArray(_useStateManualCat, 2),
     manualCategory = _useStateManualCatArr[0],
     setManualCategory = _useStateManualCatArr[1];
+  // AI 是否暫時無法使用（呼叫不到或掛掉）→ 為 true 時才顯示手動分類選項
+  var _useStateAiUnavail = useState(false),
+    _useStateAiUnavailArr = _slicedToArray(_useStateAiUnavail, 2),
+    aiUnavailable = _useStateAiUnavailArr[0],
+    setAiUnavailable = _useStateAiUnavailArr[1];
 
   // Start/End Date (date string for <input type="date">)
   var todayStr = toISODay(now); // use local date, not UTC
@@ -6121,7 +6126,13 @@ function AddHabitModal(_ref12) {
         return { skip: true };
       }
       if (data.valid === false) {
-        return { error: data.reason || 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".', category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
+        // 防線：若後端 reason 含中文字元（舊版或 Haiku 偶發），一律改用英文預設訊息
+        var _reason = data.reason || '';
+        var _hasCJK = /[\u4e00-\u9fff]/.test(_reason);
+        var _enReason = (!_reason || _hasCJK)
+          ? 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".'
+          : _reason;
+        return { error: _enReason, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
       }
       return { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
     } catch(e) {
@@ -6175,6 +6186,15 @@ function AddHabitModal(_ref12) {
     }
     return durPreset.label;
   };
+  // AI 掛掉時的降級：手動選的是 category（大類），對應到該大類的通用 activityType
+  function activityTypeFromCategory(cat) {
+    var map = {
+      'Fitness': 'other-fitness', 'Nutrition': 'healthy-eating', 'Sleep': 'sleep-schedule',
+      'Mindfulness': 'meditation', 'Hydration': 'hydration', 'Learning': 'studying',
+      'Skincare': 'skincare', 'Other': 'other'
+    };
+    return map[cat] || 'other';
+  }
   var handleAdd = async function handleAdd() {
     // 防連點：若正在送出中，直接忽略後續點擊
     if (submittingRef.current) return;
@@ -6193,10 +6213,17 @@ function AddHabitModal(_ref12) {
     var l2result = await layer2Check(name);
     setValidating(false);
     if (l2result.error) { setNameError(l2result.error); return; }
-    // skip: true → Claude 暫時無法審核，category 和 mindBody 用預設值，讓用戶繼續
+    // skip: true → Claude 暫時無法審核/分類
+    if (l2result.skip) {
+      setAiUnavailable(true);
+      if (!manualCategory) {
+        setNameError('AI is temporarily unavailable. Please pick a category below, then tap Create again.');
+        return;
+      }
+    }
     var inferredCategory = manualCategory || l2result.category || 'Other';
     var inferredMindBody = l2result.mindBody || 'balance';
-    var inferredActivityType = l2result.activityType || 'other';
+    var inferredActivityType = l2result.activityType || (l2result.skip ? activityTypeFromCategory(manualCategory) : 'other');
     // Validate frequency is selected
     if (!freqPreset) {
       alert('Please select a frequency.');
@@ -6327,7 +6354,7 @@ function AddHabitModal(_ref12) {
     style: { color: 'var(--gray-500)', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }
   }, /*#__PURE__*/React.createElement("span", { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid var(--gray-400)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' } }), "Claude is validating and categorizing..."), nameError && /*#__PURE__*/React.createElement("div", {
     style: { color: '#dc2626', fontSize: 12, marginTop: 4, fontWeight: 500 }
-  }, nameError)), /*#__PURE__*/React.createElement("div", {
+  }, nameError)), aiUnavailable && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "section-divider"
   }), /*#__PURE__*/React.createElement("div", {
     className: "form-group"
@@ -6370,8 +6397,9 @@ function AddHabitModal(_ref12) {
     })
   ),
   manualCategory === '' && /*#__PURE__*/React.createElement("div", {
-    style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 6 }
-  }, "Skip to let AI infer the category from your habit name.")),
+    style: { fontSize: 11, color: '#b45309', marginTop: 6 }
+  }, "AI is temporarily unavailable \u2014 please pick a category for your habit.")),
+  ),
   /*#__PURE__*/React.createElement("div", {
     className: "section-divider"
   }), /*#__PURE__*/React.createElement("div", {
