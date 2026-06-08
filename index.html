@@ -573,16 +573,16 @@
         .cheer-av-stack { display:flex; }
         .cheer-av { width:20px; height:20px; border-radius:50%; border:2px solid var(--white); display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:500; margin-left:-6px; flex-shrink:0; }
         .cheer-av:first-child { margin-left:0; }
-        .cheer-total { font-size:11px; font-weight:700; color:#c2410c; display:inline-flex; align-items:baseline; gap:2px; }
+        .cheer-total { font-size:11px; font-weight:700; color:#993556; display:inline-flex; align-items:center; gap:2px; }
         .cheer-sep { width:1px; height:10px; background:var(--gray-200); flex-shrink:0; }
         .cheer-today-badge { display:inline-flex; align-items:center; background:#c2410c; color:#fff; border-radius:6px; padding:1px 6px; font-size:8px; font-weight:700; white-space:nowrap; }
-        .cheer-roll-wrap { display:inline-block; position:relative; overflow:hidden; height:14px; line-height:14px; min-width:10px; vertical-align:bottom; }
-        .cheer-roll-num { display:block; position:absolute; left:0; right:0; transition:transform .38s cubic-bezier(.4,0,.2,1),opacity .38s; }
+        .cheer-roll-wrap { display:inline-block; position:relative; overflow:hidden; height:14px; line-height:14px; min-width:10px; max-width:92px; vertical-align:bottom; text-align:right; }
+        .cheer-roll-num { display:block; position:absolute; left:0; right:0; text-align:right; transition:transform .38s cubic-bezier(.4,0,.2,1),opacity .38s; }
         /* completed habit / matching credits */
         .completed-section-label { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gray-400); margin:20px 0 8px; display:flex; align-items:center; gap:8px; }
         .completed-section-label::after { content:""; flex:1; height:1px; background:var(--gray-200); }
         .completed-done-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:9px; font-weight:700; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; white-space:nowrap; flex-shrink:0; }
-        .completed-cheer-static { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff7ed; border:1px solid #fed7aa; border-radius:20px; font-size:10px; font-weight:700; color:#c2410c; }
+        .completed-cheer-static { display:inline-flex; align-items:center; gap:2px; padding:3px 10px; background:#fbeaf0; border:1px solid #f4c0d1; border-radius:20px; font-size:10px; font-weight:700; color:#993556; }
         /* seek block */
         .seek-block { border:1px solid var(--gray-200); border-radius:8px; overflow:hidden; margin-bottom:10px; }
         .seek-top { padding:11px 13px; display:flex; align-items:center; gap:10px; }
@@ -7463,7 +7463,7 @@ function MainApp(_ref16) {
 
     var q = _sb
       ? _sb.from('habits')
-           .select('id, user_id, name, category, streak, challenge_visibility, today_cheer_count, display_name, checked_dates, user_avatar')
+           .select('id, user_id, name, category, streak, challenge_visibility, today_cheer_count, display_name, checked_dates, today_counts, user_avatar')
            .neq('user_id', user.uid)
            .or('challenge_visibility.is.null,challenge_visibility.neq.private')
       : null;
@@ -7482,6 +7482,7 @@ function MainApp(_ref16) {
               category: row.category,
               streak: liveStreak,
               checkedDates: checkedDates,
+              todayCounts: row.today_counts || {},
               challengeVisibility: row.challenge_visibility,
               todayCheerCount: row.today_cheer_count || 0,
               displayName: row.display_name || '',
@@ -7503,15 +7504,28 @@ function MainApp(_ref16) {
         });
 
     promise.then(function(list) {
-      // ── Filter 1: must have checked in TODAY (streak not broken) ──────────
-      // If today is not in checkedDates, the streak is broken → remove from challenger page
+      // 判定「今天是否至少打卡 1 次」：checkedDates 含今天(打滿) 或 todayCounts[今天]>=1(未打滿也算)
+      function checkedInToday(h) {
+        if ((h.checkedDates || []).includes(todayISO)) return true;
+        var tc = h.todayCounts || {};
+        return (tc[todayISO] || 0) >= 1;
+      }
+      // 判定「至少打卡過的天數」：checkedDates ∪ todayCounts(值>=1) 取聯集
+      function activeDayCount(h) {
+        var s = new Set((h.checkedDates || []).filter(Boolean));
+        var tc = h.todayCounts || {};
+        Object.keys(tc).forEach(function(k){ if ((tc[k]||0) >= 1) s.add(k); });
+        return s.size;
+      }
+      // ── Filter 1: 今天至少打卡 1 次（不需打滿 target）──────────────────────
       list = list.filter(function(h) {
-        return (h.checkedDates || []).includes(todayISO);
+        return checkedInToday(h);
       });
 
-      // ── Filter 2: live streak must be 1–20 ───────────────────────────────
+      // ── Filter 2: 至少打卡過 1 天，且尚未完成 21 天挑戰 ─────────────────────
       list = list.filter(function(h) {
-        return h.streak >= 1 && h.streak < CHALLENGE_COMPLETE_DAYS;
+        var d = activeDayCount(h);
+        return d >= 1 && d < CHALLENGE_COMPLETE_DAYS;
       });
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
@@ -7546,13 +7560,14 @@ function MainApp(_ref16) {
   // ── cheer number roll animation ─────────────────────────────────────────
   function rollCheerNum(el, val) {
     if (!el) return;
+    var _txt = (typeof val === 'number' ? val : Number(val) || 0).toLocaleString();
     var wrap = el.parentNode;
-    if (wrap) wrap.style.minWidth = Math.max(10, String(val).length * 8) + 'px';
+    if (wrap) wrap.style.minWidth = Math.min(92, Math.max(10, _txt.length * 8)) + 'px';
     var old = el.cloneNode(true);
-    old.style.cssText = 'display:block;position:absolute;left:0;right:0;transition:none;transform:translateY(0);opacity:1;';
+    old.style.cssText = 'display:block;position:absolute;left:0;right:0;text-align:right;transition:none;transform:translateY(0);opacity:1;';
     el.parentNode.appendChild(old);
-    el.textContent = val;
-    el.style.cssText = 'display:block;position:absolute;left:0;right:0;transition:none;transform:translateY(100%);opacity:0;';
+    el.textContent = _txt;
+    el.style.cssText = 'display:block;position:absolute;left:0;right:0;text-align:right;transition:none;transform:translateY(100%);opacity:0;';
     requestAnimationFrame(function(){requestAnimationFrame(function(){
       el.style.transition='transform .38s cubic-bezier(.4,0,.2,1),opacity .38s';
       el.style.transform='translateY(0)'; el.style.opacity='1';
@@ -9305,12 +9320,24 @@ function MainApp(_ref16) {
       var todayKey = currentDay;
       var progPct = calcCompletionRate(habit);
       var streak = habit.streak || 0;
-      // BUG FIX: 21-day progress = checkedDates.length (total days), NOT streak (consecutive).
+      // 21-day progress = checkedDates (打滿 target 的天數，維持原邏輯不變)
       var _nc21 = (habit.checkedDates || []).map(function(d) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
         var p = new Date(d); return isNaN(p) ? null : toISODay(p);
       }).filter(Boolean);
-      var daysCompleted = new Set(_nc21).size;
+      // ── 解鎖 AI 配對進度：只要當天打卡 ≥1 次就算這天（與 21 天挑戰的「打滿才算」脫鉤）──
+      // 來源 = checkedDates（打滿的天）∪ todayCounts 中值 ≥1 的天，取聯集去重
+      var _unlockDays = new Set(_nc21);
+      var _tc = habit.todayCounts || {};
+      Object.keys(_tc).forEach(function(dayKey) {
+        if ((_tc[dayKey] || 0) >= 1) {
+          var _norm = /^\d{4}-\d{2}-\d{2}$/.test(dayKey)
+            ? dayKey
+            : (function(){ var p = new Date(dayKey); return isNaN(p) ? null : toISODay(p); })();
+          if (_norm) _unlockDays.add(_norm);
+        }
+      });
+      var daysCompleted = _unlockDays.size;
       var isQualified = daysCompleted >= PARTNER_UNLOCK_DAYS;
       var unlockPct = Math.min(Math.round((daysCompleted / PARTNER_UNLOCK_DAYS) * 100), 100);
       var daysLeft = Math.max(PARTNER_UNLOCK_DAYS - daysCompleted, 0);
@@ -9412,15 +9439,21 @@ function MainApp(_ref16) {
           onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
         },
           React.createElement("div", { className: "cheer-av-stack" },
-            React.createElement("div", { className: "cheer-av", style:{ background:'#fde68a', color:'#92400e' } }, "💪")
+            React.createElement("div", { className: "cheer-av", style:{ background:'#fbeaf0', color:'#993556' } },
+              React.createElement("svg", { width:"11", height:"11", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true" },
+                React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
+              )
+            )
           ),
           React.createElement("div", { className: "cheer-total" },
-            "💪\u00a0",
+            React.createElement("svg", { width:"12", height:"12", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true", style:{ marginRight:'3px', flexShrink:0 } },
+              React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
+            ),
             React.createElement("span", { className: "cheer-roll-wrap" },
               React.createElement("span", {
                 className: "cheer-roll-num",
                 id: _cheerUid
-              }, habitCheerData ? habitCheerData.totalCount : 0)
+              }, (habitCheerData ? habitCheerData.totalCount : 0).toLocaleString())
             )
           ),
           React.createElement("div", { className: "cheer-sep" }),
@@ -9529,7 +9562,12 @@ function MainApp(_ref16) {
               /* cheer static */
               habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { className: "habit-card-divider" }),
               habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { style:{ padding:'9px 15px 10px' } },
-                React.createElement("span", { className: "completed-cheer-static" }, "💪 " + habitCheerData2.totalCount + " people cheered this journey")
+                React.createElement("span", { className: "completed-cheer-static" },
+                  React.createElement("svg", { width:"11", height:"11", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true", style:{ marginRight:'4px', flexShrink:0 } },
+                    React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
+                  ),
+                  habitCheerData2.totalCount.toLocaleString() + " people cheered this journey"
+                )
               )
             );
           }) // end completedHabits.map
