@@ -7545,15 +7545,14 @@ function MainApp(_ref16) {
         Object.keys(tc).forEach(function(k){ if ((tc[k]||0) >= 1) s.add(k); });
         return s.size;
       }
-      // ── Filter 1: 今天至少打卡 1 次（不需打滿 target）──────────────────────
+      // ── Filter 1: 今天必須已打卡（過了 00:00 但還沒打今天的卡 → 移除）────────
       list = list.filter(function(h) {
         return checkedInToday(h);
       });
 
-      // ── Filter 2: 至少打卡過 1 天，且尚未完成 21 天挑戰 ─────────────────────
+      // ── Filter 2: streak === 1（正在挑戰中；streak >= 2 代表已解鎖 AI 配對，畢業移除）──
       list = list.filter(function(h) {
-        var d = activeDayCount(h);
-        return d >= 1 && d < CHALLENGE_COMPLETE_DAYS;
+        return h.streak === 1;
       });
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
