@@ -3074,7 +3074,7 @@ if (isFirebaseConfigured) {
       'postText': 'post_text', 'isComment': 'is_comment', 'mediaType': 'media_type',
       'publicIds': 'public_ids', 'usernameChangedAt': 'username_changed_at',
       'avatarPublicId': 'avatar_public_id', 'deletedAt': 'deleted_at', 'deletedBy': 'deleted_by',
-      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'mindBody': 'mind_body', 'activityType': 'activity_type', 'userName': 'user_name', 'userAvatar': 'user_avatar',
+      'checkedDates': 'checked_dates', 'checkTimestamps': 'check_timestamps', 'mindBody': 'mind_body', 'activityType': 'activity_type', 'userName': 'user_name', 'userAvatar': 'user_avatar', 'durLabel': 'dur_label',
       'userAvatarUrl': 'user_avatar_url', 'challengeVisibility': 'challenge_visibility',
       'finalRate': 'final_rate', 'archivedAt': 'archived_at'
     };
@@ -7828,12 +7828,13 @@ function MainApp(_ref16) {
       db.collection('habits').add(_objectSpread(_objectSpread({}, habit), {}, {
         createdAt: FieldValue.serverTimestamp()
       })).catch(function(err) {
-        console.error('Failed to save habit:', err);
+        console.error('Failed to save habit — full error:', JSON.stringify(err), err);
         // Roll back optimistic update on error
         setHabits(function(prev) {
           return prev.filter(function(h) { return h.id !== tempId; });
         });
-        alert('Failed to save habit. Please try again.');
+        var errMsg = (err && err.message) ? err.message : JSON.stringify(err);
+        alert('Failed to save habit: ' + errMsg);
       });
     }
   };
