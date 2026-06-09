@@ -7493,7 +7493,6 @@ function MainApp(_ref16) {
       ? _sb.from('habits')
            .select('id, user_id, name, category, streak, challenge_visibility, today_cheer_count, display_name, checked_dates, today_counts, user_avatar')
            .neq('user_id', user.uid)
-           .not('challenge_visibility', 'eq', 'private')
       : null;
 
     var promise = q
