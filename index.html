@@ -8804,17 +8804,53 @@ function MainApp(_ref16) {
               return _context1.a(2);
             }
           case 13:
-            // ── AI content moderation ───────────────────────
+            // ── AI content moderation（先審後傳：圖片用 base64 送審，通過才上傳）──
             _context1.n = 30;
             return (function() {
-              var _modSession, _modToken, _modPayload, _modFetchRes;
+              var _modSession, _modToken, _modPayload;
               return _supabase.auth.getSession().then(function(s) {
                 _modSession = s;
                 _modToken = _modSession.data.session && _modSession.data.session.access_token;
                 if (!_modToken) return { approved: true };
                 _modPayload = { caption: postText.trim() || '' };
-                if (postMedia && postMedia.type === 'image' && postMedia.url) {
-                  _modPayload.imageUrl = postMedia.url;
+                // 先審後傳：圖片轉 base64 送審，不先上傳到 Bunny
+                if (postMedia && postMedia.type === 'image' && postMedia.file) {
+                  return new Promise(function(resolve, reject) {
+                    var MAX_SIZE = 800;
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                      var img = new Image();
+                      img.onload = function() {
+                        var canvas = document.createElement('canvas');
+                        var w = img.width, h = img.height;
+                        if (w > MAX_SIZE || h > MAX_SIZE) {
+                          if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+                          else       { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+                        }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+                        resolve(dataUrl.split(',')[1]);
+                      };
+                      img.onerror = function() { resolve(null); };
+                      img.src = e.target.result;
+                    };
+                    reader.onerror = function() { resolve(null); };
+                    reader.readAsDataURL(postMedia.file);
+                  }).then(function(b64) {
+                    if (b64) {
+                      _modPayload.imageBase64 = b64;
+                      _modPayload.imageMediaType = 'image/jpeg';
+                    }
+                    return fetch(
+                      'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content',
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _modToken },
+                        body: JSON.stringify(_modPayload)
+                      }
+                    );
+                  });
                 }
                 return fetch(
                   'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content',
