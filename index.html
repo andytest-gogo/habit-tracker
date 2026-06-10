@@ -7174,6 +7174,10 @@ function MainApp(_ref16) {
     postMedia = _useState92[0],
     setPostMedia = _useState92[1]; // { type:'image'|'video', url, file }
   var mediaPublicIdRef = useRef(null); // stable ref to avoid React state timing issues
+  var _useStateReviewing = useState(false),
+    _useStateReviewingArr = _slicedToArray(_useStateReviewing, 2),
+    isReviewing = _useStateReviewingArr[0],
+    setIsReviewing = _useStateReviewingArr[1];
   var fileInputRef = useRef(null);
   var videoInputRef = useRef(null);
   // Stable ref for the video preview element.
@@ -8805,6 +8809,7 @@ function MainApp(_ref16) {
             }
           case 13:
             // ── AI content moderation（先審後傳：圖片用 base64 送審，通過才上傳）──
+            setIsReviewing(true);
             _context1.n = 30;
             return (function() {
               var _modSession, _modToken, _modPayload;
@@ -8882,6 +8887,7 @@ function MainApp(_ref16) {
               };
               var _vtype = _modResult.violation || 'IRRELEVANT';
               alert('\u26a0\ufe0f Post not published\n\n' + (_vMsgs[_vtype] || "Your post couldn't be published. Please review our community guidelines."));
+              setIsReviewing(false);
               return _context1.a(2);
             }
             // ── End moderation ───────────────────────────────
@@ -8941,6 +8947,7 @@ function MainApp(_ref16) {
             var _curCount = parseInt(localStorage.getItem(_limitKeySave) || '0', 10);
             localStorage.setItem(_limitKeySave, String(_curCount + 1));
             localStorage.setItem('postCooldown_' + user.uid, String(Date.now()));
+            setIsReviewing(false);
             setPostText('');
             mediaPublicIdRef.current = null; setPostMedia(null);
             // Clear the stable video element after posting
@@ -10192,9 +10199,15 @@ function MainApp(_ref16) {
       className: "composer-char"
     }, postText.length, "/300"), /*#__PURE__*/React.createElement("button", {
       className: "composer-submit",
-      disabled: !postText.trim() && !postMedia || (postMedia === null || postMedia === void 0 ? void 0 : postMedia.uploading),
-      onClick: handlePostSubmit
-    }, postMedia !== null && postMedia !== void 0 && postMedia.uploading ? 'Uploading…' : 'Post')))), /*#__PURE__*/React.createElement("div", {
+      disabled: !postText.trim() && !postMedia || (postMedia === null || postMedia === void 0 ? void 0 : postMedia.uploading) || isReviewing,
+      onClick: handlePostSubmit,
+      style: isReviewing ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', opacity: 1, background: 'var(--gray-800)', cursor: 'not-allowed' } : {}
+    }, isReviewing
+      ? [
+          React.createElement('span', { key: 'spin', style: { width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 } }),
+          React.createElement('span', { key: 'txt' }, 'AI Reviewing…')
+        ]
+      : (postMedia !== null && postMedia !== void 0 && postMedia.uploading ? 'Uploading…' : 'Post'))))), /*#__PURE__*/React.createElement("div", {
       className: "my-posts-section"
     }, myPosts.length > 0 && /*#__PURE__*/React.createElement("div", {
       className: "section-title"
