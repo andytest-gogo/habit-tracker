@@ -8804,6 +8804,51 @@ function MainApp(_ref16) {
               return _context1.a(2);
             }
           case 13:
+            // ── AI content moderation ───────────────────────
+            _context1.n = 30;
+            return (function() {
+              var _modSession, _modToken, _modPayload, _modFetchRes;
+              return _supabase.auth.getSession().then(function(s) {
+                _modSession = s;
+                _modToken = _modSession.data.session && _modSession.data.session.access_token;
+                if (!_modToken) return { approved: true };
+                _modPayload = { caption: postText.trim() || '' };
+                if (postMedia && postMedia.type === 'image' && postMedia.url) {
+                  _modPayload.imageUrl = postMedia.url;
+                }
+                return fetch(
+                  'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _modToken },
+                    body: JSON.stringify(_modPayload)
+                  }
+                );
+              }).then(function(res) {
+                if (!res || res === true || typeof res.json !== 'function') return { approved: true };
+                if (!res.ok) return { approved: true };
+                return res.json();
+              }).catch(function(e) {
+                console.warn('Moderation failed, proceeding:', e);
+                return { approved: true };
+              });
+            })();
+          case 30:
+            var _modResult = _context1.v;
+            if (_modResult && _modResult.approved === false) {
+              var _vMsgs = {
+                SCAM:       'Your post appears to contain promotional or suspicious content. Please share your genuine habit progress!',
+                ADULT:      "Your post contains content that's not appropriate for our community. Please keep it focused on your habits.",
+                VIOLENCE:   'Your post contains content that may be harmful or threatening. Please keep our community safe.',
+                HATE:       'Your post contains language that may be hurtful to others. Please keep our community respectful.',
+                SPAM:       'Your post looks like spam or unrelated content. Share your real habit progress instead!',
+                IRRELEVANT: "Your post doesn't seem related to habits or wellness. Tell us how your habit is going today!"
+              };
+              var _vtype = _modResult.violation || 'IRRELEVANT';
+              alert('\u26a0\ufe0f Post not published\n\n' + (_vMsgs[_vtype] || "Your post couldn't be published. Please review our community guidelines."));
+              return _context1.a(2);
+            }
+            // ── End moderation ───────────────────────────────
             avatar = ((_ref28 = user.displayName || user.email) === null || _ref28 === void 0 || (_ref28 = _ref28[0]) === null || _ref28 === void 0 ? void 0 : _ref28.toUpperCase()) || 'U';
             newPost = {
               userId: user.uid,
