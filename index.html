@@ -10635,13 +10635,94 @@ function PairWallPage(_ref_pw) {
     setPreviewUrl(url);
   }
 
+  /* publish post — helpers */
+  function _imageFileToBase64(file) {
+    return new Promise(function(resolve, reject) {
+      var MAX_SIZE = 800;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          var canvas = document.createElement('canvas');
+          var w = img.width, h = img.height;
+          if (w > MAX_SIZE || h > MAX_SIZE) {
+            if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+            else       { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          resolve(dataUrl.split(',')[1]);
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function _moderateContent(caption, imageBase64, mediaType) {
+    try {
+      var session = await _supabase.auth.getSession();
+      var token = session.data.session && session.data.session.access_token;
+      if (!token) return { approved: true };
+      var payload = { caption: caption || '' };
+      if (imageBase64 && mediaType === 'image') {
+        payload.imageBase64 = imageBase64;
+        payload.imageMediaType = 'image/jpeg';
+      }
+      var res = await fetch(
+        'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(payload)
+        }
+      );
+      if (!res.ok) return { approved: true };
+      return await res.json();
+    } catch(e) {
+      console.warn('Moderation check failed, proceeding:', e);
+      return { approved: true };
+    }
+  }
+
+  var VIOLATION_MESSAGES = {
+    SCAM:       "Your post appears to contain promotional or suspicious content. Please share your genuine habit progress!",
+    ADULT:      "Your post contains content that's not appropriate for our community. Please keep it clean and focused on your habits.",
+    VIOLENCE:   "Your post contains content that may be harmful or threatening. Please keep our community safe and supportive.",
+    HATE:       "Your post contains language that may be hurtful to others. Please keep our community respectful and inclusive.",
+    SPAM:       "Your post looks like it may be spam or unrelated to your habits. Share your real progress instead!",
+    IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!"
+  };
+
   /* publish post */
   function publishPost() {
     if (!selectedFile || publishing) return;
     setPublishing(true);
-    var ext = selectedFile.name.split('.').pop() || (mediaType === 'video' ? 'mp4' : 'jpg');
-    var path = 'pair_posts/' + pair.id + '/' + user.uid + '_' + Date.now() + '.' + ext;
-    _uploadToBunnyStorage(selectedFile, user.uid, null)
+
+    var moderationPromise;
+    if (mediaType === 'image') {
+      moderationPromise = _imageFileToBase64(selectedFile)
+        .then(function(b64) { return _moderateContent(caption, b64, 'image'); })
+        .catch(function() { return _moderateContent(caption, null, 'image'); });
+    } else {
+      moderationPromise = _moderateContent(caption, null, 'video');
+    }
+
+    moderationPromise
+      .then(function(modResult) {
+        if (modResult.approved === false) {
+          var violationType = modResult.violation || 'IRRELEVANT';
+          var userMsg = VIOLATION_MESSAGES[violationType]
+            || "Your post couldn't be published. Please review our community guidelines.";
+          alert('⚠️ Post not published\n\n' + userMsg);
+          setPublishing(false);
+          return Promise.reject({ __modBlocked: true });
+        }
+        return _uploadToBunnyStorage(selectedFile, user.uid, null);
+      })
       .then(function(r) {
         var mediaUrl = r.url;
         return _supabase.from('pair_posts').insert({ pair_id: pair.id, user_id: user.uid, media_url: mediaUrl, media_type: mediaType, caption: caption.trim() || null });
@@ -10660,7 +10741,11 @@ function PairWallPage(_ref_pw) {
         // Update pair's last_post_at for inactivity tracking
         _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).catch(function(){});
       })
-      .catch(function(e) { alert('Upload failed: ' + e.message); setPublishing(false); });
+      .catch(function(e) {
+        if (e && e.__modBlocked) return;
+        alert('Upload failed: ' + e.message);
+        setPublishing(false);
+      });
   }
 
   function fmtTime(ts) {
