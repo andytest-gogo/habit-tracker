@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="Habit Tracker Pro - Community Edition">
-    <meta name="theme-color" content="#2d4a54">
+    <meta name="theme-color" content="#3d5e6a">
     <!-- ── Content Security Policy (NIS2 / NIST / OWASP baseline) ──
          Restricts script, style, image, connect, and frame sources to known trusted origins.
          'unsafe-inline' for scripts is required by inline React/Firebase SDK pattern;
@@ -95,18 +95,19 @@
             --text-secondary: #9a9a9a;
         }
         body[data-theme="dark"] {
-            --bg: #2d4a54;
-            --bg-card: #3a5a66;
-            --bg-subtle: #496a75;
-            --border-dk: #5a7d8a;
-            --text-primary: #c8f5f5;
+            --bg: #3d5e6a;
+            --bg-card: rgba(0,0,0,0.30);
+            --bg-subtle: rgba(0,0,0,0.20);
+            --border-dk: rgba(125,216,232,0.18);
+            --text-primary: #e8f4f8;
             --text-secondary: #a8c8d4;
-            /* cyan accent tokens */
             --blue-accent: #7dd8e8;
-            --blue-dim: #3a6a7a;
+            --blue-dim: rgba(125,216,232,0.25);
             --blue-muted: #8ab8c8;
         }
         html { background: var(--bg, var(--white)); }
+        body[data-theme="dark"] html,
+        body[data-theme="dark"] { background: linear-gradient(175deg, #3d5e6a 0%, #4a6e7a 30%, #3f6272 62%, #7389a8 100%) fixed !important; }
         * { margin:0; padding:0; box-sizing:border-box; }
         /* iOS Safari PWA resets: prevent system blue from leaking into button SVGs */
         button { color: inherit; -webkit-tap-highlight-color: transparent; }
@@ -118,6 +119,10 @@
             -webkit-font-smoothing: antialiased;
             overscroll-behavior-y: auto;
             transition: background .2s, color .2s;
+        }
+        body[data-theme="dark"] {
+            background: linear-gradient(175deg, #3d5e6a 0%, #4a6e7a 30%, #3f6272 62%, #7389a8 100%) fixed;
+            min-height: 100vh;
         }
         .app-container {
             max-width: 480px;
@@ -152,7 +157,8 @@
         body[data-theme="dark"] .pw-msg.me .pw-mbub { background:var(--text-primary); color:var(--bg); }
         body[data-theme="dark"] .pw-input-bar { background:var(--bg-card); border-top-color:var(--border-dk); }
         body[data-theme="dark"] .history-page,
-        body[data-theme="dark"] .profile-header { background:var(--bg); }
+        body[data-theme="dark"] .app-container { background: transparent; }
+        body[data-theme="dark"] .profile-header { background: transparent; }
         body[data-theme="dark"] .profile-stats { border-color:var(--border-dk); }
         body[data-theme="dark"] .profile-stat { border-right-color:var(--border-dk); }
         body[data-theme="dark"] .profile-stat-value { color:var(--blue-accent); }
@@ -247,6 +253,30 @@
         body[data-theme="dark"] .view-all-posts-btn:hover { border-color:var(--blue-accent); background:var(--bg-card); }
         body[data-theme="dark"] .cheer-detail-panel { background:var(--bg-subtle); border:1px solid var(--border-dk); }
         body[data-theme="dark"] .cheer-detail-big { color:var(--blue-accent); }
+
+        /* Gradient background: make feed/profile cards dark + legible text */
+        body[data-theme="dark"] .feed-card,
+        body[data-theme="dark"] .feed-content,
+        body[data-theme="dark"] .feed-card .feed-text,
+        body[data-theme="dark"] .feed-card .my-post-body { color: #e8f4f8; }
+        body[data-theme="dark"] .feed-text { color: #e8f4f8; }
+        body[data-theme="dark"] .my-post-body { color: #e8f4f8; }
+
+        /* Profile page */
+        body[data-theme="dark"] .profile-name { color: #e8f4f8; }
+        body[data-theme="dark"] .member-profile-name { color: #e8f4f8; }
+        body[data-theme="dark"] .member-profile-handle { color: #a8c8d4; }
+        body[data-theme="dark"] .member-profile-avatar { background: rgba(125,216,232,0.18); border-color: rgba(125,216,232,0.45); color: #7dd8e8; }
+
+        /* Make pw-chat (AI partner chat) also transparent */
+        body[data-theme="dark"] .pw-chat { background: transparent; }
+
+        /* feed-content transparent so gradient shows */
+        body[data-theme="dark"] .feed-content { background: transparent; }
+
+        /* nav-bar / tab-bar: semi-transparent so gradient bleeds through */
+        body[data-theme="dark"] .nav-bar,
+        body[data-theme="dark"] .tab-bar { background: rgba(0,0,0,0.35); border-color: rgba(125,216,232,0.15); }
         body[data-theme="dark"] .history-nav { border-bottom-color:var(--border-dk); }
         body[data-theme="dark"] .section-divider { background:var(--border-dk); }
         body[data-theme="dark"] .feed-content { background:var(--bg); }
