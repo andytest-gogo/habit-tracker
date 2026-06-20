@@ -7624,8 +7624,34 @@ function MainApp(_ref16) {
       });
 
       console.log('[Challenger DEBUG] 最終顯示:', list.length, list.map(function(h){return h.name;}));
-      setChallengers(list);
-      if (list.length > 0) setTodayPick(list[0]);
+
+      // ── Backfill：舊習慣的 habits row 沒存 display_name/user_avatar，從 users 表補抓 ──
+      var _needBackfill = list.filter(function(h){ return !h.displayName || !h.userAvatar; });
+      var _sbClient = window._supabaseClient;
+      if (_sbClient && _needBackfill.length > 0) {
+        var _uids = _needBackfill.map(function(h){ return h.userId; }).filter(Boolean);
+        _sbClient.from('users').select('id, display_name, avatar_url, photo_url').in('id', _uids).then(function(ur) {
+          if (!ur.error && ur.data) {
+            var _umap = {};
+            ur.data.forEach(function(u){ _umap[u.id] = u; });
+            list.forEach(function(h){
+              var u = _umap[h.userId];
+              if (u) {
+                if (!h.displayName) h.displayName = u.display_name || '';
+                if (!h.userAvatar) h.userAvatar = u.avatar_url || u.photo_url || null;
+              }
+            });
+          }
+          setChallengers(list);
+          if (list.length > 0) setTodayPick(list[0]);
+        }).catch(function(){
+          setChallengers(list);
+          if (list.length > 0) setTodayPick(list[0]);
+        });
+      } else {
+        setChallengers(list);
+        if (list.length > 0) setTodayPick(list[0]);
+      }
     }).catch(function(e) { console.error('[Challenger DEBUG] 查詢失敗(可能是 RLS 或缺欄位):', e && e.message, e); });
   }, [user, isFirebaseConfigured]);
 
@@ -9928,17 +9954,19 @@ function MainApp(_ref16) {
     };
 
     var renderChallengersTab = function() {
-      var nearEnd = challengers.filter(function(c) { return c.streak >= 2; });
-      var buildMomentum = challengers.filter(function(c) { return c.streak >= 8 && c.streak < 18; });
-      var justStarted = challengers.filter(function(c) { return c.streak >= 1 && c.streak <= 3; });
-      var midRange = challengers.filter(function(c) { return c.streak > 3 && c.streak < 8; });
+      // 依 streak 分組，但用「兜底」確保每一筆都會被某一組接住（streak 0~1 也要顯示）
+      var nearEnd = challengers.filter(function(c) { return c.streak >= 15; });
+      var buildMomentum = challengers.filter(function(c) { return c.streak >= 8 && c.streak < 15; });
+      var midRange = challengers.filter(function(c) { return c.streak >= 4 && c.streak < 8; });
+      var justStarted = challengers.filter(function(c) { return c.streak < 4; });
       function ChallengerCard(props) {
         var c = props.challenger;
         var ckey = c.userId + "_" + c.id;
         var cheered = !!cheerMap[ckey];
-        var displayName = c.displayName || "Anonymous";
+        // 匿名機制移除：直接顯示頭像、userid、習慣名稱
+        var displayName = c.displayName || (c.userId ? c.userId.slice(0, 8) : "User");
         var shortUid = c.userId ? c.userId.slice(0, 8) : "user";
-        var habitLabel = c.challengeVisibility === "public" ? (c.name || "Habit challenge") : "Habit challenge";
+        var habitLabel = c.name || "Habit challenge";
         var initials = displayName.slice(0, 2).toUpperCase();
         var pct = Math.min(Math.round((c.streak / CHALLENGE_COMPLETE_DAYS) * 100), 100);
         var isNearEnd = c.streak >= 15;
@@ -9997,10 +10025,10 @@ function MainApp(_ref16) {
           React.createElement("div", null, "No active challengers right now"),
           React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Keep a streak going to appear here!")
         ),
-        React.createElement(SegSection, { label: "\ud83d\udd25 Almost there \u00b7 Day 2", list: nearEnd }),
-        React.createElement(SegSection, { label: "\u26a1 Building momentum \u00b7 Day 8\u201317", list: buildMomentum }),
-        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20133", list: justStarted }),
-        React.createElement(SegSection, { label: "Day 4\u20137", list: midRange })
+        React.createElement(SegSection, { label: "\ud83d\udd25 Almost there \u00b7 Day 15+", list: nearEnd }),
+        React.createElement(SegSection, { label: "\u26a1 Building momentum \u00b7 Day 8\u201314", list: buildMomentum }),
+        React.createElement(SegSection, { label: "Day 4\u20137", list: midRange }),
+        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20133", list: justStarted })
       );
     };
 
@@ -10109,14 +10137,6 @@ function MainApp(_ref16) {
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, rate, "%"),
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Completion")
-    ),
-    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, profileCheerStats.total),
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Cheers")
-    ),
-    /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, profileCheerStats.supporters),
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Supporters")
     ))), /*#__PURE__*/React.createElement("div", {
       className: "composer-wrap"
     }, /*#__PURE__*/React.createElement("textarea", {
