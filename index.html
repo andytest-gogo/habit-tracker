@@ -590,7 +590,7 @@
         }
         .habit-card:hover { border-color:var(--black); }
         /* 右上角刪除 X */
-        .habit-card-x { position:absolute; top:8px; right:8px; width:26px; height:26px; border-radius:50%; border:none; background:transparent; color:var(--gray-400); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; transition:.15s; padding:0; }
+        .habit-card-x { position:absolute; top:5px; right:5px; width:24px; height:24px; border-radius:50%; border:none; background:transparent; color:var(--gray-400); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; transition:.15s; padding:0; }
         .habit-card-x:hover { background:var(--gray-100); color:#dc2626; }
         .habit-card-x svg { width:15px; height:15px; }
         /* Option A — 整合式 cheer bar */
@@ -665,7 +665,7 @@
         .partner-end-btn { font-size:9px; color:var(--gray-400); background:var(--white); border:1px solid var(--gray-200); padding:3px 9px; border-radius:4px; cursor:pointer; }
 
         /* habit progress bar (replaces check button) */
-        .habit-progress-section { flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+        .habit-progress-section { flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:6px; margin-right:22px; }
         .habit-progress-bar-wrap { width:80px; }
         .habit-prog-label { display:flex; justify-content:space-between; font-size:9px; color:var(--gray-400); font-weight:600; letter-spacing:.5px; margin-bottom:4px; }
         .habit-prog-track { height:5px; background:var(--gray-100); border-radius:0; overflow:hidden; }
@@ -7579,6 +7579,7 @@ function MainApp(_ref16) {
         });
 
     promise.then(function(list) {
+      console.log('[Challenger DEBUG] 查詢回傳習慣數(他人):', list.length, list.map(function(h){ return { name:h.name, checkedDates:h.checkedDates, todayCounts:h.todayCounts, visibility:h.challengeVisibility }; }));
       // 判定「今天是否至少打卡 1 次」：checkedDates 含今天(打滿) 或 todayCounts[今天]>=1(未打滿也算)
       function checkedInToday(h) {
         if ((h.checkedDates || []).includes(todayISO)) return true;
@@ -7593,6 +7594,7 @@ function MainApp(_ref16) {
         return s.size;
       }
       var yesterdayISO = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return toISODay(d); })();
+      console.log('[Challenger DEBUG] todayISO=', todayISO, 'yesterdayISO=', yesterdayISO, 'PARTNER_UNLOCK_DAYS=', PARTNER_UNLOCK_DAYS);
       // ── Filter 1: 今天或昨天至少打過 1 次卡（今天還沒打的也顯示，讓別人 cheer 鼓勵）
       list = list.filter(function(h) {
         if (checkedInToday(h)) return true;
@@ -7601,15 +7603,18 @@ function MainApp(_ref16) {
         if ((tc[yesterdayISO] || 0) >= 1) return true;
         return false;
       });
+      console.log('[Challenger DEBUG] Filter1 後(今天或昨天有打卡):', list.length, list.map(function(h){return h.name;}));
 
       // ── Filter 2: activeDayCount >= 1 且 < PARTNER_UNLOCK_DAYS（未解鎖 AI 配對的挑戰者）──
       list = list.filter(function(h) {
         var days = activeDayCount(h);
         return days >= 1 && days < PARTNER_UNLOCK_DAYS;
       });
+      console.log('[Challenger DEBUG] Filter2 後(activeDayCount 1~' + (PARTNER_UNLOCK_DAYS-1) + '):', list.length, list.map(function(h){return h.name + '(days=' + activeDayCount(h) + ')';}));
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
       list = pickOnePerUser(list);
+      console.log('[Challenger DEBUG] Filter3 後(每人一個):', list.length);
 
       // ── Sort: least cheered first, near-end prioritised ──────────────────
       list.sort(function(a, b) {
@@ -7618,9 +7623,10 @@ function MainApp(_ref16) {
         return (b.streak >= 15 ? 1 : 0) - (a.streak >= 15 ? 1 : 0);
       });
 
+      console.log('[Challenger DEBUG] 最終顯示:', list.length, list.map(function(h){return h.name;}));
       setChallengers(list);
       if (list.length > 0) setTodayPick(list[0]);
-    }).catch(function(e) { console.warn('loadChallengers', e); });
+    }).catch(function(e) { console.error('[Challenger DEBUG] 查詢失敗(可能是 RLS 或缺欄位):', e && e.message, e); });
   }, [user, isFirebaseConfigured]);
 
 
