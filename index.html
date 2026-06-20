@@ -9522,7 +9522,27 @@ function MainApp(_ref16) {
       var habitCheerData = habitCheers[habit.id] || null;
       var _catCol = getCatColours(habit.category);
       var _cheerUid = habit.id + '-cheer';
-      return /*#__PURE__*/React.createElement("div", {
+      var _cheerPanel = cheerPanelHabitId === habit.id ? (function() {
+        var _pc = habitCheers[habit.id] || { todayCount: 0, totalCount: 0 };
+        var _isQ = (function() {
+          var nc = (habit.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
+          return new Set(nc).size >= CHALLENGE_COMPLETE_DAYS;
+        })();
+        var _msg = _isQ ? 'People who cheered your completed journey' : habit.streak === 0 ? 'You had their support — restart your habit to get back on Challenger' : 'People cheering you on today';
+        return React.createElement("div", { className: "cheer-detail-panel", onClick: function(e){ e.stopPropagation(); } },
+          React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } },
+            _isQ ? 'Journey completed' : habit.streak === 0 ? 'Challenge ended' : "Today's encouragement"
+          ),
+          React.createElement("div", { className: "cheer-detail-big" }, _isQ ? _pc.totalCount : (_pc.todayCount || 0)),
+          React.createElement("div", { className: "cheer-detail-sub" },
+            _msg,
+            React.createElement("br", null),
+            "Total all-time cheers: " + (_pc.totalCount || 0)
+          )
+        );
+      })() : null;
+      return /*#__PURE__*/React.createElement(React.Fragment, null,
+      React.createElement("div", {
         key: habit.id,
         className: "habit-card",
         onClick: function onClick() { return setSelectedHabit(habit.id); }
@@ -9627,27 +9647,8 @@ function MainApp(_ref16) {
           )
         )
       ),
-      /* ── inline cheer panel（嵌在卡片內，避免與 + 按鈕重疊）── */
-      cheerPanelHabitId === habit.id && (function() {
-        var _pc = habitCheers[habit.id] || { todayCount: 0, totalCount: 0 };
-        var _isQ = (function() {
-          var nc = (habit.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
-          return new Set(nc).size >= CHALLENGE_COMPLETE_DAYS;
-        })();
-        var _msg = _isQ ? 'People who cheered your completed journey' : habit.streak === 0 ? 'You had their support — restart your habit to get back on Challenger' : 'People cheering you on today';
-        return React.createElement("div", { className: "cheer-detail-panel", onClick: function(e){ e.stopPropagation(); } },
-          React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } },
-            _isQ ? 'Journey completed' : habit.streak === 0 ? 'Challenge ended' : "Today's encouragement"
-          ),
-          React.createElement("div", { className: "cheer-detail-big" }, _isQ ? _pc.totalCount : (_pc.todayCount || 0)),
-          React.createElement("div", { className: "cheer-detail-sub" },
-            _msg,
-            React.createElement("br", null),
-            "Total all-time cheers: " + (_pc.totalCount || 0)
-          )
-        );
-      })()
-      ));
+      _cheerPanel
+      );
     }) // end inProgressHabits.map
         ), // end inProgressHabits section
         /* ── COMPLETED CHALLENGES SECTION ── */
