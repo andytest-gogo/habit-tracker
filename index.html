@@ -25,6 +25,8 @@
         img-src     'self' data: blob:
                     https://nvyyneoiocyjxbtcyxyi.supabase.co
                     https://lh3.googleusercontent.com
+                    https://habitappmedia.b-cdn.net
+                    https://vz-cc68b17b-afb.b-cdn.net
                     https://nvyyneoiocyjxbtcyxyi.supabase.co;
         connect-src 'self'
                     https://nvyyneoiocyjxbtcyxyi.supabase.co
@@ -34,9 +36,12 @@
                     https://identitytoolkit.googleapis.com
                     https://securetoken.googleapis.com
                     https://cdn.jsdelivr.net
+                    https://video.bunnycdn.com
                     https://umami-psi-opal.vercel.app;
         media-src   'self' blob:
-                    https://nvyyneoiocyjxbtcyxyi.supabase.co;
+                    https://nvyyneoiocyjxbtcyxyi.supabase.co
+                    https://vz-cc68b17b-afb.b-cdn.net
+                    https://habitappmedia.b-cdn.net;
         frame-src   'none';
         object-src  'none';
         base-uri    'self';
@@ -2141,6 +2146,7 @@
 
 <!-- Supabase SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/tus-js-client@4/dist/tus.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" crossorigin="anonymous"></script>
 <!-- React -->
 <script>/* React 18 */
@@ -3606,74 +3612,107 @@ function attachHlsVideo(videoEl, src) {
 
 
 var BUNNY_STORAGE_ZONE     = 'habitapp-media';
-var BUNNY_STORAGE_API_KEY  = '4ade99f8-7528-4097-9ecc5512b453-872c-4be9';
-var BUNNY_STORAGE_ENDPOINT = 'https://sg.storage.bunnycdn.com';
 var BUNNY_CDN_HOSTNAME     = 'https://habitappmedia.b-cdn.net';
 var BUNNY_STREAM_LIBRARY   = '677933';
-var BUNNY_STREAM_API_KEY   = '77fcc99e-63c1-44a5-85ba0ba53a96-a0c2-416e';
 var BUNNY_STREAM_CDN       = 'https://vz-cc68b17b-afb.b-cdn.net';
+// ⚠️ Bunny API 金鑰已移到 bunny-upload Edge Function（後端），前端不再持有任何金鑰。
+var BUNNY_UPLOAD_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/bunny-upload';
 
-/* ── Upload image to Bunny Storage ── */
+// 取得目前使用者的 access token（呼叫 edge function 用）
+async function _getAccessToken() {
+  try {
+    var s = await _supabase.auth.getSession();
+    return (s.data.session && s.data.session.access_token) || null;
+  } catch (e) { return null; }
+}
+
+// file → base64（去掉 data:...;base64, 前綴）
+function _fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(String(reader.result).split(',')[1]); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ── Upload image to Bunny Storage（透過 Edge Function 代理，不碰金鑰）── */
 async function _uploadToBunnyStorage(file, uid, onProgress) {
+  if (onProgress) onProgress(10);
+  var token = await _getAccessToken();
+  if (!token) throw new Error('Not authenticated');
+
   var _name = file.name || '';
   var ext = (_name.includes('.') ? _name.split('.').pop() : '') || 'jpg';
-  var path = uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
-  var url = BUNNY_STORAGE_ENDPOINT + '/' + BUNNY_STORAGE_ZONE + '/' + path;
+  var base64 = await _fileToBase64(file);
 
-  if (onProgress) onProgress(10);
+  if (onProgress) onProgress(40);
 
-  var res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'AccessKey': BUNNY_STORAGE_API_KEY,
-      'Content-Type': file.type || 'application/octet-stream'
-    },
-    body: file
+  var res = await fetch(BUNNY_UPLOAD_FN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ action: 'image', base64: base64, ext: ext, contentType: file.type || 'application/octet-stream' })
   });
-  if (!res.ok) throw new Error('Bunny Storage upload failed: ' + res.status);
+  if (!res.ok) throw new Error('Bunny image upload failed: ' + res.status);
+  var data = await res.json();
+  if (data.error) throw new Error(data.error);
 
   if (onProgress) onProgress(90);
-
-  var publicUrl = BUNNY_CDN_HOSTNAME + '/' + path;
-  return { url: publicUrl, publicId: path };
+  return { url: data.url, publicId: data.publicId };
 }
 
-/* ── Upload video to Bunny Stream ── */
+/* ── Upload video to Bunny Stream（Edge Function 產生 presigned 簽章，前端用 TUS 直傳，不碰金鑰）── */
 async function _uploadToBunnyStream(file, uid, onProgress) {
-  // Step 1: Create video entry
-  var createRes = await fetch('https://video.bunnycdn.com/library/' + BUNNY_STREAM_LIBRARY + '/videos', {
+  var token = await _getAccessToken();
+  if (!token) throw new Error('Not authenticated');
+
+  // Step 1: 跟 Edge Function 要 presigned 簽章
+  var createRes = await fetch(BUNNY_UPLOAD_FN, {
     method: 'POST',
-    headers: {
-      'AccessKey': BUNNY_STREAM_API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ title: uid + '_' + Date.now() })
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ action: 'create-video' })
   });
   if (!createRes.ok) throw new Error('Bunny Stream create failed: ' + createRes.status);
-  var videoData = await createRes.json();
-  var videoId = videoData.guid;
+  var info = await createRes.json();
+  if (info.error) throw new Error(info.error);
 
   if (onProgress) onProgress(10);
 
-  // Step 2: Upload video file
-  var uploadRes = await fetch('https://video.bunnycdn.com/library/' + BUNNY_STREAM_LIBRARY + '/videos/' + videoId, {
-    method: 'PUT',
-    headers: {
-      'AccessKey': BUNNY_STREAM_API_KEY,
-      'Content-Type': 'application/octet-stream'
-    },
-    body: file
+  // Step 2: 用 tus-js-client + presigned 簽章直傳到 Bunny（金鑰留在後端）
+  if (typeof tus === 'undefined' || !tus.Upload) {
+    throw new Error('Video upload library not loaded');
+  }
+  await new Promise(function(resolve, reject) {
+    var upload = new tus.Upload(file, {
+      endpoint: info.tusEndpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        AuthorizationSignature: info.signature,
+        AuthorizationExpire: String(info.expire),
+        VideoId: info.videoId,
+        LibraryId: String(info.libraryId)
+      },
+      metadata: { filetype: file.type, title: (file.name || 'video') },
+      onError: function(err) { reject(err); },
+      onProgress: function(sent, total) { if (onProgress) onProgress(10 + Math.round((sent / total) * 80)); },
+      onSuccess: function() { resolve(); }
+    });
+    upload.start();
   });
-  if (!uploadRes.ok) throw new Error('Bunny Stream upload failed: ' + uploadRes.status);
 
-  if (onProgress) onProgress(90);
-
-  // Stream 播放網址格式
-  var publicUrl = BUNNY_STREAM_CDN + '/' + videoId + '/playlist.m3u8';
-  var thumbnailUrl = BUNNY_STREAM_CDN + '/' + videoId + '/thumbnail.jpg';
-  return { url: publicUrl, publicId: videoId, thumbnail: thumbnailUrl, isStream: true };
+  if (onProgress) onProgress(95);
+  return {
+    url: info.playUrl,
+    publicId: info.videoId,
+    thumbnail: info.thumbnail,
+    isStream: true
+  };
 }
 
+function uploadToBunny(file, resourceType, onProgress) {
+  return _uploadToBunny(file, resourceType, onProgress);
+}
+// 舊名稱別名（向後相容，避免漏改的呼叫點壞掉）
 function uploadToCloudinary(file, resourceType, onProgress) {
   return _uploadToBunny(file, resourceType, onProgress);
 }
@@ -8713,7 +8752,7 @@ function MainApp(_ref16) {
             _context9.p = 2;
             resourceType = type === 'video' ? 'video' : 'image';
             _context9.n = 3;
-            return uploadToCloudinary(file, resourceType, function (pct) {
+            return uploadToBunny(file, resourceType, function (pct) {
               _setProgressDOM(pct);
             });
           case 3:
@@ -8780,7 +8819,7 @@ function MainApp(_ref16) {
             setUploadingAvatar(true);
             _context0.p = 2;
             _context0.n = 3;
-            return uploadToCloudinary(file, 'image', null);
+            return uploadToBunny(file, 'image', null);
           case 3:
             result = _context0.v;
             setAvatarUrl(result.url);
