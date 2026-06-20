@@ -9528,7 +9528,7 @@ function MainApp(_ref16) {
           var nc = (habit.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
           return new Set(nc).size >= CHALLENGE_COMPLETE_DAYS;
         })();
-        var _msg = _isQ ? 'People who cheered your completed journey' : habit.streak === 0 ? 'You had their support — restart your habit to get back on Challenger' : 'People cheering you on today';
+        var _msg = _isQ ? 'People who cheered your completed journey' : habit.streak === 0 ? 'You had their support - restart your habit to get back on Challenger' : 'People cheering you on today';
         return React.createElement("div", { className: "cheer-detail-panel", onClick: function(e){ e.stopPropagation(); } },
           React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } },
             _isQ ? 'Journey completed' : habit.streak === 0 ? 'Challenge ended' : "Today's encouragement"
@@ -9774,7 +9774,7 @@ function MainApp(_ref16) {
     var panelMsg = isQualifiedHabit
       ? 'People who cheered your completed journey'
       : ph.streak === 0
-        ? 'You had their support — restart your habit to get back on Challenger'
+        ? 'You had their support - restart your habit to get back on Challenger'
         : 'People cheering you on today';
     return React.createElement("div", { className: "cheer-detail-panel" },
       React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } },
