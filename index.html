@@ -4781,6 +4781,17 @@ function FeedCard(_ref5) {
             return db.collection('posts').doc(post.id).collection('comments').add(_commentData);
           case 3:
             _context3.n = 4;
+            // 立即 append 到本地 state，讓留言馬上顯示（不依賴 onSnapshot realtime）
+            setComments(function(prev) {
+              var _ref8d;
+              return [].concat(_toConsumableArray(prev), [{
+                id: Date.now().toString(),
+                text: _commentData.text,
+                userName: _commentData.userName,
+                userAvatar: _commentData.userAvatar,
+                createdAt: null
+              }]);
+            });
             return db.collection('posts').doc(post.id).update({
               comments: FieldValue.increment(1),
             commentCount: FieldValue.increment(1)
@@ -7578,14 +7589,20 @@ function MainApp(_ref16) {
         Object.keys(tc).forEach(function(k){ if ((tc[k]||0) >= 1) s.add(k); });
         return s.size;
       }
-      // ── Filter 1: 今天必須已打卡（過了 00:00 但還沒打今天的卡 → 移除）────────
+      var yesterdayISO = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return toISODay(d); })();
+      // ── Filter 1: 今天或昨天至少打過 1 次卡（今天還沒打的也顯示，讓別人 cheer 鼓勵）
       list = list.filter(function(h) {
-        return checkedInToday(h);
+        if (checkedInToday(h)) return true;
+        var tc = h.todayCounts || {};
+        if ((h.checkedDates || []).includes(yesterdayISO)) return true;
+        if ((tc[yesterdayISO] || 0) >= 1) return true;
+        return false;
       });
 
-      // ── Filter 2: streak === 1（正在挑戰中；streak >= 2 代表已解鎖 AI 配對，畢業移除）──
+      // ── Filter 2: activeDayCount >= 1 且 < PARTNER_UNLOCK_DAYS（未解鎖 AI 配對的挑戰者）──
       list = list.filter(function(h) {
-        return h.streak === 1;
+        var days = activeDayCount(h);
+        return days >= 1 && days < PARTNER_UNLOCK_DAYS;
       });
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
@@ -7723,6 +7740,16 @@ function MainApp(_ref16) {
     if (cheerMap[key]) return;
     var todayKey = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0,10);
     db.collection('habit_cheers').add({ senderId: user.uid, recipientId: challengerUid, habitId: habitId, date: todayKey, createdAt: new Date() }).then(function() {
+      // 同時更新 habits.today_cheer_count，讓 cheer 數即時反映
+      var _sb2 = window._supabaseClient;
+      if (_sb2) {
+        _sb2.rpc('increment_cheer_count', { habit_id: habitId }).catch(function(){
+          // fallback: 直接 update
+          _sb2.from('habits').select('today_cheer_count').eq('id', habitId).single().then(function(r){
+            if (!r.error) _sb2.from('habits').update({ today_cheer_count: (r.data.today_cheer_count||0)+1 }).eq('id', habitId);
+          });
+        });
+      }
       var _cm = {}; _cm[key] = true;
       setCheerMap(function(prev) { return Object.assign({}, prev, _cm); });
       setChallengers(function(prev) { return prev.map(function(c) { return c.id === habitId ? Object.assign({}, c, { todayCheerCount: (c.todayCheerCount||0)+1 }) : c; }); });
@@ -9578,20 +9605,13 @@ function MainApp(_ref16) {
             React.createElement("path", { strokeLinecap:"round", strokeLinejoin:"round", d:"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" })
           ), "Delete Habit")
         ),
-        /* right side: cheer block — always visible */
+        /* right side: cheer block — 只保留一個愛心 */
         React.createElement("div", {
           className: "cheer-block",
           onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(cheerPanelHabitId === habit.id ? null : habit.id); }
         },
-          React.createElement("div", { className: "cheer-av-stack" },
-            React.createElement("div", { className: "cheer-av", style:{ background:'#fbeaf0', color:'#993556' } },
-              React.createElement("svg", { width:"11", height:"11", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true" },
-                React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
-              )
-            )
-          ),
           React.createElement("div", { className: "cheer-total" },
-            React.createElement("svg", { width:"12", height:"12", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true", style:{ marginRight:'3px', flexShrink:0 } },
+            React.createElement("svg", { width:"14", height:"14", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true", style:{ marginRight:'3px', flexShrink:0 } },
               React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
             ),
             React.createElement("span", { className: "cheer-roll-wrap" },
@@ -9606,6 +9626,27 @@ function MainApp(_ref16) {
             "+", habitCheerData ? (habitCheerData.todayCount || 0) : 0, "\u00a0today"
           )
         )
+      ),
+      /* ── inline cheer panel（嵌在卡片內，避免與 + 按鈕重疊）── */
+      cheerPanelHabitId === habit.id && (function() {
+        var _pc = habitCheers[habit.id] || { todayCount: 0, totalCount: 0 };
+        var _isQ = (function() {
+          var nc = (habit.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
+          return new Set(nc).size >= CHALLENGE_COMPLETE_DAYS;
+        })();
+        var _msg = _isQ ? 'People who cheered your completed journey' : habit.streak === 0 ? 'You had their support — restart your habit to get back on Challenger' : 'People cheering you on today';
+        return React.createElement("div", { className: "cheer-detail-panel", onClick: function(e){ e.stopPropagation(); } },
+          React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--gray-400)", marginBottom: 6 } },
+            _isQ ? 'Journey completed' : habit.streak === 0 ? 'Challenge ended' : "Today's encouragement"
+          ),
+          React.createElement("div", { className: "cheer-detail-big" }, _isQ ? _pc.totalCount : (_pc.todayCount || 0)),
+          React.createElement("div", { className: "cheer-detail-sub" },
+            _msg,
+            React.createElement("br", null),
+            "Total all-time cheers: " + (_pc.totalCount || 0)
+          )
+        );
+      })()
       ));
     }) // end inProgressHabits.map
         ), // end inProgressHabits section
@@ -10485,7 +10526,7 @@ function MainApp(_ref16) {
     onClick: onLogout
   }, "Sign Out")), /*#__PURE__*/React.createElement("div", {
     className: "content"
-  }, activeTab === 'home' && renderHome(), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits })), activeTab === 'home' && cheerPanelHabitId && React.createElement(CheerDetailPanel, null), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
+  }, activeTab === 'home' && renderHome(), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits })), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
     onClose: function onClose() {
       return setShowModal(false);
     },
