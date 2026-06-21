@@ -42,7 +42,7 @@
                     https://nvyyneoiocyjxbtcyxyi.supabase.co
                     https://vz-cc68b17b-afb.b-cdn.net
                     https://habitappmedia.b-cdn.net;
-        frame-src   'none';
+        frame-src   https://iframe.mediadelivery.net;
         object-src  'none';
         base-uri    'self';
         form-action 'self';
@@ -3610,6 +3610,37 @@ function attachHlsVideo(videoEl, src) {
   }
 }
 
+/* ── 從 Bunny Stream m3u8 網址取出 videoId ── */
+function _extractBunnyVideoId(url) {
+  if (!url) return null;
+  var m = url.match(/\/([0-9a-fA-F-]{36})\/(?:playlist\.m3u8|play)/);
+  return m ? m[1] : null;
+}
+
+/* ── 統一的貼文影片渲染：Bunny Stream → iframe 嵌入播放器；其他 → 原生 video ── */
+function renderPostVideo(mediaUrl, opts) {
+  opts = opts || {};
+  var vid = _extractBunnyVideoId(mediaUrl);
+  if (vid) {
+    // Bunny Stream iframe 播放器：自動處理轉碼狀態、CORS、自適應畫質(ABR)
+    return React.createElement('div', { style: Object.assign({ position:'relative', width:'100%', aspectRatio:'16/9', background:'#000' }, opts.wrapStyle || {}) },
+      React.createElement('iframe', {
+        src: 'https://iframe.mediadelivery.net/embed/' + BUNNY_STREAM_LIBRARY + '/' + vid + '?autoplay=false&preload=true&responsive=true',
+        loading: 'lazy',
+        style: { border: 'none', position:'absolute', top:0, left:0, width:'100%', height:'100%' },
+        allow: 'accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen;',
+        allowFullScreen: true
+      })
+    );
+  }
+  // 非 Bunny Stream（舊的 mp4 / 其他）→ 原生 video + HLS fallback
+  return React.createElement('video', Object.assign({
+    ref: function(el){ if(el) attachHlsVideo(el, mediaUrl); },
+    controls: true, playsInline: true,
+    style: Object.assign({ width:'100%', display:'block' }, opts.style || {})
+  }, opts.videoProps || {}));
+}
+
 
 var BUNNY_STORAGE_ZONE     = 'habitapp-media';
 var BUNNY_CDN_HOSTNAME     = 'https://habitappmedia.b-cdn.net';
@@ -4955,19 +4986,7 @@ function FeedCard(_ref5) {
     className: "feed-media-placeholder"
   }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, /*#__PURE__*/React.createElement("video", {
-    ref: function(el){ if(el) attachHlsVideo(el, post.mediaUrl); },
-    controls: true,
-    playsInline: true,
-    preload: "metadata",
-    style: {
-      width: '100%',
-      height: 260,
-      objectFit: 'contain',
-      display: 'block',
-      background: '#000'
-    }
-  }))), /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' } }))), /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat(post.liked ? ' liked' : ''),
@@ -11062,7 +11081,7 @@ function PairWallPage(_ref_pw) {
       ),
       React.createElement('div', { className: 'pw-media' },
         post.media_type === 'video'
-          ? React.createElement('video', { ref: function(el){ if(el) attachHlsVideo(el, post.media_url); }, controls: true, playsInline: true, style: { width:'100%', height:'100%', objectFit:'cover' } })
+          ? renderPostVideo(post.media_url, { wrapStyle: { aspectRatio:'auto', height:'100%' }, style: { width:'100%', height:'100%', objectFit:'cover' } })
           : React.createElement('img', { src: post.media_url, alt: 'habit post', style: { width:'100%', height:'100%', objectFit:'cover' } })
       ),
       post.caption && React.createElement('div', { className: 'pw-caption' },
