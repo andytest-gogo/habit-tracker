@@ -1963,9 +1963,137 @@ function renderUsers(f){
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
       '<td style="font-size:11px;color:var(--g500);white-space:nowrap">'+nameChangedHtml+'</td>'+
-      '<td><button class="del" onclick="deleteUserData(\''+safeUid+'\',\''+safeName+'\')" title="Delete all Firestore data">Delete Data</button></td>'+
+      '<td><button class="del" style="background:#475569;margin-right:4px" onclick="viewUserMedia(\''+safeUid+'\',\''+safeName+'\')" title="View &amp; manage Bunny media">📁 Media</button>'+
+      '<button class="del" onclick="deleteUserData(\''+safeUid+'\',\''+safeName+'\')" title="Delete all data + Bunny media">Delete Data</button></td>'+
       '</tr>';
   }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 管理員：瀏覽 / 刪除某用戶在 Bunny 上的所有圖片與影片
+// ════════════════════════════════════════════════════════════════════
+var BUNNY_ADMIN_FN = SUPABASE_URL + '/functions/v1/bunny-admin';
+
+async function _adminToken() {
+  try {
+    var r = await _authClient.auth.getSession();
+    return (r.data.session && r.data.session.access_token) || null;
+  } catch(e) { return null; }
+}
+
+function _fmtBytes(b) {
+  if (!b || b < 1024) return (b||0) + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+async function viewUserMedia(uid, name) {
+  var modal = document.getElementById('mediaModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'mediaModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = function(e){ if(e.target===modal) modal.style.display='none'; };
+    modal.innerHTML = '<div style="background:#fff;max-width:780px;width:100%;max-height:85vh;overflow:auto;border-radius:6px;padding:0;color:#1a1a1a">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff">' +
+        '<div><div id="mmTitle" style="font-weight:800;font-size:15px"></div><div id="mmSub" style="font-size:11px;color:#999"></div></div>' +
+        '<button onclick="document.getElementById(\'mediaModal\').style.display=\'none\'" style="border:none;background:none;font-size:22px;cursor:pointer;color:#999">&times;</button>' +
+      '</div>' +
+      '<div id="mmBody" style="padding:20px"></div>' +
+    '</div>';
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  document.getElementById('mmTitle').textContent = '📁 ' + name + ' — Media';
+  document.getElementById('mmSub').textContent = 'UID: ' + uid;
+  var body = document.getElementById('mmBody');
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading from Bunny…</div>';
+
+  var token = await _adminToken();
+  if (!token) { body.innerHTML = '<div style="color:#dc2626;padding:20px">Not authenticated.</div>'; return; }
+
+  try {
+    var resp = await fetch(BUNNY_ADMIN_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'list-user-media', uid: uid })
+    });
+    if (!resp.ok) {
+      var et = await resp.text();
+      body.innerHTML = '<div style="color:#dc2626;padding:20px">Failed (' + resp.status + '): ' + et + '</div>';
+      return;
+    }
+    var data = await resp.json();
+    _renderMediaModal(uid, name, data);
+  } catch(e) {
+    body.innerHTML = '<div style="color:#dc2626;padding:20px">Error: ' + e.message + '</div>';
+  }
+}
+
+function _renderMediaModal(uid, name, data) {
+  var body = document.getElementById('mmBody');
+  var imgs = data.images || [], vids = data.videos || [];
+  document.getElementById('mmSub').textContent = 'UID: ' + uid + ' · ' + imgs.length + ' images · ' + vids.length + ' videos';
+
+  if (imgs.length === 0 && vids.length === 0) {
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#999">No media found for this user on Bunny.</div>';
+    return;
+  }
+
+  var html = '';
+  if (imgs.length) {
+    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#666;margin-bottom:10px">Images (' + imgs.length + ')</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px">';
+    imgs.forEach(function(f){
+      html += '<div style="border:1px solid #eee;border-radius:4px;overflow:hidden">' +
+        '<img src="' + f.url + '" style="width:100%;height:110px;object-fit:cover;display:block" onerror="this.style.opacity=.3">' +
+        '<div style="padding:6px 8px"><div style="font-size:9px;color:#999">' + _fmtBytes(f.size) + '</div>' +
+        '<button class="del" style="width:100%;margin-top:4px;font-size:10px" onclick="adminDeleteMedia(\'' + uid + '\',\'' + name.replace(/'/g,"&#39;") + '\',{path:\'' + f.path + '\'},this)">Delete</button></div>' +
+      '</div>';
+    });
+    html += '</div>';
+  }
+  if (vids.length) {
+    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#666;margin-bottom:10px">Videos (' + vids.length + ')</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">';
+    vids.forEach(function(v){
+      html += '<div style="border:1px solid #eee;border-radius:4px;overflow:hidden">' +
+        '<img src="' + v.thumbnail + '" style="width:100%;height:100px;object-fit:cover;display:block;background:#000" onerror="this.style.opacity=.2">' +
+        '<div style="padding:6px 8px"><div style="font-size:9px;color:#999">' + _fmtBytes(v.size) + ' · ' + (v.status||'') + '</div>' +
+        '<button class="del" style="width:100%;margin-top:4px;font-size:10px" onclick="adminDeleteMedia(\'' + uid + '\',\'' + name.replace(/'/g,"&#39;") + '\',{videoId:\'' + v.videoId + '\'},this)">Delete</button></div>' +
+      '</div>';
+    });
+    html += '</div>';
+  }
+  body.innerHTML = html;
+}
+
+async function adminDeleteMedia(uid, name, target, btn) {
+  if (!confirm('Delete this media permanently from Bunny?\n\nThis cannot be undone.')) return;
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  var token = await _adminToken();
+  if (!token) { alert('Not authenticated.'); btn.disabled=false; btn.textContent='Delete'; return; }
+  try {
+    var bodyObj = { action: 'delete-media' };
+    if (target.path) bodyObj.path = target.path;
+    if (target.videoId) bodyObj.videoId = target.videoId;
+    bodyObj.uid = uid;
+    var resp = await fetch(BUNNY_ADMIN_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(bodyObj)
+    });
+    var res = await resp.json();
+    if (resp.ok && res.ok) {
+      btn.closest('div[style*="border"]').style.display = 'none';
+    } else {
+      alert('Delete failed: ' + (res.error || resp.status));
+      btn.disabled = false; btn.textContent = 'Delete';
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Delete';
+  }
 }
 
 function deleteUserData(uid, name){
@@ -1997,6 +2125,27 @@ function deleteUserData(uid, name){
 
   // Blacklist UIDs immediately so onSnapshot cannot re-insert them
   allUidsToDelete.forEach(function(u){ _deletedUids.add(u); });
+
+  // ── 連動清除 Bunny 上每個 uid 的所有圖片與影片 ──
+  (async function(){
+    var token = await _adminToken();
+    if (!token) { console.warn('[AdminDelete] 無 token，略過 Bunny 清除'); return; }
+    for (var delUid of Array.from(allUidsToDelete)) {
+      try {
+        var resp = await fetch(BUNNY_ADMIN_FN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ action: 'delete-user-media', uid: delUid })
+        });
+        if (resp.ok) {
+          var r = await resp.json();
+          console.log('[AdminDelete] Bunny 媒體已清除 ' + delUid + ':', r);
+        } else {
+          console.warn('[AdminDelete] Bunny 清除失敗 ' + delUid + ':', resp.status);
+        }
+      } catch(e) { console.warn('[AdminDelete] Bunny 清除錯誤:', e.message); }
+    }
+  })();
 
   var tasks = [];
   allUidsToDelete.forEach(function(delUid){
