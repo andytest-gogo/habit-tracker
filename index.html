@@ -3617,6 +3617,37 @@ function _extractBunnyVideoId(url) {
   return m ? m[1] : null;
 }
 
+/* ── 模組層級：刪貼文時連動刪 Bunny 媒體（供各元件共用）── */
+function _deletePostBunnyMedia(post, user) {
+  if (!post || !user) return;
+  var hasImg = post.hasImage || post.has_image;
+  var hasVid = post.hasVideo || post.has_video;
+  var mediaUrl = post.mediaUrl || post.media_url;
+  var publicId = post.mediaPublicId || post.media_public_id;
+  if (!hasImg && !hasVid) return; // 純文字貼文不用刪 Bunny
+
+  var target = null;
+  if (hasVid) {
+    var vid = _extractBunnyVideoId(mediaUrl) || publicId;
+    if (vid) target = { videoId: vid };
+  } else if (hasImg) {
+    if (publicId) target = { path: publicId };
+  }
+  if (!target) return;
+
+  _supabase.auth.getSession().then(function(s) {
+    var token = s.data.session && s.data.session.access_token;
+    if (!token) return;
+    var body = Object.assign({ action: 'delete-media', uid: user.uid }, target);
+    fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/bunny-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    }).then(function(r){ if(r.ok) console.log('[DeletePost] Bunny 媒體已刪除', target); })
+      .catch(function(e){ console.warn('[DeletePost] Bunny 刪除失敗', e.message); });
+  }).catch(function(){});
+}
+
 /* ── 統一的貼文影片渲染：Bunny Stream → iframe 嵌入播放器；其他 → 原生 video ── */
 function renderPostVideo(mediaUrl, opts) {
   opts = opts || {};
@@ -4861,21 +4892,41 @@ function FeedCard(_ref5) {
       IRRELEVANT: 'Your comment was flagged by our community filter. Please keep comments respectful and supportive.'
     };
 
-    // ── 留言文字審查（Claude API via moderate-content edge function）──
+    // ── 留言文字審查（先查快取，命中就不呼叫 Claude）──
     function _moderateCommentText() {
       try {
-        return _supabase.auth.getSession().then(function(s) {
-          var token = s.data.session && s.data.session.access_token;
-          if (!token) return { approved: true };
-          return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ caption: _text })
-          }).then(function(res) {
-            if (!res || !res.ok || typeof res.json !== 'function') return { approved: true };
-            return res.json();
-          }).catch(function(e) { console.warn('[Comment] Moderation failed, proceeding:', e); return { approved: true }; });
-        }).catch(function() { return { approved: true }; });
+        // 1) 先查共享快取（前端只能讀，不能寫；寫入由 edge function 用 service_role 處理）
+        var _ck = 'mod:' + String(_text).trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 800);
+        return _supabase.from('ai_cache').select('result').eq('cache_key', _ck).maybeSingle().then(function(cr) {
+          if (cr && !cr.error && cr.data && cr.data.result) {
+            return cr.data.result; // 命中快取，不呼叫 Claude
+          }
+          // 2) 沒命中 → 呼叫 Claude（edge function 內部會把結果寫進快取）
+          return _supabase.auth.getSession().then(function(s) {
+            var token = s.data.session && s.data.session.access_token;
+            if (!token) return { approved: true };
+            return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({ caption: _text })
+            }).then(function(res) {
+              if (!res || !res.ok || typeof res.json !== 'function') return { approved: true };
+              return res.json();
+            }).catch(function(e) { console.warn('[Comment] Moderation failed, proceeding:', e); return { approved: true }; });
+          }).catch(function() { return { approved: true }; });
+        }).catch(function() {
+          // 快取查詢失敗 → 退回直接呼叫 Claude
+          return _supabase.auth.getSession().then(function(s) {
+            var token = s.data.session && s.data.session.access_token;
+            if (!token) return { approved: true };
+            return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({ caption: _text })
+            }).then(function(res) { return (res && res.ok && typeof res.json==='function') ? res.json() : { approved: true }; })
+              .catch(function() { return { approved: true }; });
+          }).catch(function() { return { approved: true }; });
+        });
       } catch(e) { return Promise.resolve({ approved: true }); }
     }
 
@@ -5253,11 +5304,17 @@ function UserPostsPage(_ref_upp) {
   function handleDeleteInPage(postId) {
     if (!user) return;
     if (!window.confirm('Delete this post? This cannot be undone.')) return;
+    var _dp = allPosts.find(function(p){ return p.id === postId; });
     setAllPosts(function(prev) { return prev.filter(function(p){ return p.id !== postId; }); });
     if (isFirebaseConfigured) {
-      db.collection('posts').doc(postId).delete().catch(function(err) {
+      db.collection('posts').doc(postId).delete().then(function() {
+        // 連動刪 Bunny 媒體
+        _deletePostBunnyMedia(_dp, user);
+      }).catch(function(err) {
         alert('Delete failed: ' + err.message);
       });
+    } else {
+      _deletePostBunnyMedia(_dp, user);
     }
     if (onPostDeleted) onPostDeleted(postId);
   }
@@ -6204,10 +6261,35 @@ function AddHabitModal(_ref12) {
     return null; // pass
   }
 
+  // ── 共享 AI 快取 helper（減少重複的 Claude 呼叫）──
+  function _cacheKeyNorm(s) {
+    return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 800);
+  }
+  async function _aiCacheGet(type, input) {
+    try {
+      var key = type + ':' + _cacheKeyNorm(input);
+      var r = await _supabase.from('ai_cache').select('result').eq('cache_key', key).maybeSingle();
+      if (r && !r.error && r.data) return r.data.result;
+    } catch(e) {}
+    return null;
+  }
+  async function _aiCacheSet(type, input, result) {
+    try {
+      var key = type + ':' + _cacheKeyNorm(input);
+      await _supabase.from('ai_cache').upsert(
+        { cache_key: key, type: type, result: result, updated_at: new Date().toISOString() },
+        { onConflict: 'cache_key' }
+      );
+    } catch(e) {}
+  }
+
   // ── Layer 2: Claude Haiku — validate + categorize in ONE Edge Function call ─
   // Returns { error: string|null, category: string }
   // API key stays safely on the server, never exposed to the browser.
   async function layer2Check(val) {
+    // ── 先查快取：同一個習慣名稱驗證過就直接用，不再呼叫 Claude ──
+    var _cached = await _aiCacheGet('habit', val);
+    if (_cached) return _cached;
     try {
       var session = await _supabase.auth.getSession();
       var token = session.data.session && session.data.session.access_token;
@@ -6222,10 +6304,11 @@ function AddHabitModal(_ref12) {
       });
       var data = await res.json();
       if (!res.ok) return { skip: true }; // 伺服器錯誤，跳過審核讓用戶自行決定
-      // valid: null → Claude 暫時無法審核，跳過不擋
+      // valid: null → Claude 暫時無法審核，跳過不擋（不快取暫時性錯誤）
       if (data.valid === null) {
         return { skip: true };
       }
+      var _result;
       if (data.valid === false) {
         // 防線：若後端 reason 含中文字元（舊版或 Haiku 偶發），一律改用英文預設訊息
         var _reason = data.reason || '';
@@ -6233,9 +6316,13 @@ function AddHabitModal(_ref12) {
         var _enReason = (!_reason || _hasCJK)
           ? 'Habit name is not specific enough. Try something like "Run 20 min every morning" or "Read before bed".'
           : _reason;
-        return { error: _enReason, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
+        _result = { error: _enReason, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
+      } else {
+        _result = { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
       }
-      return { error: null, category: data.category || 'Other', mindBody: data.mindBody || 'balance', activityType: data.activityType || 'other' };
+      // ── 存進快取（只快取確定的結果，skip 不存）──
+      _aiCacheSet('habit', val, _result);
+      return _result;
     } catch(e) {
       return { skip: true }; // 網路錯誤，跳過審核讓用戶自行決定
     }
@@ -8465,17 +8552,22 @@ function MainApp(_ref16) {
   }();
 
   /* ── Delete post (own posts only) — syncs feed + myPosts + Firestore ── */
+  // ── 刪貼文時連動刪除 Bunny 上的圖片/影片，避免孤兒檔案（用模組層級 _deletePostBunnyMedia）──
+
   var handleDeletePost = function handleDeletePost(postId) {
     if (!user) return;
-    // Optimistic UI: remove from both states immediately
-    setFeedPosts(function(prev) { return prev.filter(function(p){ return p.id !== postId; }); });
-    setMyPosts(function(prev)  { return prev.filter(function(p){ return p.id !== postId; }); });
+    // 先找出該貼文（拿 media 資訊以連動刪 Bunny）
+    var _delPost = null;
+    setFeedPosts(function(prev) { var f = prev.find(function(p){return p.id===postId;}); if(f) _delPost = f; return prev.filter(function(p){ return p.id !== postId; }); });
+    setMyPosts(function(prev)  { if(!_delPost){var f=prev.find(function(p){return p.id===postId;}); if(f)_delPost=f;} return prev.filter(function(p){ return p.id !== postId; }); });
     if (isFirebaseConfigured) {
       db.collection('posts').doc(postId).delete()
+        .then(function() { _deletePostBunnyMedia(_delPost, user); })
         .catch(function(err) {
           alert('Failed to delete post: ' + err.message);
-          // Re-fetch to restore if delete failed (rare)
         });
+    } else {
+      _deletePostBunnyMedia(_delPost, user);
     }
   };
   var _useState101 = useState(false),
@@ -8971,6 +9063,25 @@ function MainApp(_ref16) {
                 _modToken = _modSession.data.session && _modSession.data.session.access_token;
                 if (!_modToken) return { approved: true };
                 _modPayload = { caption: postText.trim() || '' };
+                var _isTextOnly = !(postMedia && (postMedia.type === 'image' || postMedia.type === 'video'));
+                // 純文字貼文：先查審查快取，命中就不呼叫 Claude
+                if (_isTextOnly && _modPayload.caption) {
+                  var _ck = 'mod:' + _modPayload.caption.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 800);
+                  return _supabase.from('ai_cache').select('result').eq('cache_key', _ck).maybeSingle().then(function(cr) {
+                    if (cr && !cr.error && cr.data && cr.data.result) return cr.data.result; // 命中
+                    return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _modToken },
+                      body: JSON.stringify(_modPayload)
+                    });
+                  }).catch(function() {
+                    return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _modToken },
+                      body: JSON.stringify(_modPayload)
+                    });
+                  });
+                }
                 // 先審後傳：圖片轉 base64 送審，不先上傳到 Bunny
                 if (postMedia && postMedia.type === 'image' && postMedia.file) {
                   return new Promise(function(resolve, reject) {
@@ -9019,6 +9130,8 @@ function MainApp(_ref16) {
                   }
                 );
               }).then(function(res) {
+                // 快取命中時 res 是結果物件（已含 approved），直接用
+                if (res && typeof res === 'object' && typeof res.json !== 'function' && ('approved' in res)) return res;
                 if (!res || res === true || typeof res.json !== 'function') return { approved: true };
                 if (!res.ok) return { approved: true };
                 return res.json();
