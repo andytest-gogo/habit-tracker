@@ -769,6 +769,79 @@
             justify-content:center; overflow-y:auto;
             -webkit-overflow-scrolling:touch;
         }
+        /* ── Multi-result candidate cards ── */
+        .mrc-card {
+            background:#0f0f0f; border:1px solid #1a1a1a;
+            margin-bottom:8px; overflow:hidden;
+        }
+        .mrc-top {
+            display:flex; align-items:center; gap:10px;
+            padding:12px 14px 10px;
+        }
+        .mrc-avatar {
+            width:38px; height:38px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-size:12px; font-weight:700; flex-shrink:0;
+        }
+        .mrc-info { flex:1; min-width:0; }
+        .mrc-name {
+            font-size:13px; font-weight:700; color:#fff;
+            letter-spacing:.3px; font-family:var(--din);
+        }
+        .mrc-sub {
+            font-size:10px; color:#555; margin-top:2px;
+            text-transform:uppercase; letter-spacing:.5px;
+        }
+        /* Score on the right of header (hidden — shown in actions row instead) */
+        .mrc-score { display:none; }
+        .mrc-metrics {
+            display:grid; grid-template-columns:1fr 1fr;
+            gap:1px; background:#1a1a1a;
+            border-top:1px solid #1a1a1a;
+        }
+        .mrc-metric { background:#0f0f0f; padding:8px 12px; }
+        .mrc-mlbl {
+            font-size:8px; font-weight:700; letter-spacing:1px;
+            text-transform:uppercase; color:#3d3d3d; margin-bottom:3px;
+        }
+        .mrc-mval {
+            font-size:12px; font-weight:700; color:#ccc;
+            font-family:var(--din);
+        }
+        .mrc-actions {
+            display:flex; align-items:center; gap:8px;
+            padding:10px 12px; border-top:1px solid #1a1a1a;
+        }
+        /* Score shown left of actions row */
+        .mrc-score-left {
+            display:flex; align-items:baseline; gap:4px; flex-shrink:0;
+        }
+        .mrc-score-left-num {
+            font-size:22px; font-weight:700; color:#fff;
+            font-family:var(--din); line-height:1;
+        }
+        .mrc-score-left-lbl {
+            font-size:9px; color:#555; text-transform:uppercase;
+            letter-spacing:.5px;
+        }
+        .mrc-skip {
+            background:none; border:1px solid #2a2a2a; color:#555;
+            width:34px; height:34px; cursor:pointer; font-size:11px;
+            flex-shrink:0; transition:.15s; font-family:var(--font);
+        }
+        .mrc-skip:hover { border-color:#555; color:#888; }
+        .mrc-invite {
+            background:#fff; color:#0a0a0a; border:none;
+            padding:9px 16px; font-size:9px; font-weight:700;
+            letter-spacing:1px; text-transform:uppercase;
+            cursor:pointer; font-family:var(--font); transition:.15s;
+            flex-shrink:0;
+        }
+        .mrc-invite:hover { opacity:.85; }
+        .mrc-invite-sent {
+            background:#1a2a1a !important; color:#4caf50 !important;
+            border:1px solid #2d4a2d !important; cursor:default !important;
+        }
         .matching-sheet {
             background:#0a0a0a; width:100%; max-width:480px;
             min-height:100vh; padding:0; overflow:visible;
@@ -7881,16 +7954,27 @@ function MainApp(_ref16) {
         .where('userId','==',user.uid)
         .where('habitId','==',h.id)
         .limit(1).get().then(function(snap) {
+          var MAX_CREDITS_PER_HABIT = 10;
+          // Check if this habit already has an active partner — if so, skip awarding
+          var hasActivePartner = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs))
+            ? window._myPairs.some(function(p) {
+                return (p.habit_id === h.id || p.partner_habit_id === h.id) && p.status === 'active';
+              })
+            : false;
+          if (hasActivePartner) return; // already paired — no more credits needed
+
           if (snap.empty) {
             // First time: award 10 credits for completing challenge
-            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: 10, lastAwardDate: todayKey });
-            setMatchingCredits(function(prev){ var n={}; n[h.id]=(prev[h.id]||0)+10; return Object.assign({},prev,n); });
+            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: MAX_CREDITS_PER_HABIT, lastAwardDate: todayKey });
+            setMatchingCredits(function(prev){ var n={}; n[h.id]=MAX_CREDITS_PER_HABIT; return Object.assign({},prev,n); });
           } else {
             var doc = snap.docs[0];
             var data = doc.data();
             if (data.lastAwardDate !== todayKey) {
-              // Daily +1 login credit (only if no active partner for this habit)
-              var newCredits = (data.credits||0) + 1;
+              var currentCredits = data.credits || 0;
+              // Cap at MAX_CREDITS_PER_HABIT — prevent unlimited accumulation from idle users
+              if (currentCredits >= MAX_CREDITS_PER_HABIT) return;
+              var newCredits = currentCredits + 1;
               doc.ref.update({ credits: newCredits, lastAwardDate: todayKey });
               setMatchingCredits(function(prev){ var n={}; n[h.id]=newCredits; return Object.assign({},prev,n); });
             }
@@ -11431,6 +11515,15 @@ function BuddiesPage(_ref_buddies) {
                   .then(function() {
                     setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
                     if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
+                    // Auto-withdraw other pending invites involving either user in this pair
+                    var acceptedUserId = pair.user_id;
+                    var acceptedPartnerId = pair.partner_id;
+                    _supabase.from('pairs')
+                      .update({ status: 'withdrawn' })
+                      .eq('status', 'pending')
+                      .neq('id', pair.id)
+                      .or('user_id.eq.' + acceptedUserId + ',partner_id.eq.' + acceptedUserId + ',user_id.eq.' + acceptedPartnerId + ',partner_id.eq.' + acceptedPartnerId)
+                      .then(function(){}).catch(function(){});
                   });
               }
               function handleDecline(e) {
@@ -12757,34 +12850,35 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         <div class="match-note" id="matchNote">Claude is analysing your habit duration, lifespan, mind-body balance and rhythm stability to find your best match.</div>
       </div>
     </div>
-    <!-- State B: Result -->
+    <!-- State B: Results list (up to 5 candidates) -->
     <div id="matchingResult" style="display:none;">
-      <div class="result-hdr">
-        <div class="result-hdr-top">Best match found</div>
-        <div class="result-hdr-title" id="resultUsername">—</div>
-        <div class="result-hdr-sub" id="resultHabitSub">—</div>
+      <div class="matching-top" style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="matching-label">Partners found for</div>
+          <div class="matching-habit-name" id="matchingHabitNameResult">—</div>
+        </div>
+        <button onclick="window.closeMatchingModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
       </div>
-      <div class="result-score-row">
-        <div class="result-score-lbl">Overall compatibility</div>
-        <div class="result-score-big"><div class="score-num" id="resultScore">—</div><div class="score-unit">% match</div></div>
-        <div class="score-bar-track"><div class="score-bar-fill" id="resultScoreBar" style="width:0%"></div></div>
+      <div style="height:1px;background:#1a1a1a;"></div>
+      <div style="padding:10px 16px 4px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;" id="matchResultsLabel">Invite anyone you like</div>
+        <div style="font-size:9px;color:#3d3d3d;" id="mRemainingLabel"><span id="mRemaining">—</span> credits left today</div>
       </div>
-      <div class="result-breakdown">
-        <div class="result-breakdown-lbl">Match breakdown</div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Activity Fit</div><div class="prog-track"><div class="prog-fill" id="rProg1" style="width:0%"></div></div><div class="prog-val" id="rVal1">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Rhythm Match</div><div class="prog-track"><div class="prog-fill" id="rProg2" style="width:0%"></div></div><div class="prog-val" id="rVal2">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Mind-Body</div><div class="prog-track"><div class="prog-fill" id="rProg3" style="width:0%"></div></div><div class="prog-val" id="rVal3">—</div></div>
-        <div class="prog-row"><div class="prog-lbl" style="color:#555">Duration Fit</div><div class="prog-track"><div class="prog-fill" id="rProg4" style="width:0%"></div></div><div class="prog-val" id="rVal4">—</div></div>
+      <div id="matchResultsList" style="padding:0 10px 10px;"></div>
+      <!-- Notify row: shown when fewer than 5 results -->
+      <div id="matchNotifyRow" style="display:none;margin:4px 10px 14px;padding:12px 14px;background:#0f0f0f;border:1px solid #1a1a1a;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#888;">Notify me when more matches appear</div>
+          <div style="font-size:9px;color:#3d3d3d;margin-top:3px;">We'll alert you when a new partner joins for this habit.</div>
+        </div>
+        <label style="position:relative;width:36px;height:20px;flex-shrink:0;">
+          <input type="checkbox" id="matchNotifyToggle" style="opacity:0;width:0;height:0;position:absolute;" onchange="window._toggleMatchNotify(this)">
+          <span id="matchNotifyTrack" style="position:absolute;inset:0;border-radius:10px;background:#2a2a2a;cursor:pointer;transition:background .2s;"></span>
+          <span id="matchNotifyThumb" style="position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#555;transition:transform .2s;"></span>
+        </label>
       </div>
-      <div class="result-ai-section">
-        <div class="result-ai-lbl">Why Claude chose this match</div>
-        <div class="result-ai-text" id="resultReason">—</div>
-      </div>
-      <div class="result-actions">
-        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin-bottom:10px;line-height:1.5;">⚠️ Check the habit name above — only send requests to users with <strong style="color:rgba(255,255,255,0.8)">clear, specific habit names</strong>.</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin-bottom:10px;line-height:1.6;">⚠️ Check their habit name — only connect with users who have <strong style="color:rgba(255,255,255,0.85)">clear, specific habit names</strong>.</div>
-        <button class="result-cta" onclick="window.sendPartnerRequest()">Send Partner Request</button>
-        <button class="result-skip" onclick="window.closeMatchingModal()">See other matches later</button>
+      <div style="padding:0 10px 16px;">
+        <button class="result-skip" onclick="window.closeMatchingModal()">Close</button>
       </div>
     </div>
     <!-- State C: Error -->
@@ -13037,14 +13131,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       if (scored.length === 0) throw new Error('No valid candidates');
 
-      // Pick the best match
+      // Return top 5 matches
       scored.sort(function(a, b) { return b.score - a.score; });
-      var best = scored[0];
-
-      // Show the fallback banner in the result
-      best._isFallback = true;
-      best.reason = 'Matched by same activity type, with similar duration (' + best.breakdown.activityFit + '%), check-in rhythm (' + best.breakdown.rhythmScore + '%), mind-body alignment, and consistency.';
-      return best;
+      var top5 = scored.slice(0, 5).map(function(m) {
+        m._isFallback = true;
+        m.reason = 'Matched by same activity type, with similar duration (' + m.breakdown.activityFit + '%), check-in rhythm (' + m.breakdown.rhythmScore + '%), mind-body alignment, and consistency.';
+        return m;
+      });
+      return top5;
     } catch(e) {
       throw e;
     }
@@ -13062,6 +13156,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
     // Fill habit info
     document.getElementById('matchingHabitName').textContent = habit.name;
+    var elNameResult = document.getElementById('matchingHabitNameResult');
+    if (elNameResult) elNameResult.textContent = habit.name;
 
     var durMins = parseDurMins(habit.durLabel);
     document.getElementById('mAvgDur').textContent = durMins !== null ? durMins : '—';
@@ -13136,7 +13232,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       if (!res.ok) {
         if (res.status === 429) {
-          showMatchingError('Daily limit reached', data.message || 'You have used all 3 matches for today. Try again tomorrow.');
+          showMatchingError('Daily limit reached', data.message || 'You have used all 10 matches for today. Try again tomorrow.');
         } else {
           // 503 = Claude 掛掉 → 走程式碼配對
           throw new Error('API_ERROR');
@@ -13156,13 +13252,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       }
 
       // Filter out already-paired users from AI result just in case
-      if (data.match && alreadyPaired.has(data.match.userId)) {
-        throw new Error('AI returned already-paired user');
-      }
+      var matches = (data.matches || (data.match ? [data.match] : [])).filter(function(m) {
+        return m && !alreadyPaired.has(m.userId);
+      });
 
-      _currentMatch = data.match;
+      if (matches.length === 0) throw new Error('AI returned no valid candidates');
+
       document.getElementById('mRemaining').textContent = data.remaining !== undefined ? data.remaining : '—';
-      showMatchingResult(data.match);
+      showMatchingResults(matches);
 
     } catch(err) {
       var isTimeout = err.message === 'AI_TIMEOUT';
@@ -13172,10 +13269,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       if (needsFallback) {
         document.getElementById('matchingStatusText').textContent = 'Switching to algorithm match...';
         try {
-          var fbMatch = await runFallbackMatch(habit);
-          _currentMatch = fbMatch;
-          fbMatch._isFallback = true;
-          showMatchingResult(fbMatch);
+          var fbMatches = await runFallbackMatch(habit);
+          showMatchingResults(fbMatches);
         } catch(fbErr) {
           showMatchingError('No matches found', 'Could not find a suitable match right now. Please try again later.');
         }
@@ -13185,40 +13280,121 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
   }
 
-  function showMatchingResult(match) {
+  // ── showMatchingResults：顯示最多 5 張候選卡片 ────────────────────────────
+  function showMatchingResults(matches) {
     document.getElementById('matchingScanning').style.display = 'none';
     document.getElementById('matchingResult').style.display = '';
+    document.getElementById('matchingError').style.display = 'none';
 
-    document.getElementById('resultUsername').textContent = '@' + (match.displayName || 'partner');
-    document.getElementById('resultHabitSub').textContent = (match.habitName || '—') + ' · ' + (match.streak || 0) + '-day streak';
-    document.getElementById('resultScore').textContent = match.score || 0;
-    document.getElementById('resultScoreBar').style.width = (match.score || 0) + '%';
-    document.getElementById('resultReason').textContent = match.reason || '—';
+    var hasFallback = matches.some(function(m){ return m._isFallback; });
+    var list = document.getElementById('matchResultsList');
+    list.innerHTML = '';
 
-    if (match.mindBody) document.getElementById('mMindBody').textContent = match.mindBody;
+    if (hasFallback) {
+      var banner = document.createElement('div');
+      banner.className = 'fallback-banner';
+      banner.textContent = '⚡ AI matching temporarily unavailable — results from algorithm.';
+      list.appendChild(banner);
+    }
 
-    var bd = match.breakdown || {};
-    [['rProg1','rVal1', (bd.activityFit != null ? bd.activityFit : bd.avgDuration)||0],
-     ['rProg2','rVal2', (bd.rhythmScore != null ? bd.rhythmScore : bd.habitLifespan)||0],
-     ['rProg3','rVal3', bd.mindBody||0],
-     ['rProg4','rVal4', (bd.durationFit != null ? bd.durationFit : bd.rhythmScore)||0]].forEach(function(r) {
-      document.getElementById(r[0]).style.width = r[2] + '%';
-      document.getElementById(r[1]).textContent = r[2] + '%';
+    var avatarColors = [
+      {bg:'#EEEDFE',color:'#534AB7'},{bg:'#E1F5EE',color:'#0F6E56'},
+      {bg:'#FAECE7',color:'#993C1D'},{bg:'#E6F1FB',color:'#185FA5'},
+      {bg:'#FAEEDA',color:'#854F0B'}
+    ];
+
+    matches.forEach(function(match, idx) {
+      var ac = avatarColors[idx % avatarColors.length];
+      var initials = (match.displayName || 'U').slice(0,2).toUpperCase();
+      var bd = match.breakdown || {};
+      var score = match.score || 0;
+
+      var card = document.createElement('div');
+      card.className = 'mrc-card';
+      card.id = 'mrc-' + idx;
+      card.innerHTML =
+        '<div class="mrc-top">' +
+          '<div class="mrc-avatar" style="background:' + ac.bg + ';color:' + ac.color + ';">' + initials + '</div>' +
+          '<div class="mrc-info">' +
+            '<div class="mrc-name">@' + (match.displayName || 'partner') + '</div>' +
+            '<div class="mrc-sub">' + (match.habitName || '—') + '</div>' +
+          '</div>' +
+          '<div class="mrc-score">' +
+            '<div class="mrc-score-num">' + score + '</div>' +
+            '<div class="mrc-score-lbl">match</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="mrc-metrics">' +
+          '<div class="mrc-metric"><div class="mrc-mlbl">Avg duration</div><div class="mrc-mval">' + (match.avgDuration || '—') + '</div></div>' +
+          '<div class="mrc-metric"><div class="mrc-mlbl">Habit lifespan</div><div class="mrc-mval">' + (match.habitLifespan || '—') + '</div></div>' +
+          '<div class="mrc-metric"><div class="mrc-mlbl">Rhythm</div><div class="mrc-mval">' + (match.rhythmLabel || (bd.rhythmScore != null ? bd.rhythmScore + '%' : '—')) + '</div></div>' +
+          '<div class="mrc-metric"><div class="mrc-mlbl">Mind-body</div><div class="mrc-mval">' + (match.mindBody || '—') + '</div></div>' +
+        '</div>' +
+        '<div class="mrc-actions">' +
+          '<div class="mrc-score-left">' +
+            '<div class="mrc-score-left-num">' + score + '</div>' +
+            '<div class="mrc-score-left-lbl">match</div>' +
+          '</div>' +
+          '<div style="flex:1;"></div>' +
+          '<button class="mrc-skip" onclick="window._mrcSkip(' + idx + ')" aria-label="Skip">✕</button>' +
+          '<button class="mrc-invite" id="mrc-inv-' + idx + '" onclick="window._mrcInvite(' + idx + ')">Send invite</button>' +
+        '</div>';
+      list.appendChild(card);
+
+      // store match data on element for invite handler
+      card._matchData = match;
     });
 
-    // Show fallback banner if AI was unavailable
-    if (match._isFallback) {
-      var existing = document.getElementById('matchFallbackBanner');
-      if (!existing) {
-        var banner = document.createElement('div');
-        banner.id = 'matchFallbackBanner';
-        banner.className = 'fallback-banner';
-        banner.textContent = '⚡ Our AI matching is temporarily unavailable — we\'ve matched you using our algorithm instead.';
-        var actionsEl = document.querySelector('.result-actions');
-        if (actionsEl) actionsEl.parentNode.insertBefore(banner, actionsEl);
-      }
-    }
+    // Notify toggle
+    var notifyRow = document.getElementById('matchNotifyRow');
+    if (notifyRow) notifyRow.style.display = matches.length < 5 ? '' : 'none';
   }
+
+  // ── legacy single-result handler (kept for compatibility) ────────────────
+  function showMatchingResult(match) {
+    showMatchingResults([match]);
+  }
+
+  window._mrcSkip = function(idx) {
+    var card = document.getElementById('mrc-' + idx);
+    if (card) { card.style.opacity = '0.3'; card.style.pointerEvents = 'none'; }
+  };
+
+  window._mrcInvite = function(idx) {
+    var card = document.getElementById('mrc-' + idx);
+    if (!card || !card._matchData || !_currentHabit) return;
+    var btn = document.getElementById('mrc-inv-' + idx);
+    if (btn && btn.disabled) return;
+    var match = card._matchData;
+    (async function() {
+      try {
+        var session = await _supabase.auth.getSession();
+        var userId = session.data.session && session.data.session.user && session.data.session.user.id;
+        if (!userId) return;
+        await _supabase.from('pairs').insert({
+          user_id: userId,
+          partner_id: match.userId,
+          habit_name: _currentHabit.name,
+          partner_habit_name: match.habitName,
+          match_score: match.score,
+          status: 'pending'
+        });
+        await _supabase.from('notifications').insert({
+          user_id: match.userId,
+          type: 'partner_request',
+          title: 'New Partner Request!',
+          body: 'Someone wants to be your habit partner for "' + match.habitName + '".',
+          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name, partner_habit_name: match.habitName }),
+          is_read: false,
+          created_at: new Date().toISOString()
+        });
+        if (btn) { btn.textContent = 'Sent ✓'; btn.disabled = true; btn.classList.add('mrc-invite-sent'); }
+        if (typeof showToast === 'function') showToast('Invite sent! 🎉');
+      } catch(e) {
+        alert('Failed to send invite: ' + e.message);
+      }
+    })();
+  };
 
   function showMatchingError(title, msg) {
     document.getElementById('matchingScanning').style.display = 'none';
@@ -13275,6 +13451,28 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       alert('Failed to send request: ' + e.message);
     }
   };
+
+  // ── Notify toggle for "no match yet" scenario ────────────────────────────
+  window._toggleMatchNotify = function(el) {
+    var track = document.getElementById('matchNotifyTrack');
+    var thumb = document.getElementById('matchNotifyThumb');
+    if (el.checked) {
+      if (track) track.style.background = '#185FA5';
+      if (thumb) { thumb.style.transform = 'translateX(16px)'; thumb.style.background = '#fff'; }
+      if (_currentHabit && window._supabaseClient && window._currentUser) {
+        window._supabaseClient.from('match_notifications').upsert({
+          user_id: window._currentUser.uid,
+          habit_id: _currentHabit.id,
+          enabled: true,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,habit_id' }).then(function(){}).catch(function(){});
+      }
+    } else {
+      if (track) track.style.background = '#2a2a2a';
+      if (thumb) { thumb.style.transform = 'translateX(0)'; thumb.style.background = '#555'; }
+    }
+  };
+
 })();
 </script>
 
