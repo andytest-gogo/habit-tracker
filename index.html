@@ -756,6 +756,31 @@
         body[data-theme="dark"] .challenger-cheer-btn { border-color:var(--border-dk); color:var(--blue-muted); }
         body[data-theme="dark"] .challenger-cheer-btn:hover:not(.done) { border-color:var(--blue-accent); color:var(--blue-accent); }
         body[data-theme="dark"] .challenger-cheer-btn.done { background:#2d1a0a; border-color:#7c3800; color:#fb923c; }
+        /* ── Challenger card beautify ── */
+        .challenger-card { border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); overflow:hidden; transition:transform .18s ease, box-shadow .18s ease, border-color .15s; }
+        .challenger-card:hover { box-shadow:0 6px 18px rgba(0,0,0,.09); transform:translateY(-2px); }
+        body[data-theme="dark"] .challenger-card:hover { box-shadow:0 6px 18px rgba(0,0,0,.4); }
+        .challenger-card-top { padding:14px 14px 9px; }
+        .challenger-av { width:40px; height:40px; box-shadow:0 0 0 2px var(--bg-card), 0 0 0 3px var(--gray-200); }
+        body[data-theme="dark"] .challenger-av { box-shadow:0 0 0 2px var(--bg-card), 0 0 0 3px var(--blue-dim); }
+        .challenger-card-bar-track { height:4px; border-radius:3px; }
+        .challenger-card-bar-fill { border-radius:3px; }
+        .challenger-cheer-btn { border-radius:20px; }
+        /* ── Habit visibility prompt modal ── */
+        .vis-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; z-index:1000; padding:24px; animation:visFade .2s ease; }
+        @keyframes visFade { from{opacity:0;} to{opacity:1;} }
+        .vis-modal-box { background:var(--bg-card); border-radius:20px; max-width:344px; width:100%; padding:26px 22px 18px; text-align:center; box-shadow:0 18px 50px rgba(0,0,0,.28); animation:visPop .26s cubic-bezier(.34,1.56,.64,1); }
+        @keyframes visPop { from{ transform:scale(.9); opacity:0; } to{ transform:scale(1); opacity:1; } }
+        .vis-modal-emoji { font-size:40px; line-height:1; margin-bottom:10px; }
+        .vis-modal-title { font-size:18px; font-weight:800; color:var(--text-primary); margin-bottom:8px; font-family:var(--font); }
+        .vis-modal-body { font-size:13px; line-height:1.55; color:var(--text-secondary); margin-bottom:20px; }
+        .vis-modal-btn-public { width:100%; padding:13px; border:none; border-radius:12px; background:var(--black); color:var(--white); font-size:14px; font-weight:700; font-family:var(--font); cursor:pointer; transition:.15s; margin-bottom:9px; }
+        .vis-modal-btn-public:hover { opacity:.88; }
+        .vis-modal-btn-private { width:100%; padding:13px; border:1px solid var(--gray-200); border-radius:12px; background:var(--bg-card); color:var(--text-secondary); font-size:14px; font-weight:700; font-family:var(--font); cursor:pointer; transition:.15s; }
+        .vis-modal-btn-private:hover { border-color:var(--gray-500); color:var(--text-primary); }
+        .vis-modal-hint { font-size:11px; color:var(--gray-400); margin-top:14px; line-height:1.4; }
+        body[data-theme="dark"] .vis-modal-btn-public { background:var(--blue-accent); color:#04212a; }
+        body[data-theme="dark"] .vis-modal-btn-private { border-color:var(--border-dk); }
         .challenger-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--gray-100); }
         .challenger-row:last-child { border-bottom:none; }
         .cheer-detail-panel { background:var(--gray-100); padding:14px 16px; margin:6px 0; }
@@ -7684,6 +7709,7 @@ function MainApp(_ref16) {
   var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
   var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
+  var [visibilityPrompt, setVisibilityPrompt] = React.useState(null); // 建立習慣後詢問是否公開到 Challengers：{ id, tempId, name }
   var [deleteConfirmId, setDeleteConfirmId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
   var PARTNER_UNLOCK_DAYS = 2;       // 達成 2 天打卡 → 解鎖夥伴配對功能
@@ -7798,6 +7824,8 @@ function MainApp(_ref16) {
 
     promise.then(function(list) {
       console.log('[Challenger DEBUG] 查詢回傳習慣數(他人):', list.length, list.map(function(h){ return { name:h.name, checkedDates:h.checkedDates, todayCounts:h.todayCounts, visibility:h.challengeVisibility }; }));
+      // ── Filter 0: 排除設為私密(private)的習慣（用戶建立時選擇不公開）──
+      list = list.filter(function(h) { return h.challengeVisibility !== 'private'; });
       // 判定「今天是否至少打卡 1 次」：checkedDates 含今天(打滿) 或 todayCounts[今天]>=1(未打滿也算)
       function checkedInToday(h) {
         if ((h.checkedDates || []).includes(todayISO)) return true;
@@ -8003,8 +8031,16 @@ function MainApp(_ref16) {
     var key = challengerUid + '_' + habitId;
     if (cheerMap[key]) return;
     var todayKey = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0,10);
+
+    // ── 1) 先樂觀更新 UI：按鈕立即有反應、對方 cheer 數立即 +1（不等後端回應）──
+    var _cm = {}; _cm[key] = true;
+    setCheerMap(function(prev) { return Object.assign({}, prev, _cm); });
+    setChallengers(function(prev) { return prev.map(function(c) { return c.id === habitId ? Object.assign({}, c, { todayCheerCount: (c.todayCheerCount||0)+1 }) : c; }); });
+    setTodayPick(function(p) { return (p && p.id === habitId) ? Object.assign({}, p, { todayCheerCount: (p.todayCheerCount||0)+1 }) : p; });
+    setHabitCheers(function(prev) { var cur = prev[habitId] || { todayCount:0, totalCount:0 }; var _hc = {}; _hc[habitId] = { todayCount: cur.todayCount+1, totalCount: cur.totalCount+1 }; return Object.assign({}, prev, _hc); });
+
+    // ── 2) 背景寫入 DB；同步累加對方 habits.today_cheer_count（給其他人看到的計數）──
     db.collection('habit_cheers').add({ senderId: user.uid, recipientId: challengerUid, habitId: habitId, date: todayKey, createdAt: new Date() }).then(function() {
-      // 同時更新 habits.today_cheer_count，讓 cheer 數即時反映
       var _sb2 = window._supabaseClient;
       if (_sb2) {
         _sb2.rpc('increment_cheer_count', { habit_id: habitId }).catch(function(){
@@ -8014,12 +8050,14 @@ function MainApp(_ref16) {
           });
         });
       }
-      var _cm = {}; _cm[key] = true;
-      setCheerMap(function(prev) { return Object.assign({}, prev, _cm); });
-      setChallengers(function(prev) { return prev.map(function(c) { return c.id === habitId ? Object.assign({}, c, { todayCheerCount: (c.todayCheerCount||0)+1 }) : c; }); });
-      setTodayPick(function(p) { return (p && p.id === habitId) ? Object.assign({}, p, { todayCheerCount: (p.todayCheerCount||0)+1 }) : p; });
-      setHabitCheers(function(prev) { var cur = prev[habitId] || { todayCount:0, totalCount:0 }; var _hc = {}; _hc[habitId] = { todayCount: cur.todayCount+1, totalCount: cur.totalCount+1 }; return Object.assign({}, prev, _hc); });
-    }).catch(function(e) { console.warn('cheer error', e); });
+    }).catch(function(e) {
+      // ── 3) 寫入失敗 → 回滾樂觀更新，讓用戶可重試 ──
+      console.warn('cheer error', e);
+      setCheerMap(function(prev) { var n = Object.assign({}, prev); delete n[key]; return n; });
+      setChallengers(function(prev) { return prev.map(function(c) { return c.id === habitId ? Object.assign({}, c, { todayCheerCount: Math.max(0,(c.todayCheerCount||1)-1) }) : c; }); });
+      setTodayPick(function(p) { return (p && p.id === habitId) ? Object.assign({}, p, { todayCheerCount: Math.max(0,(p.todayCheerCount||1)-1) }) : p; });
+      setHabitCheers(function(prev) { var cur = prev[habitId] || { todayCount:1, totalCount:1 }; var _hc = {}; _hc[habitId] = { todayCount: Math.max(0,cur.todayCount-1), totalCount: Math.max(0,cur.totalCount-1) }; return Object.assign({}, prev, _hc); });
+    });
   }, [user, cheerMap, isFirebaseConfigured, todayPick]);
 
   // ── fetchAllNow: PTR data refresh（touch 動畫由 native PTR script 處理）──
@@ -8154,7 +8192,10 @@ function MainApp(_ref16) {
       setShowModal(false);
       db.collection('habits').add(_objectSpread(_objectSpread({}, habit), {}, {
         createdAt: FieldValue.serverTimestamp()
-      })).catch(function(err) {
+      })).then(function(_newRef) {
+        // 建立成功 → 詢問用戶是否要公開到 Challengers 列表
+        setVisibilityPrompt({ id: (_newRef && _newRef.id) || null, tempId: tempId, name: name });
+      }).catch(function(err) {
         console.error('Failed to save habit — full error:', JSON.stringify(err), err);
         // Roll back optimistic update on error
         setHabits(function(prev) {
@@ -9899,8 +9940,8 @@ function MainApp(_ref16) {
             onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
           }, "+ Find Partner")
         ),
-        /* right side: Option A — 整合式 cheer bar（顯示收到的鼓勵，數字會滾動）*/
-        React.createElement("div", { className: "cheer-bar-a" },
+        /* right side: cheer bar（顯示收到的鼓勵）— 僅當習慣公開時顯示；選擇 private 則隱藏 */
+        habit.challengeVisibility !== 'private' && React.createElement("div", { className: "cheer-bar-a" },
           React.createElement("span", {
             className: "cheer-bar-heart",
             key: "h-" + habit.id + "-" + (habitCheerData ? habitCheerData.todayCount : 0)
@@ -10025,9 +10066,9 @@ function MainApp(_ref16) {
                       )
                     )
               ),
-              /* cheer static */
-              habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { className: "habit-card-divider" }),
-              habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { style:{ padding:'9px 15px 10px' } },
+              /* cheer static — 僅當習慣公開且有收到 cheer 時顯示；選擇 private 則隱藏 */
+              habit.challengeVisibility !== 'private' && habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { className: "habit-card-divider" }),
+              habit.challengeVisibility !== 'private' && habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { style:{ padding:'9px 15px 10px' } },
                 React.createElement("span", { className: "completed-cheer-static" },
                   React.createElement("svg", { width:"11", height:"11", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true", style:{ marginRight:'4px', flexShrink:0 } },
                     React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
@@ -10806,6 +10847,38 @@ function MainApp(_ref16) {
     },
     onAdd: addHabit
   }),
+
+  /* ── 建立習慣後：詢問是否公開到 Challengers 列表 ── */
+  visibilityPrompt && /*#__PURE__*/React.createElement("div", {
+    className: "vis-modal-overlay",
+    onClick: function(e) { if (e.target === e.currentTarget) setVisibilityPrompt(null); }
+  }, /*#__PURE__*/React.createElement("div", { className: "vis-modal-box" },
+    /*#__PURE__*/React.createElement("div", { className: "vis-modal-emoji" }, "\uD83C\uDFC6"),
+    /*#__PURE__*/React.createElement("div", { className: "vis-modal-title" }, "Share your challenge?"),
+    /*#__PURE__*/React.createElement("div", { className: "vis-modal-body" },
+      "Show ",
+      /*#__PURE__*/React.createElement("strong", null, "\u201C" + (visibilityPrompt.name || "this habit") + "\u201D"),
+      " on the Challengers list so others can see your progress and cheer you on?"
+    ),
+    /*#__PURE__*/React.createElement("button", {
+      className: "vis-modal-btn-public",
+      onClick: function() { setVisibilityPrompt(null); } // public 是預設值，直接關閉
+    }, "\u2728 Show on Challengers"),
+    /*#__PURE__*/React.createElement("button", {
+      className: "vis-modal-btn-private",
+      onClick: function() {
+        var vp = visibilityPrompt;
+        if (vp && vp.id) {
+          db.collection('habits').doc(vp.id).update({ challengeVisibility: 'private' }).catch(function(){});
+        }
+        setHabits(function(prev) { return prev.map(function(h) {
+          return ((vp && h.id === vp.id) || (vp && h.id === vp.tempId)) ? Object.assign({}, h, { challengeVisibility: 'private' }) : h;
+        }); });
+        setVisibilityPrompt(null);
+      }
+    }, "\uD83D\uDD12 Keep it private"),
+    /*#__PURE__*/React.createElement("div", { className: "vis-modal-hint" }, "Private habits stay off the Challengers list \u2014 only you can see them.")
+  )),
 
   /* ── 刪除習慣確認視窗 ── */
   deleteConfirmId && /*#__PURE__*/React.createElement("div", {
@@ -12775,6 +12848,38 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 </script>
 
 <!-- ══════════════════════════════════════════
+     VALUES SURVEY MODAL (step -1, first time only)
+══════════════════════════════════════════ -->
+<div id="valuesSurveyOverlay" style="display:none;" class="matching-overlay">
+  <div class="matching-sheet" id="valuesSurveySheet">
+    <!-- Header -->
+    <div class="matching-top" style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="matching-label">Before we find your partner</div>
+        <div class="matching-habit-name" id="surveyHabitName">—</div>
+      </div>
+      <button onclick="window._skipSurvey()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
+    </div>
+    <!-- Step progress bar -->
+    <div style="height:2px;background:#1a1a1a;"><div id="surveyStepFill" style="height:100%;background:#fff;width:0%;transition:width .4s ease-out;"></div></div>
+
+    <!-- Loading -->
+    <div id="surveyLoading" style="padding:32px 20px;">
+      <div class="matching-status"><div class="status-blink"></div><span>Claude is preparing your questions...</span></div>
+    </div>
+
+    <!-- Question body (rendered by JS) -->
+    <div id="surveyBody" style="display:none;"></div>
+
+    <!-- Error -->
+    <div id="surveyError" style="display:none;padding:28px 20px;text-align:center;">
+      <div style="font-size:11px;color:#555;margin-bottom:16px;">Could not load questions. You can still find a partner.</div>
+      <button onclick="window._skipSurvey()" style="background:#fff;color:#000;border:none;padding:11px 24px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer;font-family:inherit;">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      MATCH PREFERENCE MODAL (step 0)
 ══════════════════════════════════════════ -->
 <div id="matchPrefOverlay" style="display:none;" class="matching-overlay">
@@ -12915,25 +13020,191 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     btn.classList.add('active');
   };
 
+  // ── Survey state ──────────────────────────────────────────────────────────
+  var _surveyQuestions = [];
+  var _surveyAnswers   = {};
+  var _surveyIdx       = 0;
+  var _surveyDimensions = {};
+  var EDGE_VALUES_URL  = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/generate-values-questions';
+
   // ── Open preference modal (step 0, before matching) ─────────────────────
-  window.openMatchingModal = function(habit) {
+  window.openMatchingModal = async function(habit) {
     _currentHabit = habit;
     _currentMatch = null;
+    _surveyAnswers = {};
+    _surveyIdx = 0;
+    _surveyQuestions = [];
 
-    // Show pref modal first
+    // Check if user has already answered values survey for this habit
+    try {
+      var session = await _supabase.auth.getSession();
+      var token = session.data.session && session.data.session.access_token;
+      if (token) {
+        var checkRes = await fetch(EDGE_VALUES_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ habitId: habit.id, habitName: habit.name, habitActivityType: habit.activityType || 'other' })
+        });
+        var checkData = await checkRes.json();
+
+        if (checkData.already_answered) {
+          // Skip survey, go straight to pref modal
+          _openPrefModal(habit);
+          return;
+        }
+
+        if (checkData.questions && checkData.questions.length >= 3) {
+          // Show survey
+          _surveyQuestions = checkData.questions;
+          _surveyDimensions = {};
+          checkData.questions.forEach(function(q) { _surveyDimensions[q.id] = q.dimension; });
+          _openSurveyModal(habit);
+          return;
+        }
+      }
+    } catch(e) {
+      console.warn('[values-survey] fetch failed, skipping survey:', e.message);
+    }
+
+    // Fallback: skip survey
+    _openPrefModal(habit);
+  };
+
+  function _openSurveyModal(habit) {
+    document.getElementById('surveyHabitName').textContent = habit.name;
+    document.getElementById('surveyLoading').style.display = 'none';
+    document.getElementById('surveyError').style.display = 'none';
+    document.getElementById('surveyBody').style.display = '';
+    document.getElementById('valuesSurveyOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _renderSurveyQ();
+  }
+
+  function _renderSurveyQ() {
+    var total = _surveyQuestions.length;
+    var pct = Math.round((_surveyIdx / total) * 100) + '%';
+    document.getElementById('surveyStepFill').style.width = pct;
+
+    var q = _surveyQuestions[_surveyIdx];
+    var body = document.getElementById('surveyBody');
+
+    // Answered items above
+    var prevHtml = '';
+    if (_surveyIdx > 0) {
+      prevHtml = '<div style="padding:0 20px;margin-bottom:4px;">';
+      for (var i = 0; i < _surveyIdx; i++) {
+        var pq = _surveyQuestions[i];
+        var pa = _surveyAnswers[pq.id];
+        var ptxt = pq.options.find(function(o){ return o.value === pa; });
+        prevHtml +=
+          '<div style="border-left:2px solid #1a1a1a;padding:7px 12px;margin-bottom:6px;">' +
+            '<div style="font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#333;margin-bottom:3px;">' + pq.dimension + '</div>' +
+            '<div style="font-size:10px;color:#444;line-height:1.5;">' + (ptxt ? ptxt.label : '—') + '</div>' +
+          '</div>';
+      }
+      prevHtml += '</div>';
+    }
+
+    // Options
+    var isLast = _surveyIdx === total - 1;
+    var optsHtml = q.options.map(function(o) {
+      var sel = _surveyAnswers[q.id] === o.value;
+      return '<button onclick="window._surveySelect(\'' + q.id + '\',\'' + o.value + '\')" style="' +
+        'width:100%;background:' + (sel ? '#111' : 'transparent') + ';' +
+        'border:1px solid ' + (sel ? '#fff' : '#1a1a1a') + ';' +
+        'padding:12px 16px;text-align:left;cursor:pointer;font-family:inherit;' +
+        'display:flex;align-items:center;gap:12px;margin-bottom:8px;transition:all .15s;">' +
+        '<span style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + (sel ? '#fff' : '#333') + ';flex-shrink:0;width:14px;">' + o.value + '</span>' +
+        '<span style="font-size:12px;color:' + (sel ? '#ccc' : '#555') + ';line-height:1.5;">' + o.label + '</span>' +
+        '</button>';
+    }).join('');
+
+    var hasAnswer = !!_surveyAnswers[q.id];
+    body.innerHTML =
+      prevHtml +
+      '<div style="padding:16px 20px 0;">' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:8px;">Question ' + (_surveyIdx+1) + ' of ' + total + ' · ' + q.dimension + '</div>' +
+        '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:18px;font-family:var(--din);letter-spacing:.3px;">' + q.text + '</div>' +
+        '<div>' + optsHtml + '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-bottom:20px;">' +
+          '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#333;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
+          '<button id="surveyNextBtn" onclick="window._surveyNext()" ' + (hasAnswer ? '' : 'disabled') + ' style="flex:1;background:#fff;color:#0a0a0a;border:none;padding:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;font-family:inherit;opacity:' + (hasAnswer ? '1' : '.25') + ';transition:.15s;">' + (isLast ? 'Find my partner →' : 'Next →') + '</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  window._surveySelect = function(qid, val) {
+    _surveyAnswers[qid] = val;
+    _renderSurveyQ();
+  };
+
+  window._surveyNext = function() {
+    var q = _surveyQuestions[_surveyIdx];
+    if (!_surveyAnswers[q.id]) return;
+    if (_surveyIdx < _surveyQuestions.length - 1) {
+      _surveyIdx++;
+      _renderSurveyQ();
+    } else {
+      // All answered — save to Supabase then proceed
+      _saveSurveyAndProceed();
+    }
+  };
+
+  window._skipSurvey = function() {
+    document.getElementById('valuesSurveyOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    _openPrefModal(_currentHabit);
+  };
+
+  function _saveSurveyAndProceed() {
+    // Show completion state
+    document.getElementById('surveyStepFill').style.width = '100%';
+    document.getElementById('surveyStepFill').style.background = '#4caf50';
+    document.getElementById('surveyBody').innerHTML =
+      '<div style="padding:32px 20px;text-align:center;">' +
+        '<div style="font-size:22px;margin-bottom:14px;color:#4caf50;">✓</div>' +
+        '<div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#fff;margin-bottom:8px;">Values profile saved</div>' +
+        '<div style="font-size:10px;color:#555;line-height:1.7;">We\'ll use your answers to find a partner<br>who shares your mindset and approach.</div>' +
+      '</div>';
+
+    // Save to Supabase
+    (async function() {
+      try {
+        if (_supabase && _currentHabit) {
+          var session = await _supabase.auth.getSession();
+          var uid = session.data.session && session.data.session.user && session.data.session.user.id;
+          if (uid) {
+            await _supabase.from('habit_values').upsert({
+              user_id:    uid,
+              habit_id:   _currentHabit.id,
+              answers:    _surveyAnswers,
+              dimensions: _surveyDimensions,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id,habit_id' });
+          }
+        }
+      } catch(e) { console.warn('[values-survey] save error:', e.message); }
+
+      // Proceed after short delay
+      setTimeout(function() {
+        document.getElementById('valuesSurveyOverlay').style.display = 'none';
+        document.body.style.overflow = '';
+        _openPrefModal(_currentHabit);
+      }, 1200);
+    })();
+  }
+
+  function _openPrefModal(habit) {
     document.getElementById('prefHabitName').textContent = habit.name;
-
-    // Reset pref buttons to reflect current selections
     document.querySelectorAll('.pref-btn[data-pref="gender"]').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-val') === _selectedGenderPref);
     });
     document.querySelectorAll('.pref-btn[data-pref="age"]').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-val') === _selectedAgePref);
     });
-
     document.getElementById('matchPrefOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
-  };
+  }
 
   window.closeMatchPrefModal = function() {
     document.getElementById('matchPrefOverlay').style.display = 'none';
@@ -13219,7 +13490,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           checkedDates: habit.checkedDates || [],
           excludeUserIds: Array.from(alreadyPaired),
           ageRange: ageRange,
-          genderPref: _selectedGenderPref
+          genderPref: _selectedGenderPref,
+          myValues: (Object.keys(_surveyAnswers).length > 0)
+            ? { answers: _surveyAnswers, dimensions: _surveyDimensions }
+            : null
         })
       });
 
@@ -13280,119 +13554,168 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
   }
 
-  // ── showMatchingResults：顯示最多 5 張候選卡片 ────────────────────────────
+  // ── showMatchingResults：滑卡式，最多 5 張 ────────────────────────────────
+  var _matchCards = [];
+  var _matchCardIdx = 0;
+  var _matchInvited = {};
+  var _avStyles = [
+    {bg:'#1a1035',fg:'#9d8ff5',border:'#4a3aaa'},
+    {bg:'#0a1f18',fg:'#4ecfa0',border:'#1a6e50'},
+    {bg:'#1f0d08',fg:'#e8795a',border:'#8a3a20'},
+    {bg:'#0a1828',fg:'#5aabe8',border:'#1a5a95'},
+    {bg:'#1a1200',fg:'#e8c040',border:'#8a7010'}
+  ];
+
   function showMatchingResults(matches) {
     document.getElementById('matchingScanning').style.display = 'none';
     document.getElementById('matchingResult').style.display = '';
     document.getElementById('matchingError').style.display = 'none';
 
-    var hasFallback = matches.some(function(m){ return m._isFallback; });
-    var list = document.getElementById('matchResultsList');
-    list.innerHTML = '';
+    _matchCards = matches;
+    _matchCardIdx = 0;
+    _matchInvited = {};
+    _renderMatchCard();
+  }
 
-    if (hasFallback) {
-      var banner = document.createElement('div');
-      banner.className = 'fallback-banner';
-      banner.textContent = '⚡ AI matching temporarily unavailable — results from algorithm.';
-      list.appendChild(banner);
+  function _renderMatchCard() {
+    var container = document.getElementById('matchResultsList');
+    var total = _matchCards.length;
+    var idx = _matchCardIdx;
+    var m = _matchCards[idx];
+    var av = _avStyles[idx % _avStyles.length];
+    var initials = (m.displayName || 'U').slice(0, 2).toUpperCase();
+    var bd = m.breakdown || {};
+    var score = m.score || 0;
+    var invited = !!_matchInvited[idx];
+
+    // Dots
+    var dotsHtml = _matchCards.map(function(_, i) {
+      return '<div style="width:18px;height:2px;background:' + (i === idx ? av.fg : '#1a1a1a') + ';transition:background .3s;"></div>';
+    }).join('');
+
+    // Values fit row (only if present)
+    var valuesFitHtml = '';
+    if (bd.valuesFit != null) {
+      valuesFitHtml =
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">' +
+          '<div style="font-size:8px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#888;width:90px;flex-shrink:0;">Values Fit</div>' +
+          '<div style="flex:1;height:1px;background:#1a1a1a;"><div style="height:100%;width:' + bd.valuesFit + '%;background:' + av.fg + ';"></div></div>' +
+          '<div style="font-size:9px;font-weight:700;color:#aaa;width:30px;text-align:right;">' + bd.valuesFit + '%</div>' +
+        '</div>';
     }
 
-    var avatarColors = [
-      {bg:'#EEEDFE',color:'#534AB7'},{bg:'#E1F5EE',color:'#0F6E56'},
-      {bg:'#FAECE7',color:'#993C1D'},{bg:'#E6F1FB',color:'#185FA5'},
-      {bg:'#FAEEDA',color:'#854F0B'}
-    ];
+    container.innerHTML =
+      // dots + counter
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px 0;">' +
+        '<div style="display:flex;gap:5px;">' + dotsHtml + '</div>' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;">' + (idx+1) + ' / ' + total + '</div>' +
+      '</div>' +
 
-    matches.forEach(function(match, idx) {
-      var ac = avatarColors[idx % avatarColors.length];
-      var initials = (match.displayName || 'U').slice(0,2).toUpperCase();
-      var bd = match.breakdown || {};
-      var score = match.score || 0;
-
-      var card = document.createElement('div');
-      card.className = 'mrc-card';
-      card.id = 'mrc-' + idx;
-      card.innerHTML =
-        '<div class="mrc-top">' +
-          '<div class="mrc-avatar" style="background:' + ac.bg + ';color:' + ac.color + ';">' + initials + '</div>' +
-          '<div class="mrc-info">' +
-            '<div class="mrc-name">@' + (match.displayName || 'partner') + '</div>' +
-            '<div class="mrc-sub">' + (match.habitName || '—') + '</div>' +
-          '</div>' +
-          '<div class="mrc-score">' +
-            '<div class="mrc-score-num">' + score + '</div>' +
-            '<div class="mrc-score-lbl">match</div>' +
-          '</div>' +
+      // header: avatar + name + score
+      '<div style="padding:14px 16px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:14px;">' +
+        '<div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0;border:2px solid ' + av.border + ';background:' + av.bg + ';color:' + av.fg + ';">' + initials + '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:4px;">Best match found</div>' +
+          '<div style="font-size:18px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#fff;line-height:1;font-family:var(--din);">@' + (m.displayName || 'partner') + '</div>' +
+          '<div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#555;margin-top:5px;">' + (m.habitName || '—') + '</div>' +
         '</div>' +
-        '<div class="mrc-metrics">' +
-          '<div class="mrc-metric"><div class="mrc-mlbl">Avg duration</div><div class="mrc-mval">' + (match.avgDuration || '—') + '</div></div>' +
-          '<div class="mrc-metric"><div class="mrc-mlbl">Habit lifespan</div><div class="mrc-mval">' + (match.habitLifespan || '—') + '</div></div>' +
-          '<div class="mrc-metric"><div class="mrc-mlbl">Rhythm</div><div class="mrc-mval">' + (match.rhythmLabel || (bd.rhythmScore != null ? bd.rhythmScore + '%' : '—')) + '</div></div>' +
-          '<div class="mrc-metric"><div class="mrc-mlbl">Mind-body</div><div class="mrc-mval">' + (match.mindBody || '—') + '</div></div>' +
+        '<div style="display:flex;align-items:baseline;gap:5px;flex-shrink:0;">' +
+          '<div style="font-size:36px;font-weight:700;line-height:1;font-family:var(--din);color:' + av.fg + ';">' + score + '</div>' +
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;">% match</div>' +
         '</div>' +
-        '<div class="mrc-actions">' +
-          '<div class="mrc-score-left">' +
-            '<div class="mrc-score-left-num">' + score + '</div>' +
-            '<div class="mrc-score-left-lbl">match</div>' +
-          '</div>' +
-          '<div style="flex:1;"></div>' +
-          '<button class="mrc-skip" onclick="window._mrcSkip(' + idx + ')" aria-label="Skip">✕</button>' +
-          '<button class="mrc-invite" id="mrc-inv-' + idx + '" onclick="window._mrcInvite(' + idx + ')">Send invite</button>' +
-        '</div>';
-      list.appendChild(card);
+      '</div>' +
 
-      // store match data on element for invite handler
-      card._matchData = match;
-    });
+      // score bar
+      '<div style="height:2px;background:#1a1a1a;margin:0 16px;">' +
+        '<div style="height:100%;width:' + score + '%;background:' + av.fg + ';"></div>' +
+      '</div>' +
 
-    // Notify toggle
-    var notifyRow = document.getElementById('matchNotifyRow');
-    if (notifyRow) notifyRow.style.display = matches.length < 5 ? '' : 'none';
+      // breakdown
+      '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;">Match breakdown</div>' +
+        _progRow('Avg Duration',   bd.activityFit,  av.fg) +
+        _progRow('Habit Lifespan', bd.rhythmScore,   av.fg) +
+        _progRow('Mind-Body',      bd.mindBody,      av.fg) +
+        _progRow('Rhythm Score',   bd.durationFit,   av.fg) +
+        valuesFitHtml +
+      '</div>' +
+
+      // AI reason
+      '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:8px;">Why this match</div>' +
+        '<div style="font-size:11px;color:#aaa;line-height:1.8;">' + (m.reason || '—') + '</div>' +
+      '</div>' +
+
+      // actions
+      '<div style="padding:12px 16px 10px;display:flex;gap:8px;align-items:center;">' +
+        '<button onclick="window._mrcSkipCard()" style="background:transparent;border:1px solid #2a2a2a;color:#888;width:40px;height:40px;cursor:pointer;font-size:13px;flex-shrink:0;transition:.15s;font-family:inherit;">✕</button>' +
+        '<button id="mrcInviteBtn" onclick="window._mrcInviteCard()" ' + (invited ? 'disabled' : '') + ' style="flex:1;background:' + (invited ? '#1a2a1a' : '#fff') + ';color:' + (invited ? '#4caf50' : '#0a0a0a') + ';border:' + (invited ? '1px solid #2d4a2d' : 'none') + ';padding:11px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:' + (invited ? 'default' : 'pointer') + ';font-family:inherit;">' + (invited ? 'Request sent ✓' : 'Send partner request') + '</button>' +
+      '</div>' +
+
+      // prev / next nav
+      '<div style="display:flex;gap:8px;padding:0 16px 14px;">' +
+        '<button onclick="window._mrcPrev()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;" ' + (idx === 0 ? 'disabled style="flex:1;background:transparent;border:1px solid #111;color:#333;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:default;font-family:inherit;"' : '') + '>← Previous</button>' +
+        '<button onclick="window._mrcNext()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;">Next →</button>' +
+      '</div>' +
+
+      // notify row (show when on last card)
+      (idx === total - 1 ? '<div style="margin:0 12px 14px;padding:12px;background:#0f0f0f;border:1px solid #111;display:flex;align-items:center;gap:10px;">' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#888;">Notify me when more matches appear</div>' +
+          '<div style="font-size:8px;color:#333;margin-top:3px;">We\'ll alert you when a new partner joins for this habit</div>' +
+        '</div>' +
+        '<div id="matchNotifyToggle" onclick="this.classList.toggle(\'on\');window._toggleMatchNotify(this)" style="width:32px;height:18px;background:#222;border-radius:9px;position:relative;cursor:pointer;flex-shrink:0;">' +
+          '<div style="position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#555;transition:transform .2s;"></div>' +
+        '</div>' +
+      '</div>' : '');
+
+    // store match data for invite
+    container._currentMatchData = m;
+    container._currentMatchIdx  = idx;
   }
 
-  // ── legacy single-result handler (kept for compatibility) ────────────────
-  function showMatchingResult(match) {
-    showMatchingResults([match]);
+  function _progRow(lbl, val, color) {
+    var v = val != null ? val : 0;
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">' +
+      '<div style="font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#888;width:90px;flex-shrink:0;">' + lbl + '</div>' +
+      '<div style="flex:1;height:1px;background:#1a1a1a;"><div style="height:100%;width:' + v + '%;background:' + color + ';"></div></div>' +
+      '<div style="font-size:9px;font-weight:700;color:#aaa;width:30px;text-align:right;">' + v + '%</div>' +
+    '</div>';
   }
 
-  window._mrcSkip = function(idx) {
-    var card = document.getElementById('mrc-' + idx);
-    if (card) { card.style.opacity = '0.3'; card.style.pointerEvents = 'none'; }
+  window._mrcPrev = function() { if (_matchCardIdx > 0) { _matchCardIdx--; _renderMatchCard(); } };
+  window._mrcNext = function() {
+    if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
   };
-
-  window._mrcInvite = function(idx) {
-    var card = document.getElementById('mrc-' + idx);
-    if (!card || !card._matchData || !_currentHabit) return;
-    var btn = document.getElementById('mrc-inv-' + idx);
-    if (btn && btn.disabled) return;
-    var match = card._matchData;
+  window._mrcSkipCard = function() {
+    if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
+  };
+  window._mrcInviteCard = function() {
+    var idx = _matchCardIdx;
+    var m = _matchCards[idx];
+    if (!m || !_currentHabit || _matchInvited[idx]) return;
     (async function() {
       try {
         var session = await _supabase.auth.getSession();
         var userId = session.data.session && session.data.session.user && session.data.session.user.id;
         if (!userId) return;
         await _supabase.from('pairs').insert({
-          user_id: userId,
-          partner_id: match.userId,
-          habit_name: _currentHabit.name,
-          partner_habit_name: match.habitName,
-          match_score: match.score,
-          status: 'pending'
+          user_id: userId, partner_id: m.userId,
+          habit_name: _currentHabit.name, partner_habit_name: m.habitName,
+          match_score: m.score, status: 'pending'
         });
         await _supabase.from('notifications').insert({
-          user_id: match.userId,
-          type: 'partner_request',
+          user_id: m.userId, type: 'partner_request',
           title: 'New Partner Request!',
-          body: 'Someone wants to be your habit partner for "' + match.habitName + '".',
-          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name, partner_habit_name: match.habitName }),
-          is_read: false,
-          created_at: new Date().toISOString()
+          body: 'Someone wants to be your habit partner for "' + m.habitName + '".',
+          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name }),
+          is_read: false, created_at: new Date().toISOString()
         });
-        if (btn) { btn.textContent = 'Sent ✓'; btn.disabled = true; btn.classList.add('mrc-invite-sent'); }
+        _matchInvited[idx] = true;
+        _renderMatchCard();
         if (typeof showToast === 'function') showToast('Invite sent! 🎉');
-      } catch(e) {
-        alert('Failed to send invite: ' + e.message);
-      }
+        if (_matchCardIdx < _matchCards.length - 1) setTimeout(function(){ _matchCardIdx++; _renderMatchCard(); }, 700);
+      } catch(e) { alert('Failed to send invite: ' + e.message); }
     })();
   };
 
