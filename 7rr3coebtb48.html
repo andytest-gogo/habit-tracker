@@ -245,6 +245,10 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
         Token Usage
       </button>
+      <button class="nav-btn" data-page="engagement">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Engagement
+      </button>
       <button class="nav-btn" data-page="subscriptions">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         Subscriptions
@@ -599,6 +603,23 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER;
 
+-- ── pairs：新增 ended_at 欄位（Engagement 頁計算 partnership 存續天數用）──
+ALTER TABLE pairs ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+
+-- ── page_sessions（Engagement 頁：使用者頁面停留時間）─────────────────────
+CREATE TABLE IF NOT EXISTS page_sessions (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID NOT NULL,
+  page TEXT NOT NULL,
+  seconds INTEGER NOT NULL CHECK (seconds &gt; 0 AND seconds &lt;= 7200),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_page_sessions_created ON page_sessions (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_page_sessions_user ON page_sessions (user_id);
+ALTER TABLE page_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "page_sessions_insert" ON page_sessions FOR INSERT WITH CHECK (auth.uid()=user_id);
+CREATE POLICY "page_sessions_admin_read" ON page_sessions FOR SELECT USING (is_admin());
+
 -- ── users ─────────────────────────────────────────────────────────────────
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "users_read"   ON users FOR SELECT USING (auth.uid()=id OR is_admin());
@@ -855,6 +876,56 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
         <table>
           <thead><tr><th>Date</th><th>API Calls</th><th>Est. Tokens</th><th>Est. Cost (USD)</th><th>Unique Users</th></tr></thead>
           <tbody id="tokensTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ ENGAGEMENT PAGE ══ -->
+    <div class="pg" id="pg-engagement">
+      <div class="pg-title">Engagement</div>
+      <div class="pg-sub">Page dwell time · Pair chat frequency · Ended partnerships</div>
+
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Avg Session</div><div class="stat-val" id="egAvgSession">—</div><div class="stat-note">Avg dwell per page visit (30d)</div></div>
+        <div class="stat" style="border-left:3px solid #60a5fa"><div class="stat-lbl">Chatting Pairs</div><div class="stat-val" id="egChattingPairs" style="color:#2563eb">—</div><div class="stat-note">Pairs with messages in last 7d</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Msgs / Pair / Day</div><div class="stat-val" id="egMsgsPerDay" style="color:#059669">—</div><div class="stat-note">Avg across active pairs</div></div>
+        <div class="stat" style="border-left:3px solid #f87171"><div class="stat-lbl">Ended Pairs</div><div class="stat-val" id="egEndedTotal" style="color:#dc2626">—</div><div class="stat-note" id="egEndedBreakdown">—</div></div>
+      </div>
+
+      <!-- Per-user page dwell time -->
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Page Dwell Time per User (last 30 days)</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="egDwellMode" onchange="renderEngagementDwell()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+              <option value="total">Total time</option>
+              <option value="avg">Avg per visit</option>
+            </select>
+            <button class="refresh" onclick="loadEngagement()">Refresh</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>User</th><th>Home</th><th>Community</th><th>Buddies</th><th>Pair Wall</th><th>Profile</th><th>Total</th><th>Visits</th></tr></thead>
+          <tbody id="egDwellTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
+        </table>
+        <p style="font-size:10px;color:var(--g400);padding:10px 4px 2px;line-height:1.6">Source: <code>page_sessions</code> table — the app logs a row each time a user leaves a tab or backgrounds the app. Sessions &lt;2s or &gt;2h are discarded client-side.</p>
+      </div>
+
+      <!-- Pair chat frequency -->
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd"><div class="tbl-ttl">Pair Chat Frequency</div><button class="refresh" onclick="loadEngagement()">Refresh</button></div>
+        <table>
+          <thead><tr><th>Pair</th><th>Habit</th><th>Status</th><th>Total Msgs</th><th>Last 7d</th><th>Msgs / Day</th><th>Last Message</th></tr></thead>
+          <tbody id="egChatTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Ended partnerships -->
+      <div class="tbl-card">
+        <div class="tbl-hd"><div class="tbl-ttl">Ended Partnerships</div><button class="refresh" onclick="loadEngagement()">Refresh</button></div>
+        <table>
+          <thead><tr><th>Pair</th><th>Habit</th><th>Reason</th><th>Msgs Exchanged</th><th>Lifespan (days)</th><th>Created</th><th>Last Post</th></tr></thead>
+          <tbody id="egEndedTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1528,6 +1599,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (btn.dataset.page === 'pairs') loadPairs();
     if (btn.dataset.page === 'tokens') loadTokenUsage();
     if (btn.dataset.page === 'subscriptions') loadSubscriptions();
+    if (btn.dataset.page === 'engagement') loadEngagement();
   };
 });
 
@@ -3821,6 +3893,175 @@ async function loadPairs() {
   } catch(e) {
     document.getElementById('pairsTbody').innerHTML = '<tr><td colspan="8">Error: ' + e.message + '</td></tr>';
   }
+}
+
+/* ══════════════════════════════════════════════════
+   ENGAGEMENT（頁面停留時間 / 配對聊天頻率 / 解除綁定數據）
+══════════════════════════════════════════════════ */
+var _egDwellAgg = null;   // { uid: { pages:{page:{sec,visits}}, totalSec, totalVisits } }
+var _egUserNames = {};    // uid → username
+
+function _egFmtDur(sec) {
+  if (!sec) return '<span style="color:var(--g300)">—</span>';
+  if (sec < 60) return sec + 's';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ' + (sec%60) + 's';
+  return Math.floor(sec/3600) + 'h ' + Math.floor((sec%3600)/60) + 'm';
+}
+function _egName(uid) {
+  var n = _egUserNames[uid];
+  return n ? n : ((uid||'').slice(0,8) + '…');
+}
+
+async function loadEngagement() {
+  var dwellTbody = document.getElementById('egDwellTbody');
+  var chatTbody  = document.getElementById('egChatTbody');
+  var endedTbody = document.getElementById('egEndedTbody');
+  dwellTbody.innerHTML = '<tr class="loading-row"><td colspan="8">Loading...</td></tr>';
+  chatTbody.innerHTML  = '<tr class="loading-row"><td colspan="7">Loading...</td></tr>';
+  endedTbody.innerHTML = '<tr class="loading-row"><td colspan="7">Loading...</td></tr>';
+  try {
+    var since30 = new Date(Date.now() - 30*86400000).toISOString();
+    var since7  = new Date(Date.now() -  7*86400000).toISOString();
+
+    var results = await Promise.all([
+      _supabase.from('page_sessions').select('user_id,page,seconds,created_at').gte('created_at', since30).limit(20000),
+      _supabase.from('pair_messages').select('pair_id,sender_id,created_at').order('created_at', { ascending: false }).limit(20000),
+      _supabase.from('pairs').select('*').order('created_at', { ascending: false }),
+      _supabase.from('users').select('id,username,display_name')
+    ]);
+    var sessions = results[0].data || [];
+    var msgs     = results[1].data || [];
+    var pairs    = results[2].data || [];
+    var users    = results[3].data || [];
+    if (results[0].error && results[0].error.message && /page_sessions/.test(results[0].error.message + (results[0].error.hint||''))) {
+      dwellTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#d97706">⚠ page_sessions table not found — run the SQL in Security &amp; Rules to create it</td></tr>';
+    }
+
+    _egUserNames = {};
+    users.forEach(function(u){ _egUserNames[u.id] = u.username || u.display_name || null; });
+
+    /* ── 1) Page dwell time per user ── */
+    var agg = {};
+    var grandSec = 0, grandVisits = 0;
+    sessions.forEach(function(s){
+      var uid = s.user_id; if (!uid) return;
+      if (!agg[uid]) agg[uid] = { pages:{}, totalSec:0, totalVisits:0 };
+      var pg = s.page || 'other';
+      if (!agg[uid].pages[pg]) agg[uid].pages[pg] = { sec:0, visits:0 };
+      agg[uid].pages[pg].sec += (s.seconds||0);
+      agg[uid].pages[pg].visits += 1;
+      agg[uid].totalSec += (s.seconds||0);
+      agg[uid].totalVisits += 1;
+      grandSec += (s.seconds||0); grandVisits += 1;
+    });
+    _egDwellAgg = agg;
+    document.getElementById('egAvgSession').textContent = grandVisits ? _egFmtDur(Math.round(grandSec/grandVisits)).replace(/<[^>]*>/g,'') : '—';
+    renderEngagementDwell();
+
+    /* ── 2) Pair chat frequency ── */
+    var byPair = {};
+    msgs.forEach(function(m){
+      if (!byPair[m.pair_id]) byPair[m.pair_id] = { total:0, last7:0, lastAt:null };
+      byPair[m.pair_id].total += 1;
+      if (m.created_at >= since7) byPair[m.pair_id].last7 += 1;
+      if (!byPair[m.pair_id].lastAt || m.created_at > byPair[m.pair_id].lastAt) byPair[m.pair_id].lastAt = m.created_at;
+    });
+    var chattingPairs7d = Object.keys(byPair).filter(function(pid){ return byPair[pid].last7 > 0; }).length;
+    document.getElementById('egChattingPairs').textContent = chattingPairs7d;
+
+    var activePairs = pairs.filter(function(p){ return p.status === 'active'; });
+    var perDaySum = 0, perDayCount = 0;
+    var chatRows = pairs.filter(function(p){ return p.status === 'active' || byPair[p.id]; }).map(function(p){
+      var stat = byPair[p.id] || { total:0, last7:0, lastAt:null };
+      var ageDays = Math.max(1, Math.round((Date.now() - new Date(p.created_at).getTime()) / 86400000));
+      var perDay = stat.total / ageDays;
+      if (p.status === 'active') { perDaySum += perDay; perDayCount += 1; }
+      return { p:p, stat:stat, perDay:perDay };
+    }).sort(function(a,b){ return b.stat.total - a.stat.total; });
+    document.getElementById('egMsgsPerDay').textContent = perDayCount ? (perDaySum/perDayCount).toFixed(1) : '—';
+
+    if (chatRows.length === 0) {
+      chatTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g400)">No pair messages yet</td></tr>';
+    } else {
+      chatTbody.innerHTML = chatRows.map(function(r){
+        var p = r.p, stat = r.stat;
+        var statusColor = p.status === 'active' ? '#059669' : p.status === 'pending' ? '#d97706' : '#9ca3af';
+        return '<tr>' +
+          '<td style="font-size:11px">' + _egName(p.user_id) + ' × ' + _egName(p.partner_id) + '</td>' +
+          '<td>' + (p.habit_name||'—') + '</td>' +
+          '<td><span class="badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + p.status + '</span></td>' +
+          '<td style="font-weight:700">' + stat.total + '</td>' +
+          '<td>' + (stat.last7 || '<span style="color:var(--g300)">0</span>') + '</td>' +
+          '<td>' + r.perDay.toFixed(1) + '</td>' +
+          '<td style="font-size:11px;color:var(--g400)">' + (stat.lastAt ? new Date(stat.lastAt).toLocaleString() : '—') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    /* ── 3) Ended partnerships ── */
+    var ended = pairs.filter(function(p){ return p.status === 'ended'; });
+    var byUser = ended.filter(function(p){ return p.ended_reason === 'user_request'; }).length;
+    var byInact = ended.filter(function(p){ return p.ended_reason === 'inactivity'; }).length;
+    document.getElementById('egEndedTotal').textContent = ended.length;
+    document.getElementById('egEndedBreakdown').textContent = '👤 ' + byUser + ' user-ended · ⏱ ' + byInact + ' inactivity';
+
+    if (ended.length === 0) {
+      endedTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g400)">No ended partnerships</td></tr>';
+    } else {
+      endedTbody.innerHTML = ended.map(function(p){
+        var stat = byPair[p.id] || { total:0 };
+        var endRef = p.ended_at || p.last_post_at || null;
+        var lifespan = endRef ? Math.max(0, Math.round((new Date(endRef) - new Date(p.created_at)) / 86400000)) : null;
+        var reason = p.ended_reason === 'inactivity'
+          ? '<span style="color:#d97706;font-size:10px">⏱ 7-day inactivity</span>'
+          : p.ended_reason === 'user_request'
+            ? '<span style="color:#6b7280;font-size:10px">👤 User ended</span>'
+            : '<span style="color:var(--g300)">—</span>';
+        return '<tr>' +
+          '<td style="font-size:11px">' + _egName(p.user_id) + ' × ' + _egName(p.partner_id) + '</td>' +
+          '<td>' + (p.habit_name||'—') + '</td>' +
+          '<td>' + reason + '</td>' +
+          '<td>' + stat.total + '</td>' +
+          '<td>' + (lifespan === null ? '<span style="color:var(--g300)">—</span>' : lifespan) + '</td>' +
+          '<td style="font-size:11px;color:var(--g400)">' + new Date(p.created_at).toLocaleDateString() + '</td>' +
+          '<td style="font-size:11px;color:var(--g400)">' + (p.last_post_at ? new Date(p.last_post_at).toLocaleDateString() : '—') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+  } catch(e) {
+    dwellTbody.innerHTML = '<tr><td colspan="8">Error: ' + e.message + '</td></tr>';
+    chatTbody.innerHTML  = '<tr><td colspan="7">Error: ' + e.message + '</td></tr>';
+    endedTbody.innerHTML = '<tr><td colspan="7">Error: ' + e.message + '</td></tr>';
+  }
+}
+
+function renderEngagementDwell() {
+  var tbody = document.getElementById('egDwellTbody');
+  var agg = _egDwellAgg;
+  if (!agg) return;
+  var mode = document.getElementById('egDwellMode').value;
+  var uids = Object.keys(agg).sort(function(a,b){ return agg[b].totalSec - agg[a].totalSec; });
+  if (uids.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--g400)">No page session data yet — data appears once users navigate the app after this update is deployed</td></tr>';
+    return;
+  }
+  var PAGES = ['home','feed','buddies','pair_wall','profile'];
+  tbody.innerHTML = uids.map(function(uid){
+    var u = agg[uid];
+    var cells = PAGES.map(function(pg){
+      var d = u.pages[pg];
+      if (!d) return '<td><span style="color:var(--g300)">—</span></td>';
+      var val = mode === 'avg' ? Math.round(d.sec / d.visits) : d.sec;
+      return '<td>' + _egFmtDur(val) + (mode === 'total' ? ' <span style="font-size:9px;color:var(--g400)">(' + d.visits + '×)</span>' : '') + '</td>';
+    }).join('');
+    var totalVal = mode === 'avg' ? Math.round(u.totalSec / u.totalVisits) : u.totalSec;
+    return '<tr>' +
+      '<td style="font-size:11px;font-weight:600">' + _egName(uid) + '</td>' +
+      cells +
+      '<td style="font-weight:700">' + _egFmtDur(totalVal) + '</td>' +
+      '<td>' + u.totalVisits + '</td>' +
+    '</tr>';
+  }).join('');
 }
 
 /* ══════════════════════════════════════════════════

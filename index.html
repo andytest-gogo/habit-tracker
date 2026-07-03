@@ -7338,10 +7338,48 @@ function MainApp(_ref16) {
     if (tab === 'feed') {
       window._communityEnterTime = _now;
     }
+    // ── Supabase: page dwell-time tracking（管理後台 Engagement 頁使用）──
+    if (typeof window._flushPageSession === 'function') window._flushPageSession(tab);
     window._activeTabTrack = tab;
     _setActiveTabRaw(tab);
     try{localStorage.setItem('_ht_tab',tab);}catch(e){}
   },[]);
+  /* ── Page dwell-time tracking → Supabase `page_sessions` ─────────────────
+     每次切換分頁 / App 進背景時，把「上一頁停留秒數」寫入 page_sessions。
+     管理後台 Engagement 頁會彙總這張表。2 秒以下或超過 2 小時的紀錄視為雜訊丟棄。 */
+  useEffect(function(){
+    if (!user || !user.uid) return;
+    var _uid = user.uid;
+    window._pageEnterTime = Date.now();
+    window._pageTrackName = window._activeTabTrack || activeTab || 'home';
+    window._flushPageSession = function(nextPage){
+      var now = Date.now();
+      var prevPage = window._pageTrackName;
+      var enter = window._pageEnterTime;
+      window._pageTrackName = nextPage || prevPage;
+      window._pageEnterTime = now;
+      if (!prevPage || typeof enter !== 'number') return;
+      var sec = Math.round((now - enter) / 1000);
+      if (sec < 2 || sec > 7200) return; // 丟棄雜訊
+      try {
+        _supabase.from('page_sessions').insert({ user_id: _uid, page: prevPage, seconds: sec })
+          .then(function(){}).catch(function(){});
+      } catch(e) {}
+    };
+    function _onVis(){
+      if (document.visibilityState === 'hidden') {
+        // App 進背景 → 先結算目前頁面；回前景時 enterTime 已重設
+        window._flushPageSession(window._pageTrackName);
+      } else {
+        window._pageEnterTime = Date.now();
+      }
+    }
+    document.addEventListener('visibilitychange', _onVis);
+    return function(){
+      document.removeEventListener('visibilitychange', _onVis);
+      window._flushPageSession = null;
+    };
+  }, [user]);
   var _useStateTHEME = useState(function(){
     try{return localStorage.getItem('_ht_theme')||'light';}catch(e){return 'light';}
   }),
@@ -7712,7 +7750,7 @@ function MainApp(_ref16) {
   var [visibilityPrompt, setVisibilityPrompt] = React.useState(null); // 建立習慣後詢問是否公開到 Challengers：{ id, tempId, name }
   var [deleteConfirmId, setDeleteConfirmId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
-  var PARTNER_UNLOCK_DAYS = 2;       // 達成 2 天打卡 → 解鎖夥伴配對功能
+  var PARTNER_UNLOCK_DAYS = 7;       // 達成 7 天打卡 → 解鎖夥伴配對功能
   var CHALLENGE_COMPLETE_DAYS = 21;  // 達成 21 天打卡 → 真正完成挑戰，移入 Completed
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
@@ -9847,7 +9885,7 @@ function MainApp(_ref16) {
       var isQualified = daysCompleted >= PARTNER_UNLOCK_DAYS;
       var unlockPct = Math.min(Math.round((daysCompleted / PARTNER_UNLOCK_DAYS) * 100), 100);
       var daysLeft = Math.max(PARTNER_UNLOCK_DAYS - daysCompleted, 0);
-      // Bug fix: don't show unlock progress bar if habit total duration < 2 days
+      // Bug fix: don't show unlock progress bar if habit total duration < PARTNER_UNLOCK_DAYS
       var _habitTr = parseTimeRange(habit.timeRange);
       var _habitDuration = (_habitTr.start && _habitTr.end)
         ? Math.round((dateFromISO(_habitTr.end) - dateFromISO(_habitTr.start)) / 86400000) + 1
@@ -11038,7 +11076,7 @@ function PairWallPage(_ref_pw) {
     if (!lastActivity) return;
     var daysSilent = Math.floor((Date.now() - new Date(lastActivity)) / 86400000);
     if (daysSilent >= 7) {
-      _supabase.from('pairs').update({ status: 'ended', ended_reason: 'inactivity' })
+      _supabase.from('pairs').update({ status: 'ended', ended_reason: 'inactivity', ended_at: new Date().toISOString() })
         .eq('id', p.id)
         .then(function() {
           // Send notification to both users
@@ -11055,7 +11093,7 @@ function PairWallPage(_ref_pw) {
   function endPartnership() {
     if (ending) return;
     setEnding(true);
-    _supabase.from('pairs').update({ status: 'ended', ended_reason: 'user_request' })
+    _supabase.from('pairs').update({ status: 'ended', ended_reason: 'user_request', ended_at: new Date().toISOString() })
       .eq('id', pair.id)
       .then(function() {
         var notifBase = { type: 'partnership_ended', pair_id: pair.id, message: 'Your partnership has ended.' };
@@ -11090,6 +11128,14 @@ function PairWallPage(_ref_pw) {
     if (!user) return;
     _supabase.from('users').update({ last_active: new Date().toISOString() }).eq('id', user.uid).catch(function(){});
   }, [user]);
+
+  /* Page dwell tracking: 進入 Pair Wall 記為 'pair_wall'，離開時記回 'buddies' */
+  useEffect(function(){
+    if (typeof window._flushPageSession === 'function') window._flushPageSession('pair_wall');
+    return function(){
+      if (typeof window._flushPageSession === 'function') window._flushPageSession('buddies');
+    };
+  }, []);
 
   /* load posts + messages */
   useEffect(function() {
