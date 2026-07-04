@@ -280,6 +280,12 @@
 
         /* Make pw-chat (AI partner chat) also transparent */
         body[data-theme="dark"] .pw-chat { background: transparent; }
+        body[data-theme="dark"] .pw-ai-card { background:var(--bg-subtle); border-bottom:1px solid var(--border-dk); }
+        body[data-theme="dark"] .pw-req-card { background:var(--bg-subtle); border-color:var(--border-dk); }
+        body[data-theme="dark"] .pw-req-txt { color:var(--text-secondary); }
+        body[data-theme="dark"] .pw-req-decline { background:transparent; border-color:var(--border-dk); color:var(--text-secondary); }
+        body[data-theme="dark"] .pw-cam { border-color:var(--border-dk); }
+        body[data-theme="dark"] .pw-mmedia { border-color:var(--border-dk); }
 
         /* feed-content transparent so gradient shows */
         body[data-theme="dark"] .feed-content { background: transparent; }
@@ -1088,6 +1094,22 @@
         .pw-nudge-btn { padding:6px 12px; background:var(--black); color:var(--white); border:none; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); white-space:nowrap; flex-shrink:0; }
         /* chat */
         .pw-chat { background:var(--gray-50); flex:1; }
+        /* ── AI insight card（共同點提醒，閃爍點沿用配對動畫 matchBlink）── */
+        .pw-ai-card { background:var(--black); padding:12px 16px; display:flex; gap:10px; align-items:flex-start; }
+        .pw-ai-dot { width:5px; height:5px; background:#4ade80; animation:matchBlink 1s infinite; margin-top:5px; flex-shrink:0; }
+        .pw-ai-lbl { font-size:8px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.45); margin-bottom:3px; }
+        .pw-ai-txt { font-size:11.5px; line-height:1.6; color:rgba(255,255,255,0.92); }
+        /* ── Media consent / system messages ── */
+        .pw-sys-msg { text-align:center; font-size:10px; color:var(--gray-400); padding:3px 12px; line-height:1.5; }
+        .pw-req-card { border:1px solid var(--gray-200); background:var(--white); padding:10px 12px; max-width:240px; }
+        .pw-req-txt { font-size:11px; color:var(--gray-600); line-height:1.55; margin-bottom:8px; }
+        .pw-req-btns { display:flex; gap:6px; }
+        .pw-req-allow { flex:1; padding:6px; background:#16a34a; color:#fff; border:none; font-size:10px; font-weight:700; cursor:pointer; font-family:var(--font); }
+        .pw-req-decline { flex:1; padding:6px; background:var(--white); border:1px solid var(--gray-200); color:var(--gray-600); font-size:10px; font-weight:700; cursor:pointer; font-family:var(--font); }
+        .pw-cam { width:32px; height:32px; border:1px solid var(--gray-200); display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; flex-shrink:0; }
+        .pw-cam.busy { opacity:.5; pointer-events:none; }
+        .pw-mmedia { max-width:180px; border:1px solid var(--gray-200); overflow:hidden; }
+        .pw-mmedia img { width:100%; display:block; }
         .pw-chat-label { padding:7px 16px 5px; font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:var(--gray-400); border-bottom:1px solid var(--gray-150,#e8e8e8); }
         .pw-msgs { padding:10px 16px; display:flex; flex-direction:column; gap:8px; }
         .pw-msg { display:flex; gap:7px; align-items:flex-end; }
@@ -3777,6 +3799,7 @@ var BUNNY_STREAM_LIBRARY   = '677933';
 var BUNNY_STREAM_CDN       = 'https://vz-cc68b17b-afb.b-cdn.net';
 // ⚠️ Bunny API 金鑰已移到 bunny-upload Edge Function（後端），前端不再持有任何金鑰。
 var BUNNY_UPLOAD_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/bunny-upload';
+var PAIR_INSIGHT_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/pair-insight';
 
 // 取得目前使用者的 access token（呼叫 edge function 用）
 async function _getAccessToken() {
@@ -11057,6 +11080,44 @@ function PairWallPage(_ref_pw) {
   var _sla = useState(null); var partnerLastActive = _sla[0]; var setPartnerLastActive = _sla[1];
   var _sep = useState(false); var showEndConfirm = _sep[0]; var setShowEndConfirm = _sep[1];
   var _send = useState(false); var ending = _send[0]; var setEnding = _send[1];
+  /* AI insight（共同點提醒）*/
+  var _sai = useState(pair.ai_insight || null); var aiInsight = _sai[0]; var setAiInsight = _sai[1];
+  var _sail = useState(false); var insightLoading = _sail[0]; var setInsightLoading = _sail[1];
+  /* Media consent（首次上傳照片/影片需對方同意）*/
+  var _smc = useState(pair.media_consent || {}); var mediaConsent = _smc[0]; var setMediaConsent = _smc[1];
+  var _smcm = useState(false); var showMediaConsentModal = _smcm[0]; var setShowMediaConsentModal = _smcm[1];
+  var _scms = useState(false); var chatMediaSending = _scms[0]; var setChatMediaSending = _scms[1];
+
+  /* 從 DB 重新讀取 media_consent（對方核准/拒絕後同步）*/
+  function refreshConsent() {
+    _supabase.from('pairs').select('media_consent').eq('id', pair.id).single()
+      .then(function(r) { if (r.data) setMediaConsent(r.data.media_consent || {}); })
+      .catch(function(){});
+  }
+
+  /* 取得 AI 共同點提醒（每組 pair 只會呼叫 Claude 一次，之後讀 pairs.ai_insight 快取）*/
+  useEffect(function() {
+    if (!user || !pair || pair.status !== 'active') return;
+    if (pair.ai_insight) { setAiInsight(pair.ai_insight); return; }
+    setInsightLoading(true);
+    _getAccessToken().then(function(token) {
+      if (!token) throw new Error('not authenticated');
+      return fetch(PAIR_INSIGHT_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ pairId: pair.id })
+      });
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && d.insight) setAiInsight(d.insight);
+      setInsightLoading(false);
+    })
+    .catch(function() { setInsightLoading(false); });
+  }, [user, pair && pair.id]);
+
+  /* 進入聊天室時同步一次 consent 狀態 */
+  useEffect(function() { refreshConsent(); }, []);
 
   /* Format last active time */
   function fmtLastActive(ts) {
@@ -11172,6 +11233,10 @@ function PairWallPage(_ref_pw) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pair_messages', filter: 'pair_id=eq.' + pair.id },
         function(payload) {
           setMessages(function(prev) { return prev.concat([payload.new]); });
+          // Media consent 相關訊息 → 重新同步 pairs.media_consent
+          if (payload.new.message_type && payload.new.message_type !== 'text' && payload.new.message_type !== 'media') {
+            refreshConsent();
+          }
           // Auto-mark as read if it's from partner
           if (payload.new.sender_id !== user.uid) {
             setTimeout(function() { markMessagesRead(); }, 500);
@@ -11207,6 +11272,74 @@ function PairWallPage(_ref_pw) {
     _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
       .then(function() { setInputText(''); setSending(false); })
       .catch(function() { setSending(false); });
+  }
+
+  /* ── Chat media（聊天室傳照片/影片，首次需對方同意）─────────────────── */
+  function handleChatMediaClick() {
+    if (chatMediaSending) return;
+    var status = (mediaConsent || {})[user.uid];
+    if (status === 'approved') {
+      var inp = document.getElementById('pw-chat-media-input');
+      if (inp) inp.click();
+      return;
+    }
+    if (status === 'pending') {
+      alert('Waiting for Partner ' + partnerInitials + ' to approve photo & video sharing.');
+      return;
+    }
+    setShowMediaConsentModal(true); // 未申請過 或 曾被拒絕 → 送出（新的）請求
+  }
+
+  function requestMediaConsent() {
+    var mc = Object.assign({}, mediaConsent); mc[user.uid] = 'pending';
+    setMediaConsent(mc);
+    setShowMediaConsentModal(false);
+    _supabase.from('pairs').update({ media_consent: mc }).eq('id', pair.id)
+      .then(function() {
+        return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media_request' });
+      })
+      .catch(function() {});
+  }
+
+  function respondMediaRequest(approve) {
+    var mc = Object.assign({}, mediaConsent); mc[partnerId] = approve ? 'approved' : 'declined';
+    setMediaConsent(mc);
+    _supabase.from('pairs').update({ media_consent: mc }).eq('id', pair.id)
+      .then(function() {
+        return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: approve ? 'media_consent_granted' : 'media_consent_declined' });
+      })
+      .catch(function() {});
+  }
+
+  function handleChatMediaSelect(e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file || chatMediaSending) return;
+    var isVid = file.type.startsWith('video/');
+    setChatMediaSending(true);
+    var modP = isVid
+      ? _moderateContent('', null, 'video')
+      : _imageFileToBase64(file)
+          .then(function(b64) { return _moderateContent('', b64, 'image'); })
+          .catch(function() { return _moderateContent('', null, 'image'); });
+    modP.then(function(mod) {
+      if (mod.approved === false) {
+        var v = mod.violation || 'IRRELEVANT';
+        alert('⚠️ Media not sent\n\n' + (VIOLATION_MESSAGES[v] || 'Please review our community guidelines.'));
+        setChatMediaSending(false);
+        return Promise.reject({ __modBlocked: true });
+      }
+      return _uploadToBunnyStorage(file, user.uid, null);
+    })
+    .then(function(r) {
+      return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media', media_url: r.url, media_type: isVid ? 'video' : 'image' });
+    })
+    .then(function() { setChatMediaSending(false); })
+    .catch(function(err) {
+      if (err && err.__modBlocked) return;
+      alert('Send failed: ' + (err && err.message ? err.message : err));
+      setChatMediaSending(false);
+    });
   }
 
   /* handle file select */
@@ -11471,6 +11604,39 @@ function PairWallPage(_ref_pw) {
       )
     ),
 
+    /* AI INSIGHT — 一兩句話提醒雙方的共同點（一次生成，讀 pairs.ai_insight 快取）*/
+    (insightLoading || aiInsight) && React.createElement('div', { className: 'pw-ai-card' },
+      React.createElement('div', { className: 'pw-ai-dot' }),
+      React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+        React.createElement('div', { className: 'pw-ai-lbl' }, 'AI · What you two share'),
+        React.createElement('div', { className: 'pw-ai-txt' },
+          insightLoading ? 'Analysing what you both have in common...' : aiInsight
+        )
+      )
+    ),
+
+    /* MEDIA CONSENT REQUEST MODAL */
+    showMediaConsentModal && React.createElement('div', {
+      style: { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }
+    },
+      React.createElement('div', { style: { background:'var(--white)', borderRadius:8, padding:'24px 20px', width:'100%', maxWidth:320 } },
+        React.createElement('div', { style: { fontSize:14, fontWeight:700, color:'var(--black)', marginBottom:8 } }, 'Share photos & videos?'),
+        React.createElement('div', { style: { fontSize:12, color:'var(--gray-500)', lineHeight:1.6, marginBottom:20 } },
+          'First-time sharing needs your partner\'s OK. Partner ' + partnerInitials + ' will get a request in this chat — once they approve, you can send photos and videos anytime without asking again.'
+        ),
+        React.createElement('div', { style: { display:'flex', gap:8 } },
+          React.createElement('button', {
+            style: { flex:1, padding:'10px', background:'var(--white)', border:'1px solid var(--gray-200)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' },
+            onClick: function(){ setShowMediaConsentModal(false); }
+          }, 'Cancel'),
+          React.createElement('button', {
+            style: { flex:1, padding:'10px', background:'var(--black)', color:'#fff', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' },
+            onClick: requestMediaConsent
+          }, 'Send Request')
+        )
+      )
+    ),
+
     /* CONTENT */
     /* State 1: nobody posted today */
     !partnerPost && !myPost && React.createElement(React.Fragment, null,
@@ -11526,6 +11692,65 @@ function PairWallPage(_ref_pw) {
               var isMe = m.sender_id === user.uid;
               var isLast = idx === messages.length - 1;
               var isRead = isMe && m.read_at;
+              var mType = m.message_type || 'text';
+
+              /* ── 媒體分享請求卡 ── */
+              if (mType === 'media_request') {
+                var reqStatus = (mediaConsent || {})[m.sender_id];
+                if (isMe) {
+                  return React.createElement('div', { key: m.id, className: 'pw-sys-msg' },
+                    reqStatus === 'approved' ? '✓ Partner ' + partnerInitials + ' allowed photo & video sharing'
+                    : reqStatus === 'declined' ? 'Your photo & video request was declined'
+                    : 'You asked to share photos & videos — waiting for Partner ' + partnerInitials
+                  );
+                }
+                return React.createElement('div', { key: m.id, className: 'pw-msg' },
+                  React.createElement('div', { className: 'pw-mav dk' }, partnerInitials),
+                  React.createElement('div', { className: 'pw-req-card' },
+                    React.createElement('div', { className: 'pw-req-txt' },
+                      '📷 Partner ' + partnerInitials + ' wants to share photos & videos in this chat. Approve once and they won\'t need to ask again.'
+                    ),
+                    reqStatus === 'pending'
+                      ? React.createElement('div', { className: 'pw-req-btns' },
+                          React.createElement('button', { className: 'pw-req-allow', onClick: function(){ respondMediaRequest(true); } }, 'Allow'),
+                          React.createElement('button', { className: 'pw-req-decline', onClick: function(){ respondMediaRequest(false); } }, 'Decline')
+                        )
+                      : React.createElement('div', { style: { fontSize:10, fontWeight:700, color: reqStatus === 'approved' ? '#16a34a' : 'var(--gray-400)' } },
+                          reqStatus === 'approved' ? '✓ Allowed' : reqStatus === 'declined' ? 'Declined' : ''
+                        )
+                  )
+                );
+              }
+
+              /* ── 同意/拒絕系統訊息 ── */
+              if (mType === 'media_consent_granted' || mType === 'media_consent_declined') {
+                var who = isMe ? 'You' : 'Partner ' + partnerInitials;
+                return React.createElement('div', { key: m.id, className: 'pw-sys-msg' },
+                  who + (mType === 'media_consent_granted' ? ' allowed photo & video sharing 🎉' : ' declined photo & video sharing')
+                );
+              }
+
+              /* ── 媒體訊息（照片/影片）── */
+              if (mType === 'media' && m.media_url) {
+                return React.createElement('div', { key: m.id, className: 'pw-msg' + (isMe ? ' me' : '') },
+                  React.createElement('div', { className: 'pw-mav' + (isMe ? '' : ' dk') }, isMe ? 'YOU' : partnerInitials),
+                  React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start' } },
+                    React.createElement('div', { className: 'pw-mmedia' },
+                      m.media_type === 'video'
+                        ? renderPostVideo(m.media_url, { wrapStyle: { aspectRatio:'1/1', width:180 }, style: { width:'100%', height:'100%', objectFit:'cover' } })
+                        : React.createElement('img', { src: m.media_url, alt: 'shared media', loading: 'lazy' })
+                    ),
+                    React.createElement('div', { style: { display:'flex', alignItems:'center', gap:4, marginTop:2 } },
+                      React.createElement('div', { className: 'pw-mt' }, fmtTime(m.created_at)),
+                      isMe && isLast && React.createElement('div', {
+                        style: { fontSize:9, color: isRead ? '#4ade80' : 'var(--gray-300)', fontWeight:700 }
+                      }, isRead ? '✓✓ Read' : '✓ Sent')
+                    )
+                  )
+                );
+              }
+
+              /* ── 一般文字訊息 ── */
               return React.createElement('div', { key: m.id, className: 'pw-msg' + (isMe ? ' me' : '') },
                 React.createElement('div', { className: 'pw-mav' + (isMe ? '' : ' dk') }, isMe ? 'YOU' : partnerInitials),
                 React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start' } },
@@ -11552,6 +11777,15 @@ function PairWallPage(_ref_pw) {
     /* INPUT BAR */
     canChat && React.createElement('div', { className: 'pw-input-bar' },
       React.createElement('div', { className: 'pw-attach', onClick: function(){ setShowUpload(true); } }, '+'),
+      React.createElement('div', {
+        className: 'pw-cam' + (chatMediaSending ? ' busy' : ''),
+        title: 'Send photo or video',
+        onClick: handleChatMediaClick
+      }, chatMediaSending ? '⋯' : '📷'),
+      React.createElement('input', {
+        type: 'file', id: 'pw-chat-media-input', accept: 'image/*,video/*',
+        style: { display: 'none' }, onChange: handleChatMediaSelect
+      }),
       React.createElement('input', {
         className: 'pw-input',
         placeholder: 'Reply to today\'s update…',
@@ -13553,6 +13787,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       if (!res.ok) {
         if (res.status === 429) {
           showMatchingError('Daily limit reached', data.message || 'You have used all 10 matches for today. Try again tomorrow.');
+        } else if (res.status === 403 && data.error === 'not_qualified') {
+          // 伺服器端 7 天門檻擋下 → 顯示原因，絕不降級走程式碼配對（否則門檻會被繞過）
+          showMatchingError('Not unlocked yet 🔒', data.message || 'This habit needs more check-in days before partner matching unlocks.');
         } else {
           // 503 = Claude 掛掉 → 走程式碼配對
           throw new Error('API_ERROR');
