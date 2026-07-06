@@ -7773,7 +7773,11 @@ function MainApp(_ref16) {
   var [visibilityPrompt, setVisibilityPrompt] = React.useState(null); // 建立習慣後詢問是否公開到 Challengers：{ id, tempId, name }
   var [deleteConfirmId, setDeleteConfirmId] = React.useState(null);
   var [todayPick, setTodayPick] = React.useState(null);
-  var PARTNER_UNLOCK_DAYS = 7;       // 達成 7 天打卡 → 解鎖夥伴配對功能
+  // 🧪TEST MODE：僅下列測試帳號 (s1002506 / andytestlih) 略過解鎖門檻，
+  // 其他真實使用者完全不受影響。測試完畢後請刪除這兩行，
+  // 直接恢復：var PARTNER_UNLOCK_DAYS = 7;
+  var _TEST_BYPASS_UIDS = ['c041d006-c71f-42c7-9bbf-bc6d5fc849b1', '6199b013-1e74-43b6-898d-fcb65af28051'];
+  var PARTNER_UNLOCK_DAYS = (user && user.uid && _TEST_BYPASS_UIDS.indexOf(user.uid) !== -1) ? 1 : 7;
   var CHALLENGE_COMPLETE_DAYS = 21;  // 達成 21 天打卡 → 真正完成挑戰，移入 Completed
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
@@ -13534,16 +13538,68 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
   // ── FALLBACK: pure code-based matching ──────────────────────────────────
   async function runFallbackMatch(habit) {
+    // 統一天數算法：checkedDates ∪ todayCounts(>=1)，以日去重（與後端 v3 一致）
+    function _fbActiveDays(h) {
+      var ds = new Set();
+      (Array.isArray(h.checkedDates) ? h.checkedDates : []).forEach(function(d) {
+        if (d) ds.add(String(d).slice(0, 10));
+      });
+      var tc = (h.todayCounts && typeof h.todayCounts === 'object') ? h.todayCounts : {};
+      Object.keys(tc).forEach(function(k) { if ((tc[k] || 0) >= 1) ds.add(String(k).slice(0, 10)); });
+      return ds.size;
+    }
     try {
       var session = await _supabase.auth.getSession();
       var myUserId = session.data.session && session.data.session.user && session.data.session.user.id;
       var alreadyPaired = getAlreadyPairedIds();
       var ageRange = parseAgeRange(_selectedAgePref);
 
-      // Fetch candidate users from Supabase
-      var candidatesQuery = _supabase.from('users').select('id, displayName, signup_age, signup_gender, habits').neq('id', myUserId || '');
-      var { data: candidates } = await candidatesQuery;
-      if (!candidates || candidates.length === 0) throw new Error('No candidates');
+      // ★ v3 修正：候選人改從 habits 資料表撈（App 實際寫入的地方），
+      //   不再讀 users.habits JSON 欄位（該欄位無同步機制，永遠是空的）。
+      var myActType0 = habit.activityType || 'other';
+      var { data: candHabitRows } = await _supabase.from('habits')
+        .select('id, user_id, name, category, activity_type, mind_body, dur_label, time_range, checked_dates, today_counts, check_timestamps, display_name')
+        .neq('user_id', myUserId || '')
+        .eq('activity_type', myActType0);
+      if (!candHabitRows || candHabitRows.length === 0) throw new Error('No candidates');
+
+      // 依 user_id 分組，欄位轉回 camelCase 供下方評分程式使用
+      var byUser = {};
+      candHabitRows.forEach(function(row) {
+        (byUser[row.user_id] = byUser[row.user_id] || []).push({
+          name: row.name, category: row.category,
+          activityType: row.activity_type || 'other',
+          mindBody: row.mind_body || null,
+          durLabel: row.dur_label || '',
+          timeRange: row.time_range || '',
+          checkedDates: Array.isArray(row.checked_dates) ? row.checked_dates : [],
+          todayCounts: row.today_counts || {},
+          checkTimestamps: Array.isArray(row.check_timestamps) ? row.check_timestamps : [],
+          streak: 0, _displayName: row.display_name || null
+        });
+      });
+
+      var candUserIds = Object.keys(byUser);
+
+      // 撈 users 表做年齡／性別過濾與 displayName
+      var { data: candUsers } = await _supabase.from('users')
+        .select('id, displayName, signup_age, signup_gender')
+        .in('id', candUserIds);
+      var userMap = {};
+      (candUsers || []).forEach(function(u) { userMap[u.id] = u; });
+
+      // 組成與舊格式相容的 candidates（habits 已是陣列，不再是 JSON 字串）
+      var candidates = candUserIds.map(function(uid) {
+        var u = userMap[uid] || {};
+        var dn = u.displayName;
+        if (!dn) {
+          for (var hi = 0; hi < byUser[uid].length; hi++) {
+            if (byUser[uid][hi]._displayName) { dn = byUser[uid][hi]._displayName; break; }
+          }
+        }
+        return { id: uid, displayName: dn || 'user', signup_age: u.signup_age || null,
+                 signup_gender: u.signup_gender || null, habits: byUser[uid] };
+      });
 
       // Filter out already-paired, age, and gender
       candidates = candidates.filter(function(u) {
@@ -13562,7 +13618,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       var myDur = parseDurMins(habit.durLabel) || 30;
       var myLifespan = habitLifespanDays(habit) || 30;
-      var myChecked = Array.isArray(habit.checkedDates) ? new Set(habit.checkedDates).size : 0;
+      var myChecked = _fbActiveDays(habit);
       var myTimestamps = habit.checkTimestamps || [];
 
       // ── Mind-Body：中文 + 英文關鍵字雙語支援 ─────────────────────────────
@@ -13623,7 +13679,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
         var uDur = parseDurMins(uHabit.durLabel) || 30;
         var uLifespan = habitLifespanDays(uHabit) || 30;
-        var uChecked = Array.isArray(uHabit.checkedDates) ? new Set(uHabit.checkedDates).size : 0;
+        var uChecked = _fbActiveDays(uHabit);
+        if (uChecked < PARTNER_UNLOCK_DAYS) return null; // 候選者也需達解鎖門檻（與後端一致）
         var uTimestamps = uHabit.checkTimestamps || [];
         var uMindBody = getMindBody(uHabit.name);
         var uRhythm = calcRhythmScore(uTimestamps);
