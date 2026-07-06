@@ -13561,7 +13561,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         .select('id, user_id, name, category, activity_type, mind_body, dur_label, time_range, checked_dates, today_counts, check_timestamps, display_name')
         .neq('user_id', myUserId || '')
         .eq('activity_type', myActType0);
-      if (!candHabitRows || candHabitRows.length === 0) throw new Error('No candidates');
+      console.log('[MatchDebug] fallback: myActivityType=', myActType0, '| candHabitRows found=', candHabitRows ? candHabitRows.length : 0); // 🧪TEST MODE 診斷log
+      if (!candHabitRows || candHabitRows.length === 0) throw new Error('No candidates (activity_type=' + myActType0 + ' 沒有其他使用者符合)');
 
       // 依 user_id 分組，欄位轉回 camelCase 供下方評分程式使用
       var byUser = {};
@@ -13715,7 +13716,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         };
       }).filter(Boolean);
 
-      if (scored.length === 0) throw new Error('No valid candidates');
+      console.log('[MatchDebug] fallback: PARTNER_UNLOCK_DAYS=', PARTNER_UNLOCK_DAYS, '| myChecked=', myChecked, '| candidates before day-filter=', candidates.length, '| scored after filter=', scored.length); // 🧪TEST MODE 診斷log
+      if (scored.length === 0) throw new Error('No valid candidates (可能是候選人打卡天數 < ' + PARTNER_UNLOCK_DAYS + ' 天，或 mind-body/duration 資料不足)');
 
       // Return top 5 matches
       scored.sort(function(a, b) { return b.score - a.score; });
@@ -13774,7 +13776,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   }
 
   async function callMatchPartner(habit) {
-    var AI_TIMEOUT_MS = 3000; // 3s — if Claude doesn't respond, use fallback
+    var AI_TIMEOUT_MS = 8000; // 🧪was 3000 — Edge Function做6+次DB查詢+呼叫Claude，3秒常常不夠，冷啟動更容易超時
 
     try {
       document.getElementById('matchingStatusText').textContent = 'Claude is analysing...';
@@ -13818,6 +13820,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       var res = await Promise.race([fetchPromise, timeoutPromise]);
       var data = await res.json();
+      console.log('[MatchDebug] match-partner status=', res.status, 'body=', data); // 🧪TEST MODE 診斷log，確認完可刪除
 
       if (!res.ok) {
         if (res.status === 429) {
@@ -13857,6 +13860,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       var isTimeout = err.message === 'AI_TIMEOUT';
       var isApiErr  = err.message === 'API_ERROR' || /fetch|network|failed to fetch/i.test(err.message);
       var needsFallback = isTimeout || isApiErr || err.message.includes('already-paired');
+      console.log('[MatchDebug] callMatchPartner caught:', err.message, '| needsFallback=', needsFallback); // 🧪TEST MODE 診斷log
 
       if (needsFallback) {
         document.getElementById('matchingStatusText').textContent = 'Switching to algorithm match...';
@@ -13864,6 +13868,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           var fbMatches = await runFallbackMatch(habit);
           showMatchingResults(fbMatches);
         } catch(fbErr) {
+          console.log('[MatchDebug] runFallbackMatch failed:', fbErr.message); // 🧪TEST MODE 診斷log
           showMatchingError('No matches found', 'Could not find a suitable match right now. Please try again later.');
         }
       } else {
