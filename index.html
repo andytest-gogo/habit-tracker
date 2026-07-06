@@ -13554,6 +13554,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       var alreadyPaired = getAlreadyPairedIds();
       var ageRange = parseAgeRange(_selectedAgePref);
 
+      // 🐛 修正既有 bug：這裡原本直接引用外層元件的 var PARTNER_UNLOCK_DAYS，
+      // 但 runFallbackMatch 其實不在該元件的作用域內，執行到就會丟出
+      // "PARTNER_UNLOCK_DAYS is not defined" 的 ReferenceError（等於備援配對從來沒有真的成功執行過）。
+      // 這裡改成在函式內自行定義，白名單測試帳號沿用同一份 bypass 邏輯，真實使用者維持 7 天不變。
+      var _TEST_BYPASS_UIDS_FB = ['c041d006-c71f-42c7-9bbf-bc6d5fc849b1', '6199b013-1e74-43b6-898d-fcb65af28051'];
+      var PARTNER_UNLOCK_DAYS = (myUserId && _TEST_BYPASS_UIDS_FB.indexOf(myUserId) !== -1) ? 1 : 7;
+
       // ★ v3 修正：候選人改從 habits 資料表撈（App 實際寫入的地方），
       //   不再讀 users.habits JSON 欄位（該欄位無同步機制，永遠是空的）。
       var myActType0 = habit.activityType || 'other';
