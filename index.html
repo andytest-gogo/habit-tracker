@@ -13498,6 +13498,16 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   };
 
   // ── Helper: get already-paired user IDs (to exclude from results) ────────
+  // 🧪 TEST MODE：白名單測試帳號互測時，略過「已配對過就永遠排除」規則，
+  // 讓 s1002506 / andytestlih 可以無視過去的配對紀錄重複互測配對功能。
+  // 其他真實使用者的排除邏輯完全不受影響（後端 blocked_users 封鎖過濾也不受影響，
+  // 這裡只處理「已配對過」這一項前端排除條件）。
+  // 測試完畢後，只需刪除 TEST_BYPASS_UIDS 這個 Set 與下面的白名單判斷式，
+  // 即可完整恢復原本行為。
+  var TEST_BYPASS_UIDS = new Set([
+    'c041d006-c71f-42c7-9bbf-bc6d5fc849b1', // s1002506
+    '6199b013-1e74-43b6-898d-fcb65af28051', // andytestlih
+  ]);
   function getAlreadyPairedIds() {
     var ids = new Set();
     if (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) {
@@ -13505,6 +13515,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         if (p.user_id) ids.add(p.user_id);
         if (p.partner_id) ids.add(p.partner_id);
       });
+    }
+    // 🧪 TEST MODE：目前登入者若是白名單測試帳號，把「另一個白名單測試帳號」
+    // 從排除名單中移除，其他人（含非白名單的真實已配對對象）仍正常排除。
+    var _myUid = window._currentUser && window._currentUser.uid;
+    if (_myUid && TEST_BYPASS_UIDS.has(_myUid)) {
+      TEST_BYPASS_UIDS.forEach(function(uid) { if (uid !== _myUid) ids.delete(uid); });
     }
     return ids;
   }
