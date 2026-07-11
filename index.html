@@ -13188,18 +13188,16 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         <div style="font-size:9px;color:#3d3d3d;" id="mRemainingLabel"><span id="mRemaining">—</span> credits left today</div>
       </div>
       <div id="matchResultsList" style="padding:0 10px 10px;"></div>
-      <!-- Notify row: shown when fewer than 5 results -->
-      <div id="matchNotifyRow" style="display:none;margin:4px 10px 14px;padding:12px 14px;background:#0f0f0f;border:1px solid #1a1a1a;display:flex;align-items:center;gap:10px;">
-        <div style="flex:1;">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#888;">Notify me when more matches appear</div>
-          <div style="font-size:9px;color:#3d3d3d;margin-top:3px;">We'll alert you when a new partner joins for this habit.</div>
-        </div>
-        <label style="position:relative;width:36px;height:20px;flex-shrink:0;">
-          <input type="checkbox" id="matchNotifyToggle" style="opacity:0;width:0;height:0;position:absolute;" onchange="window._toggleMatchNotify(this)">
-          <span id="matchNotifyTrack" style="position:absolute;inset:0;border-radius:10px;background:#2a2a2a;cursor:pointer;transition:background .2s;"></span>
-          <span id="matchNotifyThumb" style="position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#555;transition:transform .2s;"></span>
-        </label>
-      </div>
+      <!-- ★ 這裡原本還有一個靜態的 Notify toggle（id="matchNotifyRow"），
+           跟 _renderMatchCard() 動態產生的那個是兩份重複的 UI：
+           1. inline style 裡同時寫了 display:none 又寫了 display:flex，
+              CSS 後面蓋前面，等於這個 display:none 從來沒生效過，永遠顯示。
+           2. 裡面的 checkbox id="matchNotifyToggle" 跟 _renderMatchCard()
+              裡 div 版的 id="matchNotifyToggle" 撞名，document.getElementById
+              永遠只會抓到最先出現在 DOM 裡的這一個，導致行為不一致。
+           3. 從頭到尾沒有任何 JS 依「候選人數量 < 5」去控制它的顯示，
+              註解寫的意圖從來沒被真的實作。
+           已整個移除，只保留 _renderMatchCard() 裡那個正確、唯一的版本。 -->
       <div style="padding:0 10px 16px;">
         <button class="result-skip" onclick="window.closeMatchingModal()">Close</button>
       </div>
@@ -13733,7 +13731,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   }
 
   async function callMatchPartner(habit) {
-    var AI_TIMEOUT_MS = 8000; // 🧪was 3000 — Edge Function做6+次DB查詢+呼叫Claude，3秒常常不夠，冷啟動更容易超時
+    var AI_TIMEOUT_MS = 15000; // 🧪was 8000 — 8 秒在冷啟動時仍常常不夠，拉長到 15 秒減少掉到備援演算法的機率
 
     try {
       document.getElementById('matchingStatusText').textContent = 'Claude is analysing...';
@@ -14086,26 +14084,16 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
   // ── Notify toggle for "no match yet" scenario ────────────────────────────
   window._toggleMatchNotify = function(el) {
-    // ★ 修正：這支函式原本只認「真正的 checkbox」的 el.checked，但配對卡片裡
-    //   的開關其實是一個 div 元素（用 classList.toggle('on') 記狀態），div 沒有
-    //   .checked 屬性，永遠讀到 undefined → 永遠當成「關閉」，連存資料庫都沒做到。
-    //   這裡改成先判斷元素類型，checkbox 用 el.checked，div 用 classList 是否有 'on'。
-    var isOn = (el.tagName === 'INPUT') ? el.checked : el.classList.contains('on');
+    // ★ 現在畫面上只剩 _renderMatchCard() 產生的 div 版開關（用 classList.toggle('on') 記狀態），
+    //   原本重複的靜態 checkbox 版本（matchNotifyTrack/matchNotifyThumb）已經整個移除，
+    //   這裡不用再判斷元素型態，直接讀 classList。
+    var isOn = el.classList.contains('on');
 
-    // 舊版：checkbox + 分離的 track/thumb 兩個 span（"no match found" 畫面用）
-    var track = document.getElementById('matchNotifyTrack');
-    var thumb = document.getElementById('matchNotifyThumb');
-    if (track) track.style.background = isOn ? '#185FA5' : '#2a2a2a';
-    if (thumb) { thumb.style.transform = isOn ? 'translateX(16px)' : 'translateX(0)'; thumb.style.background = isOn ? '#fff' : '#555'; }
-
-    // 新版：配對卡片內的 div 開關，自己就是軌道，內層第一個 div 是圓形滑塊
-    if (el.tagName !== 'INPUT') {
-      el.style.background = isOn ? '#185FA5' : '#222';
-      var innerThumb = el.firstElementChild;
-      if (innerThumb) {
-        innerThumb.style.transform = isOn ? 'translateX(14px)' : 'translateX(0)';
-        innerThumb.style.background = isOn ? '#fff' : '#555';
-      }
+    el.style.background = isOn ? '#185FA5' : '#222';
+    var innerThumb = el.firstElementChild;
+    if (innerThumb) {
+      innerThumb.style.transform = isOn ? 'translateX(14px)' : 'translateX(0)';
+      innerThumb.style.background = isOn ? '#fff' : '#555';
     }
 
     // ★ 不論開或關都要存，之前關閉的狀態完全沒寫回資料庫
