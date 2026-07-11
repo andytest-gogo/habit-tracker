@@ -13867,7 +13867,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       // header: avatar + name + score
       '<div style="padding:14px 16px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:14px;">' +
-        '<div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0;border:2px solid ' + av.border + ';background:' + av.bg + ';color:' + av.fg + ';">' + initials + '</div>' +
+        '<div style="width:64px;height:64px;border-radius:50%;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0;border:2px solid ' + av.border + ';background:' + av.bg + ';color:' + av.fg + ';">' +
+          initials +
+          (m.avatarUrl ? '<img src="' + m.avatarUrl + '" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()">' : '') +
+        '</div>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:4px;">Best match found</div>' +
           '<div style="font-size:18px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#fff;line-height:1;font-family:var(--din);">@' + (m.displayName || 'partner') + '</div>' +
