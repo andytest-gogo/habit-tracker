@@ -13233,6 +13233,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     _surveyIdx = 0;
     _surveyQuestions = [];
 
+    // ★ 立刻顯示掃描動畫，避免「按下去空白等好幾秒」的 lag 感——
+    //   generate-values-questions 會即時呼叫 Claude 生成問題，本來就需要幾秒鐘，
+    //   之前完全沒有任何讀取畫面，看起來就像卡住。這裡先開掃描畫面墊著，
+    //   之後不管是要接著進問卷、還是直接進配對，都不會出現空白等待。
+    _openScanningModal(habit);
+
     // Check if user has already answered values survey for this habit
     try {
       var session = await _supabase.auth.getSession();
@@ -13279,6 +13285,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   };
 
   function _openSurveyModal(habit) {
+    // ★ 掃描動畫在 openMatchingModal 一開始就先開了，這裡要換成問卷 modal 時
+    //   把它關掉，不然會兩個 overlay 疊在一起。
+    document.getElementById('matchingOverlay').style.display = 'none';
     document.getElementById('surveyHabitName').textContent = habit.name;
     document.getElementById('surveyLoading').style.display = 'none';
     document.getElementById('surveyError').style.display = 'none';
@@ -13912,7 +13921,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       // prev / next nav
       '<div style="display:flex;gap:8px;padding:0 16px 14px;">' +
         '<button onclick="window._mrcPrev()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;" ' + (idx === 0 ? 'disabled style="flex:1;background:transparent;border:1px solid #111;color:#333;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:default;font-family:inherit;"' : '') + '>← Previous</button>' +
-        '<button onclick="window._mrcNext()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;">Next →</button>' +
+        '<button onclick="window._mrcNext()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;" ' + (idx === total - 1 ? 'disabled style="flex:1;background:transparent;border:1px solid #111;color:#333;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:default;font-family:inherit;"' : '') + '>Next →</button>' +
       '</div>' +
 
       // notify row (show when on last card)
@@ -13945,7 +13954,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
   };
   window._mrcSkipCard = function() {
+    // ★ 修正：跟 Next 共用同一段「還有下一位才前進」的邏輯時，最後一張卡片按 X
+    //   會完全沒反應（看起來像壞掉）。X 的語意其實是「不想約這位」，
+    //   沒有下一位可看的話，最合理的動作是直接關掉整個配對視窗。
     if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
+    else { window.closeMatchingModal(); }
   };
   // ── Helper：幫任何 promise 加上逾時保護，避免網路/DB 卡住時畫面永遠不動 ──
   function _withTimeout(promise, ms, label) {
@@ -14061,22 +14074,36 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
   // ── Notify toggle for "no match yet" scenario ────────────────────────────
   window._toggleMatchNotify = function(el) {
+    // ★ 修正：這支函式原本只認「真正的 checkbox」的 el.checked，但配對卡片裡
+    //   的開關其實是一個 div 元素（用 classList.toggle('on') 記狀態），div 沒有
+    //   .checked 屬性，永遠讀到 undefined → 永遠當成「關閉」，連存資料庫都沒做到。
+    //   這裡改成先判斷元素類型，checkbox 用 el.checked，div 用 classList 是否有 'on'。
+    var isOn = (el.tagName === 'INPUT') ? el.checked : el.classList.contains('on');
+
+    // 舊版：checkbox + 分離的 track/thumb 兩個 span（"no match found" 畫面用）
     var track = document.getElementById('matchNotifyTrack');
     var thumb = document.getElementById('matchNotifyThumb');
-    if (el.checked) {
-      if (track) track.style.background = '#185FA5';
-      if (thumb) { thumb.style.transform = 'translateX(16px)'; thumb.style.background = '#fff'; }
-      if (_currentHabit && window._supabaseClient && window._currentUser) {
-        window._supabaseClient.from('match_notifications').upsert({
-          user_id: window._currentUser.uid,
-          habit_id: _currentHabit.id,
-          enabled: true,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id,habit_id' }).then(function(){}).catch(function(){});
+    if (track) track.style.background = isOn ? '#185FA5' : '#2a2a2a';
+    if (thumb) { thumb.style.transform = isOn ? 'translateX(16px)' : 'translateX(0)'; thumb.style.background = isOn ? '#fff' : '#555'; }
+
+    // 新版：配對卡片內的 div 開關，自己就是軌道，內層第一個 div 是圓形滑塊
+    if (el.tagName !== 'INPUT') {
+      el.style.background = isOn ? '#185FA5' : '#222';
+      var innerThumb = el.firstElementChild;
+      if (innerThumb) {
+        innerThumb.style.transform = isOn ? 'translateX(14px)' : 'translateX(0)';
+        innerThumb.style.background = isOn ? '#fff' : '#555';
       }
-    } else {
-      if (track) track.style.background = '#2a2a2a';
-      if (thumb) { thumb.style.transform = 'translateX(0)'; thumb.style.background = '#555'; }
+    }
+
+    // ★ 不論開或關都要存，之前關閉的狀態完全沒寫回資料庫
+    if (_currentHabit && window._supabaseClient && window._currentUser) {
+      window._supabaseClient.from('match_notifications').upsert({
+        user_id: window._currentUser.uid,
+        habit_id: _currentHabit.id,
+        enabled: isOn,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,habit_id' }).then(function(){}).catch(function(){});
     }
   };
 
