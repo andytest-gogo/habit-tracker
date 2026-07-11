@@ -7927,7 +7927,7 @@ function MainApp(_ref16) {
       var _sbClient = window._supabaseClient;
       if (_sbClient && _needBackfill.length > 0) {
         var _uids = _needBackfill.map(function(h){ return h.userId; }).filter(Boolean);
-        _sbClient.from('users').select('id, display_name, avatar_url, photo_url').in('id', _uids).then(function(ur) {
+        _sbClient.from('users').select('id, display_name, photo_url').in('id', _uids).then(function(ur) {
           if (!ur.error && ur.data) {
             var _umap = {};
             ur.data.forEach(function(u){ _umap[u.id] = u; });
@@ -7935,7 +7935,7 @@ function MainApp(_ref16) {
               var u = _umap[h.userId];
               if (u) {
                 if (!h.displayName) h.displayName = u.display_name || '';
-                if (!h.userAvatar) h.userAvatar = u.avatar_url || u.photo_url || null;
+                if (!h.userAvatar) h.userAvatar = u.photo_url || null;
               }
             });
           }
