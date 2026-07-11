@@ -937,20 +937,6 @@
             text-transform:uppercase; color:#2a2a2a; line-height:1.7;
             border-top:1px solid #1a1a1a; padding-top:14px;
         }
-        .age-pref-btn {
-            font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
-            padding:5px 10px; border:1px solid #333; background:transparent; color:#555;
-            cursor:pointer; transition:.15s; font-family:var(--font);
-        }
-        .age-pref-btn:hover { border-color:#666; color:#888; }
-        .age-pref-btn.active { border-color:#fff; color:#fff; background:#111; }
-        .pref-btn {
-            font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
-            padding:9px 16px; border:1px solid #2a2a2a; background:transparent; color:#555;
-            cursor:pointer; transition:.15s; font-family:var(--font); flex:1;
-        }
-        .pref-btn:hover { border-color:#555; color:#888; }
-        .pref-btn.active { border-color:#fff; color:#fff; background:#111; }
         .fallback-banner {
             font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
             background:#1a1200; border:1px solid #3a2e00; color:#c8a800;
@@ -13142,48 +13128,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 </div>
 
 <!-- ══════════════════════════════════════════
-     MATCH PREFERENCE MODAL (step 0)
-══════════════════════════════════════════ -->
-<div id="matchPrefOverlay" style="display:none;" class="matching-overlay">
-  <div class="matching-sheet" id="matchPrefSheet" style="max-height:80vh;overflow-y:auto;">
-    <div class="matching-top" style="display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div class="matching-label">Find a partner for</div>
-        <div class="matching-habit-name" id="prefHabitName">—</div>
-      </div>
-      <button onclick="window.closeMatchPrefModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
-    </div>
-    <div style="height:1px;background:#1a1a1a;"></div>
-    <div style="padding:20px;">
-
-      <!-- Gender preference -->
-      <div style="margin-bottom:22px;">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#666;margin-bottom:10px;">Partner gender</div>
-        <div style="display:flex;gap:8px;">
-          <button class="pref-btn active" data-pref="gender" data-val="any" onclick="window._setPref('gender',this)">Any</button>
-          <button class="pref-btn" data-pref="gender" data-val="male" onclick="window._setPref('gender',this)">Male</button>
-          <button class="pref-btn" data-pref="gender" data-val="female" onclick="window._setPref('gender',this)">Female</button>
-        </div>
-      </div>
-
-      <!-- Age preference -->
-      <div style="margin-bottom:28px;">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#666;margin-bottom:10px;">Partner age range</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="pref-btn active" data-pref="age" data-val="any" onclick="window._setPref('age',this)">Any age</button>
-          <button class="pref-btn" data-pref="age" data-val="18-24" onclick="window._setPref('age',this)">18–24</button>
-          <button class="pref-btn" data-pref="age" data-val="25-34" onclick="window._setPref('age',this)">25–34</button>
-          <button class="pref-btn" data-pref="age" data-val="35-50" onclick="window._setPref('age',this)">35–50</button>
-        </div>
-      </div>
-
-      <button onclick="window._startMatchingWithPrefs()" style="width:100%;background:#fff;color:#000;border:none;padding:13px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer;">Find My Match →</button>
-      <div style="font-size:9px;color:#333;text-align:center;margin-top:10px;line-height:1.6;">These preferences help narrow your results.<br>A wider range finds matches faster.</div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════
      AI MATCHING MODAL
 ══════════════════════════════════════════ -->
 <div id="matchingOverlay" style="display:none;" class="matching-overlay" >
@@ -13263,24 +13207,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var EDGE_URL = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/match-partner';
   var _currentHabit = null;
   var _currentMatch = null;
-  var _selectedAgePref = 'any';
-  var _selectedGenderPref = 'any';
-
-  // ── Age preference selector (legacy, kept for reset) ────────────────────
-  window._setAgePref = function(btn) {
-    _selectedAgePref = btn.getAttribute('data-age');
-    document.querySelectorAll('.age-pref-btn').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-  };
-
-  // ── Unified pref selector for the new pref modal ────────────────────────
-  window._setPref = function(type, btn) {
-    var val = btn.getAttribute('data-val');
-    if (type === 'gender') _selectedGenderPref = val;
-    if (type === 'age')    _selectedAgePref    = val;
-    document.querySelectorAll('.pref-btn[data-pref="' + type + '"]').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-  };
 
   // ── Survey state ──────────────────────────────────────────────────────────
   var _surveyQuestions = [];
@@ -13289,8 +13215,18 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var _surveyDimensions = {};
   var EDGE_VALUES_URL  = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/generate-values-questions';
 
-  // ── Open preference modal (step 0, before matching) ─────────────────────
+  // ── 按下 Find Partner 的進入點：先確認是否需要價值觀問卷，再進入配對 ─────
   window.openMatchingModal = async function(habit) {
+    // ★ 防呆：新增習慣後，畫面會先用 "temp-<timestamp>" 這種暫時 id 顯示
+    //   （optimistic update），要等 Supabase 真正寫入成功、onSnapshot 同步回來，
+    //   habit.id 才會變成正式的 UUID。如果在同步完成前就按 Find Partner，
+    //   這個暫時 id 送到後端不會對應到任何真正的習慣，問卷檢查與配對都會
+    //   靜默失敗/跳過。這裡擋下來並給使用者明確提示，而不是讓它悄悄跳過。
+    if (habit && typeof habit.id === 'string' && habit.id.indexOf('temp-') === 0) {
+      alert('This habit is still syncing. Please wait a second and try again.');
+      return;
+    }
+
     _currentHabit = habit;
     _currentMatch = null;
     _surveyAnswers = {};
@@ -13309,9 +13245,15 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         });
         var checkData = await checkRes.json();
 
+        if (!checkRes.ok) {
+          // 🧪 診斷用：generate-values-questions 回傳非 2xx（例如 JWT/CORS 或 Claude 呼叫失敗）
+          // 之前不會顯示出來，只會靜默跳過問卷，這裡補上 log 方便排查。
+          console.error('[values-survey] generate-values-questions non-OK response:', checkRes.status, checkData);
+        }
+
         if (checkData.already_answered) {
-          // Skip survey, go straight to pref modal
-          _openPrefModal(habit);
+          // 使用者已經在任何一個習慣上填過問卷 → 全站只問一次，直接進入配對
+          _proceedToMatching(habit);
           return;
         }
 
@@ -13323,13 +13265,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           _openSurveyModal(habit);
           return;
         }
+
+        // 走到這裡代表 checkData 既不是 already_answered、也沒有合法的 questions
+        // （例如 Claude 產題失敗回傳 {error:...}）— 記錄下來方便排查，並照舊 fallback。
+        console.warn('[values-survey] unexpected response shape, skipping survey:', checkData);
       }
     } catch(e) {
       console.warn('[values-survey] fetch failed, skipping survey:', e.message);
     }
 
-    // Fallback: skip survey
-    _openPrefModal(habit);
+    // Fallback: skip survey（例如未登入、網路/CORS 失敗、或 Claude 產題失敗）
+    _proceedToMatching(habit);
   };
 
   function _openSurveyModal(habit) {
@@ -13415,7 +13361,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   window._skipSurvey = function() {
     document.getElementById('valuesSurveyOverlay').style.display = 'none';
     document.body.style.overflow = '';
-    _openPrefModal(_currentHabit);
+    _proceedToMatching(_currentHabit);
   };
 
   function _saveSurveyAndProceed() {
@@ -13451,34 +13397,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       setTimeout(function() {
         document.getElementById('valuesSurveyOverlay').style.display = 'none';
         document.body.style.overflow = '';
-        _openPrefModal(_currentHabit);
+        _proceedToMatching(_currentHabit);
       }, 1200);
     })();
   }
 
-  function _openPrefModal(habit) {
-    document.getElementById('prefHabitName').textContent = habit.name;
-    document.querySelectorAll('.pref-btn[data-pref="gender"]').forEach(function(b){
-      b.classList.toggle('active', b.getAttribute('data-val') === _selectedGenderPref);
-    });
-    document.querySelectorAll('.pref-btn[data-pref="age"]').forEach(function(b){
-      b.classList.toggle('active', b.getAttribute('data-val') === _selectedAgePref);
-    });
-    document.getElementById('matchPrefOverlay').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-  }
-
-  window.closeMatchPrefModal = function() {
-    document.getElementById('matchPrefOverlay').style.display = 'none';
-    document.body.style.overflow = '';
-    _currentHabit = null;
-  };
-
-  // ── "Find My Match →" button — close pref modal, open matching modal ────
-  window._startMatchingWithPrefs = function() {
-    if (!_currentHabit) return;
-    var habit = _currentHabit;
-    document.getElementById('matchPrefOverlay').style.display = 'none';
+  // ── 直接進入配對（年齡/性別偏好 modal 已移除，這裡取代原本的 _startMatchingWithPrefs）──
+  function _proceedToMatching(habit) {
+    if (!habit) return;
 
     // Deduct 1 matching credit
     if (window._supabaseClient && window._currentUser) {
@@ -13495,7 +13421,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
 
     _openScanningModal(habit);
-  };
+  }
 
   // ── Helper: get already-paired user IDs (to exclude from results) ────────
   // 🧪 TEST MODE：白名單測試帳號互測時，略過「已配對過就永遠排除」規則，
@@ -13545,13 +13471,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     return Math.round((e - s) / 86400000) + 1;
   }
 
-  // ── Helper: parse age range string → {min, max} ──────────────────────────
-  function parseAgeRange(pref) {
-    if (!pref || pref === 'any') return null;
-    var p = pref.split('-');
-    return { min: parseInt(p[0], 10), max: parseInt(p[1], 10) };
-  }
-
   // ── FALLBACK: pure code-based matching ──────────────────────────────────
   async function runFallbackMatch(habit) {
     // 統一天數算法：checkedDates ∪ todayCounts(>=1)，以日去重（與後端 v3 一致）
@@ -13568,7 +13487,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       var session = await _supabase.auth.getSession();
       var myUserId = session.data.session && session.data.session.user && session.data.session.user.id;
       var alreadyPaired = getAlreadyPairedIds();
-      var ageRange = parseAgeRange(_selectedAgePref);
 
       // 🐛 修正既有 bug：這裡原本直接引用外層元件的 var PARTNER_UNLOCK_DAYS，
       // 但 runFallbackMatch 其實不在該元件的作用域內，執行到就會丟出
@@ -13605,9 +13523,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       var candUserIds = Object.keys(byUser);
 
-      // 撈 users 表做年齡／性別過濾與 displayName
+      // 撈 users 表做 displayName（年齡／性別偏好已移除，不再需要 signup_age/signup_gender）
       var { data: candUsers } = await _supabase.from('users')
-        .select('id, displayName, signup_age, signup_gender')
+        .select('id, displayName')
         .in('id', candUserIds);
       var userMap = {};
       (candUsers || []).forEach(function(u) { userMap[u.id] = u; });
@@ -13621,21 +13539,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             if (byUser[uid][hi]._displayName) { dn = byUser[uid][hi]._displayName; break; }
           }
         }
-        return { id: uid, displayName: dn || 'user', signup_age: u.signup_age || null,
-                 signup_gender: u.signup_gender || null, habits: byUser[uid] };
+        return { id: uid, displayName: dn || 'user', habits: byUser[uid] };
       });
 
-      // Filter out already-paired, age, and gender
+      // Filter out already-paired
       candidates = candidates.filter(function(u) {
-        if (alreadyPaired.has(u.id)) return false;
-        if (ageRange && u.signup_age) {
-          var age = parseInt(u.signup_age, 10);
-          if (!isNaN(age) && (age < ageRange.min || age > ageRange.max)) return false;
-        }
-        if (_selectedGenderPref !== 'any' && u.signup_gender) {
-          if (u.signup_gender.toLowerCase() !== _selectedGenderPref) return false;
-        }
-        return true;
+        return !alreadyPaired.has(u.id);
       });
 
       if (candidates.length === 0) throw new Error('No candidates after filter');
@@ -13809,7 +13718,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       if (!token) throw new Error('Not logged in');
 
       var alreadyPaired = getAlreadyPairedIds();
-      var ageRange = parseAgeRange(_selectedAgePref);
 
       // Wrap fetch in a timeout race
       var fetchPromise = fetch(EDGE_URL, {
@@ -13829,8 +13737,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           habitTimeRange: habit.timeRange || '',
           checkedDates: habit.checkedDates || [],
           excludeUserIds: Array.from(alreadyPaired),
-          ageRange: ageRange,
-          genderPref: _selectedGenderPref,
           myValues: (Object.keys(_surveyAnswers).length > 0)
             ? { answers: _surveyAnswers, dimensions: _surveyDimensions }
             : null
