@@ -11193,7 +11193,7 @@ function PairWallPage(_ref_pw) {
   /* Update my last_active on mount */
   React.useEffect(function() {
     if (!user) return;
-    _supabase.from('users').update({ last_active: new Date().toISOString() }).eq('id', user.uid).catch(function(){});
+    _supabase.from('users').update({ last_active: new Date().toISOString() }).eq('id', user.uid).then(function(){}).catch(function(){});
   }, [user]);
 
   /* Page dwell tracking: 進入 Pair Wall 記為 'pair_wall'，離開時記回 'buddies' */
@@ -11463,7 +11463,7 @@ function PairWallPage(_ref_pw) {
         setCaption('');
         setPublishing(false);
         // Update pair's last_post_at for inactivity tracking
-        _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).catch(function(){});
+        _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).then(function(){}).catch(function(){});
       })
       .catch(function(e) {
         if (e && e.__modBlocked) return;
@@ -11942,7 +11942,7 @@ function BuddiesPage(_ref_buddies) {
                     )
                   ),
                   React.createElement("div", { className: "pair-info" },
-                    React.createElement("div", { className: "pair-name" }, 'You × ' + (partnerName || 'partner')),
+                    React.createElement("div", { className: "pair-name" }, 'You × ' + (partnerName || partnerId.toString().slice(0,8))),
                     React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name),
                     isIncoming && React.createElement("div", { style:{ fontSize:10, color:'#f59e0b', fontWeight:700, marginTop:2 } }, '⏳ Incoming request')
                   ),
@@ -11999,6 +11999,40 @@ function BuddiesPage(_ref_buddies) {
 }
 
 /* ── ROOT APP ── */
+// ★ Error Boundary：接住 App 掛載成功「之後」任何子元件在 render 階段丟出的例外。
+//   White Screen Guard（上面那套 _wsg 系統）只在 React 第一次掛載失敗時介入，
+//   一旦掛載成功過，_reactPtrReady 就永久是 true，之後任何時間點（例如點進
+//   PairWallPage 時）如果 render 當掉，沒有 Error Boundary 包著的話 React 會把
+//   整棵樹卸載，畫面變成完全空白、連引導畫面都不會出現。這裡補上這一層，
+//   沿用同一套 showPullGuide() 下拉重新整理引導，維持一致的使用者體驗，
+//   同時把完整錯誤內容記到 window._wsgLastError 方便之後排查。
+class _AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    window._wsgLastError = {
+      message: error && error.message,
+      stack: error && error.stack,
+      componentStack: info && info.componentStack,
+      time: new Date().toISOString()
+    };
+    console.error('[ErrorBoundary] caught:', error, info && info.componentStack);
+    if (typeof showPullGuide === 'function') showPullGuide('render_error');
+  }
+  render() {
+    if (this.state.hasError) {
+      // showPullGuide() 已经把引導畫面蓋在最上層了，這裡回傳 null 讓壞掉的子樹不再嘗試渲染
+      return null;
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   var _useState109 = useState(null),
     _useState110 = _slicedToArray(_useState109, 2),
@@ -12269,7 +12303,7 @@ function App() {
   });
 }
 var _root = ReactDOM.createRoot(document.getElementById('main-content'));
-_root.render(/*#__PURE__*/React.createElement(App, null));
+_root.render(/*#__PURE__*/React.createElement(_AppErrorBoundary, null, React.createElement(App, null)));
 // 通知 White Screen Guard：React 已成功掛載
 if (typeof window._wsgOnReactReady === 'function') window._wsgOnReactReady();
 
