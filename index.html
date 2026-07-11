@@ -11037,9 +11037,18 @@ function PairWallPage(_ref_pw) {
   var pair = _ref_pw.pair;
   var onBack = _ref_pw.onBack;
 
-  var isUser = pair.user_id === user.uid;
-  var partnerId = isUser ? pair.partner_id : pair.user_id;
-  var partnerInitials = partnerId.toString().slice(0,2).toUpperCase();
+  var isUser = pair && pair.user_id === user.uid;
+  // ★ 防呆：pair.partner_id / pair.user_id 理論上不該是空的，但如果真的是空值，
+  //   下面 .toString() 會直接丟出例外，讓整個元件在 render 階段當掉——沒有 Error
+  //   Boundary 包著的話，React 會整個畫面清空，變成使用者看到的「白頁」。
+  //   這裡先擋一層，資料真的不完整就顯示明確錯誤，而不是無聲當機。
+  var partnerId = pair ? (isUser ? pair.partner_id : pair.user_id) : null;
+  if (!pair || !partnerId) {
+    return React.createElement("div", { style: { padding: 40, textAlign: 'center' } },
+      React.createElement("div", { style: { fontSize: 13, color: '#888', marginBottom: 16 } }, 'This partnership could not be loaded (missing data).'),
+      React.createElement("button", { className: "result-cta", style: { maxWidth: 200, margin: '0 auto' }, onClick: onBack }, 'Back')
+    );
+  }
   var habitName = isUser ? pair.habit_name : pair.partner_habit_name;
   var daysSince = pair.created_at ? Math.max(1, Math.floor((Date.now() - new Date(pair.created_at)) / 86400000)) : 1;
 
@@ -11067,6 +11076,23 @@ function PairWallPage(_ref_pw) {
   var _smc = useState(pair.media_consent || {}); var mediaConsent = _smc[0]; var setMediaConsent = _smc[1];
   var _smcm = useState(false); var showMediaConsentModal = _smcm[0]; var setShowMediaConsentModal = _smcm[1];
   var _scms = useState(false); var chatMediaSending = _scms[0]; var setChatMediaSending = _scms[1];
+  /* ★ 修正「YOU × 61」同一個問題：查真實姓名/頭像，不要用 partnerId 前兩碼充當縮寫 */
+  var _spn = useState(null); var partnerName = _spn[0]; var setPartnerName = _spn[1];
+  var _spa = useState(null); var partnerAvatarUrl = _spa[0]; var setPartnerAvatarUrl = _spa[1];
+  // ★ partnerInitials 要放在 partnerName state 宣告「之後」才能讀到正確的值——
+  //   放在上面的話，這行執行當下 partnerName 這個 var 雖然已經被 hoist，但賦值
+  //   （= _spn[0]）還沒執行到，會永遠讀到 undefined，等於這個修正完全沒作用。
+  var partnerInitials = (partnerName ? partnerName.slice(0,2) : partnerId.toString().slice(0,2)).toUpperCase();
+  useEffect(function() {
+    if (!partnerId) return;
+    _supabase.from('users').select('display_name, photo_url').eq('id', partnerId).single()
+      .then(function(r) {
+        if (r.data) {
+          setPartnerName(r.data.display_name || null);
+          setPartnerAvatarUrl(r.data.photo_url || null);
+        }
+      }).catch(function(){});
+  }, [partnerId]);
 
   /* 從 DB 重新讀取 media_consent（對方核准/拒絕後同步）*/
   function refreshConsent() {
@@ -11561,10 +11587,17 @@ function PairWallPage(_ref_pw) {
       React.createElement('div', { className: 'pw-identity' },
         React.createElement('div', { className: 'pw-avs' },
           React.createElement('div', { className: 'pw-av you' }, 'YOU'),
-          React.createElement('div', { className: 'pw-av them' }, partnerInitials)
+          React.createElement('div', { className: 'pw-av them', style: { position:'relative', overflow:'hidden' } },
+            partnerInitials,
+            partnerAvatarUrl && React.createElement('img', {
+              src: partnerAvatarUrl, alt: '',
+              style: { position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' },
+              onError: function(e){ e.target.remove(); }
+            })
+          )
         ),
         React.createElement('div', { className: 'pw-pair-info' },
-          React.createElement('div', { className: 'pw-pair-name' }, 'YOU × ' + partnerInitials),
+          React.createElement('div', { className: 'pw-pair-name' }, 'You × ' + (partnerName || partnerInitials)),
           React.createElement('div', { className: 'pw-pair-sub' }, habitName),
           fmtLastActive(partnerLastActive) && React.createElement('div', {
             style: { fontSize:9, color:'rgba(255,255,255,0.45)', marginTop:2, display:'flex', alignItems:'center', gap:4 }
@@ -11790,6 +11823,11 @@ function BuddiesPage(_ref_buddies) {
   var pairsLoading = _useState_loading[0], setPairsLoading = _useState_loading[1];
   var _useState_selected = useState(null);
   var selectedPair = _useState_selected[0], setSelectedPair = _useState_selected[1];
+  // ★ 修正「YOU × 61」這類問題：之前完全沒查過夥伴的真實姓名/頭像，
+  //   initials 直接拿 partnerId（UUID）的前兩碼硬顯示，"61" 就是這樣來的。
+  //   這裡比照 Challengers 頁面既有的批次查詢慣例，一次撈出所有夥伴的 display_name/photo_url。
+  var _useState_partnerInfo = useState({});
+  var partnerInfoMap = _useState_partnerInfo[0], setPartnerInfoMap = _useState_partnerInfo[1];
 
   useEffect(function() {
     if (!user) return;
@@ -11798,8 +11836,20 @@ function BuddiesPage(_ref_buddies) {
       .in('status', ['active','pending'])
       .order('created_at', { ascending: false });
     q.then(function(r) {
-      setPairs(r.data || []);
+      var pairsData = r.data || [];
+      setPairs(pairsData);
       setPairsLoading(false);
+
+      var partnerIds = pairsData.map(function(p) {
+        return p.user_id === user.uid ? p.partner_id : p.user_id;
+      }).filter(Boolean);
+      if (partnerIds.length === 0) return;
+      _supabase.from('users').select('id, display_name, photo_url').in('id', partnerIds)
+        .then(function(ur) {
+          var map = {};
+          (ur.data || []).forEach(function(u) { map[u.id] = u; });
+          setPartnerInfoMap(map);
+        }).catch(function(){});
     }).catch(function() { setPairsLoading(false); });
   }, [user]);
 
@@ -11839,7 +11889,12 @@ function BuddiesPage(_ref_buddies) {
               var isIncoming = !isUser && pair.status === 'pending'; // partner sent request TO me
               var partnerId = isUser ? pair.partner_id : pair.user_id;
               var habitName = isUser ? pair.habit_name : pair.partner_habit_name;
-              var initials = partnerId.toString().slice(0,2).toUpperCase();
+              // ★ 修正：改用真的查到的 display_name 取縮寫，查不到才 fallback 回 UUID 前兩碼
+              //   （這是最後手段，正常情況不會走到這裡）。
+              var partnerInfo = partnerInfoMap[partnerId];
+              var partnerName = (partnerInfo && partnerInfo.display_name) || null;
+              var initials = partnerName ? partnerName.slice(0,2).toUpperCase() : partnerId.toString().slice(0,2).toUpperCase();
+              var partnerAvatarUrl = (partnerInfo && partnerInfo.photo_url) || null;
 
               // Accept / Decline handlers for incoming pending requests
               function handleAccept(e) {
@@ -11868,31 +11923,75 @@ function BuddiesPage(_ref_buddies) {
                   });
               }
 
-              return React.createElement("div", { key: pair.id, className: "pair-card", onClick: function(){ if (!isIncoming) setSelectedPair(pair); } },
-                React.createElement("div", { className: "pair-avs" },
-                  React.createElement("div", { className: "pair-av" }, "YOU"),
-                  React.createElement("div", { className: "pair-av" }, initials)
-                ),
-                React.createElement("div", { className: "pair-info" },
-                  React.createElement("div", { className: "pair-name" }, 'YOU × ' + initials),
-                  React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name),
-                  isIncoming && React.createElement("div", { style:{ fontSize:10, color:'#f59e0b', fontWeight:700, marginTop:2 } }, '⏳ Incoming request')
-                ),
-                isIncoming
-                  ? React.createElement("div", { style:{ display:'flex', gap:6, flexShrink:0 } },
-                      React.createElement("button", {
-                        style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'#16a34a', color:'#fff', border:'none', borderRadius:6, cursor:'pointer' },
-                        onClick: handleAccept
-                      }, "Accept"),
-                      React.createElement("button", {
-                        style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'var(--gray-200)', color:'var(--gray-600)', border:'none', borderRadius:6, cursor:'pointer' },
-                        onClick: handleDecline
-                      }, "Decline")
+              return React.createElement("div", {
+                key: pair.id,
+                className: "pair-card",
+                style: isIncoming ? { display:'block', cursor:'default' } : undefined,
+                onClick: function(){ if (!isIncoming) setSelectedPair(pair); }
+              },
+                React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:14 } },
+                  React.createElement("div", { className: "pair-avs" },
+                    React.createElement("div", { className: "pair-av" }, "YOU"),
+                    React.createElement("div", { className: "pair-av", style: { position:'relative', overflow:'hidden' } },
+                      initials,
+                      partnerAvatarUrl && React.createElement("img", {
+                        src: partnerAvatarUrl, alt: "",
+                        style: { position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' },
+                        onError: function(e){ e.target.remove(); }
+                      })
                     )
-                  : React.createElement(React.Fragment, null,
-                      React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase()),
-                      React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
-                    )
+                  ),
+                  React.createElement("div", { className: "pair-info" },
+                    React.createElement("div", { className: "pair-name" }, 'You × ' + (partnerName || 'partner')),
+                    React.createElement("div", { className: "pair-habit-tag" }, habitName || pair.habit_name),
+                    isIncoming && React.createElement("div", { style:{ fontSize:10, color:'#f59e0b', fontWeight:700, marginTop:2 } }, '⏳ Incoming request')
+                  ),
+                  isIncoming
+                    ? React.createElement("div", { style:{ display:'flex', gap:6, flexShrink:0 } },
+                        React.createElement("button", {
+                          style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'#16a34a', color:'#fff', border:'none', borderRadius:6, cursor:'pointer' },
+                          onClick: handleAccept
+                        }, "Accept"),
+                        React.createElement("button", {
+                          style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'var(--gray-200)', color:'var(--gray-600)', border:'none', borderRadius:6, cursor:'pointer' },
+                          onClick: handleDecline
+                        }, "Decline")
+                      )
+                    : React.createElement(React.Fragment, null,
+                        React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase()),
+                        React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
+                      )
+                ),
+                // ★ 收到邀請的人原本只看得到一張空空的卡片（姓名+習慣名），完全沒有足夠資訊
+                //   判斷要不要接受。現在把當初送出邀請時存下的配對報告（ai_match_data）秀出來，
+                //   跟發起邀請那方看到的內容一致（分數、細項、AI 理由）。舊資料（這次修正之前
+                //   送出的邀請）沒有這份快照，顯示一句提示文字，不會整塊消失或報錯。
+                isIncoming && React.createElement("div", { style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' } },
+                  pair.ai_match_data
+                    ? React.createElement(React.Fragment, null,
+                        React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:6, marginBottom:8 } },
+                          React.createElement("span", { style:{ fontSize:20, fontWeight:800, color:'var(--black)' } }, (pair.ai_match_data.score != null ? pair.ai_match_data.score : pair.match_score) || '—'),
+                          React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase' } }, '% match')
+                        ),
+                        pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 &&
+                          React.createElement("div", { style:{ marginBottom:8 } },
+                            Object.entries(pair.ai_match_data.breakdown)
+                              .filter(function(e){ return e[1] != null; })
+                              .map(function(e) {
+                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                                return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
+                                  React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
+                                  React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
+                                    React.createElement("div", { style:{ height:'100%', width: e[1] + '%', background:'var(--black)', borderRadius:2 } })
+                                  ),
+                                  React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:28, textAlign:'right' } }, e[1] + '%')
+                                );
+                              })
+                          ),
+                        pair.ai_match_data.reason && React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.7 } }, pair.ai_match_data.reason)
+                      )
+                    : React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } }, 'No AI match report available for this invite.')
+                )
               );
             })
           )
@@ -13440,6 +13539,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
 
     _openScanningModal(habit);
+    callMatchPartner(habit); // ★ 真正發送配對請求的唯一入口
   }
 
   // ── Helper: get already-paired user IDs (to exclude from results) ────────
@@ -13727,7 +13827,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('matchingOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    callMatchPartner(habit);
+    // ★ 修正：callMatchPartner 的呼叫從這裡移到 _proceedToMatching()。
+    //   原本這裡直接打 API，但 openMatchingModal 一開頭（為了消除按下去空白 lag
+    //   的問題）也會先呼叫一次 _openScanningModal 顯示掃描動畫；如果這裡也自動打
+    //   API，等於同一次「Find Partner」點擊，在還沒判斷完是否需要問卷之前就先發了
+    //   一次真正的配對請求，判斷完不需要問卷後 _proceedToMatching() 又會再呼叫一次
+    //   _openScanningModal，變成兩次 API 請求互相賽跑——誰晚回來就把誰的結果蓋掉，
+    //   這正是「配對結果先顯示中文、一秒後被英文蓋掉、分數還變了」的原因。
+    //   現在 _openScanningModal 只負責畫面，實際發送請求統一由呼叫端自己決定時機。
   }
 
   async function callMatchPartner(habit) {
@@ -13994,12 +14101,21 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         var userId = session.data.session && session.data.session.user && session.data.session.user.id;
         if (!userId) throw new Error('Not logged in');
 
-        // ★ 每一步都加 8 秒逾時保護；insert 的 .error 也要明確檢查並丟出，
-        //   否則 RLS 擋下來、唯一鍵衝突等情況會被靜默吞掉，使用者完全看不到原因。
+        // ★ 把當初的配對報告（分數、理由、細項）存成快照，收到邀請的人才看得到
+        //   完整資訊來決定要不要接受，不用只看一張空空的邀請卡。
         var pairRes = await _withTimeout(_supabase.from('pairs').insert({
           user_id: userId, partner_id: m.userId,
           habit_name: _currentHabit.name, partner_habit_name: m.habitName,
-          match_score: m.score, status: 'pending'
+          match_score: m.score, status: 'pending',
+          ai_match_data: {
+            score: m.score,
+            reason: m.reason || '',
+            breakdown: m.breakdown || {},
+            requesterHabitName: _currentHabit.name,
+            partnerHabitName: m.habitName,
+            avgDuration: m.avgDuration || null,
+            habitLifespan: m.habitLifespan || null
+          }
         }), 8000, 'Send request');
         if (pairRes && pairRes.error) throw new Error(pairRes.error.message || 'Could not create pair request');
 
