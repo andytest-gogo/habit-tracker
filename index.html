@@ -8343,6 +8343,18 @@ function MainApp(_ref16) {
     }
     db.collection('habits').doc(habitId).delete().catch(function(err) {
       console.error('[deleteHabit] failed:', err.message);
+      // ★ 修正：這裡原本只印 console，但上面第一步已經把習慣從畫面上「樂觀移除」了——
+      //   如果這個刪除實際上被資料庫擋下來（例如 RLS 權限），使用者完全看不到任何提示，
+      //   會以為刪除成功，但那筆習慣其實還留在資料庫裡，之後就可能被配對之類的功能
+      //   當成「還活著」的候選資料撈出來（這正是被刪除的 jogging 習慣還會出現在配對名單的原因）。
+      //   這裡補上明確提示，並把畫面上的習慣復原，讓畫面狀態跟資料庫保持一致。
+      alert('Failed to delete "' + (habitToArchive ? habitToArchive.name : 'this habit') + '": ' + err.message + '\n\nThe habit has been restored on screen. Please try again.');
+      if (habitToArchive) {
+        setHabits(function(prev) {
+          if (prev.some(function(h) { return h.id === habitId; })) return prev;
+          return [habitToArchive].concat(prev);
+        });
+      }
     });
   };
   var countHabit = /*#__PURE__*/function () {
@@ -13532,9 +13544,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       var candUserIds = Object.keys(byUser);
 
-      // 撈 users 表做 displayName（年齡／性別偏好已移除，不再需要 signup_age/signup_gender）
+      // 撈 users 表做 displayName + 頭像（年齡／性別偏好已移除，不再需要 signup_age/signup_gender）
+      // ★ 修正：欄位名稱改成真正存在的 display_name / photo_url（底線），不是 displayName（駝峰）——
+      //   跟 match-partner 那邊查出來的同一個 bug，之前這裡整條查詢一直失敗，
+      //   名字全靠下面 _displayName fallback 撐著，頭像完全沒有 fallback，才會一直是空的。
       var { data: candUsers } = await _supabase.from('users')
-        .select('id, displayName')
+        .select('id, display_name, photo_url')
         .in('id', candUserIds);
       var userMap = {};
       (candUsers || []).forEach(function(u) { userMap[u.id] = u; });
@@ -13542,13 +13557,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       // 組成與舊格式相容的 candidates（habits 已是陣列，不再是 JSON 字串）
       var candidates = candUserIds.map(function(uid) {
         var u = userMap[uid] || {};
-        var dn = u.displayName;
+        var dn = u.display_name;
         if (!dn) {
           for (var hi = 0; hi < byUser[uid].length; hi++) {
             if (byUser[uid][hi]._displayName) { dn = byUser[uid][hi]._displayName; break; }
           }
         }
-        return { id: uid, displayName: dn || 'user', habits: byUser[uid] };
+        return { id: uid, displayName: dn || 'user', avatarUrl: u.photo_url || null, habits: byUser[uid] };
       });
 
       // Filter out already-paired
@@ -13649,6 +13664,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         return {
           userId: u.id,
           displayName: u.displayName || 'user',
+          avatarUrl: u.avatarUrl || null,
           habitName: uHabit.name || '—',
           checkedCount: uChecked,
           score: overall,
@@ -13913,8 +13929,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       '</div>' +
 
       // actions
+      // ★ 移除了原本 Send Partner Request 左邊的 X（跳過候選人）按鈕：
+      //   它跟下面的 Next 幾乎做同一件事（切到下一位候選人），唯一差別只在
+      //   最後一張卡片時 X 會關掉整個視窗——但最上面已經有一顆 ✕ 可以關閉整個
+      //   配對視窗了，功能重複，容易讓人搞不清楚兩個 X 差在哪，直接拿掉。
       '<div style="padding:12px 16px 10px;display:flex;gap:8px;align-items:center;">' +
-        '<button onclick="window._mrcSkipCard()" style="background:transparent;border:1px solid #2a2a2a;color:#888;width:40px;height:40px;cursor:pointer;font-size:13px;flex-shrink:0;transition:.15s;font-family:inherit;">✕</button>' +
         '<button id="mrcInviteBtn" onclick="window._mrcInviteCard()" ' + ((invited || _matchSending) ? 'disabled' : '') + ' style="flex:1;background:' + (invited ? '#1a2a1a' : '#fff') + ';color:' + (invited ? '#4caf50' : '#0a0a0a') + ';border:' + (invited ? '1px solid #2d4a2d' : 'none') + ';padding:11px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:' + ((invited || _matchSending) ? 'default' : 'pointer') + ';font-family:inherit;opacity:' + (_matchSending && !invited ? '.6' : '1') + ';">' + (invited ? 'Request sent ✓' : (_matchSending ? 'Sending…' : 'Send partner request')) + '</button>' +
       '</div>' +
 
@@ -13952,13 +13971,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   window._mrcPrev = function() { if (_matchCardIdx > 0) { _matchCardIdx--; _renderMatchCard(); } };
   window._mrcNext = function() {
     if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
-  };
-  window._mrcSkipCard = function() {
-    // ★ 修正：跟 Next 共用同一段「還有下一位才前進」的邏輯時，最後一張卡片按 X
-    //   會完全沒反應（看起來像壞掉）。X 的語意其實是「不想約這位」，
-    //   沒有下一位可看的話，最合理的動作是直接關掉整個配對視窗。
-    if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
-    else { window.closeMatchingModal(); }
   };
   // ── Helper：幫任何 promise 加上逾時保護，避免網路/DB 卡住時畫面永遠不動 ──
   function _withTimeout(promise, ms, label) {
