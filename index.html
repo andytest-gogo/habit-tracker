@@ -13810,6 +13810,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var _matchCards = [];
   var _matchCardIdx = 0;
   var _matchInvited = {};
+  var _matchSending = false; // 送出配對邀請中（防呆用，避免畫面看起來像當機、也擋重複點擊）
   var _avStyles = [
     {bg:'#1a1035',fg:'#9d8ff5',border:'#4a3aaa'},
     {bg:'#0a1f18',fg:'#4ecfa0',border:'#1a6e50'},
@@ -13826,6 +13827,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     _matchCards = matches;
     _matchCardIdx = 0;
     _matchInvited = {};
+    _matchSending = false;
     _renderMatchCard();
   }
 
@@ -13901,7 +13903,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       // actions
       '<div style="padding:12px 16px 10px;display:flex;gap:8px;align-items:center;">' +
         '<button onclick="window._mrcSkipCard()" style="background:transparent;border:1px solid #2a2a2a;color:#888;width:40px;height:40px;cursor:pointer;font-size:13px;flex-shrink:0;transition:.15s;font-family:inherit;">✕</button>' +
-        '<button id="mrcInviteBtn" onclick="window._mrcInviteCard()" ' + (invited ? 'disabled' : '') + ' style="flex:1;background:' + (invited ? '#1a2a1a' : '#fff') + ';color:' + (invited ? '#4caf50' : '#0a0a0a') + ';border:' + (invited ? '1px solid #2d4a2d' : 'none') + ';padding:11px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:' + (invited ? 'default' : 'pointer') + ';font-family:inherit;">' + (invited ? 'Request sent ✓' : 'Send partner request') + '</button>' +
+        '<button id="mrcInviteBtn" onclick="window._mrcInviteCard()" ' + ((invited || _matchSending) ? 'disabled' : '') + ' style="flex:1;background:' + (invited ? '#1a2a1a' : '#fff') + ';color:' + (invited ? '#4caf50' : '#0a0a0a') + ';border:' + (invited ? '1px solid #2d4a2d' : 'none') + ';padding:11px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:' + ((invited || _matchSending) ? 'default' : 'pointer') + ';font-family:inherit;opacity:' + (_matchSending && !invited ? '.6' : '1') + ';">' + (invited ? 'Request sent ✓' : (_matchSending ? 'Sending…' : 'Send partner request')) + '</button>' +
       '</div>' +
 
       // prev / next nav
@@ -13942,32 +13944,59 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   window._mrcSkipCard = function() {
     if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
   };
+  // ── Helper：幫任何 promise 加上逾時保護，避免網路/DB 卡住時畫面永遠不動 ──
+  function _withTimeout(promise, ms, label) {
+    var timeoutId;
+    var timeoutPromise = new Promise(function(_, reject) {
+      timeoutId = setTimeout(function() { reject(new Error((label || 'Request') + ' timed out')); }, ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(function() { clearTimeout(timeoutId); });
+  }
+
   window._mrcInviteCard = function() {
     var idx = _matchCardIdx;
     var m = _matchCards[idx];
     if (!m || !_currentHabit || _matchInvited[idx]) return;
+
+    // ★ 先切成「送出中」狀態並重繪按鈕，避免使用者以為畫面當機（也防止重複點擊）
+    _matchSending = true;
+    _renderMatchCard();
+
     (async function() {
       try {
-        var session = await _supabase.auth.getSession();
+        var session = await _withTimeout(_supabase.auth.getSession(), 8000, 'Auth session');
         var userId = session.data.session && session.data.session.user && session.data.session.user.id;
-        if (!userId) return;
-        await _supabase.from('pairs').insert({
+        if (!userId) throw new Error('Not logged in');
+
+        // ★ 每一步都加 8 秒逾時保護；insert 的 .error 也要明確檢查並丟出，
+        //   否則 RLS 擋下來、唯一鍵衝突等情況會被靜默吞掉，使用者完全看不到原因。
+        var pairRes = await _withTimeout(_supabase.from('pairs').insert({
           user_id: userId, partner_id: m.userId,
           habit_name: _currentHabit.name, partner_habit_name: m.habitName,
           match_score: m.score, status: 'pending'
-        });
-        await _supabase.from('notifications').insert({
+        }), 8000, 'Send request');
+        if (pairRes && pairRes.error) throw new Error(pairRes.error.message || 'Could not create pair request');
+
+        var notifRes = await _withTimeout(_supabase.from('notifications').insert({
           user_id: m.userId, type: 'partner_request',
           title: 'New Partner Request!',
           body: 'Someone wants to be your habit partner for "' + m.habitName + '".',
           data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name }),
           is_read: false, created_at: new Date().toISOString()
-        });
+        }), 8000, 'Send notification');
+        // 通知失敗不影響配對請求本身是否成功，只記錄，不擋流程
+        if (notifRes && notifRes.error) console.warn('[mrcInviteCard] notification insert error:', notifRes.error.message);
+
         _matchInvited[idx] = true;
+        _matchSending = false;
         _renderMatchCard();
         if (typeof showToast === 'function') showToast('Invite sent! 🎉');
         if (_matchCardIdx < _matchCards.length - 1) setTimeout(function(){ _matchCardIdx++; _renderMatchCard(); }, 700);
-      } catch(e) { alert('Failed to send invite: ' + e.message); }
+      } catch(e) {
+        _matchSending = false;
+        _renderMatchCard();
+        alert('Failed to send invite: ' + e.message);
+      }
     })();
   };
 
