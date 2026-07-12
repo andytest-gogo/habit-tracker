@@ -13251,7 +13251,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         <div class="matching-label">Before we find your partner</div>
         <div class="matching-habit-name" id="surveyHabitName">—</div>
       </div>
-      <button onclick="window._skipSurvey()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
+      <button onclick="window._closeSurveyModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
     </div>
     <!-- Step progress bar -->
     <div style="height:2px;background:#1a1a1a;"><div id="surveyStepFill" style="height:100%;background:#fff;width:0%;transition:width .4s ease-out;"></div></div>
@@ -13474,8 +13474,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         'border:1px solid ' + (sel ? '#fff' : '#1a1a1a') + ';' +
         'padding:12px 16px;text-align:left;cursor:pointer;font-family:inherit;' +
         'display:flex;align-items:center;gap:12px;margin-bottom:8px;transition:all .15s;">' +
-        '<span style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + (sel ? '#fff' : '#333') + ';flex-shrink:0;width:14px;">' + o.value + '</span>' +
-        '<span style="font-size:12px;color:' + (sel ? '#ccc' : '#555') + ';line-height:1.5;">' + o.label + '</span>' +
+        '<span style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + (sel ? '#fff' : '#888') + ';flex-shrink:0;width:14px;">' + o.value + '</span>' +
+        '<span style="font-size:12px;color:' + (sel ? '#fff' : '#ccc') + ';line-height:1.5;">' + o.label + '</span>' +
         '</button>';
     }).join('');
 
@@ -13483,11 +13483,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     body.innerHTML =
       prevHtml +
       '<div style="padding:16px 20px 0;">' +
-        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:8px;">Question ' + (_surveyIdx+1) + ' of ' + total + ' · ' + q.dimension + '</div>' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">Question ' + (_surveyIdx+1) + ' of ' + total + ' · ' + q.dimension + '</div>' +
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:18px;font-family:var(--din);letter-spacing:.3px;">' + q.text + '</div>' +
         '<div>' + optsHtml + '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-bottom:20px;">' +
-          '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#333;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
+          '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#888;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
           '<button id="surveyNextBtn" onclick="window._surveyNext()" ' + (hasAnswer ? '' : 'disabled') + ' style="flex:1;background:#fff;color:#0a0a0a;border:none;padding:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;font-family:inherit;opacity:' + (hasAnswer ? '1' : '.25') + ';transition:.15s;">' + (isLast ? 'Find my partner →' : 'Next →') + '</button>' +
         '</div>' +
       '</div>';
@@ -13514,6 +13514,20 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('valuesSurveyOverlay').style.display = 'none';
     document.body.style.overflow = '';
     _proceedToMatching(_currentHabit);
+  };
+
+  // ★ 右上角 ✕ 專用的關閉行為，跟「Skip for now」是兩種不同的意圖：
+  //   Skip for now 是使用者明確表示「這次不填了，直接幫我配對」；
+  //   ✕ 只是想關掉這個視窗（很可能是手滑、或只是想先看一下其他畫面），
+  //   不代表使用者同意跳過問卷、直接開始配對。
+  //   所以這裡只關視窗，不呼叫 _proceedToMatching。已經生成的題目在
+  //   generate-values-questions 那邊已經存成草稿（habit_values.questions），
+  //   下次使用者再按 Find Partner 時會直接沿用同一批題目、不會再呼叫一次 Claude，
+  //   使用者也還有機會把問卷填完。
+  window._closeSurveyModal = function() {
+    document.getElementById('valuesSurveyOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    _currentHabit = null;
   };
 
   function _saveSurveyAndProceed() {
@@ -14137,20 +14151,55 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
         // ★ 把當初的配對報告（分數、理由、細項）存成快照，收到邀請的人才看得到
         //   完整資訊來決定要不要接受，不用只看一張空空的邀請卡。
-        var pairRes = await _withTimeout(_supabase.from('pairs').insert({
-          user_id: userId, partner_id: m.userId,
-          habit_name: _currentHabit.name, partner_habit_name: m.habitName,
-          match_score: m.score, status: 'pending',
-          ai_match_data: {
-            score: m.score,
-            reason: m.reason || '',
-            breakdown: m.breakdown || {},
-            requesterHabitName: _currentHabit.name,
-            partnerHabitName: m.habitName,
-            avgDuration: m.avgDuration || null,
-            habitLifespan: m.habitLifespan || null
-          }
-        }), 8000, 'Send request');
+        var snapshot = {
+          score: m.score,
+          reason: m.reason || '',
+          breakdown: m.breakdown || {},
+          requesterHabitName: _currentHabit.name,
+          partnerHabitName: m.habitName,
+          avgDuration: m.avgDuration || null,
+          habitLifespan: m.habitLifespan || null
+        };
+
+        // ★ 修正 duplicate key bug：pairs 表對 (user_id, partner_id) 有唯一約束（pairs_user_id_partner_id_key）。
+        //   如果這兩人之前就有過一筆紀錄——不管是被拒絕(declined)、被撤回(withdrawn)、
+        //   還是夥伴關係已結束(ended)——直接 insert 一定會撞到這個唯一約束，
+        //   整個請求失敗、丟出資料庫層級的錯誤訊息給使用者看（就是你截圖看到的那個 alert）。
+        //   改成先查有沒有既有紀錄，再決定要新增還是更新既有那一筆；
+        //   如果對方還在 pending 或已經是 active 夥伴，也直接給明確訊息，不要嘗試寫入。
+        var existingRes = await _withTimeout(
+          _supabase.from('pairs').select('id, status').eq('user_id', userId).eq('partner_id', m.userId).maybeSingle(),
+          8000, 'Check existing pair'
+        );
+        if (existingRes && existingRes.error) throw new Error(existingRes.error.message || 'Could not check existing request');
+        var existingPair = existingRes && existingRes.data;
+
+        if (existingPair && existingPair.status === 'active') {
+          throw new Error("You're already partners with this person.");
+        }
+        if (existingPair && existingPair.status === 'pending') {
+          throw new Error("You already sent a request to this person — it's still pending.");
+        }
+
+        var pairRes;
+        if (existingPair) {
+          // 舊紀錄狀態是 declined / withdrawn / ended → 重新發出邀請時更新既有那一筆，
+          // 順便把 created_at 重置，避免 Buddies 頁「配對 X 天」用到舊夥伴關係的起始時間。
+          pairRes = await _withTimeout(_supabase.from('pairs').update({
+            habit_name: _currentHabit.name, partner_habit_name: m.habitName,
+            match_score: m.score, status: 'pending',
+            ai_match_data: snapshot,
+            ended_reason: null, ended_at: null,
+            created_at: new Date().toISOString()
+          }).eq('id', existingPair.id), 8000, 'Send request');
+        } else {
+          pairRes = await _withTimeout(_supabase.from('pairs').insert({
+            user_id: userId, partner_id: m.userId,
+            habit_name: _currentHabit.name, partner_habit_name: m.habitName,
+            match_score: m.score, status: 'pending',
+            ai_match_data: snapshot
+          }), 8000, 'Send request');
+        }
         if (pairRes && pairRes.error) throw new Error(pairRes.error.message || 'Could not create pair request');
 
         var notifRes = await _withTimeout(_supabase.from('notifications').insert({
