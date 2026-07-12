@@ -5974,6 +5974,20 @@ function parseTimeRange(timeRange) {
   };
 }
 
+/* ── Count unique check-in days (mirrors match-partner Edge Function's
+   countActiveDays: checkedDates ∪ todayCounts(≥1), deduped by day) ──
+   Used to gate the "Find Partner" button on the History/Archive page —
+   keeps the frontend's idea of "≥7 days" consistent with what the
+   server will actually verify when it re-checks the habits row. */
+function countCheckedDays(habit) {
+  var dayset = {};
+  (habit.checkedDates || []).forEach(function(d) { if (d) dayset[String(d).slice(0,10)] = true; });
+  Object.keys(habit.todayCounts || {}).forEach(function(k) {
+    if ((habit.todayCounts[k] || 0) >= 1) dayset[String(k).slice(0,10)] = true;
+  });
+  return Object.keys(dayset).length;
+}
+
 /* ── Calculate cumulative completion rate (shared helper) ──
    Formula: sum of completed sessions across all cycles (max per cycle = timesPerCycle)
          ÷ (Total Days ÷ intervalDays × timesPerCycle)
@@ -6951,18 +6965,33 @@ function HistoryPage(_ref15) {
   var habits = _ref15.habits,
     archivedHabits = _ref15.archivedHabits,
     percentile = _ref15.percentile,
+    user = _ref15.user,
+    matchingCredits = _ref15.matchingCredits || {},
+    matchCallsUsedToday = _ref15.matchCallsUsedToday,
+    matchDailyLimit = _ref15.matchDailyLimit || 10,
     onBack = _ref15.onBack;
   var _useStateHP = useState(10),
     _useStateHP2 = _slicedToArray(_useStateHP, 2),
     visibleCount = _useStateHP2[0],
     setVisibleCount = _useStateHP2[1];
+  // ★ Find Partner 資格門檻，跟其他地方保持一致（含測試帳號略過門檻）
+  var _HP_TEST_BYPASS_UIDS = ['c041d006-c71f-42c7-9bbf-bc6d5fc849b1', '6199b013-1e74-43b6-898d-fcb65af28051'];
+  var PARTNER_UNLOCK_DAYS = (user && user.uid && _HP_TEST_BYPASS_UIDS.indexOf(user.uid) !== -1) ? 1 : 7;
   // Merge sources: expired habits + archivedHabits (legacy compatibility)
   var _historyToday = toISODay();
   var expiredFromHabits = habits.filter(function(h) {
     var _e = parseTimeRange(h.timeRange).end;
     return _e && _e < _historyToday;
   }).map(function(h) {
-    return Object.assign({}, h, { finalRate: h.finalRate || calcCompletionRate(h) });
+    // ★ _isLive=true 代表這筆資料還是 habits 表裡活生生的那一列（只是首頁篩選掉不顯示），
+    //   match-partner Edge Function 能正常查到 → 可以顯示 Find Partner。
+    //   跟下面 fromArchived（使用者手動刪除、已經搬進 archived_habits、habits 表原始列
+    //   已經被砍掉）要分開處理，那些沒有 habitId 可以再打 match-partner 了。
+    return Object.assign({}, h, {
+      finalRate: h.finalRate || calcCompletionRate(h),
+      _isLive: true,
+      _checkedDays: countCheckedDays(h)
+    });
   });
   // Deduplicate by id (habits take priority, archivedHabits fill gaps)
   var seenIds = new Set(expiredFromHabits.map(function(h){ return h.id; }));
@@ -7046,38 +7075,38 @@ function HistoryPage(_ref15) {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "active-now-card"
-  }, percentile !== null && expiredRates.length > 0 ? [
+  }, matchCallsUsedToday !== null ? [
     /*#__PURE__*/React.createElement("div", {
-      key:"pct-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
+      key:"aicalls-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
     }, /*#__PURE__*/React.createElement("svg", {
       width:64, height:64, style:{ transform:'rotate(-90deg)' }
     }, /*#__PURE__*/React.createElement("circle", {
       cx:32, cy:32, r:26, fill:"none", stroke:"rgba(96,165,250,0.18)", strokeWidth:7
     }), /*#__PURE__*/React.createElement("circle", {
       cx:32, cy:32, r:26, fill:"none", stroke:"#60a5fa", strokeWidth:7,
-      strokeDasharray: (percentile/100 * 2*Math.PI*26) + " " + (2*Math.PI*26),
+      strokeDasharray: (Math.max(0, matchDailyLimit - matchCallsUsedToday)/matchDailyLimit * 2*Math.PI*26) + " " + (2*Math.PI*26),
       strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
     })), /*#__PURE__*/React.createElement("div", {
       style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
         textAlign:'center', width:'100%', lineHeight:1 }
     }, /*#__PURE__*/React.createElement("div", {
-      style:{ fontSize:13, fontWeight:700, fontFamily:'var(--din)', color:'#60a5fa', lineHeight:1 }
-    }, percentile, "%"), /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#60a5fa', lineHeight:1 }
+    }, Math.max(0, matchDailyLimit - matchCallsUsedToday)), /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:7, opacity:.7, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#60a5fa' }
-    }, "RANK"))),
+    }, "LEFT"))),
     /*#__PURE__*/React.createElement("div", {
-      key:"pct-info", className:"active-now-info"
-    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Your Ranking"),
+      key:"aicalls-info", className:"active-now-info"
+    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Today's AI Searches"),
     /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:14, fontWeight:700, fontFamily:'var(--din)', lineHeight:1.3, color:'#60a5fa', marginBottom:4 }
-    }, "Better than ", percentile, "% of all users"),
+    }, matchCallsUsedToday, " of ", matchDailyLimit, " used today"),
     /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:11, opacity:.55, marginTop:2 }
-    }, percentile >= 90 ? 'Top tier! \U0001f525' : percentile >= 70 ? 'Above avg \U0001f4aa' : percentile >= 50 ? 'Solid \u2191' : 'Keep going \u2726'),
+    }, matchCallsUsedToday >= matchDailyLimit ? 'All used — resets tomorrow \u23f0' : 'Resets daily \u00b7 log in for more credits'),
     /*#__PURE__*/React.createElement("div", {
       style:{ marginTop:7, height:2, background:'rgba(96,165,250,.18)', width:'100%', overflow:'hidden' }
     }, /*#__PURE__*/React.createElement("div", {
-      style:{ height:'100%', background:'#60a5fa', width:percentile+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
+      style:{ height:'100%', background:'#60a5fa', width:Math.min(100, Math.round(matchCallsUsedToday/matchDailyLimit*100))+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
     })))
   ] : null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7294,7 +7323,25 @@ function HistoryPage(_ref15) {
       className: "archive-tag"
     }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
       className: "archive-tag"
-    }, h.durLabel)));
+    }, h.durLabel)),
+    /* ★ 新增：到期但仍在 habits 表裡（沒被手動刪除）、打卡天數已經 ≥ PARTNER_UNLOCK_DAYS
+       的習慣，補一個 Find Partner 入口——之前這批已經證明過自己會堅持的習慣，挑戰一到期
+       就再也叫不出配對按鈕了。已經有 active 夥伴的排除掉，避免對同一個習慣重複發邀請。
+       真正擋濫用的門檻在 match-partner Edge Function（habit_ai_usage 每人每日 10 次，
+       跟這個使用者手上有幾個符合資格的習慣無關），不是靠這裡藏不藏按鈕，所以這裡開放
+       完全不會重新打開之前討論過的濫用缺口。 */
+    (h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS &&
+      !((typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) &&
+        window._myPairs.some(function(p){ return (p.habit_id === h.id || p.partner_habit_id === h.id) && p.status === 'active'; }))
+    ) && /*#__PURE__*/React.createElement("div", {
+      style: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, padding:'10px 16px 14px', borderTop:'1px solid var(--gray-100)', marginTop:10 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:'var(--gray-400)' }
+    }, (matchingCredits[h.id] || 0) + ' AI match credit' + ((matchingCredits[h.id] || 0) === 1 ? '' : 's') + ' left'
+    ), /*#__PURE__*/React.createElement("button", {
+      className: "seek-find-btn",
+      onClick: function(e){ e.stopPropagation(); window.openMatchingModal(h); }
+    }, "Find Partner")));
   }), hasMore && /*#__PURE__*/React.createElement("div", {
     style: { padding: '16px 0 0', textAlign: 'center' }
   }, /*#__PURE__*/React.createElement("button", {
@@ -7754,6 +7801,23 @@ function MainApp(_ref16) {
   var [cheerMap, setCheerMap] = React.useState({});
   var [habitCheers, setHabitCheers] = React.useState({});
   var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
+  // ★ 新增：今天真正打過 match-partner（呼叫 Claude）的次數，讀 habit_ai_usage 表。
+  //   跟上面 matchingCredits 不是同一件事——matchingCredits 只是每個習慣自己的
+  //   「錢包」數字，目前並沒有真的擋住 _proceedToMatching() 呼叫 match-partner
+  //   （credits 用完了案子照樣送出去，只是不再 -1 而已）；真正會擋下請求、
+  //   回 429 的是 match-partner Edge Function 裡的 DAILY_LIMIT（見那支程式碼），
+  //   這裡讀的就是同一張表、同樣的每日 10 次上限，數字才會跟後端行為一致。
+  var MATCH_DAILY_LIMIT = 10; // ⚠️ 要跟 match-partner/index.ts 的 DAILY_LIMIT 保持一致
+  var [matchCallsUsedToday, setMatchCallsUsedToday] = React.useState(null); // null = 還沒讀到
+  var loadMatchCallsToday = React.useCallback(function() {
+    if (!user || !user.uid || !window._supabaseClient) return;
+    var todayKey = toISODay();
+    window._supabaseClient.from('habit_ai_usage')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.uid).eq('feature', 'match').eq('usage_date', todayKey)
+      .then(function(r) { setMatchCallsUsedToday(r.count || 0); })
+      .catch(function() { setMatchCallsUsedToday(null); }); // 讀不到（例如 RLS 還沒開 SELECT）就不顯示，不要顯示錯的數字
+  }, [user]);
   var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
   var [visibilityPrompt, setVisibilityPrompt] = React.useState(null); // 建立習慣後詢問是否公開到 Challengers：{ id, tempId, name }
@@ -9801,6 +9865,10 @@ function MainApp(_ref16) {
     habits: habits,
     archivedHabits: archivedHabits,
     percentile: percentile,
+    user: user,
+    matchingCredits: matchingCredits,
+    matchCallsUsedToday: matchCallsUsedToday,
+    matchDailyLimit: MATCH_DAILY_LIMIT,
     onBack: function onBack() {
       return setShowHistory(false);
     }
@@ -10712,6 +10780,7 @@ function MainApp(_ref16) {
     }, "Analytics"), /*#__PURE__*/React.createElement("button", {
       className: "history-entry-btn",
       onClick: function onClick() {
+        loadMatchCallsToday();
         return setShowHistory(true);
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -11136,25 +11205,11 @@ function PairWallPage(_ref_pw) {
     return null;
   }
 
-  /* Check 7-day inactivity → auto end */
-  function checkInactivityEnd(p) {
-    if (!p || p.status !== 'active') return;
-    var lastActivity = p.last_post_at || p.created_at;
-    if (!lastActivity) return;
-    var daysSilent = Math.floor((Date.now() - new Date(lastActivity)) / 86400000);
-    if (daysSilent >= 7) {
-      _supabase.from('pairs').update({ status: 'ended', ended_reason: 'inactivity', ended_at: new Date().toISOString() })
-        .eq('id', p.id)
-        .then(function() {
-          // Send notification to both users
-          var notifBase = { type: 'partnership_ended', pair_id: p.id, message: 'Your partnership has ended due to 7 days of inactivity.' };
-          Promise.all([
-            _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: p.user_id })),
-            _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: p.partner_id }))
-          ]).catch(function(){});
-        }).catch(function(){});
-    }
-  }
+  /* ★ 已移除：原本「7 天沒互動就自動結束夥伴關係」的 checkInactivityEnd()。
+     現在改成完全交給雙方自己決定要不要按 End Partnership，系統不會主動幫使用者
+     結束一段夥伴關係。上面 touchPairActivity() 這個輔助函式因此也不再有實際用途
+     （原本只是為了讓自動結束判斷不要誤殺聊天中的活躍夥伴），先留著沒有壞處，
+     之後如果想做「不活躍提醒」（只提醒、不強制結束）可以再接回來用。 */
 
   /* End partnership manually */
   function endPartnership() {
@@ -11227,8 +11282,6 @@ function PairWallPage(_ref_pw) {
       var lastActiveRaw = results[2].data && results[2].data.last_active;
       setPartnerLastActive(lastActiveRaw || null);
       setLoading(false);
-      // Check 7-day inactivity → auto end partnership
-      checkInactivityEnd(pair);
     }).catch(function() { setLoading(false); });
   }, [user, pair]);
 
@@ -11270,13 +11323,22 @@ function PairWallPage(_ref_pw) {
     if (msgsEndRef.current) msgsEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  /* ★ 聊天室現在不強制要求貼日更才能用了，但「7 天沒動靜就自動結束夥伴關係」
+     （checkInactivityEnd）判斷的還是 pairs.last_post_at，而這個欄位原本只有
+     publishPost() 貼日更時才會更新。如果不補上這段，兩個人明明每天都在聊天、
+     只是沒貼照片，7 天後還是會被誤判成「不活躍」而自動結束夥伴關係。
+     所以聊天室傳出文字或媒體訊息時，也一併把 last_post_at 刷新成現在。 */
+  function touchPairActivity() {
+    _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).then(function(){}).catch(function(){});
+  }
+
   /* send message */
   function sendMessage() {
     var text = inputText.trim();
     if (!text || sending) return;
     setSending(true);
     _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
-      .then(function() { setInputText(''); setSending(false); })
+      .then(function() { setInputText(''); setSending(false); touchPairActivity(); })
       .catch(function() { setSending(false); });
   }
 
@@ -11340,7 +11402,7 @@ function PairWallPage(_ref_pw) {
     .then(function(r) {
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media', media_url: r.url, media_type: isVid ? 'video' : 'image' });
     })
-    .then(function() { setChatMediaSending(false); })
+    .then(function() { setChatMediaSending(false); touchPairActivity(); })
     .catch(function(err) {
       if (err && err.__modBlocked) return;
       alert('Send failed: ' + (err && err.message ? err.message : err));
@@ -11486,7 +11548,9 @@ function PairWallPage(_ref_pw) {
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  var canChat = !!(partnerPost && myPost); // both must post today to unlock chat
+  // ★ 改動：聊天室不再要求「雙方都先貼今日進度」才能用——直接開放聊天，
+  //   貼照片/影片變成純粹可選的分享功能，不是聊天的前提條件。
+  var canChat = true;
 
   /* UPLOAD OVERLAY */
   function renderUpload() {
@@ -11651,40 +11715,33 @@ function PairWallPage(_ref_pw) {
     ),
 
     /* CONTENT */
-    /* State 1: nobody posted today */
+    /* State 1: nobody posted today — posting is optional, chat is already open below */
     !partnerPost && !myPost && React.createElement(React.Fragment, null,
       React.createElement('div', { className: 'pw-empty' },
         React.createElement('div', { className: 'pw-empty-box' }, '↑'),
-        React.createElement('div', { className: 'pw-empty-title' }, 'Post Today\'s Habit'),
-        React.createElement('div', { className: 'pw-empty-sub' }, 'Both of you need to post today\'s habit update to unlock the chat.'),
+        React.createElement('div', { className: 'pw-empty-title' }, "Share Today's Update"),
+        React.createElement('div', { className: 'pw-empty-sub' }, 'Optional — post a photo or video to show your partner how it\u2019s going. Chat is open below either way.'),
         React.createElement('button', { className: 'pw-empty-btn', onClick: function(){ setShowUpload(true); } }, "Post Today's Habit →")
       )
     ),
 
-    /* State 2: partner posted, waiting for me */
+    /* State 2: partner posted, I haven't — chat is already open, posting is just a nudge */
     partnerPost && !myPost && React.createElement(React.Fragment, null,
       renderMediaBlock(partnerPost, false),
       React.createElement('div', { className: 'pw-nudge' },
-        React.createElement('div', { className: 'pw-nudge-txt' }, '🔒 Post your update to unlock today\'s chat'),
+        React.createElement('div', { className: 'pw-nudge-txt' }, '📸 Partner posted today — share yours too?'),
         React.createElement('button', { className: 'pw-nudge-btn', onClick: function(){ setShowUpload(true); } }, 'Post Now →')
       ),
       React.createElement('div', { style: { background:'var(--gray-50)', borderTop:'1px solid var(--gray-100)', padding:'16px', textAlign:'center' } },
-        React.createElement('div', { style: { fontSize:11, color:'var(--gray-400)', marginBottom:4 } }, 'Chat unlocks when you post your habit too'),
-        React.createElement('div', { style: { fontSize:10, color:'var(--gray-300)' } }, 'Partnership ends after 7 days without activity')
+        React.createElement('div', { style: { fontSize:11, color:'var(--gray-400)' } }, 'Posting updates is optional — chat below is always open')
       )
     ),
 
-    /* State 3: I posted, waiting for partner */
+    /* State 3: I posted, partner hasn't — chat is already open, no need to wait */
     myPost && !partnerPost && React.createElement(React.Fragment, null,
-      React.createElement('div', { className: 'pw-wait' },
-        React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-dot' }),
-        React.createElement('div', { className: 'pw-wait-text' }, 'Waiting for partner\'s update to unlock chat')
-      ),
       renderMediaBlock(myPost, true),
       React.createElement('div', { style: { background:'var(--gray-50)', borderTop:'1px solid var(--gray-100)', padding:'16px', textAlign:'center' } },
-        React.createElement('div', { style: { fontSize:11, color:'var(--gray-400)' } }, '🔒 Chat unlocks once your partner posts today\'s habit')
+        React.createElement('div', { style: { fontSize:11, color:'var(--gray-400)' } }, 'Waiting on your partner\u2019s update — chat below is open in the meantime')
       )
     ),
 
@@ -11801,7 +11858,7 @@ function PairWallPage(_ref_pw) {
       }),
       React.createElement('input', {
         className: 'pw-input',
-        placeholder: 'Reply to today\'s update…',
+        placeholder: 'Message your buddy…',
         value: inputText,
         onChange: function(e){ setInputText(e.target.value); },
         onKeyDown: function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
@@ -11823,6 +11880,12 @@ function BuddiesPage(_ref_buddies) {
   var pairsLoading = _useState_loading[0], setPairsLoading = _useState_loading[1];
   var _useState_selected = useState(null);
   var selectedPair = _useState_selected[0], setSelectedPair = _useState_selected[1];
+  // ★ 新增：active 配對卡片上的「AI 配對報告」是收合的，這裡記哪一張被展開了。
+  //   單一 pair 的 ai_match_data 只有一份（送邀請那方送出時存的那份快照），
+  //   雙方看到的內容是同一個欄位、逐字一樣，不會有「該用誰的報告為準」的分歧
+  //   ——見下面卡片內的說明文字。
+  var _useState_expandedReport = useState(null);
+  var expandedReportId = _useState_expandedReport[0], setExpandedReportId = _useState_expandedReport[1];
   // ★ 修正「YOU × 61」這類問題：之前完全沒查過夥伴的真實姓名/頭像，
   //   initials 直接拿 partnerId（UUID）的前兩碼硬顯示，"61" 就是這樣來的。
   //   這裡比照 Challengers 頁面既有的批次查詢慣例，一次撈出所有夥伴的 display_name/photo_url。
@@ -11864,11 +11927,25 @@ function BuddiesPage(_ref_buddies) {
 
   var qualifiedHabits = habits; // qualification conditions temporarily removed for testing
 
+  // ★ 修正：pairs 這個 state 其實同時包含 status='active' 跟 status='pending' 兩種
+  //   （見上面 useEffect 的 .in('status', ['active','pending'])），但下面標題原本
+  //   不分青紅皂白直接寫「pairs.length + ' active pairs'」——只要清單裡混了一筆
+  //   還沒被接受的 pending 邀請，這個數字就會把它也算成「active」，跟卡片上
+  //   實際顯示的 PENDING 標籤自相矛盾。這裡拆成兩個數字分開講。
+  var activePairsCount  = pairs.filter(function(p){ return p.status === 'active'; }).length;
+  var pendingPairsCount = pairs.length - activePairsCount;
+  var buddiesSubLabel =
+    activePairsCount > 0 && pendingPairsCount > 0
+      ? activePairsCount + ' active · ' + pendingPairsCount + ' pending'
+      : activePairsCount > 0
+        ? activePairsCount + ' active pair' + (activePairsCount > 1 ? 's' : '')
+        : pendingPairsCount + ' pending request' + (pendingPairsCount > 1 ? 's' : '');
+
   return React.createElement("div", { className: "app-container" },
     React.createElement("div", { className: "buddies-header" },
       React.createElement("div", null,
         React.createElement("div", { className: "buddies-title" }, "Buddies"),
-        React.createElement("div", { className: "buddies-sub" }, pairs.length + " active pairs")
+        React.createElement("div", { className: "buddies-sub" }, buddiesSubLabel)
       )
     ),
     pairsLoading
@@ -11959,8 +12036,43 @@ function BuddiesPage(_ref_buddies) {
                       )
                     : React.createElement(React.Fragment, null,
                         React.createElement("div", { className: "pair-streak" }, pair.status.toUpperCase()),
+                        pair.status === 'active' && pair.ai_match_data && React.createElement("button", {
+                          style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', background:'none', border:'none', cursor:'pointer', padding:'2px 0', textTransform:'uppercase', letterSpacing:'.4px' },
+                          onClick: function(e){ e.stopPropagation(); setExpandedReportId(function(prev){ return prev === pair.id ? null : pair.id; }); }
+                        }, expandedReportId === pair.id ? 'Hide report ▴' : 'AI report ▾'),
                         React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
                       )
+                ),
+                // ★ active 配對也可以展開看當初的 AI 配對報告——用的是同一個 pair.ai_match_data
+                //   欄位，跟 isIncoming 那邊看到的是完全一樣的資料，不是各自重新算一份，
+                //   所以沒有「該以哪一份報告為準」的問題：整個 pairs 資料表對這組配對
+                //   本來就只存了「送邀請那一方當初搜尋時」產生的這一份，接受邀請的人
+                //   看到的、日後回來這裡展開看到的，都是讀同一個欄位。
+                pair.status === 'active' && expandedReportId === pair.id && React.createElement("div", { style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' } },
+                  pair.ai_match_data
+                    ? React.createElement(React.Fragment, null,
+                        React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:6, marginBottom:8 } },
+                          React.createElement("span", { style:{ fontSize:20, fontWeight:800, color:'var(--black)' } }, (pair.ai_match_data.score != null ? pair.ai_match_data.score : pair.match_score) || '—'),
+                          React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase' } }, '% match')
+                        ),
+                        pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 &&
+                          React.createElement("div", { style:{ marginBottom:8 } },
+                            Object.entries(pair.ai_match_data.breakdown)
+                              .filter(function(e){ return e[1] != null; })
+                              .map(function(e) {
+                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                                return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
+                                  React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
+                                  React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
+                                    React.createElement("div", { style:{ height:'100%', width: e[1] + '%', background:'var(--black)', borderRadius:2 } })
+                                  ),
+                                  React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:28, textAlign:'right' } }, e[1] + '%')
+                                );
+                              })
+                          ),
+                        pair.ai_match_data.reason && React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.7 } }, pair.ai_match_data.reason)
+                      )
+                    : React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } }, 'No AI match report was saved for this pair (matched before this feature existed).')
                 ),
                 // ★ 收到邀請的人原本只看得到一張空空的卡片（姓名+習慣名），完全沒有足夠資訊
                 //   判斷要不要接受。現在把當初送出邀請時存下的配對報告（ai_match_data）秀出來，
