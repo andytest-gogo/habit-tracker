@@ -12638,6 +12638,15 @@ function BuddiesPage(_ref_buddies) {
     }
   }
 
+  /* ★ 在線狀態：跟 PairWallPage 用同一套 last_active 心跳機制，
+     不另外接 Realtime presence channel —— 進到 Buddies 頁就順手更新一次
+     自己的 last_active，夥伴那邊用同樣 5 分鐘門檻判斷在不在線（跟
+     likers 清單的 isOnline 判斷邏輯一致）。 */
+  useEffect(function() {
+    if (!user) return;
+    _supabase.from('users').update({ last_active: new Date().toISOString() }).eq('id', user.uid).then(function(){}).catch(function(){});
+  }, [user]);
+
   useEffect(function() {
     if (!user) return;
     var q = _supabase.from('pairs').select('*')
@@ -12653,7 +12662,7 @@ function BuddiesPage(_ref_buddies) {
         return p.user_id === user.uid ? p.partner_id : p.user_id;
       }).filter(Boolean);
       if (partnerIds.length > 0) {
-        _supabase.from('users').select('id, display_name, photo_url').in('id', partnerIds)
+        _supabase.from('users').select('id, display_name, photo_url, last_active').in('id', partnerIds)
           .then(function(ur) {
             var map = {};
             (ur.data || []).forEach(function(u) { map[u.id] = u; });
@@ -12750,6 +12759,12 @@ function BuddiesPage(_ref_buddies) {
               var partnerName = (partnerInfo && partnerInfo.display_name) || null;
               var initials = partnerName ? partnerName.slice(0,2).toUpperCase() : partnerId.toString().slice(0,2).toUpperCase();
               var partnerAvatarUrl = (partnerInfo && partnerInfo.photo_url) || null;
+              // ★ 在線狀態：5 分鐘內有 last_active 就算 online，跟 likers 清單同一套門檻
+              var partnerIsOnline = false;
+              if (partnerInfo && partnerInfo.last_active) {
+                var partnerActiveDiffMs = Date.now() - new Date(partnerInfo.last_active).getTime();
+                partnerIsOnline = partnerActiveDiffMs < 5 * 60 * 1000;
+              }
 
               // Accept / Decline handlers for incoming pending requests
               function handleAccept(e) {
@@ -12791,13 +12806,14 @@ function BuddiesPage(_ref_buddies) {
                 React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:14 } },
                   React.createElement("div", { className: "pair-avs" },
                     React.createElement("div", { className: "pair-av" }, "YOU"),
-                    React.createElement("div", { className: "pair-av", style: { position:'relative', overflow:'hidden' } },
+                    React.createElement("div", { className: "pair-av", style: { position:'relative' } },
                       initials,
                       partnerAvatarUrl && React.createElement("img", {
                         src: partnerAvatarUrl, alt: "",
                         style: { position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' },
                         onError: function(e){ e.target.remove(); }
-                      })
+                      }),
+                      React.createElement("span", { className: "likers-dot " + (partnerIsOnline ? "on" : "off"), title: partnerIsOnline ? "Online" : "Offline" })
                     )
                   ),
                   React.createElement("div", { className: "pair-info" },
