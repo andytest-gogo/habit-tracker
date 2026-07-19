@@ -7912,6 +7912,38 @@ function DesktopHomeSidebar(props) {
   );
 }
 
+/* ★ 新增：Buddies 頁桌面版右側欄，樣式比照 DesktopHomeSidebar（大數字＋分隔線＋清單），
+   資料是 BuddiesPage 那邊已經抓好、算好的統計，這裡只負責畫，不另外查 Supabase。 */
+function DesktopBuddiesSidebar(props) {
+  var habits = props.habits || [];
+  var stats = props.stats || {};
+  if (habits.length === 0) return null;
+  return React.createElement("div", { className: "desktop-sidebar" },
+    stats.longestTogether > 0 && React.createElement(React.Fragment, null,
+      React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 26 } }, stats.longestTogether),
+      React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 2, marginBottom: 24 } }, "day longest streak together"),
+      React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 22 } })
+    ),
+    React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--gray-400)', marginBottom: 14 } }, "Buddy stats"),
+    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 } },
+      React.createElement("span", { style: { color: 'var(--gray-500)' } }, "Total matched"),
+      React.createElement("span", { style: { fontWeight: 700 } }, stats.totalMatched || 0)
+    ),
+    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: stats.daysToUnlock ? 22 : 0 } },
+      React.createElement("span", { style: { color: 'var(--gray-500)' } }, "Active pairs"),
+      React.createElement("span", { style: { fontWeight: 700 } }, stats.activePairsCount || 0)
+    ),
+    stats.daysToUnlock && React.createElement(React.Fragment, null,
+      React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 16 } }),
+      React.createElement("div", { style: { background: 'var(--gray-50)', border: '1px solid var(--gray-100)', padding: 12, textAlign: 'center' } },
+        React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-500)' } },
+          stats.daysToUnlock + " day" + (stats.daysToUnlock === 1 ? '' : 's') + " to unlock more matches"
+        )
+      )
+    )
+  );
+}
+
 /* ── MAIN APP ── */
 function MainApp(_ref16) {
   var user = _ref16.user,
@@ -11655,7 +11687,7 @@ function MainApp(_ref16) {
   }, activeTab === 'home' && (isDesktop && !selectedHabit
     ? /*#__PURE__*/React.createElement("div", { className: "desktop-home-grid" }, renderHome(), /*#__PURE__*/React.createElement(DesktopHomeSidebar, { habits: habits }))
     : renderHome()
-  ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits }),
+  ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits, isDesktop: isDesktop }),
     showClipShareForHabit && /*#__PURE__*/React.createElement(ClipShareModal, {
       habit: showClipShareForHabit,
       user: user,
@@ -12593,6 +12625,7 @@ function PairWallPage(_ref_pw) {
 function BuddiesPage(_ref_buddies) {
   var user = _ref_buddies.user;
   var habits = _ref_buddies.habits || [];
+  var isDesktop = !!_ref_buddies.isDesktop;
   var _useState_pairs = useState([]);
   var pairs = _useState_pairs[0], setPairs = _useState_pairs[1];
   // Expose pairs to window so home section can read active/ended pair status
@@ -12615,11 +12648,63 @@ function BuddiesPage(_ref_buddies) {
   // ★ 夥伴打卡 clip：key 是「夥伴那邊」的 habit_id，value 是 posts 資料列
   var _useState_partnerClip = useState({});
   var partnerClipMap = _useState_partnerClip[0], setPartnerClipMap = _useState_partnerClip[1];
+  // ★ 新增：夥伴那邊習慣的 checked_dates（用來算夥伴的 streak，不是我自己的）
+  var _useState_partnerHabit = useState({});
+  var partnerHabitMap = _useState_partnerHabit[0], setPartnerHabitMap = _useState_partnerHabit[1];
+  // ★ 新增：每組配對最新一則聊天訊息（卡片上的訊息預覽用）
+  var _useState_latestMsg = useState({});
+  var latestMsgMap = _useState_latestMsg[0], setLatestMsgMap = _useState_latestMsg[1];
   // ★ 我對哪些 clip 已經按過「Cheer on」了（post_id -> true），Buddies-only 的心意標記不計入公開 cheer 數
   var _useState_reacted = useState({});
   var reactedMap = _useState_reacted[0], setReactedMap = _useState_reacted[1];
   var _useState_viewingClip = useState(null);
   var viewingBuddyClip = _useState_viewingClip[0], setViewingBuddyClip = _useState_viewingClip[1];
+
+  // ★ 新增：pair-card 上「7 天進度」用的天數。這個 7 就是 Find Partner 解鎖門檻
+  //   PARTNER_UNLOCK_DAYS 那個 7（跟配對系統本來就相關），不是 Challengers 頁另一個
+  //   獨立、無關的 21 天挑戰完成天數（CHALLENGE_COMPLETE_DAYS，那是每個習慣自己的
+  //   長期挑戰進度，跟配對無關，這裡沒有動它，也沒有改到 MainApp 裡那份 21）。
+  var PAIR_MOMENTUM_DAYS = 7;
+
+  /* 算夥伴的 streak，邏輯跟 Challengers 頁 loadChallengers() 裡的 calcStreak 一致 */
+  function calcPartnerStreak(checkedDates) {
+    if (!checkedDates || !checkedDates.length) return 0;
+    var set = new Set(checkedDates);
+    var streak = 0;
+    var cur = new Date();
+    cur.setHours(0, 0, 0, 0);
+    while (set.has(toISODay(cur))) {
+      streak++;
+      cur.setDate(cur.getDate() - 1);
+    }
+    return streak;
+  }
+
+  /* 兩邊 streak 對照時，算左邊那個數字該佔多少寬度（至少留 8% 讓 0 天也看得到） */
+  function streakBarPct(a, b) {
+    var max = Math.max(a, b, 1);
+    var pct = Math.round((a / max) * 100);
+    return a > 0 ? Math.max(pct, 8) : 0;
+  }
+
+  function fmtMsgAgo(ts) {
+    if (!ts) return '';
+    var diff = Math.floor((Date.now() - new Date(ts)) / 1000);
+    if (diff < 60) return 'now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+    return Math.floor(diff / 86400) + 'd';
+  }
+
+  function fmtMsgPreview(m) {
+    if (!m) return '';
+    var t = m.message_type || 'text';
+    if (t === 'media') return m.media_type === 'video' ? 'Shared a video' : 'Shared a photo';
+    if (t === 'media_request') return 'Asked to share photos & videos';
+    if (t === 'media_consent_granted') return 'Allowed photo & video sharing';
+    if (t === 'media_consent_declined') return 'Declined photo & video sharing';
+    return (m.content || '').slice(0, 60);
+  }
 
   function toggleClipReaction(postId, habitOwnerId) {
     if (!user || !postId) return;
@@ -12651,7 +12736,7 @@ function BuddiesPage(_ref_buddies) {
     if (!user) return;
     var q = _supabase.from('pairs').select('*')
       .or('user_id.eq.' + user.uid + ',partner_id.eq.' + user.uid)
-      .in('status', ['active','pending'])
+      .in('status', ['active','pending','ended'])
       .order('created_at', { ascending: false });
     q.then(function(r) {
       var pairsData = r.data || [];
@@ -12699,6 +12784,30 @@ function BuddiesPage(_ref_buddies) {
                 }).catch(function(){});
             }
           }).catch(function(){});
+
+        // ★ 新增：夥伴那邊習慣的 checked_dates，用來現算夥伴的 streak（不是我自己的 streak）
+        _supabase.from('habits').select('id, checked_dates').in('id', partnerHabitIds)
+          .then(function(hr) {
+            if (hr.error || !hr.data) return;
+            var hmap = {};
+            hr.data.forEach(function(h) { hmap[h.id] = h; });
+            setPartnerHabitMap(hmap);
+          }).catch(function(){});
+      }
+
+      // ★ 新增：每組「真的配對成功」的配對，抓最新一則訊息，卡片上做聊天預覽用
+      var activePairIds = pairsData.filter(function(p) { return p.status === 'active'; }).map(function(p) { return p.id; });
+      if (activePairIds.length > 0) {
+        _supabase.from('pair_messages').select('pair_id, sender_id, content, message_type, media_type, created_at')
+          .in('pair_id', activePairIds)
+          .order('created_at', { ascending: false })
+          .limit(300)
+          .then(function(mr) {
+            if (mr.error || !mr.data) return;
+            var lmap = {};
+            mr.data.forEach(function(m) { if (!lmap[m.pair_id]) lmap[m.pair_id] = m; });
+            setLatestMsgMap(lmap);
+          }).catch(function(){});
       }
     }).catch(function() { setPairsLoading(false); });
   }, [user]);
@@ -12714,13 +12823,26 @@ function BuddiesPage(_ref_buddies) {
 
   var qualifiedHabits = habits; // qualification conditions temporarily removed for testing
 
+  // ★ 新增：pairs 現在同時包含 active / pending / ended 三種狀態（見上面 useEffect），
+  //   主清單只該顯示 active + pending，ended 的獨立放到下面「過去的夥伴」那排小頭像。
+  var visiblePairs = pairs.filter(function(p) { return p.status !== 'ended'; });
+  var pastPairs = pairs.filter(function(p) { return p.status === 'ended'; });
+
+  // ★ 新增：目前沒有 active/pending 配對在用的習慣 → 底下探索卡片，直接導去 Find Partner
+  var _pairedHabitIds = {};
+  visiblePairs.forEach(function(p) {
+    var myHid = p.user_id === user.uid ? p.habit_id : p.partner_habit_id;
+    if (myHid) _pairedHabitIds[myHid] = true;
+  });
+  var unpairedHabits = habits.filter(function(h) { return !_pairedHabitIds[h.id]; });
+
   // ★ 修正：pairs 這個 state 其實同時包含 status='active' 跟 status='pending' 兩種
-  //   （見上面 useEffect 的 .in('status', ['active','pending'])），但下面標題原本
+  //   （見上面 useEffect 的 .in('status', [...])），但下面標題原本
   //   不分青紅皂白直接寫「pairs.length + ' active pairs'」——只要清單裡混了一筆
   //   還沒被接受的 pending 邀請，這個數字就會把它也算成「active」，跟卡片上
   //   實際顯示的 PENDING 標籤自相矛盾。這裡拆成兩個數字分開講。
-  var activePairsCount  = pairs.filter(function(p){ return p.status === 'active'; }).length;
-  var pendingPairsCount = pairs.length - activePairsCount;
+  var activePairsCount  = visiblePairs.filter(function(p){ return p.status === 'active'; }).length;
+  var pendingPairsCount = visiblePairs.length - activePairsCount;
   var buddiesSubLabel =
     activePairsCount > 0 && pendingPairsCount > 0
       ? activePairsCount + ' active · ' + pendingPairsCount + ' pending'
@@ -12728,7 +12850,32 @@ function BuddiesPage(_ref_buddies) {
         ? activePairsCount + ' active pair' + (activePairsCount > 1 ? 's' : '')
         : pendingPairsCount + ' pending request' + (pendingPairsCount > 1 ? 's' : '');
 
-  return React.createElement("div", { className: "app-container" },
+  // ★ 新增：右側欄（僅桌面版）要用的統計 —— 一起最長 streak、總共配對過幾位、
+  //   還差幾天解鎖更多配對。全部從現有已經抓好的 pairs/habits/partnerHabitMap 現算，
+  //   不另外發新的 Supabase 查詢。
+  var _pairSidebarStats = (function() {
+    var longestTogether = 0;
+    visiblePairs.filter(function(p){ return p.status === 'active'; }).forEach(function(p) {
+      var isU = p.user_id === user.uid;
+      var myHid = isU ? p.habit_id : p.partner_habit_id;
+      var theirHid = isU ? p.partner_habit_id : p.habit_id;
+      var myH = habits.find(function(h) { return String(h.id) === String(myHid); });
+      var myStreak = (myH && myH.streak) || 0;
+      var theirRow = partnerHabitMap[theirHid];
+      var theirStreak = calcPartnerStreak(theirRow && theirRow.checked_dates);
+      var together = Math.min(myStreak, theirStreak);
+      if (together > longestTogether) longestTogether = together;
+    });
+    var totalMatched = pairs.filter(function(p){ return p.status === 'active' || p.status === 'ended'; }).length;
+    var daysToUnlock = null;
+    unpairedHabits.forEach(function(h) {
+      var left = PAIR_MOMENTUM_DAYS - (h.streak || 0);
+      if (left > 0 && (daysToUnlock === null || left < daysToUnlock)) daysToUnlock = left;
+    });
+    return { longestTogether: longestTogether, totalMatched: totalMatched, activePairsCount: activePairsCount, daysToUnlock: daysToUnlock };
+  })();
+
+  var mainContent = React.createElement("div", { className: "app-container" },
     React.createElement("div", { className: "buddies-header" },
       React.createElement("div", null,
         React.createElement("div", { className: "buddies-title" }, "Buddies"),
@@ -12737,18 +12884,19 @@ function BuddiesPage(_ref_buddies) {
     ),
     pairsLoading
       ? React.createElement("div", { style: { padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--gray-400)' } }, "Loading...")
-      : pairs.length === 0
-        ? React.createElement("div", { className: "buddies-empty" },
-            React.createElement("div", { className: "buddies-empty-icon" }, "👥"),
-            React.createElement("div", { className: "buddies-empty-title" }, "No Buddies Yet"),
-            React.createElement("div", { className: "buddies-empty-sub" },
-              qualifiedHabits.length > 0
-                ? "You have " + qualifiedHabits.length + " habit" + (qualifiedHabits.length > 1 ? 's' : '') + ". Tap '+ Find Partner' on any habit to get matched."
-                : "Add a habit first to unlock partner matching."
-            )
-          )
-        : React.createElement("div", null,
-            pairs.map(function(pair) {
+      : React.createElement(React.Fragment, null,
+          visiblePairs.length === 0
+            ? React.createElement("div", { className: "buddies-empty" },
+                React.createElement("div", { className: "buddies-empty-icon" }, "👥"),
+                React.createElement("div", { className: "buddies-empty-title" }, "No Buddies Yet"),
+                React.createElement("div", { className: "buddies-empty-sub" },
+                  qualifiedHabits.length > 0
+                    ? "You have " + qualifiedHabits.length + " habit" + (qualifiedHabits.length > 1 ? 's' : '') + ". Tap '+ Find Partner' on any habit to get matched."
+                    : "Add a habit first to unlock partner matching."
+                )
+              )
+            : React.createElement("div", null,
+            visiblePairs.map(function(pair) {
               var isUser = pair.user_id === user.uid;
               var isIncoming = !isUser && pair.status === 'pending'; // partner sent request TO me
               var partnerId = isUser ? pair.partner_id : pair.user_id;
@@ -12795,6 +12943,13 @@ function BuddiesPage(_ref_buddies) {
 
               var partnerHabitId = isUser ? pair.partner_habit_id : pair.habit_id;
               var clip = partnerClipMap[partnerHabitId] || null;
+              // ★ 新增：streak 對照、7 天進度條、聊天預覽要用的資料
+              var myHabitIdForPair = isUser ? pair.habit_id : pair.partner_habit_id;
+              var myHabitForPair = habits.find(function(h) { return String(h.id) === String(myHabitIdForPair); });
+              var myPairStreak = (myHabitForPair && myHabitForPair.streak) || 0;
+              var partnerHabitRow = partnerHabitMap[partnerHabitId];
+              var partnerPairStreak = calcPartnerStreak(partnerHabitRow && partnerHabitRow.checked_dates);
+              var latestMsg = latestMsgMap[pair.id] || null;
               var clipReacted = clip ? !!reactedMap[clip.id] : false;
 
               return React.createElement("div", {
@@ -12840,6 +12995,49 @@ function BuddiesPage(_ref_buddies) {
                         }, expandedReportId === pair.id ? 'Hide report ▴' : 'AI report ▾'),
                         React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
                       )
+                ),
+                // ★ 新增：streak 對照 + 7 天進度條 + 最新訊息預覽，只有真的配對成功
+                //   （非 pending、非收到的邀請）才顯示，跟下面 clip 區塊同一個顯示條件。
+                !isIncoming && pair.status === 'active' && React.createElement(React.Fragment, null,
+                  React.createElement("div", {
+                    style:{ display:'flex', gap:20, marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' }
+                  },
+                    React.createElement("div", { style:{ flex:1 } },
+                      React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-400)', marginBottom:4 } },
+                        React.createElement("span", null, "You"),
+                        React.createElement("span", null, myPairStreak + " day" + (myPairStreak === 1 ? '' : 's'))
+                      ),
+                      React.createElement("div", { style:{ height:4, background:'var(--gray-100)', borderRadius:2 } },
+                        React.createElement("div", { style:{ height:'100%', width: streakBarPct(myPairStreak, partnerPairStreak) + '%', background:'var(--black)', borderRadius:2 } })
+                      )
+                    ),
+                    React.createElement("div", { style:{ flex:1 } },
+                      React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-400)', marginBottom:4 } },
+                        React.createElement("span", null, partnerName || 'Buddy'),
+                        React.createElement("span", null, partnerPairStreak + " day" + (partnerPairStreak === 1 ? '' : 's'))
+                      ),
+                      React.createElement("div", { style:{ height:4, background:'var(--gray-100)', borderRadius:2 } },
+                        React.createElement("div", { style:{ height:'100%', width: streakBarPct(partnerPairStreak, myPairStreak) + '%', background:'var(--black)', borderRadius:2 } })
+                      )
+                    )
+                  ),
+                  React.createElement("div", { style:{ marginTop:10 } },
+                    React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-400)', marginBottom:4 } },
+                      React.createElement("span", null, "Momentum"),
+                      React.createElement("span", null, "Day " + Math.min(myPairStreak, PAIR_MOMENTUM_DAYS) + " of " + PAIR_MOMENTUM_DAYS)
+                    ),
+                    React.createElement("div", { style:{ height:4, background:'var(--gray-100)', borderRadius:2 } },
+                      React.createElement("div", { style:{ height:'100%', width: Math.min(Math.round(myPairStreak / PAIR_MOMENTUM_DAYS * 100), 100) + '%', background:'#16a34a', borderRadius:2 } })
+                    )
+                  ),
+                  latestMsg && React.createElement("div", {
+                    style:{ display:'flex', alignItems:'center', gap:8, marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)', fontSize:11, color:'var(--gray-500)' }
+                  },
+                    React.createElement("span", { style:{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } },
+                      (latestMsg.sender_id === user.uid ? 'You' : (partnerName || 'Buddy')) + ': ' + fmtMsgPreview(latestMsg)
+                    ),
+                    React.createElement("span", { style:{ marginLeft:'auto', color:'var(--gray-300)', flexShrink:0 } }, fmtMsgAgo(latestMsg.created_at))
+                  )
                 ),
                 // ★ 夥伴打卡 clip：Buddies-only 的心意標記不計入公開 cheer 數，
                 //   只在這裡跟聊天室互動，跟 Home/Challenger 的公開 cheer 是兩件事。
@@ -12943,6 +13141,44 @@ function BuddiesPage(_ref_buddies) {
               );
             })
           ),
+          unpairedHabits.length > 0 && React.createElement("div", { style:{ marginTop:16 } },
+            unpairedHabits.map(function(h) {
+              return React.createElement("div", {
+                key: 'unpaired-' + h.id,
+                style:{ display:'flex', alignItems:'center', gap:14, border:'1px solid var(--gray-200)', margin:'0 0 1px', padding:'14px 16px' }
+              },
+                React.createElement("div", { style:{ flex:1, minWidth:0 } },
+                  React.createElement("div", { className: "pair-name" }, h.name),
+                  React.createElement("div", { className: "pair-habit-tag" }, "Not paired yet")
+                ),
+                React.createElement("button", {
+                  style:{ fontSize:11, fontWeight:700, padding:'6px 14px', background:'#fff', color:'var(--black)', border:'1px solid var(--black)', cursor:'pointer', flexShrink:0 },
+                  onClick: function(){ window.openMatchingModal(h); }
+                }, "Find a partner")
+              );
+            })
+          ),
+          pastPairs.length > 0 && React.createElement("div", { style:{ marginTop:20 } },
+            React.createElement("div", { style:{ fontSize:10, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:8 } }, "Past buddies"),
+            React.createElement("div", { style:{ display:'flex', gap:8, flexWrap:'wrap' } },
+              pastPairs.map(function(p) {
+                var pid = p.user_id === user.uid ? p.partner_id : p.user_id;
+                var pinfo = partnerInfoMap[pid];
+                var pname = (pinfo && pinfo.display_name) || null;
+                var pinit = pname ? pname.slice(0,2).toUpperCase() : pid.toString().slice(0,2).toUpperCase();
+                var pphoto = (pinfo && pinfo.photo_url) || null;
+                return React.createElement("div", {
+                  key: p.id,
+                  title: pname || 'Buddy',
+                  style:{ width:32, height:32, background:'var(--gray-100)', border:'1px solid var(--gray-200)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, position:'relative' }
+                },
+                  pinit,
+                  pphoto && React.createElement("img", { src: pphoto, alt:"", style:{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }, onError:function(e){ e.target.remove(); } })
+                );
+              })
+            )
+          )
+        ),
     viewingBuddyClip && React.createElement(ClipViewerModal, {
       post: viewingBuddyClip,
       currentUser: user,
@@ -12951,6 +13187,16 @@ function BuddiesPage(_ref_buddies) {
       onClose: function() { setViewingBuddyClip(null); }
     })
   );
+
+  // ★ 新增：桌面版才包右側欄，手機版維持原本只回傳 mainContent（跟 Home 頁的
+  //   desktop-home-grid + DesktopHomeSidebar 是同一套做法，這裡重用同一個 CSS class）
+  if (isDesktop) {
+    return React.createElement("div", { className: "desktop-home-grid" },
+      mainContent,
+      React.createElement(DesktopBuddiesSidebar, { habits: habits, stats: _pairSidebarStats })
+    );
+  }
+  return mainContent;
 }
 
 /* ── ROOT APP ── */
