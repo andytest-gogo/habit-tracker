@@ -3877,6 +3877,33 @@ function _fileToBase64(file) {
   });
 }
 
+// 依 checkedDates 換算某支 clip 是打卡的第幾天（統計「小於等於該日」的打卡次數）
+function _clipDayNumber(checkedDates, clipCreatedAt) {
+  if (!checkedDates || !checkedDates.length || !clipCreatedAt) return null;
+  var day = new Date(clipCreatedAt).toISOString().slice(0, 10);
+  var count = 0;
+  for (var i = 0; i < checkedDates.length; i++) { if (checkedDates[i] <= day) count++; }
+  return count > 0 ? count : null;
+}
+
+// 習慣打卡 clip 的文字審查（沿用 moderate-content edge function，跟社群貼文/留言同一套）
+async function _moderateClipCaption(caption) {
+  try {
+    var token = await _getAccessToken();
+    if (!token) return { approved: true };
+    var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ caption: caption || '' })
+    });
+    if (!res.ok) return { approved: true };
+    return await res.json();
+  } catch (e) {
+    console.warn('[Clip] Moderation check failed, proceeding:', e);
+    return { approved: true };
+  }
+}
+
 /* ── Upload image to Bunny Storage（透過 Edge Function 代理，不碰金鑰）── */
 async function _uploadToBunnyStorage(file, uid, onProgress) {
   if (onProgress) onProgress(10);
@@ -4972,7 +4999,11 @@ function FeedCard(_ref5) {
     currentUser = _ref5.currentUser,
     onLike = _ref5.onLike,
     onReport = _ref5.onReport,
-    onDelete = _ref5.onDelete;
+    onDelete = _ref5.onDelete,
+    cheerMode = _ref5.cheerMode,
+    cheered = _ref5.cheered,
+    onCheer = _ref5.onCheer,
+    hideLikeAction = _ref5.hideLikeAction;
   var isOwner = !!(currentUser && post.userId && currentUser.uid === post.userId);
   var _useState17 = useState(false),
     _useState18 = _slicedToArray(_useState17, 2),
@@ -5245,18 +5276,19 @@ function FeedCard(_ref5) {
     className: "feed-media"
   }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' } }))), /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "feed-action".concat(post.liked ? ' liked' : ''),
+  }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
+    className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
     onClick: function onClick() {
+      if (cheerMode) { if (!cheered) onCheer && onCheer(); return; }
       if (currentUser && post.userId && post.userId === currentUser.uid) return;
       return onLike && onLike(post.id);
     }
   }, /*#__PURE__*/React.createElement(HeartIcon, {
-    filled: post.liked
+    filled: cheerMode ? cheered : post.liked
   }), /*#__PURE__*/React.createElement("span", {
     className: "likers-count-btn",
-    onClick: function(e) { if (post.likes > 0) toggleLikers(e); }
-  }, post.likes)), /*#__PURE__*/React.createElement("div", {
+    onClick: function(e) { if (!cheerMode && post.likes > 0) toggleLikers(e); }
+  }, cheerMode ? (post.cheerCount || 0) : post.likes)), /*#__PURE__*/React.createElement("div", {
     className: "feed-action",
     onClick: function onClick() {
       return setShowComments(function (s) {
@@ -5480,6 +5512,249 @@ function FeedCard(_ref5) {
     onClick: handleSendComment,
     disabled: !commentText.trim() || sendingComment
   }, sendingComment ? '…' : 'Send'))));
+}
+
+/* ── Clip Viewer：從 Challenger 卡片縮圖點進來的全螢幕影片畫面（Concept B）──
+   直接重用 FeedCard 顯示影片/留言/檢舉，留言審查（handleSendComment 內建的
+   moderate-content 呼叫）跟社群貼文走同一套，不用另外做。 */
+function ClipViewerModal(props) {
+  var post = props.post, onClose = props.onClose, cheered = props.cheered,
+    onCheer = props.onCheer, currentUser = props.currentUser;
+  if (!post) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+    onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: 'var(--white)', maxWidth: 420, width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 12 }
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--gray-100)' }
+    },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: onClose,
+        "aria-label": "Back",
+        style: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }
+      }, /*#__PURE__*/React.createElement(BackIcon, null)),
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 13, fontWeight: 700 } }, post.habit || 'Habit clip')
+    ),
+    /*#__PURE__*/React.createElement(FeedCard, {
+      post: post,
+      currentUser: currentUser,
+      hideLikeAction: true,
+      onReport: null,
+      onDelete: null
+    })
+  ));
+}
+
+/* ── Clip Share Modal：Home 頁「Add a clip」開啟的上傳 + 隱私設定畫面 ──
+   對象只有 Everyone / Buddies only 兩種（no "just me"），並附上不露臉引導。
+   文字（caption）審查沿用 _moderateClipCaption（跟社群貼文/留言同一支 moderate-content）。 */
+function ClipShareModal(props) {
+  var habit = props.habit, user = props.user, onClose = props.onClose, onPosted = props.onPosted;
+  var _fileState = React.useState(null); var file = _fileState[0], setFile = _fileState[1];
+  var _previewState = React.useState(null); var previewUrl = _previewState[0], setPreviewUrl = _previewState[1];
+  var _capState = React.useState(''); var caption = _capState[0], setCaption = _capState[1];
+  var _audState = React.useState('everyone'); var audience = _audState[0], setAudience = _audState[1];
+  var _hideState = React.useState(false); var hideHabitName = _hideState[0], setHideHabitName = _hideState[1];
+  var _upState = React.useState(false); var uploading = _upState[0], setUploading = _upState[1];
+  var _progState = React.useState(0); var progress = _progState[0], setProgress = _progState[1];
+  var _errState = React.useState(''); var errorMsg = _errState[0], setErrorMsg = _errState[1];
+
+  function handleFileChange(e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (!f.type || !f.type.startsWith('video/')) { setErrorMsg('Please choose a video file.'); return; }
+    setErrorMsg('');
+    setFile(f);
+    setPreviewUrl(URL.createObjectURL(f));
+  }
+
+  function handleClose() {
+    if (uploading) return;
+    if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (e) {} }
+    onClose && onClose();
+  }
+
+  function handleSubmit() {
+    if (!file || uploading) return;
+    setUploading(true);
+    setErrorMsg('');
+    _moderateClipCaption(caption).then(function(mod) {
+      if (mod && mod.approved === false) {
+        setUploading(false);
+        setErrorMsg("This clip couldn't be posted. Please keep it respectful and on-topic.");
+        return;
+      }
+      uploadToBunny(file, 'video', function(pct) { setProgress(pct); }).then(function(result) {
+        var avatar = ((user.displayName || user.email || 'U')[0] || 'U').toUpperCase();
+        var newClip = {
+          userId: user.uid,
+          user: user.displayName || 'User',
+          avatar: avatar,
+          avatarUrl: (typeof localStorage !== 'undefined' && localStorage.getItem('avatar_' + user.uid)) || null,
+          text: caption.trim(),
+          habit: hideHabitName ? (habit.category || '') : habit.name,
+          habitId: habit.id,
+          isHabitClip: true,
+          clipVisibility: audience,
+          likes: 0,
+          comments: 0,
+          likedBy: [],
+          hasImage: false,
+          hasVideo: true,
+          mediaUrl: result.url,
+          mediaPublicId: result.publicId,
+          thumbnailUrl: result.thumbnail || null
+        };
+        if (!isFirebaseConfigured) return Promise.resolve();
+        return db.collection('posts').add(Object.assign({}, newClip, { createdAt: FieldValue.serverTimestamp() }));
+      }).then(function() {
+        setUploading(false);
+        if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (e) {} }
+        onPosted && onPosted();
+      }).catch(function(e) {
+        console.warn('[ClipShare] upload/post failed:', e);
+        setUploading(false);
+        setErrorMsg('Something went wrong uploading your clip. Please try again.');
+      });
+    });
+  }
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+    onClick: function(e) { if (e.target === e.currentTarget) handleClose(); }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: 'var(--white)', maxWidth: 380, width: '100%', borderRadius: 12, padding: 18, maxHeight: '90vh', overflowY: 'auto' }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 10 } }, "Share a clip \u2014 " + habit.name),
+    !file
+      ? /*#__PURE__*/React.createElement("label", {
+          style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px dashed var(--gray-300)', borderRadius: 8, padding: '28px 12px', cursor: 'pointer', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700 }
+        }, /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 22, height: 22 } }), "Choose a video",
+          /*#__PURE__*/React.createElement("input", { type: 'file', accept: 'video/*', onChange: handleFileChange, style: { display: 'none' } }))
+      : /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
+          renderPostVideo(previewUrl, { videoProps: { preload: 'metadata' }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } })
+        ),
+    /*#__PURE__*/React.createElement("textarea", {
+      value: caption,
+      onChange: function(e) { setCaption(e.target.value.slice(0, 300)); },
+      placeholder: 'Say something about this clip (optional)',
+      maxLength: 300,
+      style: { width: '100%', minHeight: 50, fontSize: 12, fontFamily: 'var(--font)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 8, margin: '10px 0', resize: 'vertical', boxSizing: 'border-box' }
+    }),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 6 } }, "Who can see this clip"),
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 6, marginBottom: 12 } },
+      ['everyone', 'buddies'].map(function(opt) {
+        return /*#__PURE__*/React.createElement("span", {
+          key: opt,
+          onClick: function() { setAudience(opt); },
+          style: {
+            display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            border: '1px solid ' + (audience === opt ? 'var(--black)' : 'var(--gray-200)'),
+            background: audience === opt ? 'var(--black)' : 'var(--white)',
+            color: audience === opt ? 'var(--white)' : 'var(--gray-600)'
+          }
+        }, opt === 'everyone' ? 'Everyone' : 'Buddies only');
+      })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, background: 'var(--gray-50)', borderRadius: 8, padding: 10, marginBottom: 12 } },
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)', lineHeight: 1.5 } },
+        "Don't want to show your face? Film your hands, your journal, or your setup instead \u2014 that counts too."
+      )
+    ),
+    /*#__PURE__*/React.createElement("label", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, cursor: 'pointer' } },
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)' } }, "Hide habit name (show as \"" + (habit.category || 'category') + "\")"),
+      /*#__PURE__*/React.createElement("input", { type: 'checkbox', checked: hideHabitName, onChange: function(e) { setHideHabitName(e.target.checked); } })
+    ),
+    errorMsg && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: '#c00', marginBottom: 8 } }, errorMsg),
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: handleSubmit,
+        disabled: !file || uploading,
+        style: { flex: 1, background: 'var(--black)', color: 'var(--white)', border: 'none', borderRadius: 8, padding: 10, fontSize: 12, fontWeight: 700, cursor: (!file || uploading) ? 'default' : 'pointer', opacity: (!file || uploading) ? 0.5 : 1 }
+      }, uploading ? ('Posting\u2026 ' + progress + '%') : 'Post clip'),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: handleClose,
+        disabled: uploading,
+        style: { flex: 1, background: 'var(--white)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 10, fontSize: 12, fontWeight: 700, cursor: uploading ? 'default' : 'pointer' }
+      }, 'Cancel')
+    )
+  ));
+}
+
+/* ── Clip Grid：Challenger 卡片先進來的畫面（Concept A，改成同一人依天數排列自己的多支 clip）──
+   Cheer 按鈕釘在這裡（對整個習慣，一天一次），底下每個格子只負責「點進去看那一天的影片」，
+   不會各自顯示讚數，避免使用者以為每支影片有各自獨立的按讚。 */
+function ClipGridModal(props) {
+  var challenger = props.challenger, currentUser = props.currentUser,
+    cheered = props.cheered, onCheer = props.onCheer, onClose = props.onClose;
+  var _vp = React.useState(null); var viewingPost = _vp[0], setViewingPost = _vp[1];
+  if (!challenger) return null;
+  var clips = challenger.clips || (challenger.clip ? [challenger.clip] : []);
+  return /*#__PURE__*/React.createElement("div", {
+    style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+    onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: 'var(--white)', maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 12, padding: 16 }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: onClose, "aria-label": "Back",
+        style: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }
+      }, /*#__PURE__*/React.createElement(BackIcon, null)),
+      /*#__PURE__*/React.createElement("div", {
+        style: { width: 32, height: 32, borderRadius: '50%', background: 'var(--black)', color: '#fff', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0, overflow: 'hidden' }
+      }, challenger.userAvatar
+        ? /*#__PURE__*/React.createElement("img", { src: challenger.userAvatar, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' } })
+        : ((challenger.displayName || '?')[0] || '?').toUpperCase()),
+      /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700 } }, challenger.displayName || 'User'),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)' } }, (challenger.name || 'Habit') + ' · Day ' + (challenger.streak || 0))
+      ),
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function() { if (!cheered) onCheer && onCheer(); },
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0, cursor: cheered ? 'default' : 'pointer',
+          border: '1px solid #f4c0d1', background: '#fbeaf0', borderRadius: 10, padding: '6px 10px', opacity: cheered ? 0.6 : 1
+        }
+      },
+        /*#__PURE__*/React.createElement("svg", { width: 13, height: 13, viewBox: "0 0 24 24", fill: "#993556", "aria-hidden": "true" },
+          /*#__PURE__*/React.createElement("path", { d: "M13 2L3 14h7l-1 8l10-12h-7z" })
+        ),
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: '#993556' } }, cheered ? 'Cheered!' : 'Cheer on')
+      )
+    ),
+    clips.length === 0
+      ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, 'No clips yet.')
+      : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 } },
+          clips.map(function(p, idx) {
+            var dayNum = _clipDayNumber(challenger.checkedDates, p.created_at) || (idx + 1);
+            return /*#__PURE__*/React.createElement("div", {
+              key: p.id || idx,
+              onClick: function() {
+                setViewingPost(Object.assign({}, p, {
+                  userId: challenger.userId, user: challenger.displayName, avatarUrl: challenger.userAvatar,
+                  habit: challenger.name, hasVideo: true
+                }));
+              },
+              style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
+            },
+              p.thumbnail_url
+                ? /*#__PURE__*/React.createElement("img", { src: p.thumbnail_url, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' } })
+                : /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 18, height: 18, color: 'var(--gray-500)' } }),
+              /*#__PURE__*/React.createElement("span", {
+                style: { position: 'absolute', bottom: 4, left: 4, fontSize: 9, fontWeight: 700, background: '#fff', borderRadius: 4, padding: '1px 4px' }
+              }, 'Day ' + dayNum)
+            );
+          })
+        ),
+    viewingPost && /*#__PURE__*/React.createElement(ClipViewerModal, {
+      post: viewingPost,
+      currentUser: currentUser,
+      onClose: function() { setViewingPost(null); }
+    })
+  ));
 }
 
 /* ── Global formatTime (used by UserPostsPage outside App scope) ── */
@@ -7785,6 +8060,46 @@ function MainApp(_ref16) {
     _useState72 = _slicedToArray(_useState71, 2),
     habits = _useState72[0],
     setHabits = _useState72[1];
+  // ★ 今天每個習慣的 clip 分享對象 + Buddies-only 時是否已被夥伴按讚（不影響公開 cheer 數字）
+  var _useState_myClipStatus = React.useState({});
+  var myClipStatusByHabit = _useState_myClipStatus[0], setMyClipStatusByHabit = _useState_myClipStatus[1];
+  React.useEffect(function() {
+    if (!user || !habits || habits.length === 0) return;
+    var _sbc = window._supabaseClient;
+    if (!_sbc) return;
+    var habitIds = habits.map(function(h) { return h.id; }).filter(Boolean);
+    if (habitIds.length === 0) return;
+    var todayISOStr = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0, 10);
+    _sbc.from('posts').select('id, habit_id, clip_visibility, created_at')
+      .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
+      .gte('created_at', todayISOStr)
+      .order('created_at', { ascending: false })
+      .then(function(pr) {
+        if (pr.error || !pr.data) return;
+        var byHabit = {};
+        pr.data.forEach(function(p) { if (!byHabit[p.habit_id]) byHabit[p.habit_id] = p; });
+        var buddiesOnlyPosts = Object.keys(byHabit).map(function(hid) { return byHabit[hid]; })
+          .filter(function(p) { return p.clip_visibility === 'buddies'; });
+        if (buddiesOnlyPosts.length === 0) {
+          var _status = {};
+          Object.keys(byHabit).forEach(function(hid) { _status[hid] = { visibility: byHabit[hid].clip_visibility, reacted: false }; });
+          setMyClipStatusByHabit(_status);
+          return;
+        }
+        var buddiesOnlyIds = buddiesOnlyPosts.map(function(p) { return p.id; });
+        _sbc.from('clip_reactions').select('post_id').in('post_id', buddiesOnlyIds)
+          .then(function(rr) {
+            var reactedPostIds = {};
+            if (!rr.error && rr.data) { rr.data.forEach(function(x) { reactedPostIds[x.post_id] = true; }); }
+            var _status = {};
+            Object.keys(byHabit).forEach(function(hid) {
+              var p = byHabit[hid];
+              _status[hid] = { visibility: p.clip_visibility, reacted: !!reactedPostIds[p.id] };
+            });
+            setMyClipStatusByHabit(_status);
+          }).catch(function() {});
+      }).catch(function() {});
+  }, [user, habits.length]);
   var _useState73 = useState([]),
     _useState74 = _slicedToArray(_useState73, 2),
     archivedHabits = _useState74[0],
@@ -8084,6 +8399,8 @@ function MainApp(_ref16) {
   var [feedSubTab, setFeedSubTab] = React.useState('community');
   var [challengers, setChallengers] = React.useState([]);
   var [cheerMap, setCheerMap] = React.useState({});
+  var [viewingChallengerKey, setViewingChallengerKey] = React.useState(null); // Challenger 卡片影片全螢幕檢視（Concept B）
+  var [showClipShareForHabit, setShowClipShareForHabit] = React.useState(null); // Home 頁「Add a clip」開啟的分享設定 modal，存目前的 habit 物件
   var [habitCheers, setHabitCheers] = React.useState({});
   var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
   // ★ 新增：今天真正打過 match-partner（呼叫 Claude）的次數，讀 habit_ai_usage 表。
@@ -8274,6 +8591,42 @@ function MainApp(_ref16) {
       // ── Backfill：舊習慣的 habits row 沒存 display_name/user_avatar，從 users 表補抓 ──
       var _needBackfill = list.filter(function(h){ return !h.displayName || !h.userAvatar; });
       var _sbClient = window._supabaseClient;
+
+      // ── 附加今日公開 clip（只抓 clip_visibility='everyone' 的，Buddies-only 的不會出現在這裡）──
+      function _attachClipsAndFinish(finalList) {
+        var _habitIds = finalList.map(function(h){ return h.id; });
+        if (!_sbClient || _habitIds.length === 0) {
+          setChallengers(finalList);
+          if (finalList.length > 0) setTodayPick(finalList[0]);
+          return;
+        }
+        _sbClient.from('posts')
+          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at')
+          .in('habit_id', _habitIds)
+          .eq('is_habit_clip', true)
+          .eq('clip_visibility', 'everyone')
+          .order('created_at', { ascending: true }) // 由舊到新，Grid 畫面直接照這個順序排 Day 1 → Day N
+          .then(function(pr) {
+            if (!pr.error && pr.data) {
+              var _clipsByHabit = {};
+              pr.data.forEach(function(p) {
+                if (!_clipsByHabit[p.habit_id]) _clipsByHabit[p.habit_id] = [];
+                _clipsByHabit[p.habit_id].push(p);
+              });
+              finalList.forEach(function(h) {
+                var arr = _clipsByHabit[h.id] || [];
+                h.clips = arr;
+                h.clip = arr.length > 0 ? arr[arr.length - 1] : null; // 最新一支，卡片縮圖用
+              });
+            }
+            setChallengers(finalList);
+            if (finalList.length > 0) setTodayPick(finalList[0]);
+          }).catch(function() {
+            setChallengers(finalList);
+            if (finalList.length > 0) setTodayPick(finalList[0]);
+          });
+      }
+
       if (_sbClient && _needBackfill.length > 0) {
         var _uids = _needBackfill.map(function(h){ return h.userId; }).filter(Boolean);
         _sbClient.from('users').select('id, display_name, photo_url').in('id', _uids).then(function(ur) {
@@ -8288,15 +8641,12 @@ function MainApp(_ref16) {
               }
             });
           }
-          setChallengers(list);
-          if (list.length > 0) setTodayPick(list[0]);
+          _attachClipsAndFinish(list);
         }).catch(function(){
-          setChallengers(list);
-          if (list.length > 0) setTodayPick(list[0]);
+          _attachClipsAndFinish(list);
         });
       } else {
-        setChallengers(list);
-        if (list.length > 0) setTodayPick(list[0]);
+        _attachClipsAndFinish(list);
       }
     }).catch(function(e) { console.error('[Challenger DEBUG] 查詢失敗(可能是 RLS 或缺欄位):', e && e.message, e); });
   }, [user, isFirebaseConfigured]);
@@ -10387,7 +10737,26 @@ function MainApp(_ref16) {
                 : "cheering you on today"
             )
           )
-        )
+        ),
+        /* ── Buddies-only clip 的心意標記：跟上面公開 cheer 數字是兩件事，不會互相影響 ── */
+        (function() {
+          var _cs = myClipStatusByHabit[habit.id];
+          if (!_cs || _cs.visibility !== 'buddies') return null;
+          return React.createElement("div", {
+            style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--gray-500)' }
+          },
+            React.createElement("svg", { width: 12, height: 12, viewBox: "0 0 24 24", fill: _cs.reacted ? "#993556" : "none", stroke: "#993556", strokeWidth: 2 },
+              React.createElement("path", { d: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" })
+            ),
+            _cs.reacted ? "Your buddy found this encouraging" : "Shared with your buddy"
+          );
+        })(),
+        /* ── Add a clip：只在習慣公開（非 private）時出現，private 習慣完全不會看到 ── */
+        habit.challengeVisibility !== 'private' && React.createElement("button", {
+          className: "add-clip-btn",
+          style: { display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "var(--gray-600)", background: "none", border: "1px dashed var(--gray-300)", borderRadius: 8, padding: "6px 8px", cursor: "pointer", flexShrink: 0 },
+          onClick: function(e) { e.stopPropagation(); setShowClipShareForHabit(habit); }
+        }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), "Add a clip")
       )
       );
     }) // end inProgressHabits.map
@@ -10684,11 +11053,13 @@ function MainApp(_ref16) {
     };
 
     var renderChallengersTab = function() {
-      // 依 streak 分組，但用「兜底」確保每一筆都會被某一組接住（streak 0~1 也要顯示）
-      var nearEnd = challengers.filter(function(c) { return c.streak >= 15; });
-      var buildMomentum = challengers.filter(function(c) { return c.streak >= 8 && c.streak < 15; });
-      var midRange = challengers.filter(function(c) { return c.streak >= 4 && c.streak < 8; });
-      var justStarted = challengers.filter(function(c) { return c.streak < 4; });
+      // ★ 改成對齊實際範圍：loadChallengers() 的 Filter2 本來就只留 1 <= days < PARTNER_UNLOCK_DAYS(7)，
+      //   所以這裡不用再用舊的 21 天門檻分組（那組門檻在目前資料範圍下永遠打不到），
+      //   改成三組對齊 Day 1–6：Day 5–6 / Day 3–4 / Day 1–2。使用者選擇 Day 5–6 排最前面
+      //   （快解鎖 AI 配對的人優先曝光，製造一點期待感）。
+      var almostUnlocking = challengers.filter(function(c) { return c.streak >= 5; });
+      var buildingMomentum = challengers.filter(function(c) { return c.streak >= 3 && c.streak < 5; });
+      var justStarted = challengers.filter(function(c) { return c.streak < 3; });
       function ChallengerCard(props) {
         var c = props.challenger;
         var ckey = c.userId + "_" + c.id;
@@ -10721,7 +11092,15 @@ function MainApp(_ref16) {
                 React.createElement("span", { className: "challenger-card-uid" }, "#" + shortUid)
               ),
               React.createElement("div", { className: "challenger-card-habit" }, "\u2728 " + habitLabel)
-            )
+            ),
+            c.clip && React.createElement("div", {
+              className: "challenger-clip-badge",
+              "aria-label": "Watch clip",
+              onClick: function(e) { e.stopPropagation(); setViewingChallengerKey(ckey); },
+              style: { width: 44, height: 44, borderRadius: 8, background: "var(--gray-100)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", overflow: "hidden" }
+            }, c.clip.thumbnail_url
+              ? React.createElement("img", { src: c.clip.thumbnail_url, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } })
+              : React.createElement(VideoIcon, { style: { width: 18, height: 18, color: "var(--gray-500)" } }))
           ),
           React.createElement("div", { className: "challenger-card-progress" },
             React.createElement("div", { className: "challenger-card-prog-row" },
@@ -10755,10 +11134,9 @@ function MainApp(_ref16) {
           React.createElement("div", null, "No active challengers right now"),
           React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Keep a streak going to appear here!")
         ),
-        React.createElement(SegSection, { label: "\ud83d\udd25 Almost there \u00b7 Day 15+", list: nearEnd }),
-        React.createElement(SegSection, { label: "\u26a1 Building momentum \u00b7 Day 8\u201314", list: buildMomentum }),
-        React.createElement(SegSection, { label: "Day 4\u20137", list: midRange }),
-        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20133", list: justStarted })
+        React.createElement(SegSection, { label: "\u26a1 About to unlock AI matching \u00b7 Day 5\u20136", list: almostUnlocking }),
+        React.createElement(SegSection, { label: "Building momentum \u00b7 Day 3\u20134", list: buildingMomentum }),
+        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20132", list: justStarted })
       );
     };
 
@@ -10775,7 +11153,19 @@ function MainApp(_ref16) {
       ),
       React.createElement("div", { style: { padding: "12px 0" } },
         feedSubTab === "community" ? React.createElement(CommunityTab, { feedPosts: feedPosts, feedHasMore: feedHasMore, feedLoadingMore: feedLoadingMore }) : renderChallengersTab()
-      )
+      ),
+      viewingChallengerKey ? (function() {
+        var _c = challengers.find(function(x) { return (x.userId + '_' + x.id) === viewingChallengerKey; });
+        if (!_c || !_c.clip) return null;
+        var _cheered = !!cheerMap[viewingChallengerKey];
+        return React.createElement(ClipGridModal, {
+          challenger: _c,
+          currentUser: user,
+          cheered: _cheered,
+          onCheer: function() { handleCheer(_c.userId, _c.id); },
+          onClose: function() { setViewingChallengerKey(null); }
+        });
+      })() : null
     );
   };
 
@@ -11265,7 +11655,14 @@ function MainApp(_ref16) {
   }, activeTab === 'home' && (isDesktop && !selectedHabit
     ? /*#__PURE__*/React.createElement("div", { className: "desktop-home-grid" }, renderHome(), /*#__PURE__*/React.createElement(DesktopHomeSidebar, { habits: habits }))
     : renderHome()
-  ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits }));
+  ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits }),
+    showClipShareForHabit && /*#__PURE__*/React.createElement(ClipShareModal, {
+      habit: showClipShareForHabit,
+      user: user,
+      onClose: function() { setShowClipShareForHabit(null); },
+      onPosted: function() { setShowClipShareForHabit(null); }
+    })
+  );
   return /*#__PURE__*/React.createElement("div", {
     className: isDesktop ? "desktop-shell" : "app-container"
   }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, { activeTab: activeTab, setActiveTab: setActiveTab, setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout }), /*#__PURE__*/React.createElement("div", { className: isDesktop ? "desktop-main-col" : undefined }, !isDesktop && /*#__PURE__*/React.createElement("div", {
@@ -12215,6 +12612,31 @@ function BuddiesPage(_ref_buddies) {
   //   這裡比照 Challengers 頁面既有的批次查詢慣例，一次撈出所有夥伴的 display_name/photo_url。
   var _useState_partnerInfo = useState({});
   var partnerInfoMap = _useState_partnerInfo[0], setPartnerInfoMap = _useState_partnerInfo[1];
+  // ★ 夥伴打卡 clip：key 是「夥伴那邊」的 habit_id，value 是 posts 資料列
+  var _useState_partnerClip = useState({});
+  var partnerClipMap = _useState_partnerClip[0], setPartnerClipMap = _useState_partnerClip[1];
+  // ★ 我對哪些 clip 已經按過「Cheer on」了（post_id -> true），Buddies-only 的心意標記不計入公開 cheer 數
+  var _useState_reacted = useState({});
+  var reactedMap = _useState_reacted[0], setReactedMap = _useState_reacted[1];
+  var _useState_viewingClip = useState(null);
+  var viewingBuddyClip = _useState_viewingClip[0], setViewingBuddyClip = _useState_viewingClip[1];
+
+  function toggleClipReaction(postId, habitOwnerId) {
+    if (!user || !postId) return;
+    var already = !!reactedMap[postId];
+    setReactedMap(function(prev) {
+      var n = Object.assign({}, prev);
+      if (already) { delete n[postId]; } else { n[postId] = true; }
+      return n;
+    });
+    if (already) {
+      _supabase.from('clip_reactions').delete().eq('post_id', postId).eq('buddy_uid', user.uid)
+        .then(function(){}).catch(function(){});
+    } else {
+      _supabase.from('clip_reactions').insert({ post_id: postId, habit_owner_id: habitOwnerId, buddy_uid: user.uid })
+        .then(function(){}).catch(function(){});
+    }
+  }
 
   useEffect(function() {
     if (!user) return;
@@ -12230,13 +12652,45 @@ function BuddiesPage(_ref_buddies) {
       var partnerIds = pairsData.map(function(p) {
         return p.user_id === user.uid ? p.partner_id : p.user_id;
       }).filter(Boolean);
-      if (partnerIds.length === 0) return;
-      _supabase.from('users').select('id, display_name, photo_url').in('id', partnerIds)
-        .then(function(ur) {
-          var map = {};
-          (ur.data || []).forEach(function(u) { map[u.id] = u; });
-          setPartnerInfoMap(map);
-        }).catch(function(){});
+      if (partnerIds.length > 0) {
+        _supabase.from('users').select('id, display_name, photo_url').in('id', partnerIds)
+          .then(function(ur) {
+            var map = {};
+            (ur.data || []).forEach(function(u) { map[u.id] = u; });
+            setPartnerInfoMap(map);
+          }).catch(function(){});
+      }
+
+      // ── 抓每組配對「夥伴那邊」習慣的最新 clip（Everyone 或 Buddies-only 的都看得到，
+      //    因為配對本來就是雙方互相看得到彼此進度）──
+      var partnerHabitIds = pairsData.map(function(p) {
+        var isUserSide = p.user_id === user.uid;
+        return isUserSide ? p.partner_habit_id : p.habit_id;
+      }).filter(Boolean);
+      if (partnerHabitIds.length > 0) {
+        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at')
+          .in('habit_id', partnerHabitIds)
+          .eq('is_habit_clip', true)
+          .in('clip_visibility', ['everyone', 'buddies'])
+          .order('created_at', { ascending: false })
+          .then(function(pr) {
+            if (pr.error || !pr.data) return;
+            var byHabit = {};
+            pr.data.forEach(function(p) { if (!byHabit[p.habit_id]) byHabit[p.habit_id] = p; });
+            setPartnerClipMap(byHabit);
+            var postIds = pr.data.map(function(p) { return p.id; });
+            if (postIds.length > 0) {
+              _supabase.from('clip_reactions').select('post_id')
+                .eq('buddy_uid', user.uid).in('post_id', postIds)
+                .then(function(rr) {
+                  if (rr.error || !rr.data) return;
+                  var rmap = {};
+                  rr.data.forEach(function(x) { rmap[x.post_id] = true; });
+                  setReactedMap(rmap);
+                }).catch(function(){});
+            }
+          }).catch(function(){});
+      }
     }).catch(function() { setPairsLoading(false); });
   }, [user]);
 
@@ -12324,6 +12778,10 @@ function BuddiesPage(_ref_buddies) {
                   });
               }
 
+              var partnerHabitId = isUser ? pair.partner_habit_id : pair.habit_id;
+              var clip = partnerClipMap[partnerHabitId] || null;
+              var clipReacted = clip ? !!reactedMap[clip.id] : false;
+
               return React.createElement("div", {
                 key: pair.id,
                 className: "pair-card",
@@ -12366,6 +12824,44 @@ function BuddiesPage(_ref_buddies) {
                         }, expandedReportId === pair.id ? 'Hide report ▴' : 'AI report ▾'),
                         React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
                       )
+                ),
+                // ★ 夥伴打卡 clip：Buddies-only 的心意標記不計入公開 cheer 數，
+                //   只在這裡跟聊天室互動，跟 Home/Challenger 的公開 cheer 是兩件事。
+                !isIncoming && pair.status === 'active' && clip && React.createElement("div", {
+                  style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)', display:'flex', gap:10, alignItems:'center' },
+                  onClick: function(e){ e.stopPropagation(); }
+                },
+                  React.createElement("div", {
+                    style:{ width:44, height:44, borderRadius:8, background:'var(--gray-100)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, cursor:'pointer', overflow:'hidden' },
+                    onClick: function(e){
+                      e.stopPropagation();
+                      setViewingBuddyClip(Object.assign({}, clip, {
+                        userId: partnerId, user: partnerName || 'Your buddy', avatarUrl: partnerAvatarUrl,
+                        habit: habitName || pair.habit_name
+                      }));
+                    }
+                  }, clip.thumbnail_url
+                    ? React.createElement("img", { src: clip.thumbnail_url, alt:"", style:{ width:'100%', height:'100%', objectFit:'cover' } })
+                    : React.createElement(VideoIcon, { style:{ width:18, height:18, color:'var(--gray-500)' } })
+                  ),
+                  React.createElement("div", { style:{ flex:1, minWidth:0 } },
+                    React.createElement("div", { style:{ fontSize:11, fontWeight:700 } }, (partnerName || 'Your buddy') + ' shared a clip'),
+                    React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } },
+                      (clip.clip_visibility === 'buddies' ? 'Buddies only' : 'Everyone')
+                    )
+                  ),
+                  React.createElement("span", {
+                    onClick: function(e){ e.stopPropagation(); toggleClipReaction(clip.id, clip.user_id); },
+                    style:{
+                      display:'inline-flex', alignItems:'center', gap:5, border:'1px solid ' + (clipReacted ? '#f4c0d1' : 'var(--gray-200)'),
+                      background: clipReacted ? '#fbeaf0' : '#fff', borderRadius:8, padding:'5px 8px', cursor:'pointer', flexShrink:0
+                    }
+                  },
+                    React.createElement("svg", { width:13, height:13, viewBox:"0 0 24 24", fill: clipReacted ? "#993556" : "none", stroke:"#993556", strokeWidth:2 },
+                      React.createElement("path", { d:"M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" })
+                    ),
+                    React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'#555' } }, clipReacted ? 'You cheered this on' : 'Cheer on')
+                  )
                 ),
                 // ★ active 配對也可以展開看當初的 AI 配對報告——用的是同一個 pair.ai_match_data
                 //   欄位，跟 isIncoming 那邊看到的是完全一樣的資料，不是各自重新算一份，
@@ -12430,7 +12926,14 @@ function BuddiesPage(_ref_buddies) {
                 )
               );
             })
-          )
+          ),
+    viewingBuddyClip && React.createElement(ClipViewerModal, {
+      post: viewingBuddyClip,
+      currentUser: user,
+      cheered: !!reactedMap[viewingBuddyClip.id],
+      onCheer: function() { toggleClipReaction(viewingBuddyClip.id, viewingBuddyClip.userId); },
+      onClose: function() { setViewingBuddyClip(null); }
+    })
   );
 }
 
