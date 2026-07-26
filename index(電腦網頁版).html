@@ -8793,7 +8793,12 @@ function MainApp(_ref16) {
     var jobs = [ fetchHabitsNow() ];
     if (isFirebaseConfigured) {
       var feedJob = db.collection('posts').orderBy('createdAt', 'desc').limit(FEED_PAGE_SIZE).get().then(function(snap) {
-        var posts = snap.docs.map(docToPost);
+        // ★ 修正：習慣打卡 clip（isHabitClip）跟一般社群貼文存在同一個 posts 表，
+        //   這裡撈 Community feed 用的查詢原本沒有排除 clip，導致貼的 clip 會
+        //   直接混進 Community 首頁，而不是只透過 Challenger 卡片的 Concept A
+        //   （日曆網格）→ Concept B（單支影片全螢幕）那個路徑進去，跟原本討論
+        //   的設計不一致。這裡統一濾掉。
+        var posts = snap.docs.map(docToPost).filter(function(p) { return !p.isHabitClip; });
         setFeedPosts(posts);
         setFeedLastDoc(snap.docs[snap.docs.length - 1] || null);
         setFeedHasMore(snap.docs.length === FEED_PAGE_SIZE);
@@ -9253,7 +9258,8 @@ function MainApp(_ref16) {
   useEffect(function () {
     if (!isFirebaseConfigured) return;
     var unsub = db.collection('posts').orderBy('createdAt', 'desc').limit(FEED_PAGE_SIZE).onSnapshot(function (snap) {
-      var posts = snap.docs.map(docToPost);
+      // ★ 同上：Community feed 不顯示習慣打卡 clip，只顯示一般貼文
+      var posts = snap.docs.map(docToPost).filter(function(p) { return !p.isHabitClip; });
       setFeedPosts(posts);
       setMyPosts(posts.filter(function (p) {
         return p.userId === user.uid;
@@ -9285,7 +9291,8 @@ function MainApp(_ref16) {
             return db.collection('posts').orderBy('createdAt', 'desc').startAfter(feedLastDoc).limit(FEED_PAGE_SIZE).get();
           case 3:
             snap = _context7.v;
-            morePosts = snap.docs.map(docToPost);
+            // ★ 同上：Community feed 不顯示習慣打卡 clip
+            morePosts = snap.docs.map(docToPost).filter(function(p) { return !p.isHabitClip; });
             setFeedPosts(function (prev) {
               // Avoid duplicates
               var existingIds = new Set(prev.map(function (p) {
@@ -11047,19 +11054,20 @@ function MainApp(_ref16) {
         var shortUid = c.userId ? c.userId.slice(0, 8) : "user";
         var habitLabel = c.name || "Habit challenge";
         var initials = displayName.slice(0, 2).toUpperCase();
-        var pct = Math.min(Math.round((c.streak / CHALLENGE_COMPLETE_DAYS) * 100), 100);
-        var isNearEnd = c.streak >= 15;
-        var isJustStarted = c.streak <= 3;
-        var barClass = "challenger-card-bar-fill" + (isNearEnd ? " near-end" : isJustStarted ? " just-started" : "");
-        var daysLeft = CHALLENGE_COMPLETE_DAYS - c.streak;
+        // ★ 新增：卡片上色——沿用 getCatColours() 現成的分類配色（跟 Home 側欄
+        //   BY CATEGORY 的色點、習慣卡片標籤是同一組），不是另外發明新色系。
+        var cc = getCatColours(c.category);
+        var pct = Math.min(Math.round((c.streak / CHALLENGER_UNLOCK_DAYS) * 100), 100);
+        var isNearEnd = c.streak >= 5;
+        var isJustStarted = c.streak < 3;
+        var daysLeft = Math.max(CHALLENGER_UNLOCK_DAYS - c.streak, 0);
         var stageText = isNearEnd
-          ? "Almost there \u2014 " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left!"
+          ? "Almost unlocked \u2014 " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left!"
           : isJustStarted ? "Just getting started"
-          : c.streak >= 8 ? "Building momentum"
-          : "Keep going";
-        return React.createElement("div", { className: "challenger-card" },
+          : "Building momentum";
+        return React.createElement("div", { className: "challenger-card", style: { borderLeft: "4px solid " + cc.bar } },
           React.createElement("div", { className: "challenger-card-top" },
-            React.createElement("div", { className: "challenger-av" },
+            React.createElement("div", { className: "challenger-av", style: { color: cc.text, boxShadow: "0 0 0 2px var(--bg-card), 0 0 0 3px " + cc.bd } },
               c.userAvatar
                 ? React.createElement("img", { src: c.userAvatar, alt: displayName, onError: function(e) { e.target.style.display = "none"; } })
                 : initials
@@ -11071,6 +11079,7 @@ function MainApp(_ref16) {
               ),
               React.createElement("div", { className: "challenger-card-habit" }, "\u2728 " + habitLabel)
             ),
+            React.createElement("span", { style: { fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", padding: "2px 7px", borderRadius: 20, background: cc.bg, color: cc.text, flexShrink: 0, marginRight: c.clip ? 8 : 0 } }, c.category || "Other"),
             c.clip && React.createElement("div", {
               className: "challenger-clip-badge",
               "aria-label": "Watch clip",
@@ -11082,17 +11091,18 @@ function MainApp(_ref16) {
           ),
           React.createElement("div", { className: "challenger-card-progress" },
             React.createElement("div", { className: "challenger-card-prog-row" },
-              React.createElement("span", { className: "challenger-card-prog-label" }, "21-Day Challenge"),
-              React.createElement("span", { className: "challenger-card-prog-count" }, c.streak + "/" + CHALLENGE_COMPLETE_DAYS)
+              React.createElement("span", { className: "challenger-card-prog-label" }, "AI Match Unlock"),
+              React.createElement("span", { className: "challenger-card-prog-count", style: { color: cc.text } }, c.streak + "/" + CHALLENGER_UNLOCK_DAYS)
             ),
             React.createElement("div", { className: "challenger-card-bar-track" },
-              React.createElement("div", { className: barClass, style: { width: pct + "%" } })
+              React.createElement("div", { className: "challenger-card-bar-fill", style: { width: pct + "%", background: cc.bar } })
             )
           ),
           React.createElement("div", { className: "challenger-card-footer" },
-            React.createElement("span", { className: "challenger-card-stage" }, stageText),
+            React.createElement("span", { className: "challenger-card-stage", style: isNearEnd ? { color: cc.text } : null }, stageText),
             React.createElement("button", {
               className: "challenger-cheer-btn" + (cheered ? " done" : ""),
+              style: cheered ? null : { borderColor: cc.bd, color: cc.text },
               onClick: function(e) { e.stopPropagation(); if (!cheered) handleCheer(c.userId, c.id); },
               disabled: cheered
             }, cheered ? "\u2713 Cheered!" : "\u26a1 Cheer on")
