@@ -3755,11 +3755,25 @@ function _recordUploadFS() {
 /* ── HLS video helper：自動偵測 m3u8 並用 HLS.js 播放 ── */
 function attachHlsVideo(videoEl, src) {
   if (!videoEl || !src) return;
+  // ★ 修正：renderPostVideo() 每次呼叫都會建立一個新的 ref callback function
+  //   （因為它是一個 inline function），只要外層元件重新 render（例如 ClipShareModal
+  //   底下的 caption textarea 每打一個字），React 就會判定 ref 變了，把舊的 ref(null)、
+  //   新的 ref(videoEl) 都跑一次，attachHlsVideo 因此在「src 根本沒變」的情況下被
+  //   重複呼叫。原本這裡不管三七二十一直接 videoEl.src = src，等於每打一個字就讓
+  //   瀏覽器重新載入整支影片一次——影片在 metadata 重新載入前後高度會短暫跳動，
+  //   而這個 modal 是用 flex + align-items:center 置中的，內容高度一變，整個
+  //   modal 就跟著上下移動，變成「打字時整個畫面在抖動」。這裡加一個「src 沒變
+  //   就直接跳過」的判斷，從根本擋掉不必要的重新載入。
   if (src.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
+    if (videoEl._hlsSrc === src) return; // 同一個 src，不用重新 loadSource/attachMedia
+    if (videoEl._hlsInstance) { try { videoEl._hlsInstance.destroy(); } catch (e) {} }
     var hls = new Hls();
     hls.loadSource(src);
     hls.attachMedia(videoEl);
+    videoEl._hlsInstance = hls;
+    videoEl._hlsSrc = src;
   } else {
+    if (videoEl.src === src) return; // 同一個 src，不用重新指定（重新指定 = 瀏覽器重新載入影片）
     videoEl.src = src;
   }
 }
@@ -12660,6 +12674,24 @@ function BuddiesPage(_ref_buddies) {
               var _partnerGoalEnd = parseTimeRange(partnerHabitRow && partnerHabitRow.time_range).end;
               var myGoalEnded = !!(_myGoalEnd && _myGoalEnd < _todayStr);
               var partnerGoalEnded = !!(_partnerGoalEnd && _partnerGoalEnd < _todayStr);
+              // 🧪 暫時性除錯 log：確認 myHabitForPair / partnerHabitRow 到底有沒有撈到、
+              //   timeRange 欄位長什麼樣子。看完、確認問題點之後就會拿掉這段。
+              if (pair.status === 'active') {
+                console.log('[goal-ended debug]', {
+                  pairId: pair.id,
+                  myHabitIdForPair: myHabitIdForPair,
+                  myHabitForPairFound: !!myHabitForPair,
+                  myHabitForPairTimeRange: myHabitForPair && myHabitForPair.timeRange,
+                  partnerHabitId: partnerHabitId,
+                  partnerHabitRowFound: !!partnerHabitRow,
+                  partnerHabitRowTimeRange: partnerHabitRow && partnerHabitRow.time_range,
+                  todayStr: _todayStr,
+                  myGoalEnd: _myGoalEnd,
+                  partnerGoalEnd: _partnerGoalEnd,
+                  myGoalEnded: myGoalEnded,
+                  partnerGoalEnded: partnerGoalEnded
+                });
+              }
               var latestMsg = latestMsgMap[pair.id] || null;
               // ★ 新增：夥伴傳來、我還沒讀過的最新訊息 → Buddies 列表卡片要跟 FB 一樣冒出通知提示
               var isUnread = !!(latestMsg && latestMsg.sender_id !== user.uid && !latestMsg.read_at);
