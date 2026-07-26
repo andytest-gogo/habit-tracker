@@ -8771,15 +8771,26 @@ function MainApp(_ref16) {
     db.collection('habit_cheers').add({ senderId: user.uid, recipientId: challengerUid, habitId: habitId, date: todayKey, createdAt: new Date() }).then(function() {
       var _sb2 = window._supabaseClient;
       if (_sb2) {
-        _sb2.rpc('increment_cheer_count', { habit_id: habitId }).catch(function(){
+        // ★ 修正：這裡原本 RPC 失敗會 fallback 直接 update，但那段 fallback 的
+        //   .then() 沒有被 return 出去，等於整條錯誤處理鏈是「發了就不管」——
+        //   RPC 不存在也好、RLS 擋掉跨用戶更新也好、fallback update 本身失敗也好，
+        //   全部被吞掉，console 連個警告都不會有，跟你這次「按了但對方那邊
+        //   數字沒動、也看不到任何錯誤」的狀況完全對得上。這裡把每一步都補上
+        //   明確的 console.error，下次同樣狀況至少看得到是哪一步斷的。
+        _sb2.rpc('increment_cheer_count', { habit_id: habitId }).then(function(rpcRes) {
+          if (rpcRes && rpcRes.error) console.error('[Cheer] increment_cheer_count RPC 失敗:', rpcRes.error);
+        }).catch(function(rpcErr){
+          console.warn('[Cheer] increment_cheer_count RPC 不存在或報錯，改用 fallback update:', rpcErr);
           // fallback: 直接 update
           _sb2.from('habits').select('today_cheer_count').eq('id', habitId).single().then(function(r){
-            if (!r.error) _sb2.from('habits').update({ today_cheer_count: (r.data.today_cheer_count||0)+1 }).eq('id', habitId);
+            if (r.error) { console.error('[Cheer] fallback 讀取 today_cheer_count 失敗（很可能是 RLS 擋掉跨用戶讀取):', r.error); return; }
+            _sb2.from('habits').update({ today_cheer_count: (r.data.today_cheer_count||0)+1 }).eq('id', habitId)
+              .then(function(ur){ if (ur.error) console.error('[Cheer] fallback 寫入 today_cheer_count 失敗（很可能是 RLS 擋掉跨用戶寫入，需要改成 SECURITY DEFINER 的 RPC）:', ur.error); });
           });
         });
       }
     }).catch(function(e) {
-      // ── 3) 寫入失敗 → 回滾樂觀更新，讓用戶可重試 ──
+      // ── 3) habit_cheers 這筆紀錄寫入失敗 → 回滾樂觀更新，讓用戶可重試 ──
       console.warn('cheer error', e);
       setCheerMap(function(prev) { var n = Object.assign({}, prev); delete n[key]; return n; });
       setChallengers(function(prev) { return prev.map(function(c) { return c.id === habitId ? Object.assign({}, c, { todayCheerCount: Math.max(0,(c.todayCheerCount||1)-1) }) : c; }); });
