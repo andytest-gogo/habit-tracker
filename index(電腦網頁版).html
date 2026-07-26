@@ -5540,6 +5540,22 @@ function ClipViewerModal(props) {
 /* ── Clip Share Modal：Home 頁「Add a clip」開啟的上傳 + 隱私設定畫面 ──
    對象只有 Everyone / Buddies only 兩種（no "just me"），並附上不露臉引導。
    文字（caption）審查沿用 _moderateClipCaption（跟社群貼文/留言同一支 moderate-content）。 */
+// ★ 新增：原本這份訊息只定義在 PairWallPage 元件裡面（聊天室傳媒體用），
+//   ClipShareModal（貼習慣打卡影片用）沒辦法共用，導致被擋下來的時候
+//   兩邊顯示的訊息不一致——聊天室會告訴你具體是哪一類違規，
+//   ClipShareModal 卻不管什麼原因都只顯示同一句「keep it respectful and
+//   on-topic」，使用者看不出來到底是被誤判、還是內容真的有問題。
+//   移到這裡變成全域共用常數，兩邊都讀同一份。
+var VIOLATION_MESSAGES = {
+  SCAM:       "Your post appears to contain promotional or suspicious content. Please share your genuine habit progress!",
+  ADULT:      "Your post contains content that's not appropriate for our community. Please keep it clean and focused on your habits.",
+  VIOLENCE:   "Your post contains content that may be harmful or threatening. Please keep our community safe and supportive.",
+  HATE:       "Your post contains language that may be hurtful to others. Please keep our community respectful and inclusive.",
+  SPAM:       "Your post looks like it may be spam or unrelated to your habits. Share your real progress instead!",
+  IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!",
+  POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits."
+};
+
 function ClipShareModal(props) {
   var habit = props.habit, user = props.user, onClose = props.onClose, onPosted = props.onPosted;
   var _fileState = React.useState(null); var file = _fileState[0], setFile = _fileState[1];
@@ -5573,7 +5589,8 @@ function ClipShareModal(props) {
     _moderateClipCaption(caption).then(function(mod) {
       if (mod && mod.approved === false) {
         setUploading(false);
-        setErrorMsg("This clip couldn't be posted. Please keep it respectful and on-topic.");
+        var v = mod.violation || 'IRRELEVANT';
+        setErrorMsg((VIOLATION_MESSAGES[v] || "This clip couldn't be posted. Please keep it respectful and on-topic."));
         return;
       }
       uploadToBunny(file, 'video', function(pct) { setProgress(pct); }).then(function(result) {
@@ -12030,7 +12047,15 @@ function PairWallPage(_ref_pw) {
         setChatMediaSending(false);
         return Promise.reject({ __modBlocked: true });
       }
-      return _uploadToBunnyStorage(file, user.uid, null);
+      // ★ 修正：這裡原本不管圖片還是影片都呼叫 _uploadToBunnyStorage——那支函式
+      //   是專門給「圖片」用的，做法是把整個檔案轉成 base64 字串塞進 JSON body 送出。
+      //   影片檔案動輒幾十 MB，轉 base64 再塞進去，瀏覽器主執行緒會被這個轉換
+      //   卡住，畫面看起來就像「整個聊天室當掉」，文字送出鍵也不是真的被程式
+      //   disable，是整個分頁在轉檔案的時候沒辦法回應任何點擊。
+      //   影片要走 uploadToBunny(file,'video',...)——底層會自動判斷是影片，
+      //   改用 Bunny Stream 的 TUS 分段直傳（跟 ClipShareModal 貼習慣影片用的
+      //   是同一支函式），不會卡住主執行緒。
+      return uploadToBunny(file, isVid ? 'video' : 'image', null);
     })
     .then(function(r) {
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media', media_url: r.url, media_type: isVid ? 'video' : 'image' });
@@ -12096,14 +12121,7 @@ function PairWallPage(_ref_pw) {
     }
   }
 
-  var VIOLATION_MESSAGES = {
-    SCAM:       "Your post appears to contain promotional or suspicious content. Please share your genuine habit progress!",
-    ADULT:      "Your post contains content that's not appropriate for our community. Please keep it clean and focused on your habits.",
-    VIOLENCE:   "Your post contains content that may be harmful or threatening. Please keep our community safe and supportive.",
-    HATE:       "Your post contains language that may be hurtful to others. Please keep our community respectful and inclusive.",
-    SPAM:       "Your post looks like it may be spam or unrelated to your habits. Share your real progress instead!",
-    IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!"
-  };
+  // VIOLATION_MESSAGES 現在是全域共用常數（跟 ClipShareModal 共用），定義移到檔案上方。
 
   function fmtTime(ts) {
     if (!ts) return '';
