@@ -6340,6 +6340,13 @@ function toISODay(date) {
   var day = String(d.getDate()).padStart(2, '0');
   return "".concat(y, "-").concat(m, "-").concat(day);
 }
+/* ── 配對天數徽章：超過 30 天換算成月、超過 365 天換算成年，
+   不然配對一年後徽章會直接顯示「400-Day Pair」這種不直覺的數字。 */
+function fmtPairAge(days) {
+  if (!days || days < 30) return (days || 1) + '-Day Pair';
+  if (days < 365) return Math.max(1, Math.round(days / 30)) + '-Month Pair';
+  return Math.max(1, Math.round(days / 365)) + '-Year Pair';
+}
 function dateFromISO(str) {
   var _str$split$map = str.split('-').map(Number),
     _str$split$map2 = _slicedToArray(_str$split$map, 3),
@@ -12152,7 +12159,7 @@ function PairWallPage(_ref_pw) {
           )
         ),
         React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 } },
-          React.createElement('div', { className: 'pw-badge' }, daysSince + '-Day Pair')
+          React.createElement('div', { className: 'pw-badge' }, fmtPairAge(daysSince))
         ),
         React.createElement('button', { className: 'pw-back', onClick: onBack }, '← Back')
       )
@@ -12644,6 +12651,15 @@ function BuddiesPage(_ref_buddies) {
               var myGoalDays = habitGoalDays(myHabitForPair && myHabitForPair.timeRange);
               var partnerGoalDays = habitGoalDays(partnerHabitRow && partnerHabitRow.time_range);
               var togetherStreak = Math.min(myPairStreak, partnerPairStreak);
+              // ★ 新增：如果任一方這個習慣的目標期間（timeRange）已經結束（例如只設定
+              //   7 天的習慣，剛好打完就解鎖配對、之後不會再打卡了），streak 永遠會卡在 0，
+              //   「Check in together to start your streak」這句話會一直顯示、看起來像壞掉。
+              //   這裡判斷期間是否已結束，結束的話換一句對應的文案，而不是死板的「開始你的連續紀錄」。
+              var _todayStr = toISODay();
+              var _myGoalEnd = parseTimeRange(myHabitForPair && myHabitForPair.timeRange).end;
+              var _partnerGoalEnd = parseTimeRange(partnerHabitRow && partnerHabitRow.time_range).end;
+              var myGoalEnded = !!(_myGoalEnd && _myGoalEnd < _todayStr);
+              var partnerGoalEnded = !!(_partnerGoalEnd && _partnerGoalEnd < _todayStr);
               var latestMsg = latestMsgMap[pair.id] || null;
               // ★ 新增：夥伴傳來、我還沒讀過的最新訊息 → Buddies 列表卡片要跟 FB 一樣冒出通知提示
               var isUnread = !!(latestMsg && latestMsg.sender_id !== user.uid && !latestMsg.read_at);
@@ -12722,12 +12738,20 @@ function BuddiesPage(_ref_buddies) {
                       )
                     )
                   ),
-                  React.createElement("div", { style:{ marginTop:12, display:'flex', alignItems:'center', gap:8, padding:'8px 10px', background:'#f0fdf4', borderRadius:6 } },
-                    React.createElement("span", { style:{ fontSize:13 } }, "🔥"),
-                    React.createElement("span", { style:{ fontSize:11, color:'#166534', fontWeight:700 } },
+                  React.createElement("div", { style:{ marginTop:12, display:'flex', alignItems:'center', gap:8, padding:'8px 10px', background: togetherStreak === 0 && (myGoalEnded || partnerGoalEnded) ? 'var(--gray-100)' : '#f0fdf4', borderRadius:6 } },
+                    React.createElement("span", { style:{ fontSize:13 } },
+                      togetherStreak > 0 ? "🔥" : (myGoalEnded || partnerGoalEnded) ? "🏁" : "✨"
+                    ),
+                    React.createElement("span", { style:{ fontSize:11, fontWeight:700, color: togetherStreak === 0 && (myGoalEnded || partnerGoalEnded) ? 'var(--gray-500)' : '#166534' } },
                       togetherStreak > 0
                         ? "Together " + togetherStreak + " day" + (togetherStreak === 1 ? '' : 's') + " in a row"
-                        : "Check in together to start your streak"
+                        : myGoalEnded && partnerGoalEnded
+                          ? "You've both finished your goal period — start a new one to keep going together"
+                          : myGoalEnded
+                            ? "Your goal period ended — start a new one to keep this streak alive"
+                            : partnerGoalEnded
+                              ? (partnerName || "Your buddy") + "'s goal period ended — check in to keep it going"
+                              : "Check in together to start your streak"
                     )
                   ),
                   latestMsg && React.createElement("div", {
@@ -14242,6 +14266,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var _surveyIdx       = 0;
   var _surveyDimensions = {};
   var EDGE_VALUES_URL  = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/generate-value-questions';
+  // ★ 新增：「都不符合，讓我自己打字描述」的自由輸入路徑
+  var _surveyFreeTextMode = false;
+  var _surveySubmittingFreeText = false;
+  var EDGE_INTERPRET_URL = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/interpret-values-text';
 
   // ── 按下 Find Partner 的進入點：先確認是否需要價值觀問卷，再進入配對 ─────
   window.openMatchingModal = async function(habit) {
@@ -14260,6 +14288,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     _surveyAnswers = {};
     _surveyIdx = 0;
     _surveyQuestions = [];
+    _surveyFreeTextMode = false;
 
     // ★ 立刻顯示掃描動畫，避免「按下去空白等好幾秒」的 lag 感——
     //   generate-values-questions 會即時呼叫 Claude 生成問題，本來就需要幾秒鐘，
@@ -14291,7 +14320,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           return;
         }
 
-        if (checkData.questions && checkData.questions.length >= 3) {
+        if (checkData.questions && checkData.questions.length >= 5) {
           // Show survey
           _surveyQuestions = checkData.questions;
           _surveyDimensions = {};
@@ -14371,12 +14400,46 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">Question ' + (_surveyIdx+1) + ' of ' + total + ' · ' + q.dimension + '</div>' +
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:18px;font-family:var(--din);letter-spacing:.3px;">' + q.text + '</div>' +
         '<div>' + optsHtml + '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-bottom:20px;">' +
+        '<div style="text-align:center;margin-top:4px;">' +
+          '<button onclick="window._showFreeTextValues()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">None of these quite fit — describe it in your own words</button>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-bottom:20px;">' +
           '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#888;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
           '<button id="surveyNextBtn" onclick="window._surveyNext()" ' + (hasAnswer ? '' : 'disabled') + ' style="flex:1;background:#fff;color:#0a0a0a;border:none;padding:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;font-family:inherit;opacity:' + (hasAnswer ? '1' : '.25') + ';transition:.15s;">' + (isLast ? 'Find my partner →' : 'Next →') + '</button>' +
         '</div>' +
       '</div>';
   }
+
+  // ── 自由輸入路徑：選擇題都不符合時，讓使用者自己打字描述自己 ──────────────
+  function _renderFreeTextSurvey(errorMsg) {
+    document.getElementById('surveyStepFill').style.width = '90%';
+    var body = document.getElementById('surveyBody');
+    body.innerHTML =
+      '<div style="padding:16px 20px 0;">' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">In your own words</div>' +
+        '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:12px;font-family:var(--din);letter-spacing:.3px;">What drives you to stick with a habit, and what kind of partner brings out your best?</div>' +
+        '<div style="font-size:10px;color:#888;line-height:1.6;margin-bottom:12px;">A couple of sentences is plenty — we\'ll use this instead of the multiple-choice answers.</div>' +
+        '<textarea id="surveyFreeText" rows="6" maxlength="1500" placeholder="e.g. I stick with things when I have a clear goal to chase, not just a routine. I do best with a partner who checks in but doesn\'t guilt-trip me when I miss a day..." style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#fff;padding:12px;font-size:12px;line-height:1.6;font-family:inherit;resize:vertical;"></textarea>' +
+        (errorMsg ? '<div style="color:#f87171;font-size:10px;margin-top:8px;">' + errorMsg + '</div>' : '') +
+        '<div style="text-align:center;margin-top:10px;">' +
+          '<button onclick="window._backToQuestions()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">Back to the questions instead</button>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-bottom:20px;">' +
+          '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#888;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
+          '<button id="surveyFreeTextSubmitBtn" onclick="window._submitFreeTextValues()" style="flex:1;background:#fff;color:#0a0a0a;border:none;padding:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;font-family:inherit;">Find my partner →</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  window._showFreeTextValues = function() {
+    _surveyFreeTextMode = true;
+    _renderFreeTextSurvey();
+  };
+
+  window._backToQuestions = function() {
+    _surveyFreeTextMode = false;
+    _renderSurveyQ();
+  };
 
   window._surveySelect = function(qid, val) {
     _surveyAnswers[qid] = val;
@@ -14395,6 +14458,57 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
   };
 
+  // ★ 新增：自由輸入送出 → 呼叫 interpret-values-text，成功就走跟選擇題
+  //   一樣的「完成」畫面再進配對；失敗（太短/被判定不是自我描述）就地顯示錯誤，
+  //   讓使用者可以直接改文字重送，不用整個流程重來。
+  window._submitFreeTextValues = async function() {
+    if (_surveySubmittingFreeText) return;
+    var ta = document.getElementById('surveyFreeText');
+    var text = (ta && ta.value || '').trim();
+    if (text.length < 15) {
+      _renderFreeTextSurvey('A little more detail would help — at least a sentence or two.');
+      return;
+    }
+    _surveySubmittingFreeText = true;
+    var btn = document.getElementById('surveyFreeTextSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Thinking...'; btn.style.opacity = '.5'; }
+
+    try {
+      var session = await _supabase.auth.getSession();
+      var token = session.data.session && session.data.session.access_token;
+      if (!token) throw new Error('not authenticated');
+
+      var dims = _surveyQuestions.map(function(q){ return q.dimension; });
+      var res = await fetch(EDGE_INTERPRET_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          freeText: text,
+          habitId: _currentHabit && _currentHabit.id,
+          habitName: _currentHabit && _currentHabit.name,
+          dimensions: dims
+        })
+      });
+      var data = await res.json();
+      _surveySubmittingFreeText = false;
+
+      if (!res.ok || data.error) {
+        _renderFreeTextSurvey(data.message || 'Something went wrong — please try again.');
+        return;
+      }
+
+      _showSurveySavedState();
+      setTimeout(function() {
+        document.getElementById('valuesSurveyOverlay').style.display = 'none';
+        document.body.style.overflow = '';
+        _proceedToMatching(_currentHabit);
+      }, 1200);
+    } catch (e) {
+      _surveySubmittingFreeText = false;
+      _renderFreeTextSurvey('Something went wrong — please try again.');
+    }
+  };
+
   window._skipSurvey = function() {
     document.getElementById('valuesSurveyOverlay').style.display = 'none';
     document.body.style.overflow = '';
@@ -14406,40 +14520,57 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   //   ✕ 只是想關掉這個視窗（很可能是手滑、或只是想先看一下其他畫面），
   //   不代表使用者同意跳過問卷、直接開始配對。
   //   所以這裡只關視窗，不呼叫 _proceedToMatching。已經生成的題目在
-  //   generate-values-questions 那邊已經存成草稿（habit_values.questions），
-  //   下次使用者再按 Find Partner 時會直接沿用同一批題目、不會再呼叫一次 Claude，
-  //   使用者也還有機會把問卷填完。
+  //   generate-value-questions 那邊已經存成草稿（user_values.questions），
+  //   下次使用者按 Find Partner（不管是哪個習慣）都會直接沿用同一批題目、
+  //   不會再呼叫一次 Claude，使用者也還有機會把問卷填完。
   window._closeSurveyModal = function() {
     document.getElementById('valuesSurveyOverlay').style.display = 'none';
     document.body.style.overflow = '';
     _currentHabit = null;
   };
 
-  function _saveSurveyAndProceed() {
-    // Show completion state
+  // ── 共用的「已儲存」完成畫面，選擇題路徑跟自由輸入路徑都會用到 ──────────────
+  function _showSurveySavedState() {
     document.getElementById('surveyStepFill').style.width = '100%';
     document.getElementById('surveyStepFill').style.background = '#4caf50';
     document.getElementById('surveyBody').innerHTML =
       '<div style="padding:32px 20px;text-align:center;">' +
         '<div style="font-size:22px;margin-bottom:14px;color:#4caf50;">✓</div>' +
         '<div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#fff;margin-bottom:8px;">Values profile saved</div>' +
-        '<div style="font-size:10px;color:#555;line-height:1.7;">We\'ll use your answers to find a partner<br>who shares your mindset and approach.</div>' +
+        '<div style="font-size:10px;color:#555;line-height:1.7;">We\'ll use this to find every future partner<br>who shares your mindset and approach.</div>' +
       '</div>';
+  }
 
-    // Save to Supabase
+  // ★ 把選擇題代碼答案還原成當初題目的選項文字，格式跟 interpret-values-text
+  //   回傳的 summary 完全一樣（[{dimension, description}, ...]），這樣不管
+  //   使用者是選選項還是自己打字，match-partner / pair-insight 讀到的資料
+  //   長得一模一樣，不用分兩套邏輯處理。
+  function _buildValuesSummaryFromAnswers() {
+    return _surveyQuestions.map(function(q) {
+      var ans = _surveyAnswers[q.id];
+      var opt = q.options.find(function(o) { return o.value === ans; });
+      return { dimension: q.dimension, description: opt ? opt.label : null };
+    }).filter(function(x) { return !!x.description; });
+  }
+
+  function _saveSurveyAndProceed() {
+    _showSurveySavedState();
+
+    // ★ 改存 user_values（一人一列，不再是 habit_values 的一習慣一列），
+    //   summary 在存檔當下就換算成人看得懂的文字，之後不用再對照代碼。
     (async function() {
       try {
         if (_supabase && _currentHabit) {
           var session = await _supabase.auth.getSession();
           var uid = session.data.session && session.data.session.user && session.data.session.user.id;
           if (uid) {
-            await _supabase.from('habit_values').upsert({
-              user_id:    uid,
-              habit_id:   _currentHabit.id,
-              answers:    _surveyAnswers,
-              dimensions: _surveyDimensions,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id,habit_id' });
+            await _supabase.from('user_values').upsert({
+              user_id:         uid,
+              source_habit_id: _currentHabit.id,
+              raw_answers:     _surveyAnswers,
+              summary:         _buildValuesSummaryFromAnswers(),
+              updated_at:      new Date().toISOString()
+            }, { onConflict: 'user_id' });
           }
         }
       } catch(e) { console.warn('[values-survey] save error:', e.message); }
@@ -14799,10 +14930,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           habitDurLabel: habit.durLabel || '',
           habitTimeRange: habit.timeRange || '',
           checkedDates: habit.checkedDates || [],
-          excludeUserIds: Array.from(alreadyPaired),
-          myValues: (Object.keys(_surveyAnswers).length > 0)
-            ? { answers: _surveyAnswers, dimensions: _surveyDimensions }
-            : null
+          excludeUserIds: Array.from(alreadyPaired)
+          // ★ 不用再帶 myValues 了——match-partner 現在直接從 user_values 表
+          //   用 user_id 讀價值觀，不再需要前端把 _surveyAnswers/_surveyDimensions
+          //   塞進請求裡（而且自由輸入那條路徑本來就不會有 _surveyAnswers）。
         })
       });
 
