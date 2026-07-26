@@ -12674,24 +12674,6 @@ function BuddiesPage(_ref_buddies) {
               var _partnerGoalEnd = parseTimeRange(partnerHabitRow && partnerHabitRow.time_range).end;
               var myGoalEnded = !!(_myGoalEnd && _myGoalEnd < _todayStr);
               var partnerGoalEnded = !!(_partnerGoalEnd && _partnerGoalEnd < _todayStr);
-              // 🧪 暫時性除錯 log：確認 myHabitForPair / partnerHabitRow 到底有沒有撈到、
-              //   timeRange 欄位長什麼樣子。看完、確認問題點之後就會拿掉這段。
-              if (pair.status === 'active') {
-                console.log('[goal-ended debug]', {
-                  pairId: pair.id,
-                  myHabitIdForPair: myHabitIdForPair,
-                  myHabitForPairFound: !!myHabitForPair,
-                  myHabitForPairTimeRange: myHabitForPair && myHabitForPair.timeRange,
-                  partnerHabitId: partnerHabitId,
-                  partnerHabitRowFound: !!partnerHabitRow,
-                  partnerHabitRowTimeRange: partnerHabitRow && partnerHabitRow.time_range,
-                  todayStr: _todayStr,
-                  myGoalEnd: _myGoalEnd,
-                  partnerGoalEnd: _partnerGoalEnd,
-                  myGoalEnded: myGoalEnded,
-                  partnerGoalEnded: partnerGoalEnded
-                });
-              }
               var latestMsg = latestMsgMap[pair.id] || null;
               // ★ 新增：夥伴傳來、我還沒讀過的最新訊息 → Buddies 列表卡片要跟 FB 一樣冒出通知提示
               var isUnread = !!(latestMsg && latestMsg.sender_id !== user.uid && !latestMsg.read_at);
