@@ -3717,7 +3717,12 @@ function _recordUploadFS() {
           totalVideos = (q === null || q === void 0 ? void 0 : q.totalVideos) || 0;
           totalMB = (q === null || q === void 0 ? void 0 : q.totalMB) || 0;
           newDoc = {
-            uid: uid,
+            // ★ 修正：這裡原本多寫了一個 uid: uid 欄位——但 .doc(uid) 這個寫法本身
+            //   就已經是用 uid 當這筆記錄的識別碼了（對應到實際 Supabase 表裡的
+            //   id 欄位，讀取那邊 fetchQuotaDoc 用的也是 id=eq.<uid> 在查，不是
+            //   另外一個 uid 欄位）。upload_quotas 表根本沒有 uid 這個獨立欄位，
+            //   每次寫入都因為這個多出來的欄位失敗（PGRST204: Could not find the
+            //   'uid' column），quota 從來沒有真的被記錄下來。拿掉這欄就對了。
             displayName: userName || (q === null || q === void 0 ? void 0 : q.displayName) || '',
             email: userEmail || (q === null || q === void 0 ? void 0 : q.email) || '',
             // Daily
@@ -5556,6 +5561,18 @@ var VIOLATION_MESSAGES = {
   POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits."
 };
 
+// ★ 新增：影片/圖片上傳的檔案大小上限，習慣打卡影片（ClipShareModal）跟
+//   夥伴聊天室傳媒體（PairWallPage）共用同一組數字，兩個地方選到超過上限的
+//   檔案時都會直接擋下來、顯示清楚的錯誤訊息，不會讓使用者傻等一個注定會
+//   失敗（或把瀏覽器卡住半天）的上傳。數字是先抓的常見合理值，不是跟
+//   Bunny 那邊的方案綁死的，覺得要調就直接改這兩個常數即可。
+// ★ 修正：這裡原本自己另外定義了 MAX_CLIP_VIDEO_MB=100 / MAX_CLIP_IMAGE_MB=10，
+//   後來發現 _uploadToBunny() 內部的 UPLOAD_LIMITS.VIDEO_MAX_MB / IMAGE_MAX_MB
+//   本來就是同樣的數字（100 / 10），Community 發文那邊也是共用同一份
+//   UPLOAD_LIMITS——等於原本兩組數字剛好一樣，但來源是兩份，之後隨便改一邊
+//   就會兜不起來。改成這裡也直接讀 UPLOAD_LIMITS，全站只有一個地方要改。
+function _fmtMB(bytes) { return (bytes / 1024 / 1024).toFixed(1); }
+
 function ClipShareModal(props) {
   var habit = props.habit, user = props.user, onClose = props.onClose, onPosted = props.onPosted;
   var _fileState = React.useState(null); var file = _fileState[0], setFile = _fileState[1];
@@ -5571,6 +5588,11 @@ function ClipShareModal(props) {
     var f = e.target.files && e.target.files[0];
     if (!f) return;
     if (!f.type || !f.type.startsWith('video/')) { setErrorMsg('Please choose a video file.'); return; }
+    if (f.size > UPLOAD_LIMITS.VIDEO_MAX_MB * 1024 * 1024) {
+      setErrorMsg('That video is ' + _fmtMB(f.size) + 'MB — please keep clips under ' + UPLOAD_LIMITS.VIDEO_MAX_MB + 'MB.');
+      e.target.value = '';
+      return;
+    }
     setErrorMsg('');
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
@@ -11806,6 +11828,7 @@ function PairWallPage(_ref_pw) {
   var _smc = useState(pair.media_consent || {}); var mediaConsent = _smc[0]; var setMediaConsent = _smc[1];
   var _smcm = useState(false); var showMediaConsentModal = _smcm[0]; var setShowMediaConsentModal = _smcm[1];
   var _scms = useState(false); var chatMediaSending = _scms[0]; var setChatMediaSending = _scms[1];
+  var _scmp = useState(0); var chatMediaProgress = _scmp[0]; var setChatMediaProgress = _scmp[1];
   /* ★ 修正「YOU × 61」同一個問題：查真實姓名/頭像，不要用 partnerId 前兩碼充當縮寫 */
   var _spn = useState(null); var partnerName = _spn[0]; var setPartnerName = _spn[1];
   var _spa = useState(null); var partnerAvatarUrl = _spa[0]; var setPartnerAvatarUrl = _spa[1];
@@ -11934,7 +11957,16 @@ function PairWallPage(_ref_pw) {
       setPartnerLastActive(lastActiveRaw || null);
       setLoading(false);
     }).catch(function() { setLoading(false); });
-  }, [user, pair]);
+    // ★ 修正：依賴陣列原本是整個 [user, pair] object。MainApp 每次「回到前台
+    //   重抓資料」(fetchAllNow, visibilitychange 觸發) 都會把 pairs 整包重新
+    //   query 一次，就算內容完全沒變，Supabase 回來的還是全新的 JS object
+    //   （reference 不同）。BuddiesPage 用這包新的 pairs 陣列重新算出的
+    //   selectedPair 因此也是新 reference，這個 effect 只要依賴整個 pair
+    //   物件，就會被誤判成「換了一組配對」而重新觸發——setLoading(true) 讓
+    //   聊天室畫面短暫閃一下、訊息重新整包 setMessages 換掉，這就是切分頁
+    //   離開又切回來、畫面會「抖動」的原因。改成依賴 pair.id 這個穩定的字串，
+    //   同一組配對的話 id 不會變，就不會誤觸發。
+  }, [user, pair && pair.id]);
 
   /* realtime messages + read receipt updates */
   useEffect(function() {
@@ -11962,7 +11994,9 @@ function PairWallPage(_ref_pw) {
       )
       .subscribe();
     return function() { _supabase.removeChannel(ch); };
-  }, [pair]);
+    // ★ 同一個原因：改成依賴 pair.id，避免每次外層 pairs 重新整包 query 回來
+    //   （object reference 變了、id 沒變）就把現有的 realtime channel 拆掉重建一次。
+  }, [pair && pair.id]);
 
   /* Mark messages read when chat comes into view */
   useEffect(function() {
@@ -12034,7 +12068,13 @@ function PairWallPage(_ref_pw) {
     e.target.value = '';
     if (!file || chatMediaSending) return;
     var isVid = file.type.startsWith('video/');
+    var limitMB = isVid ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB;
+    if (file.size > limitMB * 1024 * 1024) {
+      alert('That ' + (isVid ? 'video' : 'image') + ' is ' + _fmtMB(file.size) + 'MB — please keep it under ' + limitMB + 'MB.');
+      return;
+    }
     setChatMediaSending(true);
+    setChatMediaProgress(0);
     var modP = isVid
       ? _moderateContent('', null, 'video')
       : _imageFileToBase64(file)
@@ -12055,13 +12095,17 @@ function PairWallPage(_ref_pw) {
       //   影片要走 uploadToBunny(file,'video',...)——底層會自動判斷是影片，
       //   改用 Bunny Stream 的 TUS 分段直傳（跟 ClipShareModal 貼習慣影片用的
       //   是同一支函式），不會卡住主執行緒。
-      return uploadToBunny(file, isVid ? 'video' : 'image', null);
+      // ★ 新增：原本這裡進度 callback 傳 null，使用者完全看不到上傳到哪了，
+      //   影片又特別慢，感覺就像卡住。現在把進度即時寫進 chatMediaProgress，
+      //   相機按鈕會直接顯示百分比。
+      return uploadToBunny(file, isVid ? 'video' : 'image', function(pct) { setChatMediaProgress(pct); });
     })
     .then(function(r) {
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media', media_url: r.url, media_type: isVid ? 'video' : 'image' });
     })
-    .then(function() { setChatMediaSending(false); touchPairActivity(); })
+    .then(function() { setChatMediaSending(false); setChatMediaProgress(0); touchPairActivity(); })
     .catch(function(err) {
+      setChatMediaProgress(0);
       if (err && err.__modBlocked) return;
       alert('Send failed: ' + (err && err.message ? err.message : err));
       setChatMediaSending(false);
@@ -12327,13 +12371,26 @@ function PairWallPage(_ref_pw) {
           )
     ),
 
+    /* ★ 新增：上傳進度條——原本上傳完全沒有回饋，使用者只看到相機按鈕變灰、
+       不知道是卡住了還是真的在傳，尤其影片比較慢，感覺特別明顯。現在跟
+       header/input-bar 一樣套 640 寬度置中，上傳中會即時顯示百分比。 */
+    chatMediaSending && React.createElement('div', { style:{ maxWidth:640, width:'100%', margin:'0 auto', padding:'6px 14px 0', boxSizing:'border-box' } },
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', fontSize:9, color:'var(--gray-400)', marginBottom:3, fontWeight:700, letterSpacing:'.3px', textTransform:'uppercase' } },
+        React.createElement('span', null, 'Uploading…'),
+        React.createElement('span', null, chatMediaProgress + '%')
+      ),
+      React.createElement('div', { style:{ height:3, background:'var(--gray-100)', borderRadius:2, overflow:'hidden' } },
+        React.createElement('div', { style:{ height:'100%', width: chatMediaProgress + '%', background:'var(--black)', borderRadius:2, transition:'width .2s ease' } })
+      )
+    ),
+
     /* INPUT BAR */
     canChat && React.createElement('div', { className: 'pw-input-bar' },
       React.createElement('div', {
         className: 'pw-cam' + (chatMediaSending ? ' busy' : ''),
         title: 'Send photo or video',
         onClick: handleChatMediaClick
-      }, chatMediaSending ? '⋯' : '📷'),
+      }, chatMediaSending ? React.createElement('span', { style:{ fontSize:9, fontWeight:700 } }, chatMediaProgress + '%') : '📷'),
       React.createElement('input', {
         type: 'file', id: 'pw-chat-media-input', accept: 'image/*,video/*',
         style: { display: 'none' }, onChange: handleChatMediaSelect
