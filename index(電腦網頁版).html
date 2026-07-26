@@ -280,7 +280,7 @@
 
         /* Make pw-chat (AI partner chat) also transparent */
         body[data-theme="dark"] .pw-chat { background: transparent; }
-        body[data-theme="dark"] .pw-ai-card { background:var(--bg-subtle); border-bottom:1px solid var(--border-dk); }
+        /* pw-ai-card 保留漸層，不論 light/dark 模式都一樣，這是設計上刻意的品牌色卡片 */
         body[data-theme="dark"] .pw-req-card { background:var(--bg-subtle); border-color:var(--border-dk); }
         body[data-theme="dark"] .pw-req-txt { color:var(--text-secondary); }
         body[data-theme="dark"] .pw-req-decline { background:transparent; border-color:var(--border-dk); color:var(--text-secondary); }
@@ -1050,26 +1050,39 @@
             font-size:11px; color:var(--gray-400); line-height:1.7;
         }
         /* ── PAIR WALL ── */
+        /* ★ 改版：header / end-partnership bar / AI 卡片 / 對話區 / 輸入框
+           全部套同一個 max-width + margin:auto，不再各自各的寬度。手機版
+           app-container 本來就只有 480px，套 640 上限不會有視覺差異；
+           桌面版則確保這幾塊不會再一個窄一個寬。 */
         .pw-page { min-height:100vh; background:var(--white); display:flex; flex-direction:column; }
-        .pw-hdr { background:var(--black); padding:0; position:sticky; top:0; z-index:50; }
+        .pw-hdr { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; background:linear-gradient(135deg,#3d5e6a 0%,#4a6e7a 55%,#3f6272 100%); padding:0; position:sticky; top:0; z-index:50; }
         .pw-status { display:flex; justify-content:space-between; align-items:center; padding:10px 16px 0; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,.25); }
         .pw-identity { padding:10px 16px 12px; display:flex; align-items:center; gap:10px; }
         .pw-avs { display:flex; flex-shrink:0; }
-        .pw-av { width:32px; height:32px; background:var(--gray-700,#2e2e2e); border:2px solid var(--black); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--white); text-transform:uppercase; border-radius:50%; flex-shrink:0; }
+        .pw-av { width:32px; height:32px; background:var(--gray-700,#2e2e2e); border:2px solid rgba(255,255,255,.4); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--white); text-transform:uppercase; border-radius:50%; flex-shrink:0; }
         .pw-av.you { background:var(--white); color:var(--black); z-index:2; }
-        .pw-av.them { margin-left:-8px; z-index:1; }
+        .pw-av.them { margin-left:-8px; z-index:1; background:#7389a8; }
         .pw-pair-info { flex:1; min-width:0; }
         .pw-pair-name { font-size:14px; font-weight:700; color:var(--white); letter-spacing:.3px; line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--din,'Barlow Condensed',monospace); }
-        .pw-pair-sub { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,.35); margin-top:3px; }
-        .pw-badge { background:#1c1c1c; border:1px solid #2e2e2e; padding:4px 9px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,.5); white-space:nowrap; flex-shrink:0; }
-        .pw-back { background:none; border:none; color:rgba(255,255,255,.45); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); padding:0; flex-shrink:0; }
+        .pw-pair-sub { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,.55); margin-top:3px; }
+        .pw-badge { background:rgba(0,0,0,.22); border:1px solid rgba(255,255,255,.2); padding:4px 9px; border-radius:20px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#fff; white-space:nowrap; flex-shrink:0; }
+        .pw-back { background:none; border:none; color:rgba(255,255,255,.7); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; cursor:pointer; font-family:var(--font); padding:0; flex-shrink:0; }
+        /* ── End partnership：獨立一整條，位置固定在標題正下方，顯眼但不是警示色 ── */
+        .pw-end-bar { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; display:flex; align-items:center; gap:8px; padding:9px 16px; background:#fff6f6; border-bottom:1px solid #fde2e2; cursor:pointer; transition:.12s; }
+        .pw-end-bar:hover { background:#fdeaea; }
+        .pw-end-icon { width:18px; height:18px; border-radius:50%; background:#fde2e2; color:#b91c1c; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0; }
+        .pw-end-label { font-size:10.5px; font-weight:700; color:#b91c1c; letter-spacing:.3px; }
+        .pw-end-chev { margin-left:auto; color:#e39a9a; font-size:13px; }
         /* chat */
-        .pw-chat { background:var(--gray-50); flex:1; }
-        /* ── AI insight card（共同點提醒，閃爍點沿用配對動畫 matchBlink）── */
-        .pw-ai-card { background:#141414; border-top:1px solid rgba(255,255,255,.1); padding:12px 16px; display:flex; gap:10px; align-items:flex-start; position:relative; z-index:1; }
-        .pw-ai-dot { width:5px; height:5px; background:#4ade80; animation:matchBlink 1s infinite; margin-top:5px; flex-shrink:0; }
-        .pw-ai-lbl { font-size:8px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.45); margin-bottom:3px; }
-        .pw-ai-txt { font-size:11.5px; line-height:1.6; color:rgba(255,255,255,0.92); }
+        .pw-chat { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; background:var(--gray-50); flex:1; }
+        /* ── AI insight card（共同點提醒，閃爍點沿用配對動畫 matchBlink）──
+           ★ 改版：原本是純黑/近黑，現在跟 header 一樣換成漸層，但用不同色系
+           （琥珀/古銅暖色）明確跟 header 的 teal-blue 冷色系區分開；原本用紫色，
+           改成兩性都通用的暖棕金色系。 */
+        .pw-ai-card { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; background:linear-gradient(135deg,#3d2b1a 0%,#6b4a28 55%,#9c7a3f 100%); border-top:1px solid rgba(255,255,255,.12); padding:12px 16px; display:flex; gap:10px; align-items:flex-start; position:relative; z-index:1; }
+        .pw-ai-dot { width:5px; height:5px; background:#fbbf24; animation:matchBlink 1s infinite; margin-top:5px; flex-shrink:0; }
+        .pw-ai-lbl { font-size:8px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.55); margin-bottom:3px; }
+        .pw-ai-txt { font-size:11.5px; line-height:1.6; color:rgba(255,255,255,0.94); }
         /* ── Media consent / system messages ── */
         .pw-sys-msg { text-align:center; font-size:10px; color:var(--gray-400); padding:3px 12px; line-height:1.5; }
         .pw-req-card { border:1px solid var(--gray-200); background:var(--white); padding:10px 12px; max-width:240px; }
@@ -1091,7 +1104,7 @@
         .pw-msg.me .pw-mbub { background:var(--black); color:var(--white); border-color:var(--black); }
         .pw-mt { font-size:9px; color:var(--gray-300); padding:0 3px; white-space:nowrap; }
         /* input bar */
-        .pw-input-bar { border-top:1px solid var(--gray-150,#e8e8e8); padding:10px 14px; display:flex; gap:8px; align-items:center; background:var(--white); position:sticky; bottom:0; }
+        .pw-input-bar { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; border-top:1px solid var(--gray-150,#e8e8e8); padding:10px 14px; display:flex; gap:8px; align-items:center; background:var(--white); position:sticky; bottom:0; }
         .pw-input { flex:1; border:1px solid var(--gray-200); padding:8px 11px; font-size:12px; outline:none; font-family:var(--font); color:var(--black); background:var(--white); resize:none; }
         .pw-input:focus { border-color:var(--black); }
         .pw-send { width:32px; height:32px; background:var(--black); border:none; color:var(--white); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
@@ -1733,10 +1746,6 @@
             .desktop-shell .habit-card { max-width:760px; margin-left:auto; margin-right:auto; }
             .desktop-shell .challenger-card { max-width:760px; margin-left:auto; margin-right:auto; }
             .desktop-shell .detail-stats-grid { max-width:760px; margin-left:auto; margin-right:auto; }
-            .desktop-shell .pw-hdr,
-            .desktop-shell .pw-ai-card,
-            .desktop-shell .pw-msgs,
-            .desktop-shell .pw-input-bar { max-width:640px; margin-left:auto; margin-right:auto; }
             .desktop-shell .pw-hdr { position:static; }
             .desktop-shell .member-profile-header,
             .desktop-shell .profile-stat-row { max-width:480px; margin-left:auto; margin-right:auto; }
@@ -7806,17 +7815,9 @@ function DesktopBuddiesSidebar(props) {
       React.createElement("span", { style: { color: 'var(--gray-500)' } }, "Total matched"),
       React.createElement("span", { style: { fontWeight: 700 } }, stats.totalMatched || 0)
     ),
-    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: stats.daysToUnlock ? 22 : 0 } },
+    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12 } },
       React.createElement("span", { style: { color: 'var(--gray-500)' } }, "Active pairs"),
       React.createElement("span", { style: { fontWeight: 700 } }, stats.activePairsCount || 0)
-    ),
-    stats.daysToUnlock && React.createElement(React.Fragment, null,
-      React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 16 } }),
-      React.createElement("div", { style: { background: 'var(--gray-50)', border: '1px solid var(--gray-100)', padding: 12, textAlign: 'center' } },
-        React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-500)' } },
-          stats.daysToUnlock + " day" + (stats.daysToUnlock === 1 ? '' : 's') + " to unlock more matches"
-        )
-      )
     )
   );
 }
@@ -12151,14 +12152,21 @@ function PairWallPage(_ref_pw) {
           )
         ),
         React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 } },
-          React.createElement('div', { className: 'pw-badge' }, daysSince + '-Day Pair'),
-          React.createElement('button', {
-            style: { fontSize:9, color:'rgba(255,255,255,0.4)', background:'none', border:'none', cursor:'pointer', fontFamily:'var(--font)', fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', padding:0 },
-            onClick: function(){ setShowEndConfirm(true); }
-          }, 'End Partnership')
+          React.createElement('div', { className: 'pw-badge' }, daysSince + '-Day Pair')
         ),
         React.createElement('button', { className: 'pw-back', onClick: onBack }, '← Back')
       )
+    ),
+
+    /* END PARTNERSHIP — ★ 改版：從標題列右上角的 9px 小字拉出來，獨立成一整條，
+       固定在標題正下方、位置好找，但用淡色調而不是強烈警示色，避免份量過重。 */
+    React.createElement('div', {
+      className: 'pw-end-bar',
+      onClick: function(){ setShowEndConfirm(true); }
+    },
+      React.createElement('div', { className: 'pw-end-icon' }, '✕'),
+      React.createElement('div', { className: 'pw-end-label' }, 'End partnership'),
+      React.createElement('div', { className: 'pw-end-chev' }, '›')
     ),
 
     /* AI INSIGHT — 一兩句話提醒雙方的共同點（一次生成，讀 pairs.ai_insight 快取）*/
@@ -12342,11 +12350,19 @@ function BuddiesPage(_ref_buddies) {
   var _useState_viewingClip = useState(null);
   var viewingBuddyClip = _useState_viewingClip[0], setViewingBuddyClip = _useState_viewingClip[1];
 
-  // ★ 新增：pair-card 上「7 天進度」用的天數。這個 7 就是 Find Partner 解鎖門檻
-  //   PARTNER_UNLOCK_DAYS 那個 7（跟配對系統本來就相關），不是 Challengers 頁另一個
-  //   獨立、無關的 21 天挑戰完成天數（CHALLENGE_COMPLETE_DAYS，那是每個習慣自己的
-  //   長期挑戰進度，跟配對無關，這裡沒有動它，也沒有改到 MainApp 裡那份 21）。
-  var PAIR_MOMENTUM_DAYS = 7;
+  // ★ 修正：momentum 進度條原本借用配對前 Find Partner 解鎖用的 PARTNER_UNLOCK_DAYS=7，
+  //   但雙方既然已經配對成功，這個「距離解鎖還差幾天」的門檻早就跨過去了，繼續用同一個
+  //   7 天當「momentum」的滿格標準沒有意義。改用下面 habitGoalDays()，讀雙方當初建立
+  //   習慣時設定的 timeRange（開始～結束日期）換算成天數，讓卡片上能一眼看到對方當初
+  //   設定的挑戰時長，跟即時 streak 對照是兩件不同但都有用的資訊，兩個都留著。
+  function habitGoalDays(timeRange) {
+    var pr = parseTimeRange(timeRange);
+    if (!pr.start || !pr.end) return null;
+    var s = dateFromISO(pr.start), e = dateFromISO(pr.end);
+    if (!s || !e) return null;
+    var days = Math.round((e - s) / 86400000) + 1;
+    return days > 0 ? days : null;
+  }
 
   /* 算夥伴的 streak，邏輯跟 Challengers 頁 loadChallengers() 裡的 calcStreak 一致 */
   function calcPartnerStreak(checkedDates) {
@@ -12468,7 +12484,7 @@ function BuddiesPage(_ref_buddies) {
           }).catch(function(){});
 
         // ★ 新增：夥伴那邊習慣的 checked_dates，用來現算夥伴的 streak（不是我自己的 streak）
-        _supabase.from('habits').select('id, checked_dates').in('id', partnerHabitIds)
+        _supabase.from('habits').select('id, checked_dates, time_range').in('id', partnerHabitIds)
           .then(function(hr) {
             if (hr.error || !hr.data) return;
             var hmap = {};
@@ -12480,7 +12496,7 @@ function BuddiesPage(_ref_buddies) {
       // ★ 新增：每組「真的配對成功」的配對，抓最新一則訊息，卡片上做聊天預覽用
       var activePairIds = pairsData.filter(function(p) { return p.status === 'active'; }).map(function(p) { return p.id; });
       if (activePairIds.length > 0) {
-        _supabase.from('pair_messages').select('pair_id, sender_id, content, message_type, media_type, created_at')
+        _supabase.from('pair_messages').select('pair_id, sender_id, content, message_type, media_type, created_at, read_at')
           .in('pair_id', activePairIds)
           .order('created_at', { ascending: false })
           .limit(300)
@@ -12510,23 +12526,6 @@ function BuddiesPage(_ref_buddies) {
   var visiblePairs = pairs.filter(function(p) { return p.status !== 'ended'; });
   var pastPairs = pairs.filter(function(p) { return p.status === 'ended'; });
 
-  // ★ 新增：目前沒有 active/pending 配對在用的習慣 → 底下探索卡片，直接導去 Find Partner
-  var _pairedHabitIds = {};
-  visiblePairs.forEach(function(p) {
-    var myHid = p.user_id === user.uid ? p.habit_id : p.partner_habit_id;
-    if (myHid) _pairedHabitIds[myHid] = true;
-  });
-  // ★ 修正：habits 這個 state 同時包含還在進行中跟已過期的習慣（過期的只是在 Home
-  //   頁面被篩掉不顯示），這裡如果不排除過期的，Buddies 頁面下面「未配對習慣」的
-  //   探索清單就會把已經結束、屬於 Habit History 的舊習慣也秀出來，讓人以為
-  //   Habit History 的資料跑到 Buddies 頁面了。判斷邏輯跟 Habit History 頁一致：
-  //   沒有結束日、或結束日 >= 今天，才算「還在進行中」。
-  var unpairedHabits = habits.filter(function(h) {
-    if (_pairedHabitIds[h.id]) return false;
-    var _end = parseTimeRange(h.timeRange).end;
-    return !_end || _end >= toISODay();
-  });
-
   // ★ 修正：pairs 這個 state 其實同時包含 status='active' 跟 status='pending' 兩種
   //   （見上面 useEffect 的 .in('status', [...])），但下面標題原本
   //   不分青紅皂白直接寫「pairs.length + ' active pairs'」——只要清單裡混了一筆
@@ -12541,9 +12540,13 @@ function BuddiesPage(_ref_buddies) {
         ? activePairsCount + ' active pair' + (activePairsCount > 1 ? 's' : '')
         : pendingPairsCount + ' pending request' + (pendingPairsCount > 1 ? 's' : '');
 
-  // ★ 新增：右側欄（僅桌面版）要用的統計 —— 一起最長 streak、總共配對過幾位、
-  //   還差幾天解鎖更多配對。全部從現有已經抓好的 pairs/habits/partnerHabitMap 現算，
-  //   不另外發新的 Supabase 查詢。
+  // ★ 新增：右側欄（僅桌面版）要用的統計 —— 一起最長 streak、總共配對過幾位。
+  //   全部從現有已經抓好的 pairs/habits/partnerHabitMap 現算，不另外發新的 Supabase 查詢。
+  //   ★ 移除：原本這裡還有一個「還差幾天解鎖更多配對」(daysToUnlock)，跟 momentum
+  //   進度條共用同一個 PAIR_MOMENTUM_DAYS=7（其實就是配對前 Find Partner 用的
+  //   PARTNER_UNLOCK_DAYS）。拿掉下面探索卡片後，這個數字沒有對應的操作入口，
+  //   單獨留著只會讓人confuse——已經被 AI 配對成功的人，看到「還差 N 天解鎖」
+  //   反而以為自己還沒解鎖。
   var _pairSidebarStats = (function() {
     var longestTogether = 0;
     visiblePairs.filter(function(p){ return p.status === 'active'; }).forEach(function(p) {
@@ -12558,15 +12561,10 @@ function BuddiesPage(_ref_buddies) {
       if (together > longestTogether) longestTogether = together;
     });
     var totalMatched = pairs.filter(function(p){ return p.status === 'active' || p.status === 'ended'; }).length;
-    var daysToUnlock = null;
-    unpairedHabits.forEach(function(h) {
-      var left = PAIR_MOMENTUM_DAYS - (h.streak || 0);
-      if (left > 0 && (daysToUnlock === null || left < daysToUnlock)) daysToUnlock = left;
-    });
-    return { longestTogether: longestTogether, totalMatched: totalMatched, activePairsCount: activePairsCount, daysToUnlock: daysToUnlock };
+    return { longestTogether: longestTogether, totalMatched: totalMatched, activePairsCount: activePairsCount };
   })();
 
-  var mainContent = React.createElement("div", { className: "app-container" },
+  var mainContent = React.createElement("div", { className: isDesktop ? undefined : "app-container" },
     React.createElement("div", { className: "buddies-header" },
       React.createElement("div", null,
         React.createElement("div", { className: "buddies-title" }, "Buddies"),
@@ -12634,13 +12632,21 @@ function BuddiesPage(_ref_buddies) {
 
               var partnerHabitId = isUser ? pair.partner_habit_id : pair.habit_id;
               var clip = partnerClipMap[partnerHabitId] || null;
-              // ★ 新增：streak 對照、7 天進度條、聊天預覽要用的資料
+              // ★ 新增：streak 對照、一起打卡天數、聊天預覽要用的資料
               var myHabitIdForPair = isUser ? pair.habit_id : pair.partner_habit_id;
               var myHabitForPair = habits.find(function(h) { return String(h.id) === String(myHabitIdForPair); });
               var myPairStreak = (myHabitForPair && myHabitForPair.streak) || 0;
               var partnerHabitRow = partnerHabitMap[partnerHabitId];
               var partnerPairStreak = calcPartnerStreak(partnerHabitRow && partnerHabitRow.checked_dates);
+              // ★ 新增：雙方當初建立這個習慣時設定的挑戰天數（timeRange 換算），
+              //   跟上面即時算出來的 streak 是兩件事——這個是一次性的設定值，
+              //   讓對照卡片上能一眼看到對方當初打算堅持多久。
+              var myGoalDays = habitGoalDays(myHabitForPair && myHabitForPair.timeRange);
+              var partnerGoalDays = habitGoalDays(partnerHabitRow && partnerHabitRow.time_range);
+              var togetherStreak = Math.min(myPairStreak, partnerPairStreak);
               var latestMsg = latestMsgMap[pair.id] || null;
+              // ★ 新增：夥伴傳來、我還沒讀過的最新訊息 → Buddies 列表卡片要跟 FB 一樣冒出通知提示
+              var isUnread = !!(latestMsg && latestMsg.sender_id !== user.uid && !latestMsg.read_at);
               var clipReacted = clip ? !!reactedMap[clip.id] : false;
 
               return React.createElement("div", {
@@ -12659,7 +12665,11 @@ function BuddiesPage(_ref_buddies) {
                         style: { position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' },
                         onError: function(e){ e.target.remove(); }
                       }),
-                      React.createElement("span", { className: "likers-dot " + (partnerIsOnline ? "on" : "off"), title: partnerIsOnline ? "Online" : "Offline" })
+                      React.createElement("span", { className: "likers-dot " + (partnerIsOnline ? "on" : "off"), title: partnerIsOnline ? "Online" : "Offline" }),
+                      isUnread && React.createElement("span", {
+                        title: "New message",
+                        style:{ position:'absolute', top:-2, right:-2, width:12, height:12, borderRadius:'50%', background:'#ef4444', border:'2px solid var(--white)' }
+                      })
                     )
                   ),
                   React.createElement("div", { className: "pair-info" },
@@ -12687,7 +12697,7 @@ function BuddiesPage(_ref_buddies) {
                         React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
                       )
                 ),
-                // ★ 新增：streak 對照 + 7 天進度條 + 最新訊息預覽，只有真的配對成功
+                // ★ 新增：streak 對照 + 一起連續打卡天數 + 最新訊息預覽，只有真的配對成功
                 //   （非 pending、非收到的邀請）才顯示，跟下面 clip 區塊同一個顯示條件。
                 !isIncoming && pair.status === 'active' && React.createElement(React.Fragment, null,
                   React.createElement("div", {
@@ -12695,7 +12705,7 @@ function BuddiesPage(_ref_buddies) {
                   },
                     React.createElement("div", { style:{ flex:1 } },
                       React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-600)', fontWeight:700, marginBottom:4 } },
-                        React.createElement("span", null, "You"),
+                        React.createElement("span", null, "You", myGoalDays && React.createElement("span", { style:{ color:'var(--gray-400)', fontWeight:600, textTransform:'none', marginLeft:5 } }, "· " + myGoalDays + "-day goal")),
                         React.createElement("span", null, myPairStreak + " day" + (myPairStreak === 1 ? '' : 's'))
                       ),
                       React.createElement("div", { style:{ height:5, background:'var(--gray-100)', borderRadius:3 } },
@@ -12704,7 +12714,7 @@ function BuddiesPage(_ref_buddies) {
                     ),
                     React.createElement("div", { style:{ flex:1 } },
                       React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-600)', fontWeight:700, marginBottom:4 } },
-                        React.createElement("span", null, partnerName || 'Buddy'),
+                        React.createElement("span", null, partnerName || 'Buddy', partnerGoalDays && React.createElement("span", { style:{ color:'var(--gray-400)', fontWeight:600, textTransform:'none', marginLeft:5 } }, "· " + partnerGoalDays + "-day goal")),
                         React.createElement("span", null, partnerPairStreak + " day" + (partnerPairStreak === 1 ? '' : 's'))
                       ),
                       React.createElement("div", { style:{ height:5, background:'var(--gray-100)', borderRadius:3 } },
@@ -12712,22 +12722,22 @@ function BuddiesPage(_ref_buddies) {
                       )
                     )
                   ),
-                  React.createElement("div", { style:{ marginTop:12 } },
-                    React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-600)', fontWeight:700, marginBottom:4 } },
-                      React.createElement("span", null, "Momentum"),
-                      React.createElement("span", null, "Day " + Math.min(myPairStreak, PAIR_MOMENTUM_DAYS) + " of " + PAIR_MOMENTUM_DAYS)
-                    ),
-                    React.createElement("div", { style:{ height:5, background:'var(--gray-100)', borderRadius:3 } },
-                      React.createElement("div", { style:{ height:'100%', width: Math.min(Math.round(myPairStreak / PAIR_MOMENTUM_DAYS * 100), 100) + '%', background:'#16a34a', borderRadius:3 } })
+                  React.createElement("div", { style:{ marginTop:12, display:'flex', alignItems:'center', gap:8, padding:'8px 10px', background:'#f0fdf4', borderRadius:6 } },
+                    React.createElement("span", { style:{ fontSize:13 } }, "🔥"),
+                    React.createElement("span", { style:{ fontSize:11, color:'#166534', fontWeight:700 } },
+                      togetherStreak > 0
+                        ? "Together " + togetherStreak + " day" + (togetherStreak === 1 ? '' : 's') + " in a row"
+                        : "Check in together to start your streak"
                     )
                   ),
                   latestMsg && React.createElement("div", {
-                    style:{ display:'flex', alignItems:'center', gap:8, marginTop:12, paddingTop:12, borderTop:'1px solid var(--gray-100)', fontSize:11, color:'var(--gray-500)' }
+                    style:{ display:'flex', alignItems:'center', gap:8, marginTop:12, paddingTop:12, borderTop:'1px solid var(--gray-100)', fontSize:11, color: isUnread ? 'var(--black)' : 'var(--gray-500)' }
                   },
-                    React.createElement("span", { style:{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } },
+                    isUnread && React.createElement("span", { style:{ width:7, height:7, borderRadius:'50%', background:'#ef4444', flexShrink:0 } }),
+                    React.createElement("span", { style:{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isUnread ? 700 : 400 } },
                       (latestMsg.sender_id === user.uid ? 'You' : (partnerName || 'Buddy')) + ': ' + fmtMsgPreview(latestMsg)
                     ),
-                    React.createElement("span", { style:{ marginLeft:'auto', color:'var(--gray-300)', flexShrink:0 } }, fmtMsgAgo(latestMsg.created_at))
+                    React.createElement("span", { style:{ marginLeft:'auto', color: isUnread ? 'var(--gray-500)' : 'var(--gray-300)', flexShrink:0, fontWeight: isUnread ? 700 : 400 } }, fmtMsgAgo(latestMsg.created_at))
                   )
                 ),
                 // ★ 夥伴打卡 clip：Buddies-only 的心意標記不計入公開 cheer 數，
@@ -12829,23 +12839,6 @@ function BuddiesPage(_ref_buddies) {
                       )
                     : React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } }, 'No AI match report available for this invite.')
                 )
-              );
-            })
-          ),
-          unpairedHabits.length > 0 && React.createElement("div", { style:{ marginTop:16 } },
-            unpairedHabits.map(function(h) {
-              return React.createElement("div", {
-                key: 'unpaired-' + h.id,
-                style:{ display:'flex', alignItems:'center', gap:14, border:'1px solid var(--gray-200)', borderRadius:10, margin:'0 0 10px', padding:'16px 20px' }
-              },
-                React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                  React.createElement("div", { className: "pair-name" }, h.name),
-                  React.createElement("div", { className: "pair-habit-tag" }, "Not paired yet")
-                ),
-                React.createElement("button", {
-                  style:{ fontSize:11, fontWeight:700, padding:'8px 16px', background:'var(--black)', color:'#fff', border:'1px solid var(--black)', borderRadius:6, cursor:'pointer', flexShrink:0 },
-                  onClick: function(){ window.openMatchingModal(h); }
-                }, "Find a partner")
               );
             })
           ),
