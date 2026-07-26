@@ -8400,6 +8400,14 @@ function MainApp(_ref16) {
   // 直接恢復：var PARTNER_UNLOCK_DAYS = 7;
   var _TEST_BYPASS_UIDS = ['c041d006-c71f-42c7-9bbf-bc6d5fc849b1', '6199b013-1e74-43b6-898d-fcb65af28051'];
   var PARTNER_UNLOCK_DAYS = (user && user.uid && _TEST_BYPASS_UIDS.indexOf(user.uid) !== -1) ? 1 : 7;
+  // ★ 修正：Challengers 頁的 Filter2 原本也是直接讀上面這個 PARTNER_UNLOCK_DAYS——
+  //   但那個是「目前登入的人」自己解鎖 Find Partner 用的門檻，白名單帳號會被
+  //   降成 1。Filter2 篩的卻是「別人」的習慣（activeDayCount >= 1 且 < 門檻，
+  //   用來決定誰還算「尚未解鎖、可以被鼓勵」），跟目前登入的是誰無關。用同一個
+  //   會被個人化成 1 的變數，篩選範圍就變成「>= 1 且 < 1」，數學上永遠不可能
+  //   成立，白名單帳號登入時 Challengers 頁面因此永遠是空的——這正是你這次
+  //   遇到的狀況。改成獨立、固定是 7 的常數，不受目前登入者是否為測試白名單影響。
+  var CHALLENGER_UNLOCK_DAYS = 7;
   var CHALLENGE_COMPLETE_DAYS = 21;  // 達成 21 天打卡 → 真正完成挑戰，移入 Completed
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
@@ -8527,7 +8535,7 @@ function MainApp(_ref16) {
         return s.size;
       }
       var yesterdayISO = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return toISODay(d); })();
-      console.log('[Challenger DEBUG] todayISO=', todayISO, 'yesterdayISO=', yesterdayISO, 'PARTNER_UNLOCK_DAYS=', PARTNER_UNLOCK_DAYS);
+      console.log('[Challenger DEBUG] todayISO=', todayISO, 'yesterdayISO=', yesterdayISO, 'CHALLENGER_UNLOCK_DAYS=', CHALLENGER_UNLOCK_DAYS);
       // ── Filter 1: 今天或昨天至少打過 1 次卡（今天還沒打的也顯示，讓別人 cheer 鼓勵）
       list = list.filter(function(h) {
         if (checkedInToday(h)) return true;
@@ -8538,12 +8546,12 @@ function MainApp(_ref16) {
       });
       console.log('[Challenger DEBUG] Filter1 後(今天或昨天有打卡):', list.length, list.map(function(h){return h.name;}));
 
-      // ── Filter 2: activeDayCount >= 1 且 < PARTNER_UNLOCK_DAYS（未解鎖 AI 配對的挑戰者）──
+      // ── Filter 2: activeDayCount >= 1 且 < CHALLENGER_UNLOCK_DAYS（未解鎖 AI 配對的挑戰者）──
       list = list.filter(function(h) {
         var days = activeDayCount(h);
-        return days >= 1 && days < PARTNER_UNLOCK_DAYS;
+        return days >= 1 && days < CHALLENGER_UNLOCK_DAYS;
       });
-      console.log('[Challenger DEBUG] Filter2 後(activeDayCount 1~' + (PARTNER_UNLOCK_DAYS-1) + '):', list.length, list.map(function(h){return h.name + '(days=' + activeDayCount(h) + ')';}));
+      console.log('[Challenger DEBUG] Filter2 後(activeDayCount 1~' + (CHALLENGER_UNLOCK_DAYS-1) + '):', list.length, list.map(function(h){return h.name + '(days=' + activeDayCount(h) + ')';}));
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
       list = pickOnePerUser(list);
@@ -14888,7 +14896,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         var uDur = parseDurMins(uHabit.durLabel) || 30;
         var uLifespan = habitLifespanDays(uHabit) || 30;
         var uChecked = _fbActiveDays(uHabit);
-        if (uChecked < PARTNER_UNLOCK_DAYS) return null; // 候選者也需達解鎖門檻（與後端一致）
+        // ★ 修正：跟 Challengers 頁同一種 bug——這裡原本用「發起配對的人」是否為白名單
+        //   （PARTNER_UNLOCK_DAYS 被個人化成 1）去篩「候選者」夠不夠格，語意不對；
+        //   應該跟後端 match-partner 一致：候選者「自己」是白名單才略過門檻，
+        //   跟誰在發起配對無關。
+        var _uIsBypass = u.id && _TEST_BYPASS_UIDS_FB.indexOf(u.id) !== -1;
+        if (!_uIsBypass && uChecked < 7) return null; // 候選者也需達解鎖門檻（與後端一致）
         var uTimestamps = uHabit.checkTimestamps || [];
         var uMindBody = getMindBody(uHabit.name);
         var uRhythm = calcRhythmScore(uTimestamps);
@@ -14924,8 +14937,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         };
       }).filter(Boolean);
 
-      console.log('[MatchDebug] fallback: PARTNER_UNLOCK_DAYS=', PARTNER_UNLOCK_DAYS, '| myChecked=', myChecked, '| candidates before day-filter=', candidates.length, '| scored after filter=', scored.length); // 🧪TEST MODE 診斷log
-      if (scored.length === 0) throw new Error('No valid candidates (可能是候選人打卡天數 < ' + PARTNER_UNLOCK_DAYS + ' 天，或 mind-body/duration 資料不足)');
+      console.log('[MatchDebug] fallback: candidate unlock days=7 (per-candidate bypass) | myChecked=', myChecked, '| candidates before day-filter=', candidates.length, '| scored after filter=', scored.length); // 🧪TEST MODE 診斷log
+      if (scored.length === 0) throw new Error('No valid candidates (可能是候選人打卡天數 < 7 天且非白名單，或 mind-body/duration 資料不足)');
 
       // Return top 5 matches
       scored.sort(function(a, b) { return b.score - a.score; });
