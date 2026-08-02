@@ -250,6 +250,14 @@ tr:hover td{background:var(--g50)}
         Engagement
       </button>
 
+      <div style="height:1px;background:var(--g200);margin:10px 0"></div>
+      <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--g400);padding:0 12px;margin-bottom:4px">Investor View</div>
+
+      <button class="nav-btn" data-page="growth">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        Growth &amp; Retention
+      </button>
+
     </nav>
     <div class="sb-foot">
       <div class="sb-email" id="adminEmail"></div>
@@ -718,7 +726,14 @@ CREATE INDEX IF NOT EXISTS idx_claude_calls_created ON claude_api_calls (created
 CREATE INDEX IF NOT EXISTS idx_claude_calls_endpoint ON claude_api_calls (endpoint);
 ALTER TABLE claude_api_calls ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "claude_calls_admin" ON claude_api_calls FOR SELECT USING (is_admin());
-CREATE POLICY "claude_calls_insert_service" ON claude_api_calls FOR INSERT WITH CHECK (auth.role()='service_role');</pre>
+CREATE POLICY "claude_calls_insert_service" ON claude_api_calls FOR INSERT WITH CHECK (auth.role()='service_role');
+
+-- ── habit_ai_usage（Growth & Retention 頁的 Match Attempts 漏斗要讀這張表）───
+-- 如果這張表本來就已經開了 RLS、也已經有政策，這段會報「policy already exists」，
+-- 那就是本來就有開，這段直接跳過不用管。
+ALTER TABLE habit_ai_usage ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "habit_ai_usage_own"   ON habit_ai_usage FOR ALL    USING (auth.uid()=user_id);
+CREATE POLICY "habit_ai_usage_admin" ON habit_ai_usage FOR SELECT USING (is_admin());</pre>
       </div>
 
 
@@ -1024,6 +1039,64 @@ await supabase.from('claude_api_calls').insert({
           <thead><tr><th>Pair</th><th>Habit</th><th>Reason</th><th>Msgs Exchanged</th><th>Lifespan (days)</th><th>Created</th><th>Last Post</th></tr></thead>
           <tbody id="egEndedTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ══ GROWTH & RETENTION PAGE ══ -->
+    <div class="pg" id="pg-growth">
+      <div class="pg-title">Growth &amp; Retention</div>
+      <div class="pg-sub">Signups, activation, retention cohorts, and the partner-matching funnel — all computed live from your real Supabase data, not sample numbers</div>
+
+      <div class="quota-warn" id="gEarlyNote" style="display:none;background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;">
+        ℹ️ You still have a small number of accounts, so these curves will look thin/spiky — that's expected this early. The value is in having the pipeline ready: as real signups grow, these numbers fill in automatically with no extra work.
+      </div>
+
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Total Users</div><div class="stat-val" id="gTotalUsers">—</div><div class="stat-note">All-time signups</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">New This Week</div><div class="stat-val" id="gNewWeek" style="color:#059669">—</div><div class="stat-note">Signups, last 7 days</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">New This Month</div><div class="stat-val" id="gNewMonth">—</div><div class="stat-note">Signups, calendar month</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Habit Activation</div><div class="stat-val" id="gActivationRate" style="color:#d97706">—</div><div class="stat-note">Users who created ≥1 habit</div></div>
+      </div>
+
+      <div class="tbl-card" style="padding:18px 18px 8px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:10px">Weekly Signups &amp; Cumulative Users (Last 12 Weeks)</div>
+        <div style="height:260px"><canvas id="chartGrowth"></canvas></div>
+      </div>
+
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd"><div class="tbl-ttl">Activation Funnel</div><button class="refresh" onclick="loadGrowthRetention()">Refresh</button></div>
+        <table>
+          <thead><tr><th>Step</th><th>Users</th><th>% of Signups</th><th>% of Previous Step</th></tr></thead>
+          <tbody id="gFunnelTbody"><tr class="loading-row"><td colspan="4">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Retention Cohorts (by Signup Week)</div>
+          <div class="tbl-cnt">% of that week's signups who checked in on Day 1 / by Day 7 / by Day 30</div>
+        </div>
+        <table>
+          <thead><tr><th>Signup Week</th><th>Cohort Size</th><th>Day 1</th><th>Day 7</th><th>Day 30</th></tr></thead>
+          <tbody id="gCohortTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd"><div class="tbl-ttl">Partner Matching Funnel</div><div class="tbl-cnt">Your core differentiator — attempt → match → pair → still active 30d+</div></div>
+        <table>
+          <thead><tr><th>Step</th><th>Count</th><th>% of Attempts</th><th>% of Previous Step</th></tr></thead>
+          <tbody id="gMatchFunnelTbody"><tr class="loading-row"><td colspan="4">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
+        <div class="chart-ttl" style="margin-bottom:8px">💰 Monetization</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.8;margin:0">
+          Not tracked yet — the old Subscriptions page was a hardcoded $3/mo estimate, not real payment data, and was removed for that reason.
+          This is a real gap investors will ask about; when there's an actual payment provider wired in (Stripe, RevenueCat, etc.), this section
+          is where MRR / conversion-to-paid would go.
+        </p>
       </div>
     </div>
 
@@ -1395,7 +1468,7 @@ var ALLOW_EMAIL_ONLY_FALLBACK = true;
 
 var allUsers=[], allPosts=[], allHabits=[];
 var _actFilter='all';
-var catChart=null, userChart=null;
+var catChart=null, userChart=null, growthChart=null;
 var _sessionTimer = null;
 var _lastActivity = Date.now();
 
@@ -1672,6 +1745,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
       _tokensLiveInterval = setInterval(loadTokenUsage, 15000); // 停留在這頁時每 15 秒重新整理一次
     }
     if (btn.dataset.page === 'engagement') loadEngagement();
+    if (btn.dataset.page === 'growth') loadGrowthRetention();
   };
 });
 
@@ -4207,6 +4281,206 @@ function renderEngagementDwell() {
     '</tr>';
   }).join('');
 }
+
+/* ══════════════════════════════════════════════════
+   GROWTH & RETENTION（投資方視角：成長、啟動漏斗、留存 cohort、配對漏斗）
+   全部即時從 Supabase 現有資料算出來，沒有預先估算或假資料。
+══════════════════════════════════════════════════ */
+function _gWeekStart(d) {
+  // 週一當作一週的開始，回傳當週週一 00:00（本地時間）的 Date，用來做 cohort 分組
+  var dt = new Date(d);
+  dt.setHours(0, 0, 0, 0);
+  var day = dt.getDay(); // 0=週日..6=週六
+  var diff = (day === 0 ? -6 : 1) - day; // 移到當週週一
+  dt.setDate(dt.getDate() + diff);
+  return dt;
+}
+function _gWeekLabel(weekStart) {
+  return weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function _gISODate(d) {
+  return new Date(d).toISOString().slice(0, 10);
+}
+
+async function loadGrowthRetention() {
+  var funnelTb = document.getElementById('gFunnelTbody');
+  var cohortTb = document.getElementById('gCohortTbody');
+  var matchTb  = document.getElementById('gMatchFunnelTbody');
+  try {
+    var results = await Promise.all([
+      _supabase.from('users').select('id, created_at').order('created_at', { ascending: true }).limit(20000),
+      _supabase.from('habits').select('user_id, checked_dates').limit(20000),
+      _supabase.from('pairs').select('id, created_at, ended_at, status').limit(20000),
+      _supabase.from('match_requests').select('user_id, created_at').limit(20000),
+      _supabase.from('habit_ai_usage').select('user_id, usage_date, call_count').eq('feature', 'match').limit(20000),
+    ]);
+    var usersRes = results[0], habitsRes = results[1], pairsRes = results[2], matchReqRes = results[3], aiUsageRes = results[4];
+
+    if (usersRes.error || habitsRes.error) {
+      var msg = 'Error: ' + ((usersRes.error || habitsRes.error).message || 'could not load users/habits');
+      funnelTb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--g400)">' + htmlEsc(msg) + '</td></tr>';
+      cohortTb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--g400)">—</td></tr>';
+      matchTb.innerHTML  = '<tr><td colspan="4" style="text-align:center;color:var(--g400)">—</td></tr>';
+      return;
+    }
+
+    var users   = usersRes.data || [];
+    var habits  = habitsRes.data || [];
+    var pairs   = pairsRes.data || [];
+    var matches = matchReqRes.data || [];
+    // habit_ai_usage 這張表 admin 端之前沒讀過，如果 RLS 還沒開放讀取，優雅跳過這個漏斗步驟而不是整頁報錯
+    var aiUsage = aiUsageRes.error ? null : (aiUsageRes.data || []);
+
+    document.getElementById('gEarlyNote').style.display = users.length < 30 ? 'block' : 'none';
+
+    // ── 每個使用者的打卡日期集合（跨他所有習慣合併）── 用來判斷「這天有沒有活躍」
+    var checkinsByUser = {}; // uid -> Set('YYYY-MM-DD')
+    var usersWithHabit = {}; // uid -> true（只要有一筆 habits 紀錄就算建立過習慣）
+    habits.forEach(function(h){
+      if (!h.user_id) return;
+      usersWithHabit[h.user_id] = true;
+      if (!checkinsByUser[h.user_id]) checkinsByUser[h.user_id] = new Set();
+      if (Array.isArray(h.checked_dates)) {
+        h.checked_dates.forEach(function(d){ if (d) checkinsByUser[h.user_id].add(String(d).slice(0, 10)); });
+      }
+    });
+
+    // ── 上方統計卡 ──
+    var now = new Date();
+    var weekAgo = new Date(now.getTime() - 7 * 86400000);
+    var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    var newWeek  = users.filter(function(u){ return new Date(u.created_at) >= weekAgo; }).length;
+    var newMonth = users.filter(function(u){ return new Date(u.created_at) >= monthStart; }).length;
+    var activatedCount = users.filter(function(u){ return usersWithHabit[u.id]; }).length;
+
+    document.getElementById('gTotalUsers').textContent = users.length;
+    document.getElementById('gNewWeek').textContent = newWeek;
+    document.getElementById('gNewMonth').textContent = newMonth;
+    document.getElementById('gActivationRate').textContent = users.length ? Math.round(activatedCount / users.length * 100) + '%' : '—';
+
+    // ── 每週新增 + 累計人數（近 12 週）──
+    var weekKeys = [];
+    for (var i = 11; i >= 0; i--) weekKeys.push(_gWeekStart(new Date(now.getTime() - i * 7 * 86400000)));
+    var weekCounts = weekKeys.map(function(wkStart){
+      var wkEnd = new Date(wkStart.getTime() + 7 * 86400000);
+      return users.filter(function(u){ var t = new Date(u.created_at); return t >= wkStart && t < wkEnd; }).length;
+    });
+    var cumulative = [];
+    var running = users.filter(function(u){ return new Date(u.created_at) < weekKeys[0]; }).length;
+    weekCounts.forEach(function(c){ running += c; cumulative.push(running); });
+
+    if (growthChart) growthChart.destroy();
+    growthChart = new Chart(document.getElementById('chartGrowth'), {
+      data: {
+        labels: weekKeys.map(_gWeekLabel),
+        datasets: [
+          { type: 'bar',  label: 'New Signups',      data: weekCounts,  backgroundColor: '#0a0a0a', order: 2 },
+          { type: 'line', label: 'Cumulative Users',  data: cumulative,  borderColor: '#059669', backgroundColor: 'transparent', tension: 0.3, order: 1, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } } },
+        scales: {
+          x:  { ticks: { font: { size: 10 } } },
+          y:  { ticks: { font: { size: 10 }, stepSize: 1 }, title: { display: true, text: 'New / week', font: { size: 10 } } },
+          y1: { position: 'right', ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Cumulative', font: { size: 10 } } }
+        }
+      }
+    });
+
+    // ── 啟動漏斗 ──
+    var checkedInCount = users.filter(function(u){ return checkinsByUser[u.id] && checkinsByUser[u.id].size > 0; }).length;
+    var retained7Count = users.filter(function(u){
+      var set = checkinsByUser[u.id];
+      if (!set || !set.size) return false;
+      var signup = new Date(u.created_at);
+      for (var d = 0; d <= 7; d++) {
+        if (set.has(_gISODate(new Date(signup.getTime() + d * 86400000)))) return true;
+      }
+      return false;
+    }).length;
+
+    var funnelSteps = [
+      { label: 'Signed Up',                count: users.length },
+      { label: 'Created a Habit',          count: activatedCount },
+      { label: 'Checked In At Least Once', count: checkedInCount },
+      { label: 'Active in First 7 Days',   count: retained7Count },
+    ];
+    funnelTb.innerHTML = funnelSteps.map(function(step, i){
+      var pctTotal = users.length ? Math.round(step.count / users.length * 100) : 0;
+      var pctPrev  = i === 0 ? null : (funnelSteps[i - 1].count ? Math.round(step.count / funnelSteps[i - 1].count * 100) : 0);
+      return '<tr><td>' + step.label + '</td><td style="font-weight:700">' + step.count + '</td>' +
+        '<td>' + pctTotal + '%</td><td>' + (pctPrev === null ? '—' : pctPrev + '%') + '</td></tr>';
+    }).join('');
+
+    // ── 留存 Cohort（依報名週分組，近 8 週）──
+    var cohortWeeks = [];
+    for (var j = 7; j >= 0; j--) cohortWeeks.push(_gWeekStart(new Date(now.getTime() - j * 7 * 86400000)));
+    var cohortRows = cohortWeeks.map(function(wkStart){
+      var wkEnd = new Date(wkStart.getTime() + 7 * 86400000);
+      var cohortUsers = users.filter(function(u){ var t = new Date(u.created_at); return t >= wkStart && t < wkEnd; });
+      var ageDays = Math.floor((now - wkStart) / 86400000);
+      if (!cohortUsers.length) return { label: _gWeekLabel(wkStart), size: 0, d1: null, d7: null, d30: null };
+      function retainedOn(offsetDays) {
+        var n = cohortUsers.filter(function(u){
+          var set = checkinsByUser[u.id];
+          if (!set) return false;
+          return set.has(_gISODate(new Date(new Date(u.created_at).getTime() + offsetDays * 86400000)));
+        }).length;
+        return Math.round(n / cohortUsers.length * 100);
+      }
+      // 太新的 cohort 還沒到第 7 / 30 天，顯示「too early」而不是誤導性的 0%
+      return {
+        label: _gWeekLabel(wkStart), size: cohortUsers.length,
+        d1:  ageDays >= 1  ? retainedOn(1)  : null,
+        d7:  ageDays >= 7  ? retainedOn(7)  : null,
+        d30: ageDays >= 30 ? retainedOn(30) : null,
+      };
+    }).reverse();
+
+    cohortTb.innerHTML = cohortRows.map(function(r){
+      var fmt = function(v){ return v === null ? '<span style="color:var(--g300);font-size:10px">too early</span>' : v + '%'; };
+      return '<tr><td>' + r.label + '</td><td style="font-weight:700">' + r.size + '</td>' +
+        '<td>' + fmt(r.d1) + '</td><td>' + fmt(r.d7) + '</td><td>' + fmt(r.d30) + '</td></tr>';
+    }).join('');
+
+    // ── Partner Matching 漏斗（這是產品的差異化賣點，投資方通常會直接問）──
+    var attemptCount = aiUsage ? aiUsage.reduce(function(s, r){ return s + (r.call_count || 1); }, 0) : null;
+    var matchedCount = matches.length;
+    var pairCount = pairs.length;
+    var activePairs30 = pairs.filter(function(p){
+      var age = (now - new Date(p.created_at)) / 86400000;
+      if (age < 30) return false;
+      return !p.ended_at || (new Date(p.ended_at) - new Date(p.created_at)) / 86400000 >= 30;
+    }).length;
+
+    var matchSteps = [
+      { label: 'Match Attempts',        count: attemptCount },
+      { label: 'Matches Found',         count: matchedCount },
+      { label: 'Pairs Formed',          count: pairCount },
+      { label: 'Pairs Active 30+ Days', count: activePairs30 },
+    ];
+    var baseForPct = attemptCount || matchedCount || 1;
+    matchTb.innerHTML = matchSteps.map(function(step, i){
+      if (step.count === null) {
+        return '<tr><td>' + step.label + '</td><td colspan="3" style="color:var(--g400);font-size:11px">Not readable yet — grant admin SELECT on habit_ai_usage (see Security &amp; Rules)</td></tr>';
+      }
+      var pctTotal = Math.round(step.count / baseForPct * 100);
+      var prevStep = i === 0 ? null : matchSteps[i - 1].count;
+      var pctPrev = (i === 0 || !prevStep) ? null : Math.round(step.count / prevStep * 100);
+      return '<tr><td>' + step.label + '</td><td style="font-weight:700">' + step.count + '</td>' +
+        '<td>' + pctTotal + '%</td><td>' + (pctPrev === null ? '—' : pctPrev + '%') + '</td></tr>';
+    }).join('');
+
+  } catch (e) {
+    console.error('[loadGrowthRetention] error:', e.message);
+    funnelTb.innerHTML = '<tr><td colspan="4">Error: ' + htmlEsc(e.message) + '</td></tr>';
+    cohortTb.innerHTML = '<tr><td colspan="5">Error loading data</td></tr>';
+    matchTb.innerHTML  = '<tr><td colspan="4">Error loading data</td></tr>';
+  }
+}
+
 
 /* ══════════════════════════════════════════════════
    CLAUDE API USAGE
