@@ -243,15 +243,11 @@ tr:hover td{background:var(--g50)}
       </button>
       <button class="nav-btn" data-page="tokens">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
-        Token Usage
+        Claude API Usage
       </button>
       <button class="nav-btn" data-page="engagement">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         Engagement
-      </button>
-      <button class="nav-btn" data-page="subscriptions">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Subscriptions
       </button>
 
     </nav>
@@ -377,13 +373,13 @@ tr:hover td{background:var(--g50)}
     <!-- Habits -->
     <div class="pg" id="pg-habits">
       <div class="pg-title">Habits</div>
-      <div class="pg-sub">Habit creation across all users</div>
-      <input class="search" id="habitSearch" placeholder="Search by habit name / category...">
-      <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">All Habits</div><div class="tbl-cnt" id="habitCnt">—</div></div>
-        <table><thead><tr><th>Habit Name</th><th>User</th><th>Category</th><th>Frequency</th><th>Streak</th><th>Completion</th></tr></thead>
-        <tbody id="habitTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody></table>
+      <div class="pg-sub">Habit creation grouped by user</div>
+      <input class="search" id="habitSearch" placeholder="Search by habit name / category / user...">
+      <div class="tbl-hd" style="margin-bottom:10px;background:var(--white);border:1px solid var(--g200);padding:14px 18px">
+        <div class="tbl-ttl">All Habits</div>
+        <div class="tbl-cnt" id="habitCnt">—</div>
       </div>
+      <div id="habitGroups"></div>
     </div>
 
     <!-- Upload Quota -->
@@ -406,6 +402,22 @@ tr:hover td{background:var(--g50)}
         <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--g400)">
           <span>0 MB</span><span id="qMonthLimit">Limit per user: — MB</span>
         </div>
+      </div>
+      <div class="tbl-card" id="quotaFullCard" style="margin-bottom:20px;display:none;border-left:3px solid #dc2626">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">⛔ Daily Limit Reached — Today</div>
+          <div class="tbl-cnt" id="quotaFullCnt">—</div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>User</th>
+            <th>Today (img / vid)</th>
+            <th>This Month</th>
+            <th>Last Upload</th>
+            <th>Reset Daily</th>
+          </tr></thead>
+          <tbody id="quotaFullTbody"></tbody>
+        </table>
       </div>
       <div class="tbl-card">
         <div class="tbl-hd">
@@ -686,7 +698,27 @@ CREATE POLICY "reports_delete" ON reports FOR DELETE USING (is_admin());
 -- ── pending_storage_deletes ───────────────────────────────────────────────
 ALTER TABLE pending_storage_deletes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "psd_insert" ON pending_storage_deletes FOR INSERT WITH CHECK (auth.role()='authenticated');
-CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin());</pre>
+CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin());
+
+-- ── claude_api_calls（Claude API Usage 頁：每次呼叫 Claude 的紀錄）──────────
+-- 只需執行一次。每個會呼叫 Claude 的 Edge Function 每次呼叫都會 insert 一筆紀錄
+-- （貼上片段請見 Claude API Usage 管理頁）。service_role 一律略過 RLS，
+-- 所以用 service role key 的 Edge Function 可以直接寫入。
+CREATE TABLE IF NOT EXISTS claude_api_calls (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  endpoint TEXT NOT NULL,           -- e.g. 'match-partner', 'moderate-content'
+  model TEXT,                       -- e.g. 'claude-haiku-4-5'
+  status TEXT NOT NULL DEFAULT 'success',  -- 'success' | 'error'
+  input_tokens INTEGER,             -- optional, only if you want cost estimates
+  output_tokens INTEGER,
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_claude_calls_created ON claude_api_calls (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_claude_calls_endpoint ON claude_api_calls (endpoint);
+ALTER TABLE claude_api_calls ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "claude_calls_admin" ON claude_api_calls FOR SELECT USING (is_admin());
+CREATE POLICY "claude_calls_insert_service" ON claude_api_calls FOR INSERT WITH CHECK (auth.role()='service_role');</pre>
       </div>
 
 
@@ -854,29 +886,71 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
       </div>
     </div>
 
-    <!-- ══ TOKEN USAGE PAGE ══ -->
+    <!-- ══ CLAUDE API USAGE PAGE ══ -->
     <div class="pg" id="pg-tokens">
-      <div class="pg-title">Token Usage</div>
-      <div class="pg-sub">Claude API usage & cost estimate</div>
-      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">This Month</div><div class="stat-val" id="tMonthCalls">—</div><div class="stat-note">Monthly calls</div></div>
-        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Est. Cost</div><div class="stat-val" id="tEstCost" style="color:#059669">—</div><div class="stat-note">Est. cost this month</div></div>
-        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Today</div><div class="stat-val" id="tTodayCalls" style="color:#d97706">—</div><div class="stat-note">Today's calls</div></div>
-        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Avg / User</div><div class="stat-val" id="tAvgPerUser">—</div><div class="stat-note">Avg requests per user</div></div>
+      <div class="pg-title">Claude API Usage</div>
+      <div class="pg-sub">Calls per Edge Function endpoint — logged directly from each function, not estimated</div>
+
+      <div class="quota-warn show" id="tSetupWarn" style="display:none;background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;">
+        ⚠️ <strong><code style="background:#f5e97a;padding:1px 5px">claude_api_calls</code> table not found yet.</strong>
+        Run the SQL in Security &amp; Rules to create it, then add the logging snippet to each Edge Function that calls Claude (see the note below the tables).
       </div>
-      <div class="tbl-card" style="padding:16px 18px;margin-bottom:16px;background:#fffbe6;border:1px solid #e0c060">
-        <div class="chart-ttl" style="margin-bottom:6px;color:#7a6000">💡 Cost calculation notes</div>
-        <p style="font-size:12px;color:#7a6000;line-height:1.8;margin:0">
-          Uses <strong>Claude Haiku</strong> model. Each match consumes ~<strong>1,000 tokens</strong>, costing ~<strong>$0.001 USD</strong>.<br>
-          Costs shown are estimates. For actual usage, visit <a href="https://console.anthropic.com" target="_blank" style="color:#7a6000;font-weight:700">Anthropic Console ↗</a>.
+
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Today</div><div class="stat-val" id="tTodayCalls">—</div><div class="stat-note">Calls today, all endpoints</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">This Month</div><div class="stat-val" id="tMonthCalls" style="color:#059669">—</div><div class="stat-note">Calls this month</div></div>
+        <div class="stat" style="border-left:3px solid #f87171"><div class="stat-lbl">Failed (30d)</div><div class="stat-val" id="tFailed30" style="color:#dc2626">—</div><div class="stat-note">Errors in last 30 days</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Est. Cost (30d)</div><div class="stat-val" id="tEstCost">—</div><div class="stat-note">Only for calls with logged tokens</div></div>
+      </div>
+
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd"><div class="tbl-ttl">Calls by Endpoint (Last 30 Days)</div><button class="refresh" onclick="loadTokenUsage()">Refresh</button></div>
+        <table>
+          <thead><tr><th>Edge Function</th><th>Total Calls</th><th>Today</th><th>Failed</th><th>Success Rate</th><th>Last Called</th></tr></thead>
+          <tbody id="tokensByEndpointTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd"><div class="tbl-ttl">Daily Calls (Last 30 Days)</div></div>
+        <table>
+          <thead><tr><th>Date</th><th>Total Calls</th><th>Failed</th><th>By Endpoint</th></tr></thead>
+          <tbody id="tokensTbody"><tr class="loading-row"><td colspan="4">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-card" style="padding:18px;margin-bottom:20px">
+        <div class="chart-ttl" style="margin-bottom:10px">🚦 Rate Limits &amp; Spend Cap</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.8">
+          Rate limits (requests/tokens per minute) and your monthly spend cap are set per <strong>organization</strong> by Anthropic and aren't safely readable from a browser-based dashboard like this one —
+          reading them programmatically requires an <strong>Admin API key</strong>, which has broad read-write access and must never be embedded in client-side code.<br><br>
+          Check your exact current tier, RPM/ITPM/OTPM limits, and spend cap here:
+          <a href="https://platform.claude.com/settings/limits" target="_blank" style="color:var(--black);font-weight:700">Claude Console → Settings → Limits ↗</a>.
+          The <a href="https://platform.claude.com/usage" target="_blank" style="color:var(--black);font-weight:700">Usage page ↗</a> also shows real per-minute charts and cache-hit rate.
         </p>
       </div>
-      <div class="tbl-card">
-        <div class="tbl-hd"><div class="tbl-ttl">Daily Usage (Last 30 Days)</div><button class="refresh" onclick="loadTokenUsage()">Refresh</button></div>
-        <table>
-          <thead><tr><th>Date</th><th>API Calls</th><th>Est. Tokens</th><th>Est. Cost (USD)</th><th>Unique Users</th></tr></thead>
-          <tbody id="tokensTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
-        </table>
+
+      <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
+        <div class="chart-ttl" style="margin-bottom:8px">📋 One-time setup — enable real call logging</div>
+        <p style="font-size:12px;color:var(--g500);line-height:1.8">
+          This page reads from a new <code style="background:var(--g100);padding:1px 5px;font-size:11px">claude_api_calls</code> table (SQL in Security &amp; Rules).
+          It stays empty until each Edge Function that calls Claude — <code style="background:var(--g100);padding:1px 5px;font-size:11px">match-partner</code>,
+          <code style="background:var(--g100);padding:1px 5px;font-size:11px">moderate-content</code>,
+          <code style="background:var(--g100);padding:1px 5px;font-size:11px">validate-habit-name</code>,
+          <code style="background:var(--g100);padding:1px 5px;font-size:11px">generate-value-questions</code>,
+          <code style="background:var(--g100);padding:1px 5px;font-size:11px">interpret-values-text</code>,
+          <code style="background:var(--g100);padding:1px 5px;font-size:11px">pair-insight</code> — inserts one row per call.
+          Add this right after each function's Claude API call succeeds or fails:
+        </p>
+        <pre style="background:#1e293b;color:#94a3b8;padding:14px 16px;font-size:11px;overflow-x:auto;line-height:1.8;white-space:pre-wrap;margin-top:10px">// 在你呼叫 api.anthropic.com 的 fetch 得到結果之後：
+await supabase.from('claude_api_calls').insert({
+  endpoint: 'match-partner',        // 這個函式自己的名字 — 每個函式改成自己的
+  model: 'claude-haiku-4-5',        // 你實際傳的 model 字串
+  status: claudeResp.ok ? 'success' : 'error',
+  input_tokens: data.usage?.input_tokens ?? null,   // 選填 — 想要估算費用才需要
+  output_tokens: data.usage?.output_tokens ?? null,
+  error: claudeResp.ok ? null : (data.error?.message || '未知錯誤')
+});</pre>
       </div>
     </div>
 
@@ -926,36 +1000,6 @@ CREATE POLICY "psd_admin"  ON pending_storage_deletes FOR ALL   USING (is_admin(
         <table>
           <thead><tr><th>Pair</th><th>Habit</th><th>Reason</th><th>Msgs Exchanged</th><th>Lifespan (days)</th><th>Created</th><th>Last Post</th></tr></thead>
           <tbody id="egEndedTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ══ SUBSCRIPTIONS PAGE ══ -->
-    <div class="pg" id="pg-subscriptions">
-      <div class="pg-title">Subscriptions</div>
-      <div class="pg-sub">Paid user management · Partner Matching $3/mo</div>
-      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Active Subs</div><div class="stat-val" id="subActive">—</div><div class="stat-note">Currently subscribed</div></div>
-        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Monthly Revenue</div><div class="stat-val" id="subRevenue" style="color:#059669">—</div><div class="stat-note">Est. monthly revenue</div></div>
-        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Cancelled</div><div class="stat-val" id="subCancelled" style="color:#d97706">—</div><div class="stat-note">Cancelled</div></div>
-        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Net Profit Est.</div><div class="stat-val" id="subProfit">—</div><div class="stat-note">Revenue minus API cost</div></div>
-      </div>
-      <div class="tbl-card">
-        <div class="tbl-hd">
-          <div class="tbl-ttl">Subscriber List</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select id="subStatusFilter" onchange="loadSubscriptions()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="expired">Expired</option>
-            </select>
-            <button class="refresh" onclick="loadSubscriptions()">Refresh</button>
-          </div>
-        </div>
-        <table>
-          <thead><tr><th>User ID</th><th>Plan</th><th>Amount</th><th>Status</th><th>Period End</th><th>Created</th></tr></thead>
-          <tbody id="subsTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1598,7 +1642,6 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (btn.dataset.page === 'matching') loadMatchingStats();
     if (btn.dataset.page === 'pairs') loadPairs();
     if (btn.dataset.page === 'tokens') loadTokenUsage();
-    if (btn.dataset.page === 'subscriptions') loadSubscriptions();
     if (btn.dataset.page === 'engagement') loadEngagement();
   };
 });
@@ -1913,6 +1956,17 @@ function buildUsers(){
   });
 
   allUsers=Object.values(map);
+
+  // 共用的 uid → 顯示名稱對照表，Matching Stats / Pairs / Engagement 都會用到，
+  // 讓「User」/「Partner」/「Pair」欄位顯示跟其他頁面一樣的帳號名稱
+  // （例如「s1002506」），而不是截斷的原始 UUID。
+  _uidNameMap = {};
+  allUsers.forEach(function(u){ _uidNameMap[u.uid] = u.name; });
+}
+var _uidNameMap = {};
+function resolveUserName(uid){
+  if(!uid) return '—';
+  return _uidNameMap[uid] || (String(uid).slice(0,8) + '…');
 }
 
 function renderStats(){
@@ -2386,21 +2440,50 @@ function delPost(id){
 }
 
 function renderHabits(f){
-  var tb=document.getElementById('habitTbody');
-  var list=allHabits.filter(function(h){ return !f||(h.name||'').includes(f)||(h.category||'').includes(f); });
+  var wrap=document.getElementById('habitGroups');
+  var fLower=(f||'').toLowerCase();
+  var nm={}; allUsers.forEach(function(u){ nm[u.uid]=u.name; });
+
+  var list=allHabits.filter(function(h){
+    if(!fLower) return true;
+    var userName=(nm[h.userId]||'').toLowerCase();
+    return (h.name||'').toLowerCase().includes(fLower)
+      || (h.category||'').toLowerCase().includes(fLower)
+      || userName.includes(fLower);
+  });
   document.getElementById('habitCnt').textContent=list.length+' habit(s)';
-  if(!list.length){tb.innerHTML='<tr class="loading-row"><td colspan="6">No matching habits</td></tr>';return;}
-  var nm={};
-  allUsers.forEach(function(u){ nm[u.uid]=u.name; });
-  tb.innerHTML=list.map(function(h){
-    var r=calcRate(h);
-    var userName=nm[h.userId]||((h.userId||'').slice(0,8))||'—';
-    return '<tr><td><strong>'+htmlEsc(h.name||'—')+'</strong></td>'+
-      '<td>'+htmlEsc(userName)+'</td>'+
-      '<td><span class="badge">'+htmlEsc(h.category||'—')+'</span></td>'+
-      '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
-      '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
-      '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
+
+  if(!list.length){ wrap.innerHTML='<div class="tbl-card" style="padding:24px;text-align:center;color:var(--g400)">No matching habits</div>'; return; }
+
+  // 依 userId 分組
+  var groups={}; // uid -> { name, habits:[] }
+  list.forEach(function(h){
+    var uid=h.userId||'—';
+    if(!groups[uid]) groups[uid]={ name: nm[uid]||(uid.slice(0,8)+'…'), habits:[] };
+    groups[uid].habits.push(h);
+  });
+
+  // 依習慣數量由多到少排序，數量相同再依名稱排序
+  var uids=Object.keys(groups).sort(function(a,b){
+    var d=groups[b].habits.length-groups[a].habits.length;
+    return d!==0 ? d : groups[a].name.localeCompare(groups[b].name);
+  });
+
+  wrap.innerHTML=uids.map(function(uid){
+    var g=groups[uid];
+    var rows=g.habits.map(function(h){
+      var r=calcRate(h);
+      return '<tr><td><strong>'+htmlEsc(h.name||'—')+'</strong></td>'+
+        '<td><span class="badge">'+htmlEsc(h.category||'—')+'</span></td>'+
+        '<td style="font-size:11px">'+(h.freqLabel||'Daily')+'</td>'+
+        '<td style="font-family:var(--mono);font-size:11px">'+(h.streak||0)+' days</td>'+
+        '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td></tr>';
+    }).join('');
+    return '<div class="tbl-card" style="margin-bottom:14px">'+
+      '<div class="tbl-hd"><div class="uc">'+avatarHtml(uid, g.name)+'<div class="tbl-ttl">'+htmlEsc(g.name)+'</div></div>'+
+      '<div class="tbl-cnt">'+g.habits.length+' habit(s)</div></div>'+
+      '<table><thead><tr><th>Habit Name</th><th>Category</th><th>Frequency</th><th>Streak</th><th>Completion</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div>';
   }).join('');
 }
 
@@ -2526,10 +2609,46 @@ function renderQuota(){
     warnEl.className='quota-warn';
   }
 
-  // Table
+  // 把今天已達每日上限（圖片上限或影片上限）的使用者獨立出來
+  var reachedToday = [], normal = [];
+  list.forEach(function(q){
+    var dImg = q.dailyDate===today ? (q.dailyImages||0) : 0;
+    var dVid = q.dailyDate===today ? (q.dailyVideos||0) : 0;
+    var atLimit = dImg>=QUOTA_LIMITS.DAILY_IMAGE_COUNT || dVid>=QUOTA_LIMITS.DAILY_VIDEO_COUNT;
+    (atLimit ? reachedToday : normal).push(q);
+  });
+
+  // ── 當日上限已滿區塊 ──
+  var fullCard = document.getElementById('quotaFullCard');
+  var fullTb   = document.getElementById('quotaFullTbody');
+  document.getElementById('quotaFullCnt').textContent = reachedToday.length+' user(s)';
+  if(reachedToday.length){
+    fullCard.style.display='block';
+    fullTb.innerHTML = reachedToday.map(function(q){
+      var dImg = q.dailyDate===today ? (q.dailyImages||0) : 0;
+      var dVid = q.dailyDate===today ? (q.dailyVideos||0) : 0;
+      var mMB  = q.monthlyMonth===month ? (q.monthlyMB||0) : 0;
+      var lastStr = q.lastUploadDate ? q.lastUploadDate.toLocaleString('en-US') : '—';
+      return '<tr>'+
+        '<td><div class="uc">'+avatarHtml(q.id, q.displayName||q.uid)+
+          '<div><strong>'+htmlEsc(q.displayName||'Unknown')+'</strong>'+
+          '<div class="uid-small">'+htmlEsc(q.email||q.uid||'')+'</div></div></div></td>'+
+        '<td style="font-family:var(--mono);font-size:11px">'+
+          '<span style="color:#c00;font-weight:700">📷 '+dImg+'/'+QUOTA_LIMITS.DAILY_IMAGE_COUNT+'</span>　'+
+          '<span style="color:#c00;font-weight:700">🎬 '+dVid+'/'+QUOTA_LIMITS.DAILY_VIDEO_COUNT+'</span></td>'+
+        '<td style="font-family:var(--mono);font-size:12px">'+mMB.toFixed(1)+' / '+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB</td>'+
+        '<td style="font-size:10px;color:var(--g400)">'+lastStr+'</td>'+
+        '<td><button class="del" onclick="resetUserDaily(\''+q.id+'\')">Reset Daily</button></td>'+
+      '</tr>';
+    }).join('');
+  } else {
+    fullCard.style.display='none';
+  }
+
+  // 其餘表格 — 今天尚未達上限的使用者
   var tb = document.getElementById('quotaTbody');
-  if(!list.length){ tb.innerHTML='<tr class="loading-row"><td colspan="8">No upload records yet</td></tr>'; return; }
-  tb.innerHTML = list.map(function(q){
+  if(!normal.length){ tb.innerHTML='<tr class="loading-row"><td colspan="8">'+(list.length?'All users have reached today\'s limit — see the section above':'No upload records yet')+'</td></tr>'; return; }
+  tb.innerHTML = normal.map(function(q){
     var dImg = q.dailyDate===today ? (q.dailyImages||0) : 0;
     var dVid = q.dailyDate===today ? (q.dailyVideos||0) : 0;
     var mMB  = q.monthlyMonth===month ? (q.monthlyMB||0) : 0;
@@ -3799,10 +3918,10 @@ async function loadMatchingStats() {
       tbody.innerHTML = recent.map(function(r) {
         var statusColor = r.status === 'completed' ? '#059669' : r.status === 'failed' ? '#dc2626' : '#d97706';
         return '<tr>' +
-          '<td style="font-size:11px">' + (r.user_id || '').slice(0,8) + '...</td>' +
+          '<td style="font-size:11px">' + htmlEsc(resolveUserName(r.user_id)) + '</td>' +
           '<td>' + (r.habit_name || '—') + '</td>' +
           '<td><span class="badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + r.status + '</span></td>' +
-          '<td style="font-size:11px">' + (r.matched_user_id ? r.matched_user_id.slice(0,8) + '...' : '—') + '</td>' +
+          '<td style="font-size:11px">' + (r.matched_user_id ? htmlEsc(resolveUserName(r.matched_user_id)) : '—') + '</td>' +
           '<td style="font-size:11px;color:var(--g400)">' + new Date(r.created_at).toLocaleString() + '</td>' +
         '</tr>';
       }).join('');
@@ -3880,8 +3999,8 @@ async function loadPairs() {
       else if (p.ended_reason === 'user_request') endedLabel = '<span style="color:#6b7280;font-size:10px">👤 User ended</span>';
       var lastPost = p.last_post_at ? new Date(p.last_post_at).toLocaleDateString() : '<span style="color:var(--g300)">—</span>';
       return '<tr>' +
-        '<td style="font-size:11px">' + (p.user_id||'').slice(0,8) + '...</td>' +
-        '<td style="font-size:11px">' + (p.partner_id||'').slice(0,8) + '...</td>' +
+        '<td style="font-size:11px">' + htmlEsc(resolveUserName(p.user_id)) + '</td>' +
+        '<td style="font-size:11px">' + htmlEsc(resolveUserName(p.partner_id)) + '</td>' +
         '<td>' + (p.habit_name||'—') + '</td>' +
         '<td>' + (p.match_score||0) + '%</td>' +
         '<td><span class="badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + p.status + '</span></td>' +
@@ -3899,7 +4018,6 @@ async function loadPairs() {
    ENGAGEMENT（頁面停留時間 / 配對聊天頻率 / 解除綁定數據）
 ══════════════════════════════════════════════════ */
 var _egDwellAgg = null;   // { uid: { pages:{page:{sec,visits}}, totalSec, totalVisits } }
-var _egUserNames = {};    // uid → username
 
 function _egFmtDur(sec) {
   if (!sec) return '<span style="color:var(--g300)">—</span>';
@@ -3907,9 +4025,11 @@ function _egFmtDur(sec) {
   if (sec < 3600) return Math.floor(sec/60) + 'm ' + (sec%60) + 's';
   return Math.floor(sec/3600) + 'h ' + Math.floor((sec%3600)/60) + 'm';
 }
+// 沿用 buildUsers() 建立的、跟 Matching Stats / Pairs 相同的 uid → 顯示名稱對照表，
+// 不再用這個頁面自己另外查 `users` 的方式，這樣所有頁面顯示的名稱才會一致，
+// 也不會因為另外查一次而跟 Firestore-shim 的資料兜不起來。
 function _egName(uid) {
-  var n = _egUserNames[uid];
-  return n ? n : ((uid||'').slice(0,8) + '…');
+  return htmlEsc(resolveUserName(uid));
 }
 
 async function loadEngagement() {
@@ -3926,19 +4046,14 @@ async function loadEngagement() {
     var results = await Promise.all([
       _supabase.from('page_sessions').select('user_id,page,seconds,created_at').gte('created_at', since30).limit(20000),
       _supabase.from('pair_messages').select('pair_id,sender_id,created_at').order('created_at', { ascending: false }).limit(20000),
-      _supabase.from('pairs').select('*').order('created_at', { ascending: false }),
-      _supabase.from('users').select('id,username,display_name')
+      _supabase.from('pairs').select('*').order('created_at', { ascending: false })
     ]);
     var sessions = results[0].data || [];
     var msgs     = results[1].data || [];
     var pairs    = results[2].data || [];
-    var users    = results[3].data || [];
     if (results[0].error && results[0].error.message && /page_sessions/.test(results[0].error.message + (results[0].error.hint||''))) {
       dwellTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#d97706">⚠ page_sessions table not found — run the SQL in Security &amp; Rules to create it</td></tr>';
     }
-
-    _egUserNames = {};
-    users.forEach(function(u){ _egUserNames[u.id] = u.username || u.display_name || null; });
 
     /* ── 1) Page dwell time per user ── */
     var agg = {};
@@ -4065,123 +4180,115 @@ function renderEngagementDwell() {
 }
 
 /* ══════════════════════════════════════════════════
-   TOKEN USAGE
+   CLAUDE API USAGE
+   讀取 `claude_api_calls` 裡各個 Edge Function 自己寫入的真實呼叫紀錄
+   （設定方式見頁面下方說明）。這裡已經不再用 match_requests 估算了。
 ══════════════════════════════════════════════════ */
+// 概略的每 MTok 價格，只用來估算有記錄 token 數的那些呼叫的費用。
+// 真要拿來估算預算前，請先到 https://platform.claude.com/docs 確認目前實際價格。
+var _CLAUDE_PRICE_PER_MTOK = {
+  'claude-haiku-4-5': { input: 1.00, output: 5.00 },
+  'default':          { input: 1.00, output: 5.00 } // fallback assumes Haiku, the model this app uses
+};
+function _estCallCost(row){
+  if (row.input_tokens == null && row.output_tokens == null) return 0;
+  var p = _CLAUDE_PRICE_PER_MTOK[row.model] || _CLAUDE_PRICE_PER_MTOK.default;
+  return ((row.input_tokens||0) * p.input + (row.output_tokens||0) * p.output) / 1e6;
+}
+
 async function loadTokenUsage() {
+  var setupWarn = document.getElementById('tSetupWarn');
   try {
     var monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     var todayStart = new Date(); todayStart.setHours(0,0,0,0);
-
-    var { data: monthData } = await _supabase
-      .from('match_requests')
-      .select('*')
-      .gte('created_at', monthStart.toISOString())
-      .eq('status', 'completed');
-
-    var { data: todayData } = await _supabase
-      .from('match_requests')
-      .select('*')
-      .gte('created_at', todayStart.toISOString())
-      .eq('status', 'completed');
-
-    var monthCalls = (monthData||[]).length;
-    var todayCalls = (todayData||[]).length;
-    var estCost = (monthCalls * 0.001).toFixed(3);
-    var uniqueUsers = new Set((monthData||[]).map(function(r){ return r.user_id; })).size;
-    var avgPerUser = uniqueUsers > 0 ? (monthCalls / uniqueUsers).toFixed(1) : '—';
-
-    document.getElementById('tMonthCalls').textContent = monthCalls;
-    document.getElementById('tEstCost').textContent = '$' + estCost;
-    document.getElementById('tTodayCalls').textContent = todayCalls;
-    document.getElementById('tAvgPerUser').textContent = avgPerUser;
-
-    // 30-day breakdown
     var thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    var { data: allData } = await _supabase
-      .from('match_requests')
+
+    var { data: allData, error } = await _supabase
+      .from('claude_api_calls')
       .select('*')
       .gte('created_at', thirtyDaysAgo.toISOString())
-      .eq('status', 'completed')
       .order('created_at', { ascending: false });
 
-    var byDay = {};
-    (allData||[]).forEach(function(r) {
-      var day = r.created_at.slice(0,10);
-      if (!byDay[day]) byDay[day] = { calls:0, users: new Set() };
-      byDay[day].calls++;
-      byDay[day].users.add(r.user_id);
-    });
+    if (error) {
+      var missing = /claude_api_calls/.test((error.message||'') + (error.hint||''));
+      setupWarn.style.display = missing ? 'block' : 'none';
+      document.getElementById('tokensByEndpointTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">' + (missing ? 'Table not created yet' : 'Error: ' + htmlEsc(error.message)) + '</td></tr>';
+      document.getElementById('tokensTbody').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--g400)">—</td></tr>';
+      ['tTodayCalls','tMonthCalls','tFailed30','tEstCost'].forEach(function(id){ document.getElementById(id).textContent = '—'; });
+      return;
+    }
+    setupWarn.style.display = 'none';
+    var rows = allData || [];
 
+    var todayRows = rows.filter(function(r){ return new Date(r.created_at) >= todayStart; });
+    var monthRows = rows.filter(function(r){ return new Date(r.created_at) >= monthStart; });
+    var failed30  = rows.filter(function(r){ return r.status === 'error'; });
+    var estCost30 = rows.reduce(function(sum,r){ return sum + _estCallCost(r); }, 0);
+
+    document.getElementById('tTodayCalls').textContent = todayRows.length;
+    document.getElementById('tMonthCalls').textContent = monthRows.length;
+    document.getElementById('tFailed30').textContent   = failed30.length;
+    document.getElementById('tEstCost').textContent    = rows.some(function(r){return r.input_tokens!=null||r.output_tokens!=null;}) ? ('$' + estCost30.toFixed(3)) : '—';
+
+    // ── By endpoint ──
+    var byEndpoint = {};
+    rows.forEach(function(r){
+      var ep = r.endpoint || 'unknown';
+      if (!byEndpoint[ep]) byEndpoint[ep] = { total:0, today:0, failed:0, lastAt:null };
+      byEndpoint[ep].total++;
+      if (new Date(r.created_at) >= todayStart) byEndpoint[ep].today++;
+      if (r.status === 'error') byEndpoint[ep].failed++;
+      if (!byEndpoint[ep].lastAt || r.created_at > byEndpoint[ep].lastAt) byEndpoint[ep].lastAt = r.created_at;
+    });
+    var epNames = Object.keys(byEndpoint).sort(function(a,b){ return byEndpoint[b].total - byEndpoint[a].total; });
+    var epTbody = document.getElementById('tokensByEndpointTbody');
+    if (!epNames.length) {
+      epTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">No calls logged in the last 30 days</td></tr>';
+    } else {
+      epTbody.innerHTML = epNames.map(function(ep){
+        var d = byEndpoint[ep];
+        var successRate = d.total ? Math.round((d.total-d.failed)/d.total*100) : 0;
+        return '<tr>' +
+          '<td><code style="font-size:11px">' + htmlEsc(ep) + '</code></td>' +
+          '<td style="font-weight:700">' + d.total + '</td>' +
+          '<td>' + d.today + '</td>' +
+          '<td style="color:' + (d.failed?'#dc2626':'var(--g400)') + '">' + d.failed + '</td>' +
+          '<td>' + successRate + '%</td>' +
+          '<td style="font-size:11px;color:var(--g400)">' + (d.lastAt ? new Date(d.lastAt).toLocaleString() : '—') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    // ── Daily calls ──
+    var byDay = {};
+    rows.forEach(function(r) {
+      var day = r.created_at.slice(0,10);
+      if (!byDay[day]) byDay[day] = { calls:0, failed:0, endpoints:{} };
+      byDay[day].calls++;
+      if (r.status === 'error') byDay[day].failed++;
+      var ep = r.endpoint || 'unknown';
+      byDay[day].endpoints[ep] = (byDay[day].endpoints[ep]||0) + 1;
+    });
     var tbody = document.getElementById('tokensTbody');
     var days = Object.keys(byDay).sort().reverse();
     if (days.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--g400)">No API calls yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--g400)">No API calls logged yet</td></tr>';
     } else {
       tbody.innerHTML = days.map(function(day) {
         var d = byDay[day];
-        var tokens = d.calls * 1000;
-        var cost = (d.calls * 0.001).toFixed(3);
+        var epSummary = Object.keys(d.endpoints).sort(function(a,b){return d.endpoints[b]-d.endpoints[a];})
+          .map(function(ep){ return htmlEsc(ep) + ' (' + d.endpoints[ep] + ')'; }).join(', ');
         return '<tr>' +
           '<td>' + day + '</td>' +
-          '<td>' + d.calls + '</td>' +
-          '<td>' + tokens.toLocaleString() + '</td>' +
-          '<td style="color:#059669">$' + cost + '</td>' +
-          '<td>' + d.users.size + '</td>' +
+          '<td style="font-weight:700">' + d.calls + '</td>' +
+          '<td style="color:' + (d.failed?'#dc2626':'var(--g400)') + '">' + d.failed + '</td>' +
+          '<td style="font-size:11px;color:var(--g400)">' + epSummary + '</td>' +
         '</tr>';
       }).join('');
     }
   } catch(e) {
-    document.getElementById('tokensTbody').innerHTML = '<tr><td colspan="5">Error: ' + e.message + '</td></tr>';
-  }
-}
-
-/* ══════════════════════════════════════════════════
-   SUBSCRIPTIONS
-══════════════════════════════════════════════════ */
-async function loadSubscriptions() {
-  try {
-    var statusFilter = document.getElementById('subStatusFilter').value;
-    var q = _supabase.from('subscriptions').select('*').order('created_at', { ascending: false });
-    if (statusFilter !== 'all') q = q.eq('status', statusFilter);
-    var { data } = await q;
-
-    var active = (data||[]).filter(function(s){ return s.status==='active'; }).length;
-    var cancelled = (data||[]).filter(function(s){ return s.status==='cancelled'; }).length;
-    var revenue = active * 3;
-
-    // Estimate API cost this month
-    var monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-    var { data: mReqs } = await _supabase
-      .from('match_requests')
-      .select('id')
-      .gte('created_at', monthStart.toISOString())
-      .eq('status', 'completed');
-    var apiCost = ((mReqs||[]).length * 0.001).toFixed(2);
-    var profit = (revenue - parseFloat(apiCost)).toFixed(2);
-
-    document.getElementById('subActive').textContent = active;
-    document.getElementById('subRevenue').textContent = '$' + revenue;
-    document.getElementById('subCancelled').textContent = cancelled;
-    document.getElementById('subProfit').textContent = '$' + profit;
-
-    var tbody = document.getElementById('subsTbody');
-    if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">No subscribers yet</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.map(function(s) {
-      var statusColor = s.status === 'active' ? '#059669' : s.status === 'cancelled' ? '#dc2626' : '#9ca3af';
-      return '<tr>' +
-        '<td style="font-size:11px">' + (s.user_id||'').slice(0,8) + '...</td>' +
-        '<td>' + (s.plan||'partner_matching') + '</td>' +
-        '<td>$' + (s.amount_usd||3) + '/mo</td>' +
-        '<td><span class="badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + s.status + '</span></td>' +
-        '<td style="font-size:11px">' + (s.current_period_end ? new Date(s.current_period_end).toLocaleDateString() : '—') + '</td>' +
-        '<td style="font-size:11px;color:var(--g400)">' + new Date(s.created_at).toLocaleDateString() + '</td>' +
-      '</tr>';
-    }).join('');
-  } catch(e) {
-    document.getElementById('subsTbody').innerHTML = '<tr><td colspan="6">Error: ' + e.message + '</td></tr>';
+    document.getElementById('tokensByEndpointTbody').innerHTML = '<tr><td colspan="6">Error: ' + htmlEsc(e.message) + '</td></tr>';
+    document.getElementById('tokensTbody').innerHTML = '<tr><td colspan="4">Error: ' + htmlEsc(e.message) + '</td></tr>';
   }
 }
 
