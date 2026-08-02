@@ -5741,7 +5741,7 @@ function ClipGridModal(props) {
     style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
     onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { background: 'var(--white)', maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 12, padding: 16 }
+    style: { background: 'var(--white)', maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 12, padding: 16 }
   },
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 } },
       /*#__PURE__*/React.createElement("button", {
@@ -5772,24 +5772,28 @@ function ClipGridModal(props) {
     ),
     clips.length === 0
       ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, 'No clips yet.')
-      : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 } },
+      : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 } },
           clips.map(function(p, idx) {
             var dayNum = _clipDayNumber(challenger.checkedDates, p.created_at) || (idx + 1);
             return /*#__PURE__*/React.createElement("div", {
               key: p.id || idx,
               onClick: function() {
+                // ★ 修正：這裡原本只 spread 了 p（snake_case 的原始查詢結果，只有 media_url），
+                //   從沒補上 mediaUrl（camelCase）——FeedCard 判斷要不要渲染影片播放器
+                //   靠的是 post.hasVideo && post.mediaUrl，camelCase 版本一直是 undefined，
+                //   所以影片播放器根本沒有被渲染出來，這就是別人點開 clip 卻放不出影片的原因。
                 setViewingPost(Object.assign({}, p, {
                   userId: challenger.userId, user: challenger.displayName, avatarUrl: challenger.userAvatar,
-                  habit: challenger.name, hasVideo: true
+                  habit: challenger.name, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url
                 }));
               },
-              style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
+              style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
             },
               p.thumbnail_url
                 ? /*#__PURE__*/React.createElement("img", { src: p.thumbnail_url, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' } })
-                : /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 18, height: 18, color: 'var(--gray-500)' } }),
+                : /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 24, height: 24, color: 'var(--gray-500)' } }),
               /*#__PURE__*/React.createElement("span", {
-                style: { position: 'absolute', bottom: 4, left: 4, fontSize: 9, fontWeight: 700, background: '#fff', borderRadius: 4, padding: '1px 4px' }
+                style: { position: 'absolute', bottom: 5, left: 5, fontSize: 10, fontWeight: 700, background: '#fff', borderRadius: 4, padding: '2px 5px' }
               }, 'Day ' + dayNum)
             );
           })
@@ -8056,7 +8060,7 @@ function MainApp(_ref16) {
     var habitIds = habits.map(function(h) { return h.id; }).filter(Boolean);
     if (habitIds.length === 0) return;
     var todayISOStr = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0, 10);
-    _sbc.from('posts').select('id, habit_id, clip_visibility, created_at')
+    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, created_at')
       .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
       .gte('created_at', todayISOStr)
       .order('created_at', { ascending: false })
@@ -8068,7 +8072,7 @@ function MainApp(_ref16) {
           .filter(function(p) { return p.clip_visibility === 'buddies'; });
         if (buddiesOnlyPosts.length === 0) {
           var _status = {};
-          Object.keys(byHabit).forEach(function(hid) { _status[hid] = { visibility: byHabit[hid].clip_visibility, reacted: false }; });
+          Object.keys(byHabit).forEach(function(hid) { _status[hid] = { visibility: byHabit[hid].clip_visibility, reacted: false, thumbnailUrl: byHabit[hid].thumbnail_url || null }; });
           setMyClipStatusByHabit(_status);
           return;
         }
@@ -8080,7 +8084,7 @@ function MainApp(_ref16) {
             var _status = {};
             Object.keys(byHabit).forEach(function(hid) {
               var p = byHabit[hid];
-              _status[hid] = { visibility: p.clip_visibility, reacted: !!reactedPostIds[p.id] };
+              _status[hid] = { visibility: p.clip_visibility, reacted: !!reactedPostIds[p.id], thumbnailUrl: p.thumbnail_url || null };
             });
             setMyClipStatusByHabit(_status);
           }).catch(function() {});
@@ -8388,6 +8392,8 @@ function MainApp(_ref16) {
   var [viewingChallengerKey, setViewingChallengerKey] = React.useState(null); // Challenger 卡片影片全螢幕檢視（Concept B）
   var [showClipShareForHabit, setShowClipShareForHabit] = React.useState(null); // Home 頁「Add a clip」開啟的分享設定 modal，存目前的 habit 物件
   var [habitCheers, setHabitCheers] = React.useState({});
+  var [habitCheerers, setHabitCheerers] = React.useState({}); // habitId -> [{senderId, date, createdAt}]（最新在前），CheerDetailPanel 顯示真人卡片用
+  var [cheererInfoMap, setCheererInfoMap] = React.useState({}); // senderId -> {id, display_name, photo_url}
   var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
   // ★ 新增：今天真正打過 match-partner（呼叫 Claude）的次數，讀 habit_ai_usage 表。
   //   跟上面 matchingCredits 不是同一件事——matchingCredits 只是每個習慣自己的
@@ -8684,19 +8690,62 @@ function MainApp(_ref16) {
     var todayKey = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0,10);
     db.collection('habit_cheers').where('recipientId', '==', user.uid).get().then(function(snap) {
       var counts = {};
+      var cheerers = {}; // habitId -> [{senderId, date, createdAt}]
       var uniqueSenders = new Set();
       snap.docs.forEach(function(d) {
         var data = d.data();
+        if (!data.habitId) return;
         if (!counts[data.habitId]) counts[data.habitId] = { todayCount: 0, totalCount: 0 };
         counts[data.habitId].totalCount++;
         if (data.date === todayKey) counts[data.habitId].todayCount++;
         if (data.senderId) uniqueSenders.add(data.senderId);
+        if (!cheerers[data.habitId]) cheerers[data.habitId] = [];
+        cheerers[data.habitId].push({
+          senderId: data.senderId,
+          date: data.date,
+          createdAt: (data.createdAt && data.createdAt.toDate) ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
+        });
+      });
+      Object.keys(cheerers).forEach(function(hid) {
+        cheerers[hid].sort(function(a, b) { return b.createdAt - a.createdAt; }); // 最新的排前面
       });
       setHabitCheers(counts);
+      setHabitCheerers(cheerers);
       // Compute profile-level totals
       var totalCheers = snap.docs.length;
       var uniqueCount = uniqueSenders.size;
       setProfileCheerStats({ total: totalCheers, supporters: uniqueCount });
+
+      // ── 批次撈出所有 cheerer 的 display_name/photo_url，CheerDetailPanel 的卡片要用
+      //    （比照 Buddies 頁既有的批次查詢慣例，見 partnerInfoMap）──
+      var senderIds = Array.from(uniqueSenders);
+      if (senderIds.length > 0 && window._supabaseClient) {
+        window._supabaseClient.from('users').select('id, display_name, photo_url').in('id', senderIds)
+          .then(function(ur) {
+            var map = {};
+            (ur.data || []).forEach(function(u) { map[u.id] = u; });
+            setCheererInfoMap(function(prev) { return Object.assign({}, prev, map); });
+          }).catch(function(){});
+      }
+    }).catch(function(){});
+  }, [user, isFirebaseConfigured]);
+
+  // ── 補回「已經 cheer 過」的持久狀態：cheerMap 原本只是純前端、當次 session 的樂觀更新，
+  //    重新整理頁面就會忘記，導致已經按過的 Cheer 又跑回「⚡ Cheer on」。這裡在打開
+  //    Challengers 頁時，查一次「我自己送出去的 cheer」，把已經 cheer 過的 (recipient_habit)
+  //    組合灌回 cheerMap，跟真正的資料庫狀態對齊。──
+  var loadMySentCheers = React.useCallback(function() {
+    if (!isFirebaseConfigured || !user) return;
+    db.collection('habit_cheers').where('senderId', '==', user.uid).get().then(function(snap) {
+      var map = {};
+      snap.docs.forEach(function(d) {
+        var data = d.data();
+        if (!data.recipientId || !data.habitId) return;
+        map[data.recipientId + '_' + data.habitId] = true;
+      });
+      // prev 蓋在後面：這次 session 剛按下去、還沒被資料庫查詢追上的樂觀更新優先，
+      // 不會被這次查詢結果（可能還沒包含剛剛那筆）反過來洗掉。
+      setCheerMap(function(prev) { return Object.assign({}, map, prev); });
     }).catch(function(){});
   }, [user, isFirebaseConfigured]);
 
@@ -8757,7 +8806,7 @@ function MainApp(_ref16) {
 
   useEffect(function() {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
-      loadChallengers(); loadMyHabitCheers();
+      loadChallengers(); loadMyHabitCheers(); loadMySentCheers();
     }
     if (activeTab === 'home') {
       loadMyHabitCheers();
@@ -10763,12 +10812,27 @@ function MainApp(_ref16) {
             _cs.reacted ? "Your buddy found this encouraging" : "Shared with your buddy"
           );
         })(),
+        /* ── ★ 新增：今天已經上傳過（Everyone 公開）的提醒——之前完全沒有任何顯示，
+           使用者容易忘記自己今天到底有沒有貼過 clip。縮圖 + 文字，不擋、不取代
+           下面的 Add a clip 按鈕（同一天多貼幾支也還是允許的），純粹提醒用。 ── */
+        (function() {
+          var _cs = myClipStatusByHabit[habit.id];
+          if (!_cs || _cs.visibility !== 'everyone') return null;
+          return React.createElement("div", {
+            style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--gray-500)' }
+          },
+            _cs.thumbnailUrl
+              ? React.createElement("img", { src: _cs.thumbnailUrl, alt: "", style: { width: 20, height: 20, borderRadius: 4, objectFit: 'cover', flexShrink: 0 } })
+              : React.createElement(VideoIcon, { style: { width: 12, height: 12, flexShrink: 0 } }),
+            "\u2713 Clip shared today"
+          );
+        })(),
         /* ── Add a clip：只在習慣公開（非 private）時出現，private 習慣完全不會看到 ── */
         habit.challengeVisibility !== 'private' && React.createElement("button", {
           className: "add-clip-btn",
           style: { display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "var(--gray-600)", background: "none", border: "1px dashed var(--gray-300)", borderRadius: 8, padding: "6px 8px", cursor: "pointer", flexShrink: 0 },
           onClick: function(e) { e.stopPropagation(); setShowClipShareForHabit(habit); }
-        }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), "Add a clip")
+        }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), myClipStatusByHabit[habit.id] ? "Add another" : "Add a clip")
       )
       );
     }) // end inProgressHabits.map
@@ -10892,6 +10956,7 @@ function MainApp(_ref16) {
     var ph = habits.find(function(h) { return h.id === cheerPanelHabitId; });
     if (!ph) return null;
     var pc = habitCheers[cheerPanelHabitId] || { todayCount: 0, totalCount: 0 };
+    var cheererList = habitCheerers[cheerPanelHabitId] || []; // 最新在前，已在 loadMyHabitCheers 排好序
     var isQualifiedHabit = (function() {
       var nc = (ph.checkedDates || []).map(function(d) { var p = new Date(d); return isNaN(p) ? null : toISODay(p); }).filter(Boolean);
       return new Set(nc).size >= CHALLENGE_COMPLETE_DAYS;
@@ -10920,6 +10985,32 @@ function MainApp(_ref16) {
         panelMsg,
         React.createElement("br", null),
         "Total all-time cheers: " + (pc.totalCount || 0)
+      ),
+      /* ── 真人卡片列表：頭像 + 名字 + 幾時 cheer 的，取代原本只有一個數字的樣子 ── */
+      cheererList.length > 0 && React.createElement("div", { style: { marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' } },
+        cheererList.map(function(cr, idx) {
+          var info = cheererInfoMap[cr.senderId];
+          var name = (info && info.display_name) || (cr.senderId ? cr.senderId.slice(0, 8) : 'Someone');
+          var initials = (name[0] || '?').toUpperCase();
+          var avatarUrl = info && info.photo_url;
+          var timeLabel = cr.createdAt ? _globalFormatTime(cr.createdAt) : '';
+          return React.createElement("div", {
+            key: (cr.senderId || 'u') + '_' + idx,
+            style: { display: 'flex', alignItems: 'center', gap: 10, padding: '6px 2px' }
+          },
+            React.createElement("div", {
+              style: { width: 30, height: 30, borderRadius: '50%', background: 'var(--black)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }
+            }, avatarUrl
+              ? React.createElement("img", { src: avatarUrl, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' }, onError: function(e){ e.target.style.display='none'; } })
+              : initials
+            ),
+            React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+              React.createElement("div", { style: { fontSize: 12, fontWeight: 700 } }, name),
+              cr.date === (typeof toISODay === 'function' ? toISODay() : '') && React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)' } }, 'cheered you on today')
+            ),
+            React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', flexShrink: 0 } }, timeLabel)
+          );
+        })
       )
     ));
   }
@@ -11163,7 +11254,7 @@ function MainApp(_ref16) {
         }, "Community"),
         React.createElement("div", {
           className: "feed-subtab" + (feedSubTab === "challengers" ? " active" : ""),
-          onClick: function() { setFeedSubTab("challengers"); loadChallengers(); loadMyHabitCheers(); }
+          onClick: function() { setFeedSubTab("challengers"); loadChallengers(); loadMyHabitCheers(); loadMySentCheers(); }
         }, "Challengers")
       ),
       React.createElement("div", { style: { padding: "12px 0" } },
