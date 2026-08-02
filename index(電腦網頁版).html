@@ -2921,7 +2921,23 @@ if (isFirebaseConfigured) {
       'checked_dates':'checkedDates','streak':'streak','check_timestamps':'checkTimestamps','mind_body':'mindBody','activity_type':'activityType',
       'user_name':'userName','user_avatar':'userAvatar','user_avatar_url':'userAvatarUrl',
       'challenge_visibility':'challengeVisibility','final_rate':'finalRate',
-      'archived_at':'archivedAt','archived_habits':'archivedHabits'
+      'archived_at':'archivedAt','archived_habits':'archivedHabits',
+      // ★ 修正：is_habit_clip / clip_visibility 這兩欄一直沒被列進這張表——
+      //   寫入那邊（_toSnakeCase）有 regex fallback，所以 isHabitClip 一路都正確
+      //   存成 is_habit_clip 沒出事；但這邊（讀取）是明確列出的白名單、沒有 fallback，
+      //   缺了這兩筆就等於讀出來的 doc 永遠沒有 isHabitClip/clipVisibility 這兩個
+      //   camelCase 欄位，只剩原始的 is_habit_clip/clip_visibility。下面 Community feed
+      //   用來排除 clip 的三處 `!p.isHabitClip` 因此永遠是 `!undefined` = true，
+      //   等於完全沒有真的把 clip 濾掉——這就是習慣打卡影片跑去 Community 顯示成
+      //   一般貼文的根本原因。
+      // ★ 修正：habit_id / sender_id / recipient_id 這三欄也一直沒被列進這張表——
+      //   跟上面 is_habit_clip 同一種問題：loadMyHabitCheers() 讀 habit_cheers
+      //   時用的是 data.habitId / data.senderId，但沒有這三筆對照，讀出來的
+      //   habitId 永遠是 undefined，等於每一筆 cheer 紀錄都被歸進同一個
+      //   「undefined」桶子，沒有一筆對得上真正的 habit.id——這就是
+      //   andytestlih 收到 cheer、Home 頁卻永遠顯示 0 的根本原因。
+      'habit_id':'habitId','sender_id':'senderId','recipient_id':'recipientId',
+      'is_habit_clip':'isHabitClip','clip_visibility':'clipVisibility'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];

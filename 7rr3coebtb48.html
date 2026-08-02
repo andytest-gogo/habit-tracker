@@ -733,7 +733,24 @@ CREATE POLICY "claude_calls_insert_service" ON claude_api_calls FOR INSERT WITH 
 -- 那就是本來就有開，這段直接跳過不用管。
 ALTER TABLE habit_ai_usage ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "habit_ai_usage_own"   ON habit_ai_usage FOR ALL    USING (auth.uid()=user_id);
-CREATE POLICY "habit_ai_usage_admin" ON habit_ai_usage FOR SELECT USING (is_admin());</pre>
+CREATE POLICY "habit_ai_usage_admin" ON habit_ai_usage FOR SELECT USING (is_admin());
+
+-- ── habit_cheers（Cheer 功能：s1002506 cheer 了 andytestlih 的習慣，
+--    但 andytestlih 的 Home 頁一直顯示 0 —— 這張表本來完全沒有 RLS 政策，
+--    導致 sender 寫入這筆紀錄就直接被擋掉）─────────────────────────────
+ALTER TABLE habit_cheers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "habit_cheers_insert" ON habit_cheers FOR INSERT WITH CHECK (auth.uid()=sender_id);
+CREATE POLICY "habit_cheers_read"   ON habit_cheers FOR SELECT USING (auth.uid()=recipient_id OR auth.uid()=sender_id);
+-- 如果這裡報 type mismatch（sender_id/recipient_id 是 text 不是 uuid），
+-- 把 auth.uid() 改成 auth.uid()::text 再跑一次就好。
+
+-- ── increment_cheer_count：cheer 數要能跨用戶寫對方的 habits.today_cheer_count，
+--    但一般使用者的 RLS 只能改自己的 habits，所以要用 SECURITY DEFINER 繞過，
+--    只做這一件事（+1），不開放其他任意寫入 ──────────────────────────
+CREATE OR REPLACE FUNCTION increment_cheer_count(habit_id UUID)
+RETURNS void AS $$
+  UPDATE habits SET today_cheer_count = COALESCE(today_cheer_count, 0) + 1 WHERE id = habit_id;
+$$ LANGUAGE sql SECURITY DEFINER;</pre>
       </div>
 
 
