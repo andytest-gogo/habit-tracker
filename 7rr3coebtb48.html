@@ -903,6 +903,29 @@ CREATE POLICY "claude_calls_insert_service" ON claude_api_calls FOR INSERT WITH 
         <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Est. Cost (30d)</div><div class="stat-val" id="tEstCost">—</div><div class="stat-note">Only for calls with logged tokens</div></div>
       </div>
 
+      <div class="tbl-card" style="margin-bottom:20px;border-left:3px solid #1e293b">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">🔴 Calls Per Minute — Live</div>
+          <div class="tbl-cnt" id="tLiveLabel">updates every 15s while this page is open</div>
+        </div>
+        <div style="display:flex;gap:0">
+          <div style="flex:1;padding:16px 18px;border-right:1px solid var(--g100)">
+            <div class="stat-lbl">Last 60 Seconds</div>
+            <div class="stat-val" id="tLastMinute" style="font-size:28px">—</div>
+            <div class="stat-note">Calls in the last minute, all endpoints</div>
+          </div>
+          <div style="flex:1;padding:16px 18px">
+            <div class="stat-lbl">Busiest Minute (Last Hour)</div>
+            <div class="stat-val" id="tPeakMinute" style="font-size:28px">—</div>
+            <div class="stat-note">Highest calls-in-one-minute you've actually hit</div>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Minute</th><th>Calls</th></tr></thead>
+          <tbody id="tokensPerMinuteTbody"><tr class="loading-row"><td colspan="2">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
       <div class="tbl-card" style="margin-bottom:20px">
         <div class="tbl-hd"><div class="tbl-ttl">Calls by Endpoint (Last 30 Days)</div><button class="refresh" onclick="loadTokenUsage()">Refresh</button></div>
         <table>
@@ -922,9 +945,9 @@ CREATE POLICY "claude_calls_insert_service" ON claude_api_calls FOR INSERT WITH 
       <div class="tbl-card" style="padding:18px;margin-bottom:20px">
         <div class="chart-ttl" style="margin-bottom:10px">🚦 Rate Limits &amp; Spend Cap</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.8">
-          Rate limits (requests/tokens per minute) and your monthly spend cap are set per <strong>organization</strong> by Anthropic and aren't safely readable from a browser-based dashboard like this one —
-          reading them programmatically requires an <strong>Admin API key</strong>, which has broad read-write access and must never be embedded in client-side code.<br><br>
-          Check your exact current tier, RPM/ITPM/OTPM limits, and spend cap here:
+          The table above shows your app's <strong>actual</strong> calls/minute — that's the number that matters for spotting a 429 coming, and it's real data from your own traffic, not a guess.<br><br>
+          What it can't show is the <strong>ceiling</strong> Anthropic sets you (your RPM/ITPM/OTPM limit and monthly spend cap) — those live at the <strong>organization</strong> level and aren't safely readable from a browser-based dashboard like this one; reading them programmatically requires an <strong>Admin API key</strong>, which has broad read-write access and must never be embedded in client-side code.<br><br>
+          Also worth knowing: Anthropic replaced the old numbered "Tier 1–4" system with three simpler tiers — <strong>Start / Build / Scale</strong> — on June 26, 2026, and raised limits at the same time (Haiku's RPM was brought up to match Opus/Sonnet within each tier). So if you're thinking "Tier 1, a few hundred RPM," that's the old system — your actual current tier and exact limits may well be different now. Check both here:
           <a href="https://platform.claude.com/settings/limits" target="_blank" style="color:var(--black);font-weight:700">Claude Console → Settings → Limits ↗</a>.
           The <a href="https://platform.claude.com/usage" target="_blank" style="color:var(--black);font-weight:700">Usage page ↗</a> also shows real per-minute charts and cache-hit rate.
         </p>
@@ -1630,18 +1653,24 @@ document.getElementById('logoutBtn').onclick = function(){
 document.getElementById('refreshBtn').onclick = loadAll;
 
 // Nav
+var _tokensLiveInterval = null; // Claude API Usage 頁面的即時輪詢計時器，離開頁面時要記得清掉
 document.querySelectorAll('.nav-btn').forEach(function(btn){
   btn.onclick = function(){
     document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('on'); });
     document.querySelectorAll('.pg').forEach(function(p){ p.classList.remove('on'); });
     btn.classList.add('on');
     document.getElementById('pg-'+btn.dataset.page).classList.add('on');
+    // 每次切頁都先停掉舊的輪詢，避免離開 Claude API Usage 頁面後還留在背景一直打 Supabase
+    if (_tokensLiveInterval) { clearInterval(_tokensLiveInterval); _tokensLiveInterval = null; }
     // Auto-load cleanup page when navigated to
     if (btn.dataset.page === 'cleanup') loadCleanup();
     if (btn.dataset.page === 'cloudinary') loadCloudinaryQueue();
     if (btn.dataset.page === 'matching') loadMatchingStats();
     if (btn.dataset.page === 'pairs') loadPairs();
-    if (btn.dataset.page === 'tokens') loadTokenUsage();
+    if (btn.dataset.page === 'tokens') {
+      loadTokenUsage();
+      _tokensLiveInterval = setInterval(loadTokenUsage, 15000); // 停留在這頁時每 15 秒重新整理一次
+    }
     if (btn.dataset.page === 'engagement') loadEngagement();
   };
 });
@@ -4214,7 +4243,8 @@ async function loadTokenUsage() {
       setupWarn.style.display = missing ? 'block' : 'none';
       document.getElementById('tokensByEndpointTbody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">' + (missing ? 'Table not created yet' : 'Error: ' + htmlEsc(error.message)) + '</td></tr>';
       document.getElementById('tokensTbody').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--g400)">—</td></tr>';
-      ['tTodayCalls','tMonthCalls','tFailed30','tEstCost'].forEach(function(id){ document.getElementById(id).textContent = '—'; });
+      document.getElementById('tokensPerMinuteTbody').innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--g400)">—</td></tr>';
+      ['tTodayCalls','tMonthCalls','tFailed30','tEstCost','tLastMinute','tPeakMinute'].forEach(function(id){ document.getElementById(id).textContent = '—'; });
       return;
     }
     setupWarn.style.display = 'none';
@@ -4229,6 +4259,40 @@ async function loadTokenUsage() {
     document.getElementById('tMonthCalls').textContent = monthRows.length;
     document.getElementById('tFailed30').textContent   = failed30.length;
     document.getElementById('tEstCost').textContent    = rows.some(function(r){return r.input_tokens!=null||r.output_tokens!=null;}) ? ('$' + estCost30.toFixed(3)) : '—';
+
+    // ── 每分鐘呼叫次數（近 60 分鐘）── 直接從上面已經抓好的 30 天資料裡算，不用另外多查一次
+    var nowTs = Date.now();
+    var last60SecStart = new Date(nowTs - 60 * 1000);
+    var last60MinStart  = new Date(nowTs - 60 * 60 * 1000);
+
+    var callsLast60Sec = rows.filter(function(r){ return new Date(r.created_at) >= last60SecStart; }).length;
+
+    var byMinute = {}; // 'YYYY-MM-DDTHH:MM'（UTC，到分鐘為止）→ 這一分鐘的呼叫次數
+    rows.forEach(function(r){
+      var d = new Date(r.created_at);
+      if (d < last60MinStart) return;
+      var bucket = r.created_at.slice(0, 16);
+      byMinute[bucket] = (byMinute[bucket] || 0) + 1;
+    });
+    var minuteBuckets = Object.keys(byMinute).sort().reverse();
+    var peakPerMinute = minuteBuckets.reduce(function(max, k){ return Math.max(max, byMinute[k]); }, 0);
+
+    document.getElementById('tLastMinute').textContent = callsLast60Sec;
+    document.getElementById('tPeakMinute').textContent = peakPerMinute;
+
+    var minuteTbody = document.getElementById('tokensPerMinuteTbody');
+    if (minuteBuckets.length === 0) {
+      minuteTbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--g400)">No calls in the last hour</td></tr>';
+    } else {
+      minuteTbody.innerHTML = minuteBuckets.map(function(bucket){
+        // bucket 是截斷過的 UTC 字串，補回 'Z' 才能正確還原成 UTC 時間點，
+        // 再交給 toLocaleTimeString() 轉成瀏覽器當地時間顯示，不然會被誤判成本地時間少轉一次。
+        var timeLabel = new Date(bucket + ':00Z').toLocaleTimeString();
+        var count = byMinute[bucket];
+        var hot = count >= 10 ? 'color:#dc2626;font-weight:700' : ''; // 門檻先抓個大概，之後依實際流量再調
+        return '<tr><td>' + timeLabel + '</td><td style="' + hot + '">' + count + '</td></tr>';
+      }).join('');
+    }
 
     // ── By endpoint ──
     var byEndpoint = {};
