@@ -5591,14 +5591,29 @@ function _fmtMB(bytes) { return (bytes / 1024 / 1024).toFixed(1); }
 
 function ClipShareModal(props) {
   var habit = props.habit, user = props.user, onClose = props.onClose, onPosted = props.onPosted;
-  var _fileState = React.useState(null); var file = _fileState[0], setFile = _fileState[1];
+  // ★ 新增：editingPost 有值 = 這次是編輯「今天已經貼過的那支」，不是貼新的。
+  //   一天只能有一支 clip，所以卡片上今天有貼過就只會打開編輯模式，不會再讓人貼第二支。
+  var editingPost = props.editingPost || null;
+  var _fileState = React.useState(null); var file = _fileState[0], setFile = _fileState[1]; // 只有「換影片」時才會有值，編輯模式預設沿用原本的影片
   var _previewState = React.useState(null); var previewUrl = _previewState[0], setPreviewUrl = _previewState[1];
-  var _capState = React.useState(''); var caption = _capState[0], setCaption = _capState[1];
-  var _audState = React.useState('everyone'); var audience = _audState[0], setAudience = _audState[1];
-  var _hideState = React.useState(false); var hideHabitName = _hideState[0], setHideHabitName = _hideState[1];
+  var _replacingState = React.useState(false); var replacing = _replacingState[0], setReplacing = _replacingState[1]; // 點了「Replace video」才會打開選檔畫面
+  var _capState = React.useState(editingPost ? (editingPost.text || '') : ''); var caption = _capState[0], setCaption = _capState[1];
+  var _audState = React.useState(editingPost ? (editingPost.clip_visibility || 'everyone') : 'everyone'); var audience = _audState[0], setAudience = _audState[1];
+  // ★ 修正：hideHabitName 這個 boolean 本身沒有獨立欄位，是用存進去的 habit 顯示文字
+  //   反推——如果當初存的不是完整習慣名稱，代表當初有勾選隱藏，編輯時要沿用，
+  //   不然一存檔就會把原本藏起來的習慣名稱意外洩漏出去。
+  var _hideState = React.useState(function() { return !!(editingPost && editingPost.habit && editingPost.habit !== habit.name); });
+  var hideHabitName = _hideState[0], setHideHabitName = _hideState[1];
   var _upState = React.useState(false); var uploading = _upState[0], setUploading = _upState[1];
   var _progState = React.useState(0); var progress = _progState[0], setProgress = _progState[1];
   var _errState = React.useState(''); var errorMsg = _errState[0], setErrorMsg = _errState[1];
+
+  // ★ 新增：這個習慣有沒有已配對成功的夥伴——沒有的話 Buddies only 選了也沒人看得到
+  //   （Buddies 對象是靠這個習慣的配對關係去查詢的，不是一般好友名單），所以直接停用
+  //   這個選項，而不是讓使用者選了才發現沒人看到。
+  var hasPartner = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs))
+    ? window._myPairs.some(function(p) { return (p.habit_id === habit.id || p.partner_habit_id === habit.id) && p.status === 'active'; })
+    : false;
 
   function handleFileChange(e) {
     var f = e.target.files && e.target.files[0];
@@ -5621,7 +5636,8 @@ function ClipShareModal(props) {
   }
 
   function handleSubmit() {
-    if (!file || uploading) return;
+    if (uploading) return;
+    if (!file && !editingPost) return; // 沒選影片、也不是在編輯既有的 clip，沒什麼好送出的
     setUploading(true);
     setErrorMsg('');
     _moderateClipCaption(caption).then(function(mod) {
@@ -5631,27 +5647,39 @@ function ClipShareModal(props) {
         setErrorMsg((VIOLATION_MESSAGES[v] || "This clip couldn't be posted. Please keep it respectful and on-topic."));
         return;
       }
-      uploadToBunny(file, 'video', function(pct) { setProgress(pct); }).then(function(result) {
+      // 編輯模式沒換新影片的話，這裡就不用再上傳一次
+      var doUpload = file ? uploadToBunny(file, 'video', function(pct) { setProgress(pct); }) : Promise.resolve(null);
+      doUpload.then(function(result) {
+        var updates = {
+          text: caption.trim(),
+          clipVisibility: audience,
+          habit: hideHabitName ? (habit.category || '') : habit.name
+        };
+        if (result) {
+          updates.mediaUrl = result.url;
+          updates.mediaPublicId = result.publicId;
+          updates.thumbnailUrl = result.thumbnail || null;
+        }
+        if (editingPost) {
+          return db.collection('posts').doc(editingPost.id).update(updates).then(function() {
+            // 真的換了新影片才需要清掉 Bunny 上的舊檔，不然舊的會變成孤兒檔案一直占空間
+            if (result) _deletePostBunnyMedia(editingPost, user);
+          });
+        }
         var avatar = ((user.displayName || user.email || 'U')[0] || 'U').toUpperCase();
-        var newClip = {
+        var newClip = Object.assign({
           userId: user.uid,
           user: user.displayName || 'User',
           avatar: avatar,
           avatarUrl: (typeof localStorage !== 'undefined' && localStorage.getItem('avatar_' + user.uid)) || null,
-          text: caption.trim(),
-          habit: hideHabitName ? (habit.category || '') : habit.name,
           habitId: habit.id,
           isHabitClip: true,
-          clipVisibility: audience,
           likes: 0,
           comments: 0,
           likedBy: [],
           hasImage: false,
-          hasVideo: true,
-          mediaUrl: result.url,
-          mediaPublicId: result.publicId,
-          thumbnailUrl: result.thumbnail || null
-        };
+          hasVideo: true
+        }, updates);
         if (!isFirebaseConfigured) return Promise.resolve();
         return db.collection('posts').add(Object.assign({}, newClip, { createdAt: FieldValue.serverTimestamp() }));
       }).then(function() {
@@ -5661,10 +5689,29 @@ function ClipShareModal(props) {
       }).catch(function(e) {
         console.warn('[ClipShare] upload/post failed:', e);
         setUploading(false);
-        setErrorMsg('Something went wrong uploading your clip. Please try again.');
+        setErrorMsg('Something went wrong. Please try again.');
       });
     });
   }
+
+  function handleDelete() {
+    if (!editingPost || uploading) return;
+    if (!window.confirm('Delete this clip? This cannot be undone.')) return;
+    setUploading(true);
+    setErrorMsg('');
+    db.collection('posts').doc(editingPost.id).delete().then(function() {
+      _deletePostBunnyMedia(editingPost, user);
+      setUploading(false);
+      onPosted && onPosted();
+    }).catch(function(e) {
+      console.warn('[ClipShare] delete failed:', e);
+      setUploading(false);
+      setErrorMsg('Delete failed. Please try again.');
+    });
+  }
+
+  var showExistingVideo = !file && editingPost && !replacing;
+  var showDropzone = !file && (!editingPost || replacing);
 
   return /*#__PURE__*/React.createElement("div", {
     style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
@@ -5672,15 +5719,23 @@ function ClipShareModal(props) {
   }, /*#__PURE__*/React.createElement("div", {
     style: { background: 'var(--white)', maxWidth: 380, width: '100%', borderRadius: 12, padding: 18, maxHeight: '90vh', overflowY: 'auto' }
   },
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 10 } }, "Share a clip \u2014 " + habit.name),
-    !file
-      ? /*#__PURE__*/React.createElement("label", {
-          style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px dashed var(--gray-300)', borderRadius: 8, padding: '28px 12px', cursor: 'pointer', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700 }
-        }, /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 22, height: 22 } }), "Choose a video",
-          /*#__PURE__*/React.createElement("input", { type: 'file', accept: 'video/*', onChange: handleFileChange, style: { display: 'none' } }))
-      : /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
-          renderPostVideo(previewUrl, { videoProps: { preload: 'metadata' }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } })
-        ),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 10 } }, (editingPost ? "Edit today's clip \u2014 " : "Share a clip \u2014 ") + habit.name),
+    showExistingVideo
+      ? /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
+          renderPostVideo(editingPost.media_url, { style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } }),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function() { setReplacing(true); },
+            style: { marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--gray-600)', background: 'none', border: '1px dashed var(--gray-300)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }
+          }, /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), 'Replace video')
+        )
+      : showDropzone
+        ? /*#__PURE__*/React.createElement("label", {
+            style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px dashed var(--gray-300)', borderRadius: 8, padding: '28px 12px', cursor: 'pointer', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700 }
+          }, /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 22, height: 22 } }), "Choose a video",
+            /*#__PURE__*/React.createElement("input", { type: 'file', accept: 'video/*', onChange: handleFileChange, style: { display: 'none' } }))
+        : /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
+            renderPostVideo(previewUrl, { videoProps: { preload: 'metadata' }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } })
+          ),
     /*#__PURE__*/React.createElement("textarea", {
       value: caption,
       onChange: function(e) { setCaption(e.target.value.slice(0, 300)); },
@@ -5689,19 +5744,27 @@ function ClipShareModal(props) {
       style: { width: '100%', minHeight: 50, fontSize: 12, fontFamily: 'var(--font)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 8, margin: '10px 0', resize: 'vertical', boxSizing: 'border-box' }
     }),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 6 } }, "Who can see this clip"),
-    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 6, marginBottom: 12 } },
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 6, marginBottom: 6 } },
       ['everyone', 'buddies'].map(function(opt) {
+        var isDisabled = opt === 'buddies' && !hasPartner;
         return /*#__PURE__*/React.createElement("span", {
           key: opt,
-          onClick: function() { setAudience(opt); },
+          onClick: function() { if (!isDisabled) setAudience(opt); },
           style: {
-            display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
+            opacity: isDisabled ? 0.45 : 1,
             border: '1px solid ' + (audience === opt ? 'var(--black)' : 'var(--gray-200)'),
             background: audience === opt ? 'var(--black)' : 'var(--white)',
             color: audience === opt ? 'var(--white)' : 'var(--gray-600)'
           }
         }, opt === 'everyone' ? 'Everyone' : 'Buddies only');
       })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', marginBottom: 10 } },
+      !hasPartner
+        ? "Match a partner on this habit to unlock Buddies-only sharing."
+        : (audience === 'buddies' ? "Only visible to your matched buddy on this habit \u2014 won't show on Challengers." : null)
     ),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, background: 'var(--gray-50)', borderRadius: 8, padding: 10, marginBottom: 12 } },
       /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)', lineHeight: 1.5 } },
@@ -5716,15 +5779,20 @@ function ClipShareModal(props) {
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8 } },
       /*#__PURE__*/React.createElement("button", {
         onClick: handleSubmit,
-        disabled: !file || uploading,
-        style: { flex: 1, background: 'var(--black)', color: 'var(--white)', border: 'none', borderRadius: 8, padding: 10, fontSize: 12, fontWeight: 700, cursor: (!file || uploading) ? 'default' : 'pointer', opacity: (!file || uploading) ? 0.5 : 1 }
-      }, uploading ? ('Posting\u2026 ' + progress + '%') : 'Post clip'),
+        disabled: uploading || (!file && !editingPost),
+        style: { flex: 1, background: 'var(--black)', color: 'var(--white)', border: 'none', borderRadius: 8, padding: 10, fontSize: 12, fontWeight: 700, cursor: (uploading || (!file && !editingPost)) ? 'default' : 'pointer', opacity: (uploading || (!file && !editingPost)) ? 0.5 : 1 }
+      }, uploading ? ((file ? 'Posting\u2026 ' + progress + '%' : 'Saving\u2026')) : (editingPost ? 'Save changes' : 'Post clip')),
       /*#__PURE__*/React.createElement("button", {
         onClick: handleClose,
         disabled: uploading,
         style: { flex: 1, background: 'var(--white)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 10, fontSize: 12, fontWeight: 700, cursor: uploading ? 'default' : 'pointer' }
       }, 'Cancel')
-    )
+    ),
+    editingPost && /*#__PURE__*/React.createElement("button", {
+      onClick: handleDelete,
+      disabled: uploading,
+      style: { width: '100%', marginTop: 8, background: 'none', border: 'none', color: '#c00', fontSize: 11, fontWeight: 700, cursor: uploading ? 'default' : 'pointer', padding: 6 }
+    }, 'Delete this clip')
   ));
 }
 
@@ -8050,9 +8118,19 @@ function MainApp(_ref16) {
     _useState72 = _slicedToArray(_useState71, 2),
     habits = _useState72[0],
     setHabits = _useState72[1];
-  // ★ 今天每個習慣的 clip 分享對象 + Buddies-only 時是否已被夥伴按讚（不影響公開 cheer 數字）
+  // ★ 修正：原本只抓「今天」的 clip，卡片上只能看到今天有沒有貼過，完全沒有
+  //   「這個習慣至今總共貼過幾支」的數字——這是使用者之前就想要、但沒做上去的部分。
+  //   改成不限日期抓這個習慣全部的 clip（給個 500 筆上限，量大之後要換成後端 count
+  //   RPC），在前端算出：① totalCount（一目了然的總數）② 今天那一支的完整資料
+  //   （post，caption/影片網址/分享對象都在裡面，Edit today's clip 直接用這份，
+  //   不用另外再查一次）。同時也用來擋「一天只能貼一支」——卡片按鈕看 _cs.post
+  //   在不在來決定顯示 Add a clip 還是 Edit today's clip。
   var _useState_myClipStatus = React.useState({});
   var myClipStatusByHabit = _useState_myClipStatus[0], setMyClipStatusByHabit = _useState_myClipStatus[1];
+  // ★ 新增：貼/改/刪 clip 後手動 +1，讓上面的 effect 重新抓一次，卡片才會立刻反映
+  //   最新狀態，不用等 habits.length 剛好變動或整頁重新整理。
+  var _useState_clipRefreshTick = React.useState(0);
+  var clipStatusRefreshTick = _useState_clipRefreshTick[0], bumpClipStatusRefresh = function() { _useState_clipRefreshTick[1](function(n) { return n + 1; }); };
   React.useEffect(function() {
     if (!user || !habits || habits.length === 0) return;
     var _sbc = window._supabaseClient;
@@ -8060,36 +8138,43 @@ function MainApp(_ref16) {
     var habitIds = habits.map(function(h) { return h.id; }).filter(Boolean);
     if (habitIds.length === 0) return;
     var todayISOStr = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0, 10);
-    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, created_at')
+    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at')
       .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
-      .gte('created_at', todayISOStr)
       .order('created_at', { ascending: false })
+      .limit(500)
       .then(function(pr) {
         if (pr.error || !pr.data) return;
-        var byHabit = {};
-        pr.data.forEach(function(p) { if (!byHabit[p.habit_id]) byHabit[p.habit_id] = p; });
-        var buddiesOnlyPosts = Object.keys(byHabit).map(function(hid) { return byHabit[hid]; })
-          .filter(function(p) { return p.clip_visibility === 'buddies'; });
-        if (buddiesOnlyPosts.length === 0) {
-          var _status = {};
-          Object.keys(byHabit).forEach(function(hid) { _status[hid] = { visibility: byHabit[hid].clip_visibility, reacted: false, thumbnailUrl: byHabit[hid].thumbnail_url || null }; });
-          setMyClipStatusByHabit(_status);
-          return;
-        }
-        var buddiesOnlyIds = buddiesOnlyPosts.map(function(p) { return p.id; });
-        _sbc.from('clip_reactions').select('post_id').in('post_id', buddiesOnlyIds)
+        var byHabitAll = {};
+        pr.data.forEach(function(p) {
+          if (!byHabitAll[p.habit_id]) byHabitAll[p.habit_id] = [];
+          byHabitAll[p.habit_id].push(p);
+        });
+        var _status = {};
+        var buddiesTodayIds = [];
+        Object.keys(byHabitAll).forEach(function(hid) {
+          var list = byHabitAll[hid]; // 已依 created_at 新到舊排序
+          var todayPost = list.find(function(p) { return (p.created_at || '').slice(0, 10) === todayISOStr; }) || null;
+          _status[hid] = {
+            totalCount: list.length,
+            post: todayPost,
+            visibility: todayPost ? todayPost.clip_visibility : null,
+            reacted: false,
+            thumbnailUrl: todayPost ? (todayPost.thumbnail_url || null) : null
+          };
+          if (todayPost && todayPost.clip_visibility === 'buddies') buddiesTodayIds.push(todayPost.id);
+        });
+        if (buddiesTodayIds.length === 0) { setMyClipStatusByHabit(_status); return; }
+        _sbc.from('clip_reactions').select('post_id').in('post_id', buddiesTodayIds)
           .then(function(rr) {
             var reactedPostIds = {};
             if (!rr.error && rr.data) { rr.data.forEach(function(x) { reactedPostIds[x.post_id] = true; }); }
-            var _status = {};
-            Object.keys(byHabit).forEach(function(hid) {
-              var p = byHabit[hid];
-              _status[hid] = { visibility: p.clip_visibility, reacted: !!reactedPostIds[p.id], thumbnailUrl: p.thumbnail_url || null };
+            Object.keys(_status).forEach(function(hid) {
+              if (_status[hid].post) _status[hid].reacted = !!reactedPostIds[_status[hid].post.id];
             });
             setMyClipStatusByHabit(_status);
-          }).catch(function() {});
+          }).catch(function() { setMyClipStatusByHabit(_status); });
       }).catch(function() {});
-  }, [user, habits.length]);
+  }, [user, habits.length, clipStatusRefreshTick]);
   var _useState73 = useState([]),
     _useState74 = _slicedToArray(_useState73, 2),
     archivedHabits = _useState74[0],
@@ -8391,6 +8476,7 @@ function MainApp(_ref16) {
   var [cheerMap, setCheerMap] = React.useState({});
   var [viewingChallengerKey, setViewingChallengerKey] = React.useState(null); // Challenger 卡片影片全螢幕檢視（Concept B）
   var [showClipShareForHabit, setShowClipShareForHabit] = React.useState(null); // Home 頁「Add a clip」開啟的分享設定 modal，存目前的 habit 物件
+  var [editingClipPost, setEditingClipPost] = React.useState(null); // ★ 新增：不是 null 就代表這次開 modal 是「編輯今天已經貼過的那支」，不是貼新的
   var [habitCheers, setHabitCheers] = React.useState({});
   var [habitCheerers, setHabitCheerers] = React.useState({}); // habitId -> [{senderId, date, createdAt}]（最新在前），CheerDetailPanel 顯示真人卡片用
   var [cheererInfoMap, setCheererInfoMap] = React.useState({}); // senderId -> {id, display_name, photo_url}
@@ -10799,6 +10885,18 @@ function MainApp(_ref16) {
             )
           )
         ),
+        /* ── ★ 新增：這個習慣至今總共貼過幾支 clip——之前完全沒有這個數字，只知道
+           「今天貼了沒」。跟下面的今日狀態分開一行，一眼掃過去就有總量概念。 ── */
+        (function() {
+          var _cs = myClipStatusByHabit[habit.id];
+          if (!_cs || !_cs.totalCount) return null;
+          return React.createElement("div", {
+            style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--gray-400)' }
+          },
+            React.createElement(VideoIcon, { style: { width: 11, height: 11, flexShrink: 0 } }),
+            _cs.totalCount + " clip" + (_cs.totalCount === 1 ? '' : 's') + " shared so far"
+          );
+        })(),
         /* ── Buddies-only clip 的心意標記：跟上面公開 cheer 數字是兩件事，不會互相影響 ── */
         (function() {
           var _cs = myClipStatusByHabit[habit.id];
@@ -10812,9 +10910,7 @@ function MainApp(_ref16) {
             _cs.reacted ? "Your buddy found this encouraging" : "Shared with your buddy"
           );
         })(),
-        /* ── ★ 新增：今天已經上傳過（Everyone 公開）的提醒——之前完全沒有任何顯示，
-           使用者容易忘記自己今天到底有沒有貼過 clip。縮圖 + 文字，不擋、不取代
-           下面的 Add a clip 按鈕（同一天多貼幾支也還是允許的），純粹提醒用。 ── */
+        /* ── 今天已經上傳過（Everyone 公開）的提醒：縮圖 + 文字。 ── */
         (function() {
           var _cs = myClipStatusByHabit[habit.id];
           if (!_cs || _cs.visibility !== 'everyone') return null;
@@ -10827,12 +10923,22 @@ function MainApp(_ref16) {
             "\u2713 Clip shared today"
           );
         })(),
-        /* ── Add a clip：只在習慣公開（非 private）時出現，private 習慣完全不會看到 ── */
-        habit.challengeVisibility !== 'private' && React.createElement("button", {
-          className: "add-clip-btn",
-          style: { display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "var(--gray-600)", background: "none", border: "1px dashed var(--gray-300)", borderRadius: 8, padding: "6px 8px", cursor: "pointer", flexShrink: 0 },
-          onClick: function(e) { e.stopPropagation(); setShowClipShareForHabit(habit); }
-        }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), myClipStatusByHabit[habit.id] ? "Add another" : "Add a clip")
+        /* ── ★ 修正：一天只能有一支 clip——今天已經貼過的話，按鈕改成「編輯今天那支」
+           （打開同一個 modal，帶著 editingPost），不再讓人無限往上疊加同一天的 clip。
+           只在習慣公開（非 private）時出現，private 習慣完全不會看到。 ── */
+        habit.challengeVisibility !== 'private' && (function() {
+          var _cs = myClipStatusByHabit[habit.id];
+          var _todayPost = _cs && _cs.post;
+          return React.createElement("button", {
+            className: "add-clip-btn",
+            style: { display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "var(--gray-600)", background: "none", border: "1px dashed var(--gray-300)", borderRadius: 8, padding: "6px 8px", cursor: "pointer", flexShrink: 0 },
+            onClick: function(e) {
+              e.stopPropagation();
+              setEditingClipPost(_todayPost || null);
+              setShowClipShareForHabit(habit);
+            }
+          }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), _todayPost ? "Edit today's clip" : "Add a clip");
+        })()
       )
       );
     }) // end inProgressHabits.map
@@ -11765,8 +11871,9 @@ function MainApp(_ref16) {
     showClipShareForHabit && /*#__PURE__*/React.createElement(ClipShareModal, {
       habit: showClipShareForHabit,
       user: user,
-      onClose: function() { setShowClipShareForHabit(null); },
-      onPosted: function() { setShowClipShareForHabit(null); }
+      editingPost: editingClipPost,
+      onClose: function() { setShowClipShareForHabit(null); setEditingClipPost(null); },
+      onPosted: function() { setShowClipShareForHabit(null); setEditingClipPost(null); bumpClipStatusRefresh(); }
     })
   );
   return /*#__PURE__*/React.createElement("div", {
