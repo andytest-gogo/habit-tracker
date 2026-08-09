@@ -14581,6 +14581,20 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       <div style="font-size:28px;margin-bottom:12px;">⚠</div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#fff;margin-bottom:8px;" id="matchingErrorTitle">No matches found</div>
       <div style="font-size:10px;color:#555;line-height:1.7;margin-bottom:20px;" id="matchingErrorMsg">Try again later.</div>
+      <!-- ★ 新增：真正「目前沒有合適對象」時（noMatch / fallback 也找不到人）顯示，
+           讓使用者可以選擇「有新對象出現時通知我」，不用自己每天回來手動再按一次
+           Find Partner（那樣還會再耗一次配對次數）。daily-limit / not-unlocked-yet /
+           connection-error 這幾種錯誤跟「候選人池沒有人」無關，不顯示這個選項——
+           由 showMatchingError() 的第三個參數控制顯不顯示。 -->
+      <div id="matchingErrorNotifyRow" style="display:none;width:100%;max-width:280px;margin:0 auto 16px;padding:12px;background:#0f0f0f;border:1px solid #111;align-items:center;gap:10px;text-align:left;">
+        <div style="flex:1;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#888;">Notify me when a partner is found</div>
+          <div style="font-size:8px;color:#333;margin-top:3px;">We'll email you and show an in-app alert once someone matches this habit</div>
+        </div>
+        <div id="matchingErrorNotifyToggle" onclick="this.classList.toggle('on');window._toggleMatchNotify(this)" style="width:32px;height:18px;background:#222;border-radius:9px;position:relative;cursor:pointer;flex-shrink:0;">
+          <div style="position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#555;transition:transform .2s;"></div>
+        </div>
+      </div>
       <button class="result-cta" style="max-width:200px;margin:0 auto;display:block;" onclick="window.closeMatchingModal()">Close</button>
     </div>
   </div>
@@ -14920,22 +14934,36 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   function _proceedToMatching(habit) {
     if (!habit) return;
 
-    // Deduct 1 matching credit
-    if (window._supabaseClient && window._currentUser) {
-      var _uid = window._currentUser.uid;
-      window._supabaseClient.from('matching_credits')
-        .select('*').eq('userId', _uid).eq('habitId', habit.id).limit(1).single()
-        .then(function(r) {
-          if (r.data && r.data.credits > 0) {
-            window._supabaseClient.from('matching_credits')
-              .update({ credits: r.data.credits - 1 })
-              .eq('id', r.data.id).then(function(){});
-          }
-        }).catch(function(){});
-    }
+    // ★ 修正：credit 不再「按下 Find Partner 就先扣」，改成只有在真的
+    //   秀出配對結果（showMatchingResults）當下才扣。
+    //   原因：舊邏輯在這裡就無條件扣 1 點，但這時候根本還沒呼叫
+    //   match-partner，也不知道結果是找到人、noMatch、還是整個 API 出錯——
+    //   等於使用者「找不到對象」也照樣被扣一次，錢包數字跟實際使用感受對不上。
+    //   實際防濫用的門檻本來就是後端 habit_ai_usage（DAILY_LIMIT=10，這個才是
+    //   真的擋 Claude 呼叫次數的地方），這裡的 matching_credits 只是給使用者看
+    //   的「錢包」數字，所以改成有找到才扣，對後端額度沒有任何影響。
+    //   實際扣點呼叫見下面新增的 _deductMatchingCredit()，呼叫點在
+    //   callMatchPartner() 裡「真的要顯示配對結果」的兩個地方（AI 配對成功 /
+    //   fallback 演算法配對成功），noMatch、429、403、AI 完全找不到人都不會扣。
 
     _openScanningModal(habit);
     callMatchPartner(habit); // ★ 真正發送配對請求的唯一入口
+  }
+
+  // ── 扣 1 點 matching credit：只在「確定要把配對結果卡片秀給使用者看」的
+  //   那一刻呼叫，而不是一按 Find Partner 就扣。──────────────────────────
+  function _deductMatchingCredit(habit) {
+    if (!habit || !window._supabaseClient || !window._currentUser) return;
+    var _uid = window._currentUser.uid;
+    window._supabaseClient.from('matching_credits')
+      .select('*').eq('userId', _uid).eq('habitId', habit.id).limit(1).single()
+      .then(function(r) {
+        if (r.data && r.data.credits > 0) {
+          window._supabaseClient.from('matching_credits')
+            .update({ credits: r.data.credits - 1 })
+            .eq('id', r.data.id).then(function(){});
+        }
+      }).catch(function(){});
   }
 
   // ── Helper: get already-paired user IDs (to exclude from results) ────────
@@ -15299,7 +15327,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       if (data.noMatch) {
         showMatchingError(
           'No match found 🔍',
-          data.reason || 'No suitable partner found right now. Try again later.'
+          data.reason || 'No suitable partner found right now. Try again later.',
+          true // ★ 真的沒有候選人 → 顯示「有新對象再通知我」選項
         );
         document.getElementById('mRemaining').textContent =
           data.remaining !== undefined ? data.remaining : '—';
@@ -15314,6 +15343,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       if (matches.length === 0) throw new Error('AI returned no valid candidates');
 
       document.getElementById('mRemaining').textContent = data.remaining !== undefined ? data.remaining : '—';
+      _deductMatchingCredit(habit); // ★ 確定有結果要秀出來了，這裡才扣 1 點
       showMatchingResults(matches);
 
     } catch(err) {
@@ -15326,10 +15356,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         document.getElementById('matchingStatusText').textContent = 'Switching to algorithm match...';
         try {
           var fbMatches = await runFallbackMatch(habit);
+          _deductMatchingCredit(habit); // ★ fallback 演算法配對也是「有結果」，同樣算一次
           showMatchingResults(fbMatches);
         } catch(fbErr) {
           console.log('[MatchDebug] runFallbackMatch failed:', fbErr.message); // 🧪TEST MODE 診斷log
-          showMatchingError('No matches found', 'Could not find a suitable match right now. Please try again later.');
+          showMatchingError('No matches found', 'Could not find a suitable match right now. Please try again later.', true); // ★ fallback 演算法也找不到人 → 同樣顯示通知選項
         }
       } else {
         showMatchingError('Connection error', 'Please check your internet and try again.');
@@ -15578,12 +15609,25 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     })();
   };
 
-  function showMatchingError(title, msg) {
+  function showMatchingError(title, msg, showNotifyToggle) {
     document.getElementById('matchingScanning').style.display = 'none';
     document.getElementById('matchingResult').style.display = 'none';
     document.getElementById('matchingError').style.display = 'flex';
     document.getElementById('matchingErrorTitle').textContent = title;
     document.getElementById('matchingErrorMsg').textContent = msg;
+
+    var notifyRow = document.getElementById('matchingErrorNotifyRow');
+    var notifyToggle = document.getElementById('matchingErrorNotifyToggle');
+    if (notifyRow) {
+      notifyRow.style.display = showNotifyToggle ? 'flex' : 'none';
+    }
+    // 每次重開這個畫面都重設成「關」，避免顯示上次殘留的開關狀態跟資料庫實際值兜不起來
+    if (notifyToggle) {
+      notifyToggle.classList.remove('on');
+      notifyToggle.style.background = '#222';
+      var _th = notifyToggle.firstElementChild;
+      if (_th) { _th.style.transform = 'translateX(0)'; _th.style.background = '#555'; }
+    }
   }
 
   window.closeMatchingModal = function() {
