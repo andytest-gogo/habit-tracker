@@ -8999,6 +8999,41 @@ function MainApp(_ref16) {
     return function() { window._navigateTab = null; window._refreshPairs = null; };
   }, [user, setActiveTab]);
 
+  // ── Deep link：email 裡「找到新夥伴」通知信的「Open」按鈕，網址會帶
+  //   ?habitId=xxx，這裡負責讀出來、自動導去該習慣的詳細頁面（Find Partner
+  //   按鈕就在那裡），使用者不用自己再找一次。
+  //   ★ 如果背景排程（check-pending-matches）已經預先把真正的 AI 配對結果存好
+  //   （pending_match_suggestions 表），這裡會直接把結果秀出來，不用使用者
+  //   自己再按一次 Find Partner——信件講的跟畫面看到的會是同一個人，不會有
+  //   「信說有人、AI 重新評分卻不埋單」的落差。找不到預存結果時，才退回單純
+  //   導頁，讓使用者自己按 Find Partner（因為那個動作本身有實際代價，不該被
+  //   信件連結自動觸發）。
+  useEffect(function() {
+    if (!user || !habits || habits.length === 0) return;
+    var params = new URLSearchParams(window.location.search);
+    var deepLinkHabitId = params.get('habitId');
+    if (!deepLinkHabitId) return;
+    var target = habits.find(function(h) { return h.id === deepLinkHabitId; });
+    if (target) {
+      setActiveTab('home');
+      setSelectedHabit(deepLinkHabitId);
+
+      if (window._supabaseClient) {
+        window._supabaseClient.from('pending_match_suggestions')
+          .select('match_data').eq('user_id', user.uid).eq('habit_id', deepLinkHabitId)
+          .maybeSingle().then(function(r) {
+            if (r.data && r.data.match_data && window._showPreloadedMatch) {
+              window._showPreloadedMatch(target, r.data.match_data);
+            }
+          }).catch(function(){});
+      }
+    }
+    // 不管有沒有找到對應的習慣，處理過一次就把網址參數清掉——避免使用者重新整理
+    // 或切回這個分頁時又觸發一次導頁，也避免這個網址被分享出去時帶著別人的 habitId。
+    var cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, '', cleanUrl);
+  }, [user, habits]);
+
   // ── visibilitychange 回前台重抓資料 ──
   useEffect(function() {
     function _onVisible() {
@@ -15634,6 +15669,40 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('matchingOverlay').style.display = 'none';
     document.body.style.overflow = '';
     _currentHabit = null;
+  };
+
+  // ── 顯示背景排程（check-pending-matches）已經預先算好、存在
+  //   pending_match_suggestions 的配對結果——不重新掃描、不再打一次 Claude，
+  //   使用者從「找到新夥伴」的信件點進來，直接看到跟信件裡承諾的同一個人。──
+  window._showPreloadedMatch = function(habit, matchData) {
+    if (!habit || !matchData) return;
+    if (typeof habit.id === 'string' && habit.id.indexOf('temp-') === 0) return;
+
+    _currentHabit = habit;
+    _currentMatch = null;
+
+    document.getElementById('matchingOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    document.getElementById('matchingScanning').style.display = 'none';
+    document.getElementById('matchingError').style.display = 'none';
+    var oldBanner = document.getElementById('matchFallbackBanner');
+    if (oldBanner) oldBanner.remove();
+
+    document.getElementById('matchingHabitName').textContent = habit.name;
+    var elNameResult = document.getElementById('matchingHabitNameResult');
+    if (elNameResult) elNameResult.textContent = habit.name;
+
+    // ★ 這是系統背景排程已經算好、存起來的結果，不是這次使用者按 Find Partner
+    //   才呼叫的，所以不扣 matching credit（那是給「這次真的用掉一次配對」的
+    //   動作用的）——看到這個結果本身不該讓使用者的錢包數字變少。
+    showMatchingResults([matchData]);
+
+    // 顯示過一次就從資料庫刪掉，避免下次深連結或重新整理又跳出同一筆舊資料。
+    if (window._supabaseClient && window._currentUser) {
+      window._supabaseClient.from('pending_match_suggestions')
+        .delete().eq('user_id', window._currentUser.uid).eq('habit_id', habit.id)
+        .then(function(){});
+    }
   };
 
   window.sendPartnerRequest = async function() {
