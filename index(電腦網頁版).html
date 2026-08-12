@@ -5801,7 +5801,8 @@ function ClipShareModal(props) {
    不會各自顯示讚數，避免使用者以為每支影片有各自獨立的按讚。 */
 function ClipGridModal(props) {
   var challenger = props.challenger, currentUser = props.currentUser,
-    cheered = props.cheered, onCheer = props.onCheer, onClose = props.onClose;
+    cheered = props.cheered, onCheer = props.onCheer, onClose = props.onClose,
+    hideCheer = props.hideCheer; // ★ 新增：看自己的 clip 時傳 true，不顯示 Cheer 按鈕（自己不能幫自己 cheer）
   var _vp = React.useState(null); var viewingPost = _vp[0], setViewingPost = _vp[1];
   if (!challenger) return null;
   var clips = challenger.clips || (challenger.clip ? [challenger.clip] : []);
@@ -5825,7 +5826,7 @@ function ClipGridModal(props) {
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700 } }, challenger.displayName || 'User'),
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)' } }, (challenger.name || 'Habit') + ' · Day ' + (challenger.streak || 0))
       ),
-      /*#__PURE__*/React.createElement("span", {
+      !hideCheer && /*#__PURE__*/React.createElement("span", {
         onClick: function() { if (!cheered) onCheer && onCheer(); },
         style: {
           display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0, cursor: cheered ? 'default' : 'pointer',
@@ -8127,6 +8128,10 @@ function MainApp(_ref16) {
   //   在不在來決定顯示 Add a clip 還是 Edit today's clip。
   var _useState_myClipStatus = React.useState({});
   var myClipStatusByHabit = _useState_myClipStatus[0], setMyClipStatusByHabit = _useState_myClipStatus[1];
+  // ★ 新增：點「N clips shared so far」要開的「我在這個習慣底下所有 clip」grid wall，
+  //   存目前正在看哪個習慣（null 代表沒開）。
+  var _useState_viewingMyClips = React.useState(null);
+  var viewingMyClipsForHabit = _useState_viewingMyClips[0], setViewingMyClipsForHabit = _useState_viewingMyClips[1];
   // ★ 新增：貼/改/刪 clip 後手動 +1，讓上面的 effect 重新抓一次，卡片才會立刻反映
   //   最新狀態，不用等 habits.length 剛好變動或整頁重新整理。
   var _useState_clipRefreshTick = React.useState(0);
@@ -8159,7 +8164,8 @@ function MainApp(_ref16) {
             post: todayPost,
             visibility: todayPost ? todayPost.clip_visibility : null,
             reacted: false,
-            thumbnailUrl: todayPost ? (todayPost.thumbnail_url || null) : null
+            thumbnailUrl: todayPost ? (todayPost.thumbnail_url || null) : null,
+            allPosts: list // ★ 新增：完整的 clip 列表，給「N clips shared so far」點開的 grid wall 用，反正這裡本來就撈過了，不用再多打一次 API
           };
           if (todayPost && todayPost.clip_visibility === 'buddies') buddiesTodayIds.push(todayPost.id);
         });
@@ -10926,7 +10932,8 @@ function MainApp(_ref16) {
           var _cs = myClipStatusByHabit[habit.id];
           if (!_cs || !_cs.totalCount) return null;
           return React.createElement("div", {
-            style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--gray-400)' }
+            style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--gray-400)', cursor: 'pointer' },
+            onClick: function(e) { e.stopPropagation(); setViewingMyClipsForHabit(habit); }
           },
             React.createElement(VideoIcon, { style: { width: 11, height: 11, flexShrink: 0 } }),
             _cs.totalCount + " clip" + (_cs.totalCount === 1 ? '' : 's') + " shared so far"
@@ -11909,6 +11916,22 @@ function MainApp(_ref16) {
       editingPost: editingClipPost,
       onClose: function() { setShowClipShareForHabit(null); setEditingClipPost(null); },
       onPosted: function() { setShowClipShareForHabit(null); setEditingClipPost(null); bumpClipStatusRefresh(); }
+    }),
+    viewingMyClipsForHabit && /*#__PURE__*/React.createElement(ClipGridModal, {
+      challenger: {
+        userId: user.uid,
+        displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'You'),
+        userAvatar: user.photoURL || null,
+        name: viewingMyClipsForHabit.name,
+        streak: viewingMyClipsForHabit.streak,
+        checkedDates: viewingMyClipsForHabit.checkedDates,
+        clips: (myClipStatusByHabit[viewingMyClipsForHabit.id] && myClipStatusByHabit[viewingMyClipsForHabit.id].allPosts) || []
+      },
+      currentUser: user,
+      cheered: true, // 不會顯示 Cheer 按鈕（hideCheer），這個值其實用不到，保留只是符合 props 形狀
+      hideCheer: true, // ★ 看自己的 clip，不需要（也不該能）自己幫自己 cheer
+      onCheer: function() {},
+      onClose: function() { setViewingMyClipsForHabit(null); }
     })
   );
   return /*#__PURE__*/React.createElement("div", {
