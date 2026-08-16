@@ -518,6 +518,12 @@
 
         /* ── AUTH v2 (split-screen FamStreak redesign) ── */
         .fs-split { display:grid; grid-template-columns:1fr; min-height:100vh; }
+        .fs-hero{
+            position:relative; overflow:hidden;
+            background:linear-gradient(165deg,#0D141F 0%,#16212F 45%,#22303F 100%);
+            padding:60px 52px; display:flex; flex-direction:column; justify-content:center; min-height:320px;
+            border-right:1px solid rgba(127,200,204,.12);
+        }
         @media(min-width:640px){
             .fs-split{ grid-template-columns:47% 53%; }
             .fs-hero{ position:sticky; top:0; height:100vh; align-self:start; }
@@ -530,12 +536,6 @@
             .fs-feat-txt span{ font-size:11.5px; }
             .fs-tag{ font-size:13px; }
             .fs-panel{ padding:36px 24px; }
-        }
-        .fs-hero{
-            position:relative; overflow:hidden;
-            background:linear-gradient(165deg,#0D141F 0%,#16212F 45%,#22303F 100%);
-            padding:60px 52px; display:flex; flex-direction:column; justify-content:center; min-height:320px;
-            border-right:1px solid rgba(127,200,204,.12);
         }
         .fs-hero::before{ content:''; position:absolute; inset:0;
             background-image:linear-gradient(rgba(127,200,204,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(127,200,204,.05) 1px,transparent 1px);
