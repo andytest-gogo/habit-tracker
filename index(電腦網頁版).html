@@ -52,6 +52,16 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Habit Tracker Pro</title>
 
+    <!-- ── Canonical / Open Graph / Twitter Card (famstreak.com) ── -->
+    <link rel="canonical" href="https://famstreak.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://famstreak.com/">
+    <meta property="og:title" content="Habit Tracker Pro">
+    <meta property="og:description" content="Habit Tracker Pro - Community Edition">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Habit Tracker Pro">
+    <meta name="twitter:description" content="Habit Tracker Pro - Community Edition">
+
     <!-- ── PWA ── -->
     <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
@@ -505,6 +515,62 @@
         .beta-banner strong { color:#E65100; font-size:12px; display:block; margin-bottom:2px; letter-spacing:0.5px; }
         .beta-disclaimer { background:var(--gray-50); border:1px solid var(--gray-200); padding:11px 14px; margin-top:12px; font-size:10px; color:var(--gray-500); line-height:1.7; }
         .error-message { background:var(--black); color:var(--white); padding:12px 16px; margin-bottom:16px; font-size:12px; max-width:360px; width:100%; }
+
+        /* ── AUTH v2 (split-screen FamStreak redesign) ── */
+        .fs-split { display:grid; grid-template-columns:1fr; min-height:100vh; }
+        @media(min-width:640px){ .fs-split{ grid-template-columns:47% 53%; } }
+        @media(min-width:640px) and (max-width:899px){
+            .fs-hero{ padding:36px 28px; }
+            .fs-wordmark{ font-size:clamp(30px,7vw,42px); }
+            .fs-feat-list{ margin-top:26px; gap:14px; }
+            .fs-feat-txt b{ font-size:12.5px; }
+            .fs-feat-txt span{ font-size:11px; }
+            .fs-tag{ font-size:12.5px; }
+            .fs-panel{ padding:36px 24px; }
+        }
+        .fs-hero{
+            position:relative; overflow:hidden;
+            background:linear-gradient(165deg,#0D141F 0%,#16212F 45%,#22303F 100%);
+            padding:60px 52px; display:flex; flex-direction:column; justify-content:center; min-height:320px;
+            border-right:1px solid rgba(127,200,204,.12);
+        }
+        .fs-hero::before{ content:''; position:absolute; inset:0;
+            background-image:linear-gradient(rgba(127,200,204,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(127,200,204,.05) 1px,transparent 1px);
+            background-size:44px 44px; mask-image:radial-gradient(circle at 25% 20%,black 0%,transparent 65%); pointer-events:none; }
+        .fs-chain{ display:flex; align-items:center; gap:6px; margin-bottom:24px; position:relative; z-index:1; }
+        .fs-chain i{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.14); display:inline-block; }
+        .fs-chain i.lit{ background:#7FC8CC; box-shadow:0 0 8px rgba(127,200,204,.7); }
+        .fs-chain span{ font-family:var(--mono); font-size:11px; letter-spacing:1.6px; color:#8A93A0; text-transform:uppercase; margin-left:8px; }
+        .fs-wordmark{ font-family:var(--din); font-weight:700; font-size:clamp(46px,5.6vw,66px); line-height:.95; letter-spacing:-1px; color:#fff; position:relative; z-index:1; }
+        .fs-wordmark em{ font-style:normal; color:#7FC8CC; }
+        .fs-tag{ font-size:14.5px; color:#8A93A0; margin-top:14px; max-width:380px; line-height:1.65; position:relative; z-index:1; }
+        .fs-feat-list{ margin-top:40px; position:relative; z-index:1; display:flex; flex-direction:column; gap:18px; }
+        .fs-feat{ display:flex; gap:14px; align-items:flex-start; }
+        .fs-feat-ico{ width:30px; height:30px; border-radius:7px; background:rgba(127,200,204,.12); border:1px solid rgba(127,200,204,.3); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#7FC8CC; font-size:14px; font-family:var(--mono); }
+        .fs-feat-txt b{ display:block; font-size:14px; color:#fff; font-weight:600; margin-bottom:2px; }
+        .fs-feat-txt span{ font-size:12.5px; color:#8A93A0; line-height:1.5; }
+        .fs-panel{ background:#F4F6F8; color:#12181F; display:flex; align-items:center; justify-content:center; padding:52px 32px; }
+        .fs-form-col{ width:100%; max-width:380px; }
+        .fs-eyebrow{ font-family:var(--mono); font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:#3E7377; margin-bottom:8px; font-weight:500; }
+        .fs-h2{ font-family:var(--din); font-weight:700; font-size:30px; letter-spacing:-.3px; margin-bottom:6px; color:#12181F; }
+        .fs-sub{ font-size:13px; color:#5C6773; margin-bottom:24px; }
+        .fs-beta{ background:#fff; border:1px solid #E2E6EA; border-left:3px solid #C7A868; border-radius:6px; padding:11px 14px; font-size:11.5px; color:#5C6773; line-height:1.6; margin-bottom:22px; }
+        .fs-beta b{ color:#12181F; display:block; font-size:12px; margin-bottom:2px; }
+        .fs-fgroup{ margin-bottom:16px; }
+        .fs-flabel{ display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.7px; color:#5C6773; margin-bottom:7px; }
+        .fs-finput{ width:100%; padding:12px 14px; border:1.5px solid #E2E6EA; border-radius:6px; font-size:14px; font-family:var(--font); background:#fff; color:#12181F; outline:none; transition:.15s; }
+        .fs-finput:focus{ border-color:#3E7377; box-shadow:0 0 0 3px rgba(127,200,204,.18); }
+        .fs-finput option{ font-family:var(--font); }
+        .fs-frow{ display:flex; gap:12px; }
+        .fs-frow .fs-fgroup{ flex:1; }
+        .fs-hint{ font-size:11px; color:#8A93A0; margin-top:6px; line-height:1.6; }
+        .fs-btn{ width:100%; padding:13.5px; border:none; border-radius:6px; font-size:13px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; cursor:pointer; font-family:var(--font); transition:.18s; }
+        .fs-btn-primary{ background:#0D141F; color:#fff; margin-bottom:12px; }
+        .fs-btn-primary:hover{ background:#16212F; }
+        .fs-btn-primary:disabled{ background:#8A93A0; cursor:not-allowed; }
+        .fs-switch{ text-align:center; font-size:13px; color:#5C6773; margin-top:22px; }
+        .fs-switch a{ color:#12181F; font-weight:700; text-decoration:none; cursor:pointer; }
+        .fs-forgot{ text-align:center; font-size:12px; color:#5C6773; margin-top:12px; text-decoration:underline; cursor:pointer; }
 
         /* ── HEADER ── */
         .header {
@@ -4846,61 +4912,85 @@ function AuthPage(_ref2) {
     }, "Updates tab"), "", /*#__PURE__*/React.createElement("br", null), "\u2463 Double-check your email address is correct", /*#__PURE__*/React.createElement("br", null), "\u2464 Verification link expires after 24 hours")));
   }
 
-  /* ── Login / Sign Up screen ── */
+  /* ── Login / Sign Up screen (FamStreak split-screen redesign) ── */
   return /*#__PURE__*/React.createElement("div", {
-    className: "auth-page"
+    className: "fs-split"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "auth-logo"
-  }, "Habit Tracker"), /*#__PURE__*/React.createElement("div", {
-    className: "auth-subtitle"
-  }, "PROFESSIONAL WELLNESS"), /*#__PURE__*/React.createElement("div", {
-    className: "beta-banner"
-  }, /*#__PURE__*/React.createElement("strong", null, "\uD83D\uDEA7 BETA — Early Access"), "This app is in public beta. Features may change, and occasional bugs may occur. Not intended for critical health tracking. Use at your own discretion."), !isFirebaseConfigured && /*#__PURE__*/React.createElement("div", {
+    className: "fs-hero"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fs-chain"
+  }, /*#__PURE__*/React.createElement("i", { className: "lit" }), /*#__PURE__*/React.createElement("i", { className: "lit" }), /*#__PURE__*/React.createElement("i", { className: "lit" }), /*#__PURE__*/React.createElement("i", { className: "lit" }), /*#__PURE__*/React.createElement("i", null), /*#__PURE__*/React.createElement("i", null), /*#__PURE__*/React.createElement("i", null), /*#__PURE__*/React.createElement("span", null, "Consecutive days")
+  ), /*#__PURE__*/React.createElement("div", {
+    className: "fs-wordmark"
+  }, "Fam", /*#__PURE__*/React.createElement("em", null, "Streak")), /*#__PURE__*/React.createElement("div", {
+    className: "fs-tag"
+  }, "A habit tracker built around accountability \u2014 matched with a partner, so no streak is kept alone."), /*#__PURE__*/React.createElement("div", {
+    className: "fs-feat-list"
+  }, /*#__PURE__*/React.createElement("div", { className: "fs-feat" },
+      /*#__PURE__*/React.createElement("div", { className: "fs-feat-ico" }, "01"),
+      /*#__PURE__*/React.createElement("div", { className: "fs-feat-txt" }, /*#__PURE__*/React.createElement("b", null, "AI-matched partner"), /*#__PURE__*/React.createElement("span", null, "Paired by habit type and values, not random chance."))
+    ), /*#__PURE__*/React.createElement("div", { className: "fs-feat" },
+      /*#__PURE__*/React.createElement("div", { className: "fs-feat-ico" }, "02"),
+      /*#__PURE__*/React.createElement("div", { className: "fs-feat-txt" }, /*#__PURE__*/React.createElement("b", null, "Daily check-ins"), /*#__PURE__*/React.createElement("span", null, "A shared streak that only holds if you both show up."))
+    ), /*#__PURE__*/React.createElement("div", { className: "fs-feat" },
+      /*#__PURE__*/React.createElement("div", { className: "fs-feat-ico" }, "03"),
+      /*#__PURE__*/React.createElement("div", { className: "fs-feat-txt" }, /*#__PURE__*/React.createElement("b", null, "Private by default"), /*#__PURE__*/React.createElement("span", null, "Your data stays between you and your partner."))
+    )
+  )), /*#__PURE__*/React.createElement("div", {
+    className: "fs-panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fs-form-col"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fs-eyebrow"
+  }, forgotMode ? "Reset password" : isLogin ? "Welcome back" : "Get started"), /*#__PURE__*/React.createElement("div", {
+    className: "fs-h2"
+  }, forgotMode ? "Reset password" : isLogin ? "Sign in" : "Create account"), /*#__PURE__*/React.createElement("div", {
+    className: "fs-sub"
+  }, forgotMode ? "We'll email you a link to reset it." : isLogin ? "Pick up your streak where you left off." : "Find a partner and start your first streak."), /*#__PURE__*/React.createElement("div", {
+    className: "fs-beta"
+  }, /*#__PURE__*/React.createElement("b", null, "Beta \u2014 early access"), "This app is in public beta. Features may change and occasional bugs may occur."), !isFirebaseConfigured && /*#__PURE__*/React.createElement("div", {
     className: "demo-badge"
   }, /*#__PURE__*/React.createElement("strong", null, "Demo Mode:"), "Firebase not configured. Click to use the local demo version."), error && /*#__PURE__*/React.createElement("div", {
     className: "error-message"
   }, error), /*#__PURE__*/React.createElement("form", {
-    className: "auth-form",
     onSubmit: handleSubmit
   }, !isLogin && /*#__PURE__*/React.createElement("div", {
-    className: "form-group"
+    className: "fs-fgroup"
   }, /*#__PURE__*/React.createElement("label", {
-    className: "form-label",
-    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+    className: "fs-flabel"
   }, "Name",
-    usernameStatus === 'checking' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-400)', fontWeight: 400 } }, "Checking..."),
-    usernameStatus === 'taken'    && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500 } }, "✗ Username already taken"),
-    usernameStatus === 'available'&& /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#38a169', fontWeight: 500 } }, "✓ Available")
+    usernameStatus === 'checking' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#8A93A0', fontWeight: 400, textTransform: 'none', letterSpacing: 0 } }, "Checking..."),
+    usernameStatus === 'taken'    && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500, textTransform: 'none', letterSpacing: 0 } }, "✗ Username already taken"),
+    usernameStatus === 'available'&& /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#38a169', fontWeight: 500, textTransform: 'none', letterSpacing: 0 } }, "✓ Available")
   ), /*#__PURE__*/React.createElement("input", {
     type: "text",
-    className: "form-input",
+    className: "fs-finput",
     value: displayName,
     onChange: function onChange(e) { setDisplayName(e.target.value); if (e.target.value.trim() !== displayName.trim()) setUsernameStatus(''); },
     onBlur: handleNameBlur,
     placeholder: "Your name",
     style: usernameStatus === 'taken' ? { borderColor: '#e53e3e' } : usernameStatus === 'available' ? { borderColor: '#38a169' } : {}
   })), /*#__PURE__*/React.createElement("div", {
-    className: "form-group"
+    className: "fs-fgroup"
   }, /*#__PURE__*/React.createElement("label", {
-    className: "form-label",
-    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+    className: "fs-flabel"
   }, "Email",
-    !isLogin && emailStatus === 'taken' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500 } }, "✗ Email already registered")
+    !isLogin && emailStatus === 'taken' && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: '#e53e3e', fontWeight: 500, textTransform: 'none', letterSpacing: 0 } }, "✗ Email already registered")
   ), /*#__PURE__*/React.createElement("input", {
     type: "email",
-    className: "form-input",
+    className: "fs-finput",
     value: email,
     onChange: function onChange(e) { setEmail(e.target.value); if (e.target.value.trim() !== email.trim()) setEmailStatus(''); },
     onBlur: handleEmailBlur,
     placeholder: "your@email.com",
     style: !isLogin && emailStatus === 'taken' ? { borderColor: '#e53e3e' } : {}
   })), !forgotMode && /*#__PURE__*/React.createElement("div", {
-    className: "form-group"
+    className: "fs-fgroup"
   }, /*#__PURE__*/React.createElement("label", {
-    className: "form-label"
+    className: "fs-flabel"
   }, "Password"), /*#__PURE__*/React.createElement("input", {
     type: "password",
-    className: "form-input",
+    className: "fs-finput",
     value: password,
     onChange: function onChange(e) {
       return setPassword(e.target.value);
@@ -4908,28 +4998,28 @@ function AuthPage(_ref2) {
     placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
     minLength: "8"
   }), !isLogin && /*#__PURE__*/React.createElement("div", {
-    style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 6, lineHeight: 1.6 }
+    className: "fs-hint"
   }, "Password must be at least 8 chars, with uppercase, lowercase, and a number")),
-  !isLogin && /*#__PURE__*/React.createElement("div", { className: "form-group", style: { display: 'flex', gap: 12 } },
-    /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
-      /*#__PURE__*/React.createElement("label", { className: "form-label" }, "Date of Birth"),
+  !isLogin && /*#__PURE__*/React.createElement("div", { className: "fs-frow" },
+    /*#__PURE__*/React.createElement("div", { className: "fs-fgroup" },
+      /*#__PURE__*/React.createElement("label", { className: "fs-flabel" }, "Date of Birth"),
       /*#__PURE__*/React.createElement("input", {
         type: "date",
-        className: "form-input",
+        className: "fs-finput",
         value: dobInput,
         onChange: function(e) { setDobInput(e.target.value); },
         max: (function(){ var d = new Date(); d.setFullYear(d.getFullYear()-13); return d.toISOString().split('T')[0]; })(),
         min: "1900-01-01",
-        style: { width: '100%', cursor: 'pointer' }
+        style: { cursor: 'pointer' }
       })
     ),
-    /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
-      /*#__PURE__*/React.createElement("label", { className: "form-label" }, "Gender"),
+    /*#__PURE__*/React.createElement("div", { className: "fs-fgroup" },
+      /*#__PURE__*/React.createElement("label", { className: "fs-flabel" }, "Gender"),
       /*#__PURE__*/React.createElement("select", {
-        className: "form-input",
+        className: "fs-finput",
         value: gender,
         onChange: function(e) { setGender(e.target.value); },
-        style: { width: '100%', cursor: 'pointer' }
+        style: { cursor: 'pointer' }
       },
         /*#__PURE__*/React.createElement("option", { value: "" }, "Select..."),
         /*#__PURE__*/React.createElement("option", { value: "male" }, "Male"),
@@ -4971,37 +5061,33 @@ function AuthPage(_ref2) {
   ),
   forgotMode ? /*#__PURE__*/React.createElement("button", {
     type: "button",
-    className: "button button-primary",
+    className: "fs-btn fs-btn-primary",
     disabled: loading,
     onClick: handleForgotPassword
   }, loading ? 'Sending...' : 'Send Reset Email') : /*#__PURE__*/React.createElement("button", {
     type: "submit",
-    className: "button button-primary",
+    className: "fs-btn fs-btn-primary",
     disabled: loading
   }, loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up')), !forgotMode && isLogin && /*#__PURE__*/React.createElement("div", {
-    style: { textAlign: 'center', marginTop: 12 }
-  }, /*#__PURE__*/React.createElement("a", {
-    style: { fontSize: 12, color: 'var(--gray-500)', cursor: 'pointer', textDecoration: 'underline' },
+    className: "fs-forgot",
     onClick: function onClick() {
       setError('');
       setForgotMode(true);
       setResetSent(false);
     }
-  }, "Forgot password?")), resetSent && forgotMode && /*#__PURE__*/React.createElement("div", {
-    style: { marginTop: 12, padding: '12px 16px', background: '#E8F5E9', border: '1px solid #A5D6A7', fontSize: 12, color: '#2E7D32', lineHeight: 1.7 }
+  }, "Forgot password?"), resetSent && forgotMode && /*#__PURE__*/React.createElement("div", {
+    style: { marginTop: 12, padding: '12px 16px', background: '#E8F5E9', border: '1px solid #A5D6A7', borderRadius: 6, fontSize: 12, color: '#2E7D32', lineHeight: 1.7 }
   }, "\u2705 Password reset email sent to ", /*#__PURE__*/React.createElement("strong", null, email), ". Check your inbox (and spam folder)."), forgotMode && /*#__PURE__*/React.createElement("div", {
-    style: { textAlign: 'center', marginTop: 12 }
-  }, /*#__PURE__*/React.createElement("a", {
-    style: { fontSize: 12, color: 'var(--gray-500)', cursor: 'pointer', textDecoration: 'underline' },
+    className: "fs-forgot",
     onClick: function onClick() { setForgotMode(false); setResetSent(false); setError(''); }
-  }, "\u2190 Back to Sign In")), /*#__PURE__*/React.createElement("div", {
-    className: "auth-switch"
+  }, "\u2190 Back to Sign In"), /*#__PURE__*/React.createElement("div", {
+    className: "fs-switch"
   }, isLogin ? "Don't have an account?" : "Already have an account?", /*#__PURE__*/React.createElement("a", {
     onClick: function onClick() {
       setIsLogin(!isLogin);
       setError('');
     }
-  }, isLogin ? 'Sign Up' : 'Sign In')));
+  }, isLogin ? 'Sign Up' : 'Sign In')))));
 }
 
 /* ── FEED CARD COMPONENT (Firebase real likes + comments) ── */
