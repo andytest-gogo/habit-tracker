@@ -518,14 +518,17 @@
 
         /* ── AUTH v2 (split-screen FamStreak redesign) ── */
         .fs-split { display:grid; grid-template-columns:1fr; min-height:100vh; }
-        @media(min-width:640px){ .fs-split{ grid-template-columns:47% 53%; } }
+        @media(min-width:640px){
+            .fs-split{ grid-template-columns:47% 53%; }
+            .fs-hero{ position:sticky; top:0; height:100vh; align-self:start; }
+        }
         @media(min-width:640px) and (max-width:899px){
             .fs-hero{ padding:36px 28px; }
-            .fs-wordmark{ font-size:clamp(30px,7vw,42px); }
+            .fs-wordmark{ font-size:clamp(34px,7vw,46px); }
             .fs-feat-list{ margin-top:26px; gap:14px; }
-            .fs-feat-txt b{ font-size:12.5px; }
-            .fs-feat-txt span{ font-size:11px; }
-            .fs-tag{ font-size:12.5px; }
+            .fs-feat-txt b{ font-size:13.5px; }
+            .fs-feat-txt span{ font-size:11.5px; }
+            .fs-tag{ font-size:13px; }
             .fs-panel{ padding:36px 24px; }
         }
         .fs-hero{
@@ -541,36 +544,36 @@
         .fs-chain i{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.14); display:inline-block; }
         .fs-chain i.lit{ background:#7FC8CC; box-shadow:0 0 8px rgba(127,200,204,.7); }
         .fs-chain span{ font-family:var(--mono); font-size:11px; letter-spacing:1.6px; color:#8A93A0; text-transform:uppercase; margin-left:8px; }
-        .fs-wordmark{ font-family:var(--din); font-weight:700; font-size:clamp(46px,5.6vw,66px); line-height:.95; letter-spacing:-1px; color:#fff; position:relative; z-index:1; }
+        .fs-wordmark{ font-family:var(--din); font-weight:700; font-size:clamp(52px,6.4vw,78px); line-height:.95; letter-spacing:-1px; color:#fff; position:relative; z-index:1; }
         .fs-wordmark em{ font-style:normal; color:#7FC8CC; }
-        .fs-tag{ font-size:14.5px; color:#8A93A0; margin-top:14px; max-width:380px; line-height:1.65; position:relative; z-index:1; }
-        .fs-feat-list{ margin-top:40px; position:relative; z-index:1; display:flex; flex-direction:column; gap:18px; }
-        .fs-feat{ display:flex; gap:14px; align-items:flex-start; }
-        .fs-feat-ico{ width:30px; height:30px; border-radius:7px; background:rgba(127,200,204,.12); border:1px solid rgba(127,200,204,.3); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#7FC8CC; font-size:14px; font-family:var(--mono); }
-        .fs-feat-txt b{ display:block; font-size:14px; color:#fff; font-weight:600; margin-bottom:2px; }
-        .fs-feat-txt span{ font-size:12.5px; color:#8A93A0; line-height:1.5; }
+        .fs-tag{ font-size:15.5px; color:#8A93A0; margin-top:16px; max-width:380px; line-height:1.65; position:relative; z-index:1; }
+        .fs-feat-list{ margin-top:42px; position:relative; z-index:1; display:flex; flex-direction:column; gap:20px; }
+        .fs-feat{ display:flex; gap:16px; align-items:flex-start; }
+        .fs-feat-ico{ width:38px; height:38px; border-radius:9px; background:rgba(127,200,204,.12); border:1px solid rgba(127,200,204,.3); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#7FC8CC; font-size:16px; font-family:var(--mono); }
+        .fs-feat-txt b{ display:block; font-size:15.5px; color:#fff; font-weight:600; margin-bottom:3px; }
+        .fs-feat-txt span{ font-size:13px; color:#8A93A0; line-height:1.5; }
         .fs-panel{ background:#F4F6F8; color:#12181F; display:flex; align-items:center; justify-content:center; padding:52px 32px; }
-        .fs-form-col{ width:100%; max-width:380px; }
-        .fs-eyebrow{ font-family:var(--mono); font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:#3E7377; margin-bottom:8px; font-weight:500; }
-        .fs-h2{ font-family:var(--din); font-weight:700; font-size:30px; letter-spacing:-.3px; margin-bottom:6px; color:#12181F; }
-        .fs-sub{ font-size:13px; color:#5C6773; margin-bottom:24px; }
+        .fs-form-col{ width:100%; max-width:400px; }
+        .fs-eyebrow{ font-family:var(--mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#3E7377; margin-bottom:9px; font-weight:500; }
+        .fs-h2{ font-family:var(--din); font-weight:700; font-size:38px; letter-spacing:-.3px; margin-bottom:8px; color:#12181F; }
+        .fs-sub{ font-size:14.5px; color:#5C6773; margin-bottom:26px; }
         .fs-beta{ background:#fff; border:1px solid #E2E6EA; border-left:3px solid #C7A868; border-radius:6px; padding:11px 14px; font-size:11.5px; color:#5C6773; line-height:1.6; margin-bottom:22px; }
         .fs-beta b{ color:#12181F; display:block; font-size:12px; margin-bottom:2px; }
-        .fs-fgroup{ margin-bottom:16px; }
-        .fs-flabel{ display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.7px; color:#5C6773; margin-bottom:7px; }
-        .fs-finput{ width:100%; padding:12px 14px; border:1.5px solid #E2E6EA; border-radius:6px; font-size:14px; font-family:var(--font); background:#fff; color:#12181F; outline:none; transition:.15s; }
+        .fs-fgroup{ margin-bottom:17px; }
+        .fs-flabel{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.7px; color:#5C6773; margin-bottom:8px; }
+        .fs-finput{ width:100%; padding:13px 15px; border:1.5px solid #E2E6EA; border-radius:6px; font-size:15px; font-family:var(--font); background:#fff; color:#12181F; outline:none; transition:.15s; }
         .fs-finput:focus{ border-color:#3E7377; box-shadow:0 0 0 3px rgba(127,200,204,.18); }
         .fs-finput option{ font-family:var(--font); }
         .fs-frow{ display:flex; gap:12px; }
         .fs-frow .fs-fgroup{ flex:1; }
-        .fs-hint{ font-size:11px; color:#8A93A0; margin-top:6px; line-height:1.6; }
-        .fs-btn{ width:100%; padding:13.5px; border:none; border-radius:6px; font-size:13px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; cursor:pointer; font-family:var(--font); transition:.18s; }
+        .fs-hint{ font-size:11.5px; color:#8A93A0; margin-top:6px; line-height:1.6; }
+        .fs-btn{ width:100%; padding:15px; border:none; border-radius:6px; font-size:14px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; cursor:pointer; font-family:var(--font); transition:.18s; }
         .fs-btn-primary{ background:#0D141F; color:#fff; margin-bottom:12px; }
         .fs-btn-primary:hover{ background:#16212F; }
         .fs-btn-primary:disabled{ background:#8A93A0; cursor:not-allowed; }
-        .fs-switch{ text-align:center; font-size:13px; color:#5C6773; margin-top:22px; }
+        .fs-switch{ text-align:center; font-size:14px; color:#5C6773; margin-top:22px; }
         .fs-switch a{ color:#12181F; font-weight:700; text-decoration:none; cursor:pointer; }
-        .fs-forgot{ text-align:center; font-size:12px; color:#5C6773; margin-top:12px; text-decoration:underline; cursor:pointer; }
+        .fs-forgot{ text-align:center; font-size:12.5px; color:#5C6773; margin-top:12px; text-decoration:underline; cursor:pointer; }
 
         /* ── HEADER ── */
         .header {
