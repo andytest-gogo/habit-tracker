@@ -4734,9 +4734,11 @@ var ADMIN_SEND_TEST_EMAIL_FN = SUPABASE_URL + '/functions/v1/admin-send-test-ema
 // 方便你編輯文案時知道有哪些欄位可以插進去；新增模板時記得也在這裡補一筆。
 var EMAIL_TEMPLATE_VARS = {
   'match_found': ['userName', 'habitName', 'ctaUrl'],
+  'partner_left': ['userName', 'habitName', 'ctaUrl'],
 };
 var EMAIL_TEMPLATE_SAMPLE_DATA = {
-  'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://andytest-gogo.github.io/habit-tracker/' },
+  'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
+  'partner_left': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
 };
 
 var _etTemplates = [];
