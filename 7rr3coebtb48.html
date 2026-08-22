@@ -94,6 +94,31 @@ tr:hover td{background:var(--g50)}
 .search:focus{border-color:var(--black)}
 .loading-row td{text-align:center;padding:28px;color:var(--g400);font-size:11px;text-transform:uppercase;letter-spacing:1px}
 .refresh{padding:7px 13px;background:var(--white);border:1px solid var(--g200);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:var(--g500);font-family:var(--font)}
+
+/* ── CHAT LOGS PAGE ── */
+.chatlogs-layout{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+.chatlogs-list-card{margin-bottom:0}
+.chatlogs-list{max-height:600px;overflow-y:auto}
+.chat-pair-item{padding:12px 16px;border-bottom:1px solid var(--g100);cursor:pointer;transition:background .1s}
+.chat-pair-item:hover{background:var(--g50,#fafafa)}
+.chat-pair-item.on{background:var(--black);color:var(--white)}
+.chat-pair-item.on .chat-pair-sub,
+.chat-pair-item.on .chat-pair-meta{color:rgba(255,255,255,.55)}
+.chat-pair-names{font-size:12px;font-weight:700}
+.chat-pair-sub{font-size:10px;color:var(--g400);margin-top:2px}
+.chat-pair-meta{font-size:9px;color:var(--g400);margin-top:5px;display:flex;justify-content:space-between}
+.chatlogs-thread-card{margin-bottom:0}
+.chatlogs-thread{max-height:600px;overflow-y:auto;padding:16px}
+.chat-msg{max-width:70%;margin-bottom:12px;clear:both}
+.chat-msg.mine{float:right;text-align:right}
+.chat-msg.theirs{float:left;text-align:left}
+.chat-msg-sender{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g400);margin-bottom:3px}
+.chat-msg-bubble{display:inline-block;padding:9px 13px;font-size:12px;line-height:1.5;text-align:left}
+.chat-msg.mine .chat-msg-bubble{background:var(--black);color:var(--white)}
+.chat-msg.theirs .chat-msg-bubble{background:var(--g100);color:var(--black)}
+.chat-msg-time{font-size:9px;color:var(--g400);margin-top:3px}
+.chat-msg-system{clear:both;text-align:center;font-size:10px;color:var(--g400);margin:10px 0;font-style:italic}
+.chat-msg-media a{color:inherit;text-decoration:underline}
 .refresh:hover{border-color:var(--black);color:var(--black)}
 .quota-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
 .quota-warn{background:#fffbe6;border:1px solid #e0c060;padding:10px 14px;font-size:11px;color:#7a6000;margin-bottom:16px;display:none}
@@ -240,6 +265,10 @@ tr:hover td{background:var(--g50)}
       <button class="nav-btn" data-page="pairs">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
         Pairs
+      </button>
+      <button class="nav-btn" data-page="chatlogs">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        Chat Logs
       </button>
       <button class="nav-btn" data-page="tokens">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
@@ -923,6 +952,31 @@ $$ LANGUAGE sql SECURITY DEFINER;</pre>
           <thead><tr><th>User</th><th>Partner</th><th>Habit</th><th>Score</th><th>Status</th><th>Last Post</th><th>Ended Reason</th><th>Created</th></tr></thead>
           <tbody id="pairsTbody"><tr class="loading-row"><td colspan="8">Loading...</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ══ CHAT LOGS PAGE ══ -->
+    <div class="pg" id="pg-chatlogs">
+      <div class="pg-title">Chat Logs</div>
+      <div class="pg-sub">Every pair's message history, in one place — search by either user's name or email</div>
+      <input class="search" id="chatSearch" placeholder="Search by name / email / UID..." oninput="renderChatPairList()">
+      <div class="chatlogs-layout">
+        <div class="tbl-card chatlogs-list-card">
+          <div class="tbl-hd">
+            <div class="tbl-ttl">Pairs with messages</div>
+            <button class="refresh" onclick="loadChatLogs()">Refresh</button>
+          </div>
+          <div id="chatPairList" class="chatlogs-list"><div class="loading-row" style="padding:16px;text-align:center;color:var(--g400)">Loading...</div></div>
+        </div>
+        <div class="tbl-card chatlogs-thread-card">
+          <div class="tbl-hd">
+            <div class="tbl-ttl" id="chatThreadTitle">Select a pair</div>
+            <span id="chatThreadCount" style="font-size:10px;color:var(--g400)"></span>
+          </div>
+          <div id="chatThreadBody" class="chatlogs-thread">
+            <div style="padding:40px 16px;text-align:center;color:var(--g400);font-size:12px">Pick a pair on the left to see the full conversation.</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1830,6 +1884,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (btn.dataset.page === 'cloudinary') loadCloudinaryQueue();
     if (btn.dataset.page === 'matching') loadMatchingStats();
     if (btn.dataset.page === 'pairs') loadPairs();
+    if (btn.dataset.page === 'chatlogs') loadChatLogs();
     if (btn.dataset.page === 'tokens') {
       loadTokenUsage();
       _tokensLiveInterval = setInterval(loadTokenUsage, 15000); // 停留在這頁時每 15 秒重新整理一次
@@ -4209,6 +4264,162 @@ async function loadPairs() {
 }
 
 /* ══════════════════════════════════════════════════
+   CHAT LOGS（每個配對的完整聊天紀錄，可依帳號搜尋）
+   ⚠️ pair_messages 的欄位（content / message_type / media_url / media_type）
+   是照主 App（index.html）裡實際 insert 聊天訊息的地方核對過的，跟這裡的
+   欄位名稱一致；message_type 除了一般文字訊息（值是 null/空字串）以外，
+   還有 'media'（圖片/影片，用 media_url + media_type 判斷）以及
+   'media_request' / 'media_consent_granted' / 'media_consent_declined'
+   這幾種「系統提示」訊息（沒有實際內容，用 chat-msg-system 樣式顯示）。
+══════════════════════════════════════════════════ */
+var _chatPairs = [];      // [{ pairId, userId, partnerId, habitName, msgCount, lastAt }]
+var _chatActivePairId = null;
+
+async function loadChatLogs() {
+  var listEl = document.getElementById('chatPairList');
+  listEl.innerHTML = '<div class="loading-row" style="padding:16px;text-align:center;color:var(--g400)">Loading...</div>';
+  try {
+    // 1. 撈所有訊息只取輕量欄位，在前端聚合成「每個 pair 有幾則訊息、最後一則時間」
+    //    （訊息量大的話這裡跟 Engagement 頁一樣加 .limit(20000) 保護一下）
+    var { data: msgs, error: msgsErr } = await _supabase
+      .from('pair_messages')
+      .select('pair_id, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20000);
+    if (msgsErr) throw msgsErr;
+
+    var agg = {}; // pair_id -> { count, lastAt }
+    (msgs || []).forEach(function(m) {
+      if (!agg[m.pair_id]) agg[m.pair_id] = { count: 0, lastAt: m.created_at };
+      agg[m.pair_id].count++;
+    });
+    var pairIds = Object.keys(agg);
+    if (pairIds.length === 0) {
+      _chatPairs = [];
+      listEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--g400);font-size:12px">No chat messages yet</div>';
+      return;
+    }
+
+    // 2. 只查「有訊息的」那些 pair 的基本資料（user/partner/habit），不用整張 pairs 表
+    var { data: pairs, error: pairsErr } = await _supabase
+      .from('pairs')
+      .select('id, user_id, partner_id, habit_name, partner_habit_name')
+      .in('id', pairIds);
+    if (pairsErr) throw pairsErr;
+
+    _chatPairs = (pairs || []).map(function(p) {
+      return {
+        pairId: p.id,
+        userId: p.user_id,
+        partnerId: p.partner_id,
+        habitName: p.habit_name || p.partner_habit_name || '—',
+        msgCount: (agg[p.id] || {}).count || 0,
+        lastAt: (agg[p.id] || {}).lastAt || null,
+      };
+    }).sort(function(a, b) {
+      return new Date(b.lastAt || 0) - new Date(a.lastAt || 0);
+    });
+
+    renderChatPairList();
+  } catch (e) {
+    listEl.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Error: ' + htmlEsc(e.message) + '</div>';
+  }
+}
+
+function renderChatPairList() {
+  var q = (document.getElementById('chatSearch').value || '').toLowerCase().trim();
+  var listEl = document.getElementById('chatPairList');
+
+  var filtered = _chatPairs.filter(function(p) {
+    if (!q) return true;
+    var uName = resolveUserName(p.userId).toLowerCase();
+    var pName = resolveUserName(p.partnerId).toLowerCase();
+    var uEmail = ((allUsers.find(function(u){ return u.uid === p.userId; })||{}).email || '').toLowerCase();
+    var pEmail = ((allUsers.find(function(u){ return u.uid === p.partnerId; })||{}).email || '').toLowerCase();
+    return uName.indexOf(q) !== -1 || pName.indexOf(q) !== -1 ||
+           uEmail.indexOf(q) !== -1 || pEmail.indexOf(q) !== -1 ||
+           p.userId.toLowerCase().indexOf(q) !== -1 || p.partnerId.toLowerCase().indexOf(q) !== -1;
+  });
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--g400);font-size:12px">No matching pairs</div>';
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(function(p) {
+    var lastAtLabel = p.lastAt ? new Date(p.lastAt).toLocaleString() : '—';
+    var activeClass = p.pairId === _chatActivePairId ? ' on' : '';
+    return '<div class="chat-pair-item' + activeClass + '" onclick="openChatThread(\'' + p.pairId + '\')">' +
+      '<div class="chat-pair-names">' + htmlEsc(resolveUserName(p.userId)) + ' ↔ ' + htmlEsc(resolveUserName(p.partnerId)) + '</div>' +
+      '<div class="chat-pair-sub">' + htmlEsc(p.habitName) + '</div>' +
+      '<div class="chat-pair-meta"><span>' + p.msgCount + ' messages</span><span>' + lastAtLabel + '</span></div>' +
+    '</div>';
+  }).join('');
+}
+
+async function openChatThread(pairId) {
+  _chatActivePairId = pairId;
+  renderChatPairList(); // re-render so the clicked item gets the "on" highlight
+
+  var pairInfo = _chatPairs.find(function(p) { return p.pairId === pairId; });
+  var titleEl = document.getElementById('chatThreadTitle');
+  var countEl = document.getElementById('chatThreadCount');
+  var bodyEl = document.getElementById('chatThreadBody');
+
+  titleEl.textContent = pairInfo
+    ? resolveUserName(pairInfo.userId) + ' ↔ ' + resolveUserName(pairInfo.partnerId)
+    : 'Conversation';
+  bodyEl.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--g400);font-size:12px">Loading...</div>';
+
+  try {
+    var { data: msgs, error } = await _supabase
+      .from('pair_messages')
+      .select('sender_id, content, message_type, media_url, media_type, created_at')
+      .eq('pair_id', pairId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+
+    countEl.textContent = (msgs || []).length + ' messages';
+
+    if (!msgs || msgs.length === 0) {
+      bodyEl.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--g400);font-size:12px">No messages in this thread</div>';
+      return;
+    }
+
+    var meId = pairInfo ? pairInfo.userId : null; // 「靠右」的一方，純粹用來視覺區分兩邊，不代表誰是管理者
+
+    bodyEl.innerHTML = msgs.map(function(m) {
+      // 系統性質的訊息（沒有實際聊天內容）用置中提示樣式顯示，不當成一般對話泡泡
+      if (m.message_type === 'media_request' || m.message_type === 'media_consent_granted' || m.message_type === 'media_consent_declined') {
+        var label = m.message_type === 'media_request' ? htmlEsc(resolveUserName(m.sender_id)) + ' requested to share media'
+          : m.message_type === 'media_consent_granted' ? 'Media sharing approved'
+          : 'Media sharing declined';
+        return '<div class="chat-msg-system">' + label + ' · ' + new Date(m.created_at).toLocaleString() + '</div>';
+      }
+
+      var side = m.sender_id === meId ? 'mine' : 'theirs';
+      var bubbleContent;
+      if (m.message_type === 'media' && m.media_url) {
+        var kind = m.media_type === 'video' ? '🎥 Video' : '🖼️ Image';
+        bubbleContent = '<span class="chat-msg-media">' + kind + ' — <a href="' + htmlEsc(m.media_url) + '" target="_blank" rel="noopener noreferrer">open ↗</a></span>';
+      } else {
+        bubbleContent = htmlEsc(m.content || '');
+      }
+
+      return '<div class="chat-msg ' + side + '">' +
+        '<div class="chat-msg-sender">' + htmlEsc(resolveUserName(m.sender_id)) + '</div>' +
+        '<div class="chat-msg-bubble">' + bubbleContent + '</div>' +
+        '<div class="chat-msg-time">' + new Date(m.created_at).toLocaleString() + '</div>' +
+      '</div>';
+    }).join('') + '<div style="clear:both"></div>';
+
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  } catch (e) {
+    bodyEl.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Error: ' + htmlEsc(e.message) + '</div>';
+  }
+}
+
+/* ══════════════════════════════════════════════════
    ENGAGEMENT（頁面停留時間 / 配對聊天頻率 / 解除綁定數據）
 ══════════════════════════════════════════════════ */
 var _egDwellAgg = null;   // { uid: { pages:{page:{sec,visits}}, totalSec, totalVisits } }
@@ -4734,11 +4945,11 @@ var ADMIN_SEND_TEST_EMAIL_FN = SUPABASE_URL + '/functions/v1/admin-send-test-ema
 // 方便你編輯文案時知道有哪些欄位可以插進去；新增模板時記得也在這裡補一筆。
 var EMAIL_TEMPLATE_VARS = {
   'match_found': ['userName', 'habitName', 'ctaUrl'],
-  'partner_left': ['userName', 'habitName', 'ctaUrl'],
+  'partner_left': ['userName', 'leavingUserName', 'habitName', 'ctaUrl'],
 };
 var EMAIL_TEMPLATE_SAMPLE_DATA = {
   'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
-  'partner_left': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
+  'partner_left': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
 };
 
 var _etTemplates = [];
