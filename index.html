@@ -5611,6 +5611,25 @@ function ClipViewerModal(props) {
   var post = props.post, onClose = props.onClose, cheered = props.cheered,
     onCheer = props.onCheer, currentUser = props.currentUser;
   if (!post) return null;
+  // ★ 新增：刪除這支 clip。FeedCard 本身已經有刪除按鈕 + 確認對話框的 UI，
+  //   之前這裡傳的是 onDelete: null，等於把現成的功能關掉了。這裡補上實際
+  //   邏輯，直接沿用跟其他地方刪貼文一致的方式：刪 posts 那一列 + 用
+  //   module-level 的 _deletePostBunnyMedia 清掉 Bunny 上對應的圖片/影片，
+  //   避免留下孤兒檔案；FeedCard 會先跳出「Delete this post? This cannot
+  //   be undone.」的確認，使用者按確認才會呼叫到這裡，不用另外加一層確認。
+  //   刪除完直接關掉檢視視窗——grid wall 本身的清單，下次重新打開會自動
+  //   反映最新狀態，不需要在這裡另外做即時刷新。
+  function handleDeleteClip(postId) {
+    _supabase.from('posts').delete().eq('id', postId)
+      .then(function() {
+        try { _deletePostBunnyMedia(post, currentUser); } catch (e) {}
+        onClose && onClose();
+      })
+      .catch(function(err) {
+        console.error('[ClipViewerModal] delete failed:', err);
+        alert('Could not delete this clip. Please try again.');
+      });
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
     onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
@@ -5632,7 +5651,7 @@ function ClipViewerModal(props) {
       currentUser: currentUser,
       hideLikeAction: true,
       onReport: null,
-      onDelete: null
+      onDelete: (currentUser && post.userId === currentUser.uid) ? handleDeleteClip : null
     })
   ));
 }
@@ -5654,6 +5673,14 @@ var VIOLATION_MESSAGES = {
   SPAM:       "Your post looks like it may be spam or unrelated to your habits. Share your real progress instead!",
   IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!",
   POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits."
+};
+// ★ 聊天室專用（不是 Claude 判斷的分類，是 moderate-content 的 chat_text 快速
+//   通道用 regex 判斷出來的）。CONTACT_INFO 的文字語氣刻意寫得比較像「說明」
+//   不是「禁止」——sendMessage() 裡還會動態補上「還要等幾天解鎖」，這裡的
+//   版本是找不到天數時的預設文字。
+var CHAT_VIOLATION_MESSAGES = {
+  CONTACT_INFO: "New matches get to know each other here first, before sharing contact info.",
+  SCAM: "That message looks like it may be a scam attempt and wasn't sent. Please keep chat genuine."
 };
 
 // ★ 新增：影片/圖片上傳的檔案大小上限，習慣打卡影片（ClipShareModal）跟
@@ -12197,6 +12224,13 @@ function PairWallPage(_ref_pw) {
   var _sl = useState(true); var loading = _sl[0]; var setLoading = _sl[1];
   var _si = useState(''); var inputText = _si[0]; var setInputText = _si[1];
   var _ss = useState(false); var sending = _ss[0]; var setSending = _ss[1];
+  var _scb = useState(null); var chatBlockedMsg = _scb[0]; var setChatBlockedMsg = _scb[1];
+  // ★ 配對天數，用來決定聯絡方式分享要不要解鎖（滿 7 天解鎖），跟 Buddies
+  //   卡片上 "Day X" 那個數字算法一致，都是用 pair.created_at 換算。
+  var _pairDaysTogether = pair.created_at
+    ? Math.max(1, Math.floor((Date.now() - new Date(pair.created_at).getTime()) / 86400000) + 1)
+    : 1;
+  var _contactUnlocked = _pairDaysTogether >= 7;
   var msgsEndRef = React.useRef(null);
   var _sla = useState(null); var partnerLastActive = _sla[0]; var setPartnerLastActive = _sla[1];
   var _sep = useState(false); var showEndConfirm = _sep[0]; var setShowEndConfirm = _sep[1];
@@ -12396,14 +12430,42 @@ function PairWallPage(_ref_pw) {
     _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).then(function(){}).catch(function(){});
   }
 
-  /* send message */
+  /* send message — text 先過輕量 regex 快速通道（不呼叫 Claude，聊天不卡頓）。
+     擋下來的話不寫進 pair_messages，在輸入框上方顯示原因（CONTACT_INFO 會顯示
+     還要等幾天解鎖，語氣用「說明」不用「禁止」），3 秒後自動收起。daysTogether
+     一起傳給後端，配對滿 7 天後 CONTACT_INFO 規則就不再擋（SCAM 規則不受
+     影響，一律照擋）。 */
   function sendMessage() {
     var text = inputText.trim();
     if (!text || sending) return;
     setSending(true);
-    _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
-      .then(function() { setInputText(''); setSending(false); touchPairActivity(); })
-      .catch(function() { setSending(false); });
+    setChatBlockedMsg(null);
+    _supabase.auth.getSession().then(function(s) {
+      var token = s.data.session && s.data.session.access_token;
+      if (!token) return { approved: true };
+      return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ mode: 'chat_text', caption: text, daysTogether: _pairDaysTogether })
+      }).then(function(res) { return (res && res.ok) ? res.json() : { approved: true }; })
+        .catch(function() { return { approved: true }; });
+    }).catch(function() { return { approved: true }; })
+    .then(function(mod) {
+      if (mod && mod.approved === false) {
+        setSending(false);
+        var msg = CHAT_VIOLATION_MESSAGES[mod.violation] || 'Please review our community guidelines.';
+        if (mod.violation === 'CONTACT_INFO') {
+          var daysLeft = Math.max(1, 7 - _pairDaysTogether);
+          msg = 'New matches get to know each other here first \u2014 you\u2019ll be able to share contact info once you\u2019ve been paired for 7 days. ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to go!';
+        }
+        setChatBlockedMsg(msg);
+        setTimeout(function(){ setChatBlockedMsg(null); }, 4000);
+        return;
+      }
+      return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
+        .then(function() { setInputText(''); setSending(false); touchPairActivity(); })
+        .catch(function() { setSending(false); });
+    });
   }
 
   /* ── Chat media（聊天室傳照片/影片，首次需對方同意）─────────────────── */
@@ -12761,6 +12823,24 @@ function PairWallPage(_ref_pw) {
       ),
       React.createElement('div', { style:{ height:3, background:'var(--gray-100)', borderRadius:2, overflow:'hidden' } },
         React.createElement('div', { style:{ height:'100%', width: chatMediaProgress + '%', background:'var(--black)', borderRadius:2, transition:'width .2s ease' } })
+      )
+    ),
+
+    /* CONTACT-INFO LOCK NOTICE — 主動告知規則，配對滿 7 天前一直顯示，
+       解鎖後這塊就不再渲染。放在被擋訊息的警示框「上面」，一個是持續提醒，
+       一個是真的踩到規則時才跳出來，兩個訊息用途不一樣，不合併。 */
+    !_contactUnlocked && React.createElement('div', { style:{ maxWidth:640, width:'100%', margin:'0 auto', padding:'6px 14px 0', boxSizing:'border-box' } },
+      React.createElement('div', { style:{ fontSize:10.5, color:'var(--gray-500)', background:'var(--gray-50,#fafafa)', border:'1px solid var(--gray-150,#e8e8e8)', padding:'6px 11px', display:'flex', alignItems:'center', gap:6 } },
+        React.createElement('span', null, '🔒'),
+        React.createElement('span', null, 'Contact info sharing unlocks after 7 days paired \u00b7 Day ' + _pairDaysTogether + ' of 7')
+      )
+    ),
+
+    /* CHAT BLOCKED WARNING — 訊息被 regex 擋下時顯示，3 秒自動消失 */
+    chatBlockedMsg && React.createElement('div', { style:{ maxWidth:640, width:'100%', margin:'0 auto', padding:'6px 14px 0', boxSizing:'border-box' } },
+      React.createElement('div', { style:{ fontSize:11, color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', padding:'8px 11px', display:'flex', alignItems:'center', gap:6 } },
+        React.createElement('span', null, '⚠️'),
+        React.createElement('span', null, chatBlockedMsg)
       )
     ),
 
