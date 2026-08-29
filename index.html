@@ -2741,11 +2741,18 @@ if (isFirebaseConfigured) {
     onAuthStateChanged: function(cb) {
       // Use onAuthStateChange exclusively — avoids double-firing with getSession().
       // TOKEN_REFRESHED is skipped (silent JWT rotation, not a real state change).
-      // INITIAL_SESSION with no session is also skipped — it fires on page load when
-      // the user is logged out and would needlessly reset any in-progress auth state.
+      // ★ FIX (site felt slow to load): this used to also skip INITIAL_SESSION when
+      // there was no session ("if (event === 'INITIAL_SESSION' && !session) return;").
+      // For every logged-out visitor that's the ONLY event Supabase ever fires — no
+      // session means no later SIGNED_IN/TOKEN_REFRESHED is coming — so cb() was never
+      // called, authLoading stayed true, and the app sat there until the unrelated
+      // 8-second failsafe in App() force-resolved it. Confirmed live on famstreak.com:
+      // INITIAL_SESSION with session=null fires in ~0ms (read from localStorage, no
+      // network round trip), but the app still waited the full 8s every single load.
+      // The code below already null-safely handles session===null (rawUser stays
+      // null, cb(null) shows the login page), so there is nothing left to special-case.
       var { data: { subscription } } = _supabase.auth.onAuthStateChange(function(event, session) {
         if (event === 'TOKEN_REFRESHED') return;
-        if (event === 'INITIAL_SESSION' && !session) return;
         // Build user from the session's user object — session.user has the most
         // up-to-date confirmed_at / email_confirmed_at from Supabase.
         var rawUser = session && session.user ? session.user : null;
