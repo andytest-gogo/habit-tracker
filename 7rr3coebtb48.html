@@ -4401,7 +4401,23 @@ async function openChatThread(pairId) {
       var bubbleContent;
       if (m.message_type === 'media' && m.media_url) {
         var kind = m.media_type === 'video' ? '🎥 Video' : '🖼️ Image';
-        bubbleContent = '<span class="chat-msg-media">' + kind + ' — <a href="' + htmlEsc(m.media_url) + '" target="_blank" rel="noopener noreferrer">open ↗</a></span>';
+        // ★ FIX (video 連結打開是 403)：影片的 media_url 存的是 Bunny Stream CDN
+        // 的原始 playlist.m3u8（vz-xxx.b-cdn.net/<videoId>/playlist.m3u8），這個網址
+        // 是設計給 iframe.mediadelivery.net 的內嵌播放器用的，直接開新分頁點開會被
+        // Bunny 擋下來（沒有合法 referrer/token）。主 App 播放影片時是包成
+        // https://iframe.mediadelivery.net/embed/{BUNNY_STREAM_LIBRARY}/{videoId}
+        // 這個內嵌播放頁（見 index.html 的 BUNNY_STREAM_LIBRARY / BUNNY_STREAM_CDN），
+        // 這裡改成偵測到 Bunny Stream 網址時就轉成同一種播放頁連結；圖片不受影響，
+        // 因為圖片走的是 Bunny Storage（habitappmedia.b-cdn.net），沒有這個限制。
+        var openUrl = m.media_url;
+        if (m.media_type === 'video') {
+          var vidMatch = m.media_url.match(/b-cdn\.net\/([0-9a-f-]{20,})\/playlist\.m3u8/i);
+          if (vidMatch) {
+            // ⚠️ 跟 index.html 的 BUNNY_STREAM_LIBRARY 保持一致，那邊改了這裡也要改
+            openUrl = 'https://iframe.mediadelivery.net/embed/677933/' + vidMatch[1];
+          }
+        }
+        bubbleContent = '<span class="chat-msg-media">' + kind + ' — <a href="' + htmlEsc(openUrl) + '" target="_blank" rel="noopener noreferrer">open ↗</a></span>';
       } else {
         bubbleContent = htmlEsc(m.content || '');
       }
