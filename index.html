@@ -3909,9 +3909,20 @@ function renderPostVideo(mediaUrl, opts) {
   var vid = _extractBunnyVideoId(mediaUrl);
   if (vid) {
     // Bunny Stream iframe 播放器：自動處理轉碼狀態、CORS、自適應畫質(ABR)
-    return React.createElement('div', { style: Object.assign({ position:'relative', width:'100%', aspectRatio:'16/9', background:'#000' }, opts.wrapStyle || {}) },
+    // ★ 修正「觀看影片時整個畫面一直晃動」：
+    //   1) 這裡原本外層 wrapper 寫死 aspectRatio:'16/9'（橫向），但打卡習慣的
+    //      clip 幾乎都是手機直拍（ClipGridModal 的縮圖格也是用 3/4 直向比例，
+    //      跟這裡的 16/9 從一開始就對不起來）。把一支直向影片硬塞進橫向框，
+    //      Bunny 的 iframe player 為了配合 responsive=true 會持續嘗試量測、
+    //      重新調整內部畫面大小去貼合這個「跟真實影片比例不合」的容器，
+    //      就是畫面一直在抖動/晃動的來源。
+    //   2) 拿掉 responsive=true（改用固定比例容器讓 iframe 單純填滿），player
+    //      不需要再持續跟外層容器「協商」尺寸，也一併去掉這個抖動源頭。
+    //   3) 預設比例改成直向 9/16（跟縮圖格的 3/4 精神一致），呼叫端仍可透過
+    //      opts.wrapStyle 覆寫（例如已知是橫向影片的情境）。
+    return React.createElement('div', { style: Object.assign({ position:'relative', width:'100%', aspectRatio:'9/16', maxHeight:'70vh', background:'#000', overflow:'hidden' }, opts.wrapStyle || {}) },
       React.createElement('iframe', {
-        src: 'https://iframe.mediadelivery.net/embed/' + BUNNY_STREAM_LIBRARY + '/' + vid + '?autoplay=false&preload=true&responsive=true',
+        src: 'https://iframe.mediadelivery.net/embed/' + BUNNY_STREAM_LIBRARY + '/' + vid + '?autoplay=false&preload=true',
         loading: 'lazy',
         style: { border: 'none', position:'absolute', top:0, left:0, width:'100%', height:'100%' },
         allow: 'accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen;',
@@ -5376,7 +5387,7 @@ function FeedCard(_ref5) {
     className: "feed-media-placeholder"
   }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' } }))), /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))), /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
@@ -5917,6 +5928,35 @@ function ClipShareModal(props) {
 /* ── Clip Grid：Challenger 卡片先進來的畫面（Concept A，改成同一人依天數排列自己的多支 clip）──
    Cheer 按鈕釘在這裡（對整個習慣，一天一次），底下每個格子只負責「點進去看那一天的影片」，
    不會各自顯示讚數，避免使用者以為每支影片有各自獨立的按讚。 */
+/* ── 修正：剛上傳完的 clip 立刻點開常常顯示失敗（縮圖破圖），過一下子回來看又正常 ──
+   根因：影片上傳完成當下，Bunny Stream 還在做轉檔＋縮圖生成（非同步，通常幾秒內完成），
+   但貼文當下就已經把「猜測」的 thumbnail_url 存進 DB 了，這個 URL 這一刻其實還沒有
+   真正的圖檔內容。單純 <img src=...> 遇到這種情況只會顯示瀏覽器的破圖圖示，也不會
+   自己重試。這裡包一個小元件：載入失敗就等一下重試（用 cache-busting 參數避開瀏覽器
+   快取住那次失敗的結果），試幾次都不行才顯示 VideoIcon 當退路，不是永遠卡住一張破圖。 */
+function _ClipThumb(props) {
+  var url = props.url;
+  var _rt = React.useState(0); var retryCount = _rt[0], setRetryCount = _rt[1];
+  var _fl = React.useState(false); var failed = _fl[0], setFailed = _fl[1];
+  React.useEffect(function() { setRetryCount(0); setFailed(false); }, [url]);
+  if (!url || failed) {
+    return /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 24, height: 24, color: 'var(--gray-500)' } });
+  }
+  var MAX_RETRIES = 3;
+  var src = retryCount === 0 ? url : (url + (url.indexOf('?') === -1 ? '?' : '&') + 'r=' + retryCount);
+  return /*#__PURE__*/React.createElement("img", {
+    key: retryCount, // 換 src 時強制重新掛載 <img>，確保真的重新發出請求
+    src: src, alt: "",
+    style: { width: '100%', height: '100%', objectFit: 'cover' },
+    onError: function() {
+      if (retryCount >= MAX_RETRIES) { setFailed(true); return; }
+      // 影片轉檔／縮圖生成通常幾秒內就會好，用漸增的等待時間重試，
+      // 不用一直狂打（1.5s → 3s → 4.5s）
+      setTimeout(function() { setRetryCount(function(n) { return n + 1; }); }, 1500 * (retryCount + 1));
+    }
+  });
+}
+
 function ClipGridModal(props) {
   var challenger = props.challenger, currentUser = props.currentUser,
     cheered = props.cheered, onCheer = props.onCheer, onClose = props.onClose,
@@ -5969,16 +6009,19 @@ function ClipGridModal(props) {
                 //   從沒補上 mediaUrl（camelCase）——FeedCard 判斷要不要渲染影片播放器
                 //   靠的是 post.hasVideo && post.mediaUrl，camelCase 版本一直是 undefined，
                 //   所以影片播放器根本沒有被渲染出來，這就是別人點開 clip 卻放不出影片的原因。
+                // ★ 新增修正：同理也要補 commentCount（camelCase）——上面查詢已經補選了
+                //   comment_count，這裡沒轉成 camelCase 的話 FeedCard 的留言數 badge
+                //   還是只能 fallback 顯示 0，要手動點開留言列表那支即時查詢跑完才會更新，
+                //   造成「第一次點開沒有留言、留言數也是 0，要點第二次才對」的感覺。
                 setViewingPost(Object.assign({}, p, {
                   userId: challenger.userId, user: challenger.displayName, avatarUrl: challenger.userAvatar,
-                  habit: challenger.name, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url
+                  habit: challenger.name, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
+                  commentCount: p.comment_count || 0
                 }));
               },
               style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
             },
-              p.thumbnail_url
-                ? /*#__PURE__*/React.createElement("img", { src: p.thumbnail_url, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' } })
-                : /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 24, height: 24, color: 'var(--gray-500)' } }),
+              /*#__PURE__*/React.createElement(_ClipThumb, { url: p.thumbnail_url }),
               /*#__PURE__*/React.createElement("span", {
                 style: { position: 'absolute', bottom: 5, left: 5, fontSize: 10, fontWeight: 700, background: '#fff', borderRadius: 4, padding: '2px 5px' }
               }, 'Day ' + dayNum)
@@ -8261,7 +8304,11 @@ function MainApp(_ref16) {
     var habitIds = habits.map(function(h) { return h.id; }).filter(Boolean);
     if (habitIds.length === 0) return;
     var todayISOStr = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0, 10);
-    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at')
+    // ★ 修正：這裡原本沒有選 comment_count，害 FeedCard 的留言數 badge 永遠拿到
+    //   undefined、只能 fallback 顯示 0——不管 DB 裡實際有幾則留言，第一次點開
+    //   都會看到「0」，要手動點開留言列表（觸發另一支即時查詢）才會看到正確數字。
+    //   這裡補上 comment_count，下面組 viewingPost 時也要記得轉成 camelCase 帶過去。
+    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count')
       .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
       .order('created_at', { ascending: false })
       .limit(500)
@@ -8810,8 +8857,10 @@ function MainApp(_ref16) {
           if (finalList.length > 0) setTodayPick(finalList[0]);
           return;
         }
+        // ★ 修正：同一個「comment_count 沒選到」的問題也存在於 Challenger 頁的
+        //   clip 查詢，補上，跟下面 myClipStatusByHabit 那份查詢保持一致。
         _sbClient.from('posts')
-          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at')
+          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count')
           .in('habit_id', _habitIds)
           .eq('is_habit_clip', true)
           .eq('clip_visibility', 'everyone')
@@ -11469,9 +11518,7 @@ function MainApp(_ref16) {
               "aria-label": "Watch clip",
               onClick: function(e) { e.stopPropagation(); setViewingChallengerKey(ckey); },
               style: { width: 44, height: 44, borderRadius: 8, background: "var(--gray-100)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", overflow: "hidden" }
-            }, c.clip.thumbnail_url
-              ? React.createElement("img", { src: c.clip.thumbnail_url, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } })
-              : React.createElement(VideoIcon, { style: { width: 18, height: 18, color: "var(--gray-500)" } }))
+            }, React.createElement(_ClipThumb, { url: c.clip.thumbnail_url }))
           ),
           React.createElement("div", { className: "challenger-card-progress" },
             React.createElement("div", { className: "challenger-card-prog-row" },
@@ -13021,7 +13068,8 @@ function BuddiesPage(_ref_buddies) {
         return isUserSide ? p.partner_habit_id : p.habit_id;
       }).filter(Boolean);
       if (partnerHabitIds.length > 0) {
-        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at')
+        // ★ 修正：同一份 comment_count 沒選到的問題，跟另外兩處 clip 查詢一起補上。
+        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count')
           .in('habit_id', partnerHabitIds)
           .eq('is_habit_clip', true)
           .in('clip_visibility', ['everyone', 'buddies'])
@@ -13338,15 +13386,18 @@ function BuddiesPage(_ref_buddies) {
                     style:{ width:44, height:44, borderRadius:8, background:'var(--gray-100)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, cursor:'pointer', overflow:'hidden' },
                     onClick: function(e){
                       e.stopPropagation();
+                      // ★ 修正：這裡原本沒補 hasVideo/mediaUrl（camelCase）跟 commentCount，
+                      //   跟 ClipGridModal 之前修過的是同一個 bug——FeedCard 判斷要不要渲染
+                      //   播放器靠 post.hasVideo && post.mediaUrl，這裡漏掉的話，點開夥伴分享
+                      //   的 clip 只會看到空白（播放器沒被渲染出來），留言數也會一樣卡在 0。
                       setViewingBuddyClip(Object.assign({}, clip, {
                         userId: partnerId, user: partnerName || 'Your buddy', avatarUrl: partnerAvatarUrl,
-                        habit: habitName || pair.habit_name
+                        habit: habitName || pair.habit_name,
+                        hasVideo: true, mediaUrl: clip.media_url, thumbnailUrl: clip.thumbnail_url,
+                        commentCount: clip.comment_count || 0
                       }));
                     }
-                  }, clip.thumbnail_url
-                    ? React.createElement("img", { src: clip.thumbnail_url, alt:"", style:{ width:'100%', height:'100%', objectFit:'cover' } })
-                    : React.createElement(VideoIcon, { style:{ width:18, height:18, color:'var(--gray-500)' } })
-                  ),
+                  }, React.createElement(_ClipThumb, { url: clip.thumbnail_url })),
                   React.createElement("div", { style:{ flex:1, minWidth:0 } },
                     React.createElement("div", { style:{ fontSize:11, fontWeight:700 } }, (partnerName || 'Your buddy') + ' shared a clip'),
                     React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } },
