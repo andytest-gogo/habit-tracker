@@ -3934,6 +3934,11 @@ var BUNNY_STREAM_LIBRARY   = '677933';
 var BUNNY_STREAM_CDN       = 'https://vz-cc68b17b-afb.b-cdn.net';
 // ⚠️ Bunny API 金鑰已移到 bunny-upload Edge Function（後端），前端不再持有任何金鑰。
 var BUNNY_UPLOAD_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/bunny-upload';
+// ★ 不再使用：PairWallPage 的「AI · What you two share」改成直接讀
+// pair.ai_match_data.reason，不用再打這支 Edge Function 重新生成一次
+// （原因見 PairWallPage 裡 _aiInsightInitial 那段註解）。這支 Edge Function
+// 本身沒有動，只是前端不再呼叫它——如果確定沒有其他地方在用，之後可以
+// 一併把 pair-insight 這支 Edge Function 也下架，省一份維護成本。
 var PAIR_INSIGHT_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/pair-insight';
 
 // 取得目前使用者的 access token（呼叫 edge function 用）
@@ -12243,8 +12248,18 @@ function PairWallPage(_ref_pw) {
   var _sep = useState(false); var showEndConfirm = _sep[0]; var setShowEndConfirm = _sep[1];
   var _send = useState(false); var ending = _send[0]; var setEnding = _send[1];
   /* AI insight（共同點提醒）*/
-  var _sai = useState(pair.ai_insight || null); var aiInsight = _sai[0]; var setAiInsight = _sai[1];
-  var _sail = useState(false); var insightLoading = _sail[0]; var setInsightLoading = _sail[1];
+  // ★ FIX (「AI · What you two share」內容空泛)：原本這裡會另外呼叫 pair-insight
+  // 這支 Edge Function 讓 Claude 重新生成一次文字，但它能看到的資料只有 habitName
+  // 跟時長，生出來的東西永遠只是把兩人的習慣講一次（"both committed runners
+  // tackling the same 30-minute goal..."），不管是哪一組配對都長得差不多。
+  // match-partner 配對當下其實已經用雙方 user_values 問卷結果算出更具體的
+  // pair.ai_match_data.reason 了——就是「AI report」展開時看到的同一段文字，
+  // 是根據這兩個人實際填的價值觀去寫的，每組配對會不一樣。這裡直接讀那個欄位，
+  // 不用再多打一次 Claude、也不用等網路，資料本來就已經在 pair 這個 prop 裡了。
+  // pair.ai_insight 保留當作手動覆寫用的後門：之後想幫特定配對客製化這句話，
+  // 直接寫這個欄位的值就會蓋過用 ai_match_data.reason 自動算出來的版本。
+  var _aiInsightInitial = pair.ai_insight || (pair.ai_match_data && pair.ai_match_data.reason) || null;
+  var _sai = useState(_aiInsightInitial); var aiInsight = _sai[0]; var setAiInsight = _sai[1];
   /* Media consent（首次上傳照片/影片需對方同意）*/
   var _smc = useState(pair.media_consent || {}); var mediaConsent = _smc[0]; var setMediaConsent = _smc[1];
   var _smcm = useState(false); var showMediaConsentModal = _smcm[0]; var setShowMediaConsentModal = _smcm[1];
@@ -12275,26 +12290,10 @@ function PairWallPage(_ref_pw) {
       .catch(function(){});
   }
 
-  /* 取得 AI 共同點提醒（每組 pair 只會呼叫 Claude 一次，之後讀 pairs.ai_insight 快取）*/
-  useEffect(function() {
-    if (!user || !pair || pair.status !== 'active') return;
-    if (pair.ai_insight) { setAiInsight(pair.ai_insight); return; }
-    setInsightLoading(true);
-    _getAccessToken().then(function(token) {
-      if (!token) throw new Error('not authenticated');
-      return fetch(PAIR_INSIGHT_FN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ pairId: pair.id })
-      });
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d && d.insight) setAiInsight(d.insight);
-      setInsightLoading(false);
-    })
-    .catch(function() { setInsightLoading(false); });
-  }, [user, pair && pair.id]);
+  /* ★ 原本這裡有一個 useEffect 會在 pair.ai_insight 沒有快取時打 pair-insight
+     Edge Function 重新生成一次——已經拿掉了，理由見上面 _aiInsightInitial 那段
+     註解。ai_match_data 是配對當下就跟著 pair 這筆資料一起讀進來的，不需要再
+     額外打一次網路請求或等待 loading 狀態。*/
 
   /* 進入聊天室時同步一次 consent 狀態 */
   useEffect(function() { refreshConsent(); }, []);
@@ -12701,14 +12700,13 @@ function PairWallPage(_ref_pw) {
       React.createElement('div', { className: 'pw-end-chev' }, '›')
     ),
 
-    /* AI INSIGHT — 一兩句話提醒雙方的共同點（一次生成，讀 pairs.ai_insight 快取）*/
-    (insightLoading || aiInsight) && React.createElement('div', { className: 'pw-ai-card' },
+    /* AI INSIGHT — 一兩句話提醒雙方的共同點，直接讀配對當下算好的 ai_match_data.reason
+       （或 pair.ai_insight 手動覆寫），不用再打 pair-insight 重新生成一次 */
+    aiInsight && React.createElement('div', { className: 'pw-ai-card' },
       React.createElement('div', { className: 'pw-ai-dot' }),
       React.createElement('div', { style: { flex: 1, minWidth: 0 } },
         React.createElement('div', { className: 'pw-ai-lbl' }, 'AI · What you two share'),
-        React.createElement('div', { className: 'pw-ai-txt' },
-          insightLoading ? 'Analysing what you both have in common...' : aiInsight
-        )
+        React.createElement('div', { className: 'pw-ai-txt' }, aiInsight)
       )
     ),
 
@@ -13262,37 +13260,47 @@ function BuddiesPage(_ref_buddies) {
                       )
                     : React.createElement(React.Fragment, null,
                         React.createElement("div", { className: "pair-streak" + (pair.status === 'active' ? ' active' : pair.status === 'pending' ? ' pending' : '') }, pair.status.toUpperCase()),
-                        pair.status === 'active' && pair.ai_match_data && React.createElement("button", {
-                          style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', background:'none', border:'none', cursor:'pointer', padding:'2px 0', textTransform:'uppercase', letterSpacing:'.4px' },
-                          onClick: function(e){ e.stopPropagation(); setExpandedReportId(function(prev){ return prev === pair.id ? null : pair.id; }); }
-                        }, expandedReportId === pair.id ? 'Hide report ▴' : 'AI report ▾'),
                         React.createElement("div", { style:{ color:'var(--gray-300)', fontSize:16, flexShrink:0 } }, '›')
                       )
                 ),
-                // ★ 新增：streak 對照 + 一起連續打卡天數 + 最新訊息預覽，只有真的配對成功
-                //   （非 pending、非收到的邀請）才顯示，跟下面 clip 區塊同一個顯示條件。
+                // ★ FIX (夥伴卡片重新設計)：拿掉雙方各自的打卡進度條——那個數字在習慣詳情頁
+                // 本來就看得到，卡片上真正獨特、也更值得第一眼看到的是「你們兩個為什麼合拍」。
+                // 換成配對當下就算好的 ai_match_data（score / breakdown / reason），不用再點
+                // 「AI report ▾」展開才看得到；完整五個面向的細項還在，收進下面「Full
+                // breakdown」這個可展開連結裡，只是不再佔卡片最上面的版位，不是拿掉功能。
                 !isIncoming && pair.status === 'active' && React.createElement(React.Fragment, null,
                   React.createElement("div", {
-                    style:{ display:'flex', gap:20, marginTop:14, paddingTop:14, borderTop:'1px solid var(--gray-100)' }
+                    style:{ marginTop:14, paddingTop:14, borderTop:'1px solid var(--gray-100)' }
                   },
-                    React.createElement("div", { style:{ flex:1 } },
-                      React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-600)', fontWeight:700, marginBottom:4 } },
-                        React.createElement("span", null, "You", myGoalDays && React.createElement("span", { style:{ color:'var(--gray-400)', fontWeight:600, textTransform:'none', marginLeft:5 } }, "· " + myGoalDays + "-day goal")),
-                        React.createElement("span", null, myPairStreak + " day" + (myPairStreak === 1 ? '' : 's'))
-                      ),
-                      React.createElement("div", { style:{ height:5, background:'var(--gray-100)', borderRadius:3 } },
-                        React.createElement("div", { style:{ height:'100%', width: streakBarPct(myPairStreak, partnerPairStreak) + '%', background:'#3b82f6', borderRadius:3 } })
-                      )
-                    ),
-                    React.createElement("div", { style:{ flex:1 } },
-                      React.createElement("div", { style:{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--gray-600)', fontWeight:700, marginBottom:4 } },
-                        React.createElement("span", null, partnerName || 'Buddy', partnerGoalDays && React.createElement("span", { style:{ color:'var(--gray-400)', fontWeight:600, textTransform:'none', marginLeft:5 } }, "· " + partnerGoalDays + "-day goal")),
-                        React.createElement("span", null, partnerPairStreak + " day" + (partnerPairStreak === 1 ? '' : 's'))
-                      ),
-                      React.createElement("div", { style:{ height:5, background:'var(--gray-100)', borderRadius:3 } },
-                        React.createElement("div", { style:{ height:'100%', width: streakBarPct(partnerPairStreak, myPairStreak) + '%', background:'#f59e0b', borderRadius:3 } })
-                      )
-                    )
+                    pair.ai_match_data
+                      ? React.createElement(React.Fragment, null,
+                          React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:6, marginBottom:6 } },
+                            React.createElement("span", { style:{ fontSize:19, fontWeight:800, fontFamily:'var(--din)', color:'var(--black)' } },
+                              (pair.ai_match_data.score != null ? pair.ai_match_data.score : pair.match_score) || '—'
+                            ),
+                            React.createElement("span", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px' } }, '% values match')
+                          ),
+                          pair.ai_match_data.reason && React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.6, marginBottom:8 } }, pair.ai_match_data.reason),
+                          pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 &&
+                            React.createElement("div", { style:{ display:'flex', gap:6, flexWrap:'wrap' } },
+                              Object.entries(pair.ai_match_data.breakdown)
+                                .filter(function(e){ return e[1] != null; })
+                                .sort(function(a,b){ return b[1] - a[1]; })
+                                .slice(0, 2)
+                                .map(function(e) {
+                                  var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                                  return React.createElement("span", {
+                                    key: e[0],
+                                    style:{ fontSize:9, fontWeight:700, color:'#3d5e6a', background:'#e2ebec', borderRadius:5, padding:'4px 8px' }
+                                  }, lbl + ' · ' + e[1] + '%');
+                                })
+                            ),
+                          React.createElement("button", {
+                            style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', background:'none', border:'none', cursor:'pointer', padding:'8px 0 0', textTransform:'uppercase', letterSpacing:'.4px' },
+                            onClick: function(e){ e.stopPropagation(); setExpandedReportId(function(prev){ return prev === pair.id ? null : pair.id; }); }
+                          }, expandedReportId === pair.id ? 'Hide full breakdown ▴' : 'Full breakdown ▾')
+                        )
+                      : React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } }, 'No AI match report for this pair yet.')
                   ),
                   React.createElement("div", { style:{ marginTop:12, display:'flex', alignItems:'center', gap:8, padding:'8px 10px', background: togetherStreak === 0 && (myGoalEnded || partnerGoalEnded) ? 'var(--gray-100)' : '#f0fdf4', borderRadius:6 } },
                     React.createElement("span", { style:{ fontSize:13 } },
@@ -13358,36 +13366,26 @@ function BuddiesPage(_ref_buddies) {
                     React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'#555' } }, clipReacted ? 'You cheered this on' : 'Cheer on')
                   )
                 ),
-                // ★ active 配對也可以展開看當初的 AI 配對報告——用的是同一個 pair.ai_match_data
-                //   欄位，跟 isIncoming 那邊看到的是完全一樣的資料，不是各自重新算一份，
-                //   所以沒有「該以哪一份報告為準」的問題：整個 pairs 資料表對這組配對
-                //   本來就只存了「送邀請那一方當初搜尋時」產生的這一份，接受邀請的人
-                //   看到的、日後回來這裡展開看到的，都是讀同一個欄位。
-                pair.status === 'active' && expandedReportId === pair.id && React.createElement("div", { style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' } },
-                  pair.ai_match_data
-                    ? React.createElement(React.Fragment, null,
-                        React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:6, marginBottom:8 } },
-                          React.createElement("span", { style:{ fontSize:20, fontWeight:800, color:'var(--black)' } }, (pair.ai_match_data.score != null ? pair.ai_match_data.score : pair.match_score) || '—'),
-                          React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase' } }, '% match')
+                // ★ FIX (夥伴卡片重新設計)：score 跟 reason 現在已經在上面新的
+                // 「values match」區塊一直顯示了，這裡展開時不用再重複一次，只補上完整
+                // 五個面向的細項（上面平常只挑最高的兩個當 chip）。用的還是同一個
+                // pair.ai_match_data 欄位，跟 isIncoming 那邊看到的是完全一樣的資料，
+                // 不是各自重新算一份——整個 pairs 資料表對這組配對本來就只存了「送邀請
+                // 那一方當初搜尋時」產生的這一份，接受邀請的人看到的、日後回來這裡
+                // 展開看到的，都是讀同一個欄位。
+                pair.status === 'active' && expandedReportId === pair.id && pair.ai_match_data && pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 && React.createElement("div", { style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' } },
+                  Object.entries(pair.ai_match_data.breakdown)
+                    .filter(function(e){ return e[1] != null; })
+                    .map(function(e) {
+                      var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                      return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
+                        React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
+                        React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
+                          React.createElement("div", { style:{ height:'100%', width: e[1] + '%', background:'var(--black)', borderRadius:2 } })
                         ),
-                        pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 &&
-                          React.createElement("div", { style:{ marginBottom:8 } },
-                            Object.entries(pair.ai_match_data.breakdown)
-                              .filter(function(e){ return e[1] != null; })
-                              .map(function(e) {
-                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
-                                return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
-                                  React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
-                                  React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
-                                    React.createElement("div", { style:{ height:'100%', width: e[1] + '%', background:'var(--black)', borderRadius:2 } })
-                                  ),
-                                  React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:28, textAlign:'right' } }, e[1] + '%')
-                                );
-                              })
-                          ),
-                        pair.ai_match_data.reason && React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.7 } }, pair.ai_match_data.reason)
-                      )
-                    : React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } }, 'No AI match report was saved for this pair (matched before this feature existed).')
+                        React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:28, textAlign:'right' } }, e[1] + '%')
+                      );
+                    })
                 ),
                 // ★ 收到邀請的人原本只看得到一張空空的卡片（姓名+習慣名），完全沒有足夠資訊
                 //   判斷要不要接受。現在把當初送出邀請時存下的配對報告（ai_match_data）秀出來，
@@ -14835,7 +14833,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('surveyBody').style.display = '';
     document.getElementById('valuesSurveyOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    _renderSurveyQ();
+    // ★ FIX (問卷選項感覺空泛)：改成預設先看到自由輸入，不是選擇題。
+    // 選擇題的答案終究是 AI 事先猜好、寫死的一句話——不管是誰填、選了哪一個，
+    // 存進 user_values.summary 的就是同一句罐頭文字，之後不管是配對理由還是
+    // 「AI · What you two share」，能讀到的素材本來就只有這些，難怪讀起來空泛，
+    // 這不是 prompt 或文案的問題，是資料本身的表達力被選擇題結構卡死了。
+    // 自由輸入才能讓使用者講出真正屬於自己的細節，interpret-values-text 就是
+    // 設計來處理這個的，只是原本被藏在選擇題流程裡一行不顯眼的連結，多數人
+    // 根本不會點進去。選擇題還在，改成從這裡點「Prefer a quick multiple-choice
+    // instead?」才會進去，給不想打字的人用。
+    _surveyFreeTextMode = true;
+    _renderFreeTextSurvey();
   }
 
   function _renderSurveyQ() {
@@ -14885,7 +14893,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:18px;font-family:var(--din);letter-spacing:.3px;">' + q.text + '</div>' +
         '<div>' + optsHtml + '</div>' +
         '<div style="text-align:center;margin-top:4px;">' +
-          '<button onclick="window._showFreeTextValues()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">None of these quite fit — describe it in your own words</button>' +
+          '<button onclick="window._showFreeTextValues()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">← Prefer to just describe it in your own words?</button>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-bottom:20px;">' +
           '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#888;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
@@ -14894,19 +14902,22 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       '</div>';
   }
 
-  // ── 自由輸入路徑：選擇題都不符合時，讓使用者自己打字描述自己 ──────────────
+  // ── 自由輸入路徑：現在是問卷「預設」的第一畫面，不再是選擇題的逃生門 ──────
   function _renderFreeTextSurvey(errorMsg) {
-    document.getElementById('surveyStepFill').style.width = '90%';
+    // ★ 這裡原本是 90%（原本的用途是「選擇題都填完了，這是最後一步」的視覺
+    // 提示），現在自由輸入是一進來就看到的第一畫面，不是最後一步，改成低一點
+    // 的進度、只是讓使用者知道流程開始了。
+    document.getElementById('surveyStepFill').style.width = '20%';
     var body = document.getElementById('surveyBody');
     body.innerHTML =
       '<div style="padding:16px 20px 0;">' +
         '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">In your own words</div>' +
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:12px;font-family:var(--din);letter-spacing:.3px;">What drives you to stick with a habit, and what kind of partner brings out your best?</div>' +
-        '<div style="font-size:10px;color:#888;line-height:1.6;margin-bottom:12px;">A couple of sentences is plenty — we\'ll use this instead of the multiple-choice answers.</div>' +
+        '<div style="font-size:10px;color:#888;line-height:1.6;margin-bottom:12px;">A couple of sentences is plenty — this is what we\'ll actually match you and describe your fit with a partner on.</div>' +
         '<textarea id="surveyFreeText" rows="6" maxlength="1500" placeholder="e.g. I stick with things when I have a clear goal to chase, not just a routine. I do best with a partner who checks in but doesn\'t guilt-trip me when I miss a day..." style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#fff;padding:12px;font-size:12px;line-height:1.6;font-family:inherit;resize:vertical;"></textarea>' +
         (errorMsg ? '<div style="color:#f87171;font-size:10px;margin-top:8px;">' + errorMsg + '</div>' : '') +
         '<div style="text-align:center;margin-top:10px;">' +
-          '<button onclick="window._backToQuestions()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">Back to the questions instead</button>' +
+          '<button onclick="window._backToQuestions()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">Prefer a quick multiple-choice instead?</button>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-bottom:20px;">' +
           '<button onclick="window._skipSurvey()" style="background:none;border:none;color:#888;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;padding:12px 0;">Skip for now</button>' +
