@@ -15670,10 +15670,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       // breakdown
       '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
         '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;">Match breakdown</div>' +
-        _progRow('Avg Duration',   bd.activityFit,  av.fg) +
-        _progRow('Habit Lifespan', bd.rhythmScore,   av.fg) +
-        _progRow('Mind-Body',      bd.mindBody,      av.fg) +
-        _progRow('Rhythm Score',   bd.durationFit,   av.fg) +
+        // ★ FIX：這四行原本標籤跟數值對不起來(複製時錯位) — 例如「Avg Duration」
+        // 這個標籤底下顯示的其實是 activityFit 的分數，不是真正的平均時長；
+        // 「Rhythm Score」底下顯示的其實是 durationFit，durationFit 本身反而
+        // 沒有任何標籤顯示出來。跟 Buddies 聊天室那邊已經正確的
+        // { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body',
+        //   durationFit:'Duration Fit', valuesFit:'Values Fit' } 這組標籤對齊，
+        // 四行都改成 match-partner Edge Function 實際算出來的那五個面向本身的名字。
+        _progRow('Activity Fit', bd.activityFit,  av.fg) +
+        _progRow('Rhythm Score', bd.rhythmScore,   av.fg) +
+        _progRow('Mind-Body',    bd.mindBody,      av.fg) +
+        _progRow('Duration Fit', bd.durationFit,   av.fg) +
         valuesFitHtml +
       '</div>' +
 
