@@ -3003,7 +3003,13 @@ if (isFirebaseConfigured) {
       //   「undefined」桶子，沒有一筆對得上真正的 habit.id——這就是
       //   andytestlih 收到 cheer、Home 頁卻永遠顯示 0 的根本原因。
       'habit_id':'habitId','sender_id':'senderId','recipient_id':'recipientId',
-      'is_habit_clip':'isHabitClip','clip_visibility':'clipVisibility'
+      'is_habit_clip':'isHabitClip','clip_visibility':'clipVisibility',
+      // ★ 修正（2026-09）：新的內容審查隱藏＋色標機制要讀 moderationStatus/
+      //   moderationCategory 這兩個 camelCase 欄位（見 renderModerationHiddenOther /
+      //   renderModerationAuthorBanner），不補進這張白名單的話，讀出來的 post/comment
+      //   就只會有 moderation_status/moderation_category（snake_case），跟上面
+      //   is_habit_clip 那次一樣的問題重演一次。
+      'moderation_status':'moderationStatus','moderation_category':'moderationCategory'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];
@@ -5118,6 +5124,10 @@ function FeedCard(_ref5) {
     onCheer = _ref5.onCheer,
     hideLikeAction = _ref5.hideLikeAction;
   var isOwner = !!(currentUser && post.userId && currentUser.uid === post.userId);
+  // [FIX 2026-09] hidden+color-tag moderation instead of blocking at submit time —
+  // see renderModerationHiddenOther() / renderModerationAuthorBanner() below,
+  // and the post/comment/clip submit handlers.
+  var isHidden = post.moderationStatus === 'hidden';
   var _useState17 = useState(false),
     _useState18 = _slicedToArray(_useState17, 2),
     showComments = _useState18[0],
@@ -5233,15 +5243,6 @@ function FeedCard(_ref5) {
     var _avatar = ((currentUser.displayName || currentUser.email || 'U')[0] || 'U').toUpperCase();
     setSendingComment(true);
 
-    var _COMMENT_VIOLATION_MSGS = {
-      SCAM:       'Your comment looks promotional or suspicious. Please keep it genuine and supportive.',
-      ADULT:      "Your comment contains content that's not appropriate for our community. Please keep it clean.",
-      VIOLENCE:   'Your comment may be harmful or threatening. Please keep our community safe and supportive.',
-      HATE:       'Your comment contains language that may be hurtful to others. Please keep it respectful and kind.',
-      SPAM:       'Your comment looks like spam. Please share a genuine, supportive message instead.',
-      IRRELEVANT: 'Your comment was flagged by our community filter. Please keep comments respectful and supportive.'
-    };
-
     // ── 留言文字審查（先查快取，命中就不呼叫 Claude）──
     function _moderateCommentText() {
       try {
@@ -5283,16 +5284,16 @@ function FeedCard(_ref5) {
     var _modPromise = isFirebaseConfigured ? _moderateCommentText() : Promise.resolve({ approved: true });
 
     _modPromise.then(function(mod) {
-      if (mod && mod.approved === false) {
-        var _vt = mod.violation || 'IRRELEVANT';
-        alert('\u26a0\ufe0f Comment not posted\n\n' + (_COMMENT_VIOLATION_MSGS[_vt] || 'Your comment was flagged. Please keep comments respectful and supportive.'));
-        setSendingComment(false);
-        return;
-      }
-      // ── 審查通過 ──
+      // [FIX 2026-09] Don't block comments anymore -- always post them. If
+      // moderate-content flags it (any of SCAM/ADULT/VIOLENCE/HATE/SPAM/
+      // IRRELEVANT/POLITICAL), stash the verdict on the comment instead of
+      // alert()-blocking it; the comments list renders it hidden+watermarked
+      // for everyone except the comment's own author (renderModerationHiddenOther /
+      // renderModerationAuthorBanner -- same helpers FeedCard's posts use).
+      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
       if (!isFirebaseConfigured) {
         setComments(function (prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, userId: currentUser.uid, moderationStatus: _modViolation ? 'hidden' : 'ok', moderationCategory: _modViolation, createdAt: null }]);
         });
         setCommentText('');
         setSendingComment(false);
@@ -5306,6 +5307,8 @@ function FeedCard(_ref5) {
         likes: 0,
         likedBy: [],
         postId: post.id,
+        moderationStatus: _modViolation ? 'hidden' : 'ok',
+        moderationCategory: _modViolation,
         createdAt: FieldValue.serverTimestamp()
       };
       var _avatarUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('avatar_' + currentUser.uid) : null;
@@ -5314,7 +5317,7 @@ function FeedCard(_ref5) {
       db.collection('posts').doc(post.id).collection('comments').add(_commentData).then(function() {
         // 立即 append 到本地 state，讓留言馬上顯示
         setComments(function(prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _commentData.text, userName: _commentData.userName, userAvatar: _commentData.userAvatar, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _commentData.text, userName: _commentData.userName, userAvatar: _commentData.userAvatar, userId: _commentData.userId, moderationStatus: _commentData.moderationStatus, moderationCategory: _commentData.moderationCategory, createdAt: null }]);
         });
         setLocalCommentCount(function(c) { return (c != null ? c : (post.commentCount != null ? post.commentCount : (post.comments || 0))) + 1; });
         setCommentText('');
@@ -5325,7 +5328,7 @@ function FeedCard(_ref5) {
         // insert 失敗：仍在本地顯示作為 fallback
         console.error('[Comment] Failed:', _err && _err.message);
         setComments(function (prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, userId: currentUser.uid, moderationStatus: _modViolation ? 'hidden' : 'ok', moderationCategory: _modViolation, createdAt: null }]);
         });
         setCommentText('');
         setSendingComment(false);
@@ -5355,7 +5358,9 @@ function FeedCard(_ref5) {
     className: "feed-time"
   }, post.time))), /*#__PURE__*/React.createElement("div", {
     className: "feed-content"
-  }, post.text && /*#__PURE__*/React.createElement("div", {
+  }, (isHidden && !isOwner) ? renderModerationHiddenOther(post.moderationCategory, post.isHabitClip ? 'clip' : 'post') : /*#__PURE__*/React.createElement(React.Fragment, null,
+  isHidden && isOwner && renderModerationAuthorBanner(post.moderationCategory, post.isHabitClip ? 'clip' : 'post'),
+  post.text && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
   }, (function() {
     var postNeedsTrunc = needsTruncation(post.text, POST_LINE_LIMIT);
@@ -5387,7 +5392,7 @@ function FeedCard(_ref5) {
     className: "feed-media-placeholder"
   }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))), /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), (!isHidden || isOwner) && /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
@@ -5533,9 +5538,16 @@ function FeedCard(_ref5) {
       className: "comment-body"
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-user"
-    }, c.userName), /*#__PURE__*/React.createElement("div", {
-      className: "comment-text"
-    }, (function() {
+    }, c.userName),
+    // [FIX 2026-09] Same hidden+watermark treatment as FeedCard posts: a
+    // flagged comment is never blocked at send time, it's just hidden from
+    // everyone except the person who wrote it (see renderModerationHiddenOther /
+    // renderModerationAuthorBanner, defined once and shared with FeedCard).
+    (c.moderationStatus === 'hidden' && !isOwnComment)
+      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment'))
+      : /*#__PURE__*/React.createElement("div", { className: "comment-text" },
+          c.moderationStatus === 'hidden' && isOwnComment && renderModerationAuthorBanner(c.moderationCategory, 'comment'),
+          (function() {
       var commentNeedsTrunc = needsTruncation(c.text, COMMENT_LINE_LIMIT);
       var isExpanded = !!expandedComments[c.id];
       var displayText = commentNeedsTrunc && !isExpanded ? truncateText(c.text, COMMENT_LINE_LIMIT) : c.text;
@@ -5697,6 +5709,93 @@ var VIOLATION_MESSAGES = {
   IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!",
   POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits."
 };
+
+// [FIX 2026-09] Content moderation no longer blocks posting (see the post
+// composer / comment / clip-caption submit handlers). Instead, anything
+// moderate-content flags (approved === false) is still saved and hidden from
+// everyone else, rendered as a frosted/blurred "flagged" card below — but the
+// author themselves still sees their own original content (with a banner
+// telling them why it's hidden), they just can't tell anyone else can't.
+var MODERATION_CATEGORY_INFO = {
+  ADULT:      { label: 'Sexual content',   icon: '🔞', bg: '#ffe4ec', border: '#f3b6cd', fg: '#99315f' },
+  VIOLENCE:   { label: 'Violent content',  icon: '⚠️', bg: '#fde2e1', border: '#f3a8a5', fg: '#a13328' },
+  HATE:       { label: 'Hateful language', icon: '🚫', bg: '#efe3fb', border: '#cdb0ef', fg: '#6b3fa0' },
+  POLITICAL:  { label: 'Political content',icon: '🗳', bg: '#e0edff', border: '#a9c6f5', fg: '#2a4d8f' },
+  SCAM:       { label: 'Scam / suspicious',icon: '🛑', bg: '#fff2d6', border: '#f2cf8a', fg: '#8a5a00' },
+  SPAM:       { label: 'Spam',             icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' },
+  IRRELEVANT: { label: 'Off-topic',        icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' }
+};
+
+// Faint repeating diagonal watermark text, layered behind/over flagged content
+// (same idea as a document watermark) — purely decorative, pointer-events:none.
+function _moderationWatermark(info, opts) {
+  opts = opts || {};
+  var lbl = (info.label || '').toUpperCase();
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none',
+      display: 'flex', alignItems: 'center', justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      transform: 'rotate(-16deg)', whiteSpace: 'nowrap',
+      fontSize: opts.fontSize || 13, fontWeight: 800, letterSpacing: 3,
+      color: info.fg, opacity: opts.opacity || 0.16
+    }
+  }, (lbl + ' · · · ' ).repeat(6)));
+}
+
+// What everyone EXCEPT the author sees for a hidden post/comment: the real
+// content is still in the DOM (blurred + desaturated, non-interactive) so the
+// card keeps its natural size/shape, with a frosted glass panel + watermark
+// and a small centered badge on top — nicer than a flat "blocked" banner.
+function renderModerationHiddenOther(category, kind, realContentNode) {
+  var info = MODERATION_CATEGORY_INFO[category] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+  return /*#__PURE__*/React.createElement("div", {
+    style: { position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid ' + info.border }
+  },
+    realContentNode && /*#__PURE__*/React.createElement("div", {
+      style: { filter: 'blur(9px) saturate(.6)', opacity: .55, pointerEvents: 'none', userSelect: 'none' },
+      "aria-hidden": "true"
+    }, realContentNode),
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: realContentNode ? 'absolute' : 'static', inset: 0,
+        background: info.bg + (realContentNode ? 'e6' : ''), // ~90% opacity frosted tint over the blur
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        textAlign: 'center', padding: realContentNode ? '18px 14px' : '16px 14px', minHeight: realContentNode ? 90 : 'auto'
+      }
+    },
+      _moderationWatermark(info, { fontSize: 11, opacity: .14 }),
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 20, marginBottom: 4, position: 'relative' } }, info.icon),
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 800, fontSize: 12.5, color: info.fg, position: 'relative' } }, 'Hidden · ' + info.label),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: info.fg, opacity: .75, marginTop: 2, position: 'relative', maxWidth: 220 } }, 'This ' + (kind || 'post') + ' was flagged by our AI filter.')
+    )
+  );
+}
+
+// What the AUTHOR sees on their own flagged post/comment: their real content,
+// completely legible (not blurred — they wrote it, they should be able to
+// review/edit/delete it), with a slim tinted banner on top telling them it's
+// hidden from everyone else and why. A faint watermark ties it visually to
+// the "flagged" state without getting in the way of reading.
+function renderModerationAuthorBanner(category, kind) {
+  var info = MODERATION_CATEGORY_INFO[category] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative', overflow: 'hidden', display: 'flex', gap: 8, alignItems: 'center',
+      background: info.bg, borderLeft: '3px solid ' + info.fg, color: info.fg,
+      borderRadius: 4, padding: '8px 10px', fontSize: 11, lineHeight: 1.5, marginBottom: 10
+    }
+  },
+    _moderationWatermark(info, { fontSize: 10, opacity: .10 }),
+    /*#__PURE__*/React.createElement("span", { style: { fontSize: 14, position: 'relative' } }, info.icon),
+    /*#__PURE__*/React.createElement("span", { style: { position: 'relative' } },
+      /*#__PURE__*/React.createElement("b", null, 'Only you can see this ' + (kind || 'post') + '. '),
+      'Flagged as ' + info.label.toLowerCase() + ' and hidden from everyone else.'
+    )
+  );
+}
 // ★ 聊天室專用（不是 Claude 判斷的分類，是 moderate-content 的 chat_text 快速
 //   通道用 regex 判斷出來的）。CONTACT_INFO 的文字語氣刻意寫得比較像「說明」
 //   不是「禁止」——sendMessage() 裡還會動態補上「還要等幾天解鎖」，這裡的
@@ -5770,19 +5869,22 @@ function ClipShareModal(props) {
     setUploading(true);
     setErrorMsg('');
     _moderateClipCaption(caption).then(function(mod) {
-      if (mod && mod.approved === false) {
-        setUploading(false);
-        var v = mod.violation || 'IRRELEVANT';
-        setErrorMsg((VIOLATION_MESSAGES[v] || "This clip couldn't be posted. Please keep it respectful and on-topic."));
-        return;
-      }
+      // [FIX 2026-09] Don't block the clip from posting anymore. If the caption
+      // is flagged (any of SCAM/ADULT/VIOLENCE/HATE/SPAM/IRRELEVANT/POLITICAL),
+      // the clip still uploads as usual; the verdict just gets stashed on
+      // moderationStatus/moderationCategory below, and FeedCard hides the whole
+      // card (caption + video) for everyone except the person who posted it —
+      // same hidden+watermark treatment as regular posts/comments.
+      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
       // 編輯模式沒換新影片的話，這裡就不用再上傳一次
       var doUpload = file ? uploadToBunny(file, 'video', function(pct) { setProgress(pct); }) : Promise.resolve(null);
       doUpload.then(function(result) {
         var updates = {
           text: caption.trim(),
           clipVisibility: audience,
-          habit: hideHabitName ? (habit.category || '') : habit.name
+          habit: hideHabitName ? (habit.category || '') : habit.name,
+          moderationStatus: _modViolation ? 'hidden' : 'ok',
+          moderationCategory: _modViolation
         };
         if (result) {
           updates.mediaUrl = result.url;
@@ -10395,22 +10497,13 @@ function MainApp(_ref16) {
             })();
           case 30:
             var _modResult = _context1.v;
-            if (_modResult && _modResult.approved === false) {
-              var _vMsgs = {
-                SCAM:       'Your post appears to contain promotional or suspicious content. Please share your genuine habit progress!',
-                ADULT:      "Your post contains content that's not appropriate for our community. Please keep it focused on your habits.",
-                VIOLENCE:   'Your post contains content that may be harmful or threatening. Please keep our community safe.',
-                HATE:       'Your post contains language that may be hurtful to others. Please keep our community respectful.',
-                SPAM:       'Your post looks like spam or unrelated content. Share your real habit progress instead!',
-                IRRELEVANT: "Your post doesn't seem related to habits or wellness. Tell us how your habit is going today!"
-              };
-              var _vtype = _modResult.violation || 'IRRELEVANT';
-              alert('\u26a0\ufe0f Post not published\n\n' + (_vMsgs[_vtype] || "Your post couldn't be published. Please review our community guidelines."));
-              setIsReviewing(false);
-              return _context1.a(2);
-            }
-            // ── End moderation ───────────────────────────────
-            avatar = ((_ref28 = user.displayName || user.email) === null || _ref28 === void 0 || (_ref28 = _ref28[0]) === null || _ref28 === void 0 ? void 0 : _ref28.toUpperCase()) || 'U';
+            // ★ 修正（2026-09）：改成「不擋貼文」——不管審查判定哪一類（SCAM/ADULT/
+            //   VIOLENCE/HATE/SPAM/IRRELEVANT），一律照常送出貼文，不再 alert 擋下、
+            //   不再 return 中止。只把判定結果記在下面 newPost 的 moderationStatus/
+            //   moderationCategory 這兩個欄位上；FeedCard 顯示時會依這兩欄，把內容
+            //   整個換成隱藏＋分類色標（連作者本人都看不到原文，只有後台看得到）。
+            var _modViolation = (_modResult && _modResult.approved === false) ? (_modResult.violation || 'IRRELEVANT') : null;
+            avatar =((_ref28 = user.displayName || user.email) === null || _ref28 === void 0 || (_ref28 = _ref28[0]) === null || _ref28 === void 0 ? void 0 : _ref28.toUpperCase()) || 'U';
             newPost = {
               userId: user.uid,
               user: user.displayName || 'User',
@@ -10424,7 +10517,9 @@ function MainApp(_ref16) {
               hasImage: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.type) === 'image',
               hasVideo: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.type) === 'video',
               mediaUrl: (postMedia === null || postMedia === void 0 ? void 0 : postMedia.url) || null,
-              mediaPublicId: mediaPublicIdRef.current || (postMedia === null || postMedia === void 0 ? void 0 : postMedia.publicId) || null
+              mediaPublicId: mediaPublicIdRef.current || (postMedia === null || postMedia === void 0 ? void 0 : postMedia.publicId) || null,
+              moderationStatus: _modViolation ? 'hidden' : 'ok',
+              moderationCategory: _modViolation
             };
             if (!isFirebaseConfigured) {
               _context1.n = 18;
@@ -10914,51 +11009,11 @@ function MainApp(_ref16) {
       });
     }
     return /*#__PURE__*/React.createElement("div", null,
-      // ★ 新增：Habit History 頁面已經從 Profile 移除入口，裡面唯一還有用的
-      //   AI Search Credits widget 搬來 Home 頁最上方——手機版才顯示（!isDesktop），
-      //   桌面版這個 widget 改放在 DesktopHomeSidebar（見下面 renderHome 呼叫端），
-      //   避免同一個東西桌面版出現兩次。樣式原封不動照搬 HistoryPage 那份。
-      !isDesktop && /*#__PURE__*/React.createElement("div", {
-        className: "history-chart-section",
-        style: { margin: '-20px -20px 16px', padding: '20px' }
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "history-chart-title"
-      }, "AI Search Credits"), /*#__PURE__*/React.createElement("div", {
-        className: "active-now-card"
-      }, matchCallsUsedToday !== null ? [
-        /*#__PURE__*/React.createElement("div", {
-          key:"home-aicalls-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
-        }, /*#__PURE__*/React.createElement("svg", {
-          width:64, height:64, style:{ transform:'rotate(-90deg)' }
-        }, /*#__PURE__*/React.createElement("circle", {
-          cx:32, cy:32, r:26, fill:"none", stroke:"rgba(96,165,250,0.18)", strokeWidth:7
-        }), /*#__PURE__*/React.createElement("circle", {
-          cx:32, cy:32, r:26, fill:"none", stroke:"#60a5fa", strokeWidth:7,
-          strokeDasharray: (Math.max(0, MATCH_DAILY_LIMIT - matchCallsUsedToday)/MATCH_DAILY_LIMIT * 2*Math.PI*26) + " " + (2*Math.PI*26),
-          strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
-        })), /*#__PURE__*/React.createElement("div", {
-          style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
-            textAlign:'center', width:'100%', lineHeight:1 }
-        }, /*#__PURE__*/React.createElement("div", {
-          style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#60a5fa', lineHeight:1 }
-        }, Math.max(0, MATCH_DAILY_LIMIT - matchCallsUsedToday)), /*#__PURE__*/React.createElement("div", {
-          style:{ fontSize:7, opacity:.7, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#60a5fa' }
-        }, "LEFT"))),
-        /*#__PURE__*/React.createElement("div", {
-          key:"home-aicalls-info", className:"active-now-info"
-        }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Today's AI Searches"),
-        /*#__PURE__*/React.createElement("div", {
-          style:{ fontSize:14, fontWeight:700, fontFamily:'var(--din)', lineHeight:1.3, color:'#60a5fa', marginBottom:4 }
-        }, matchCallsUsedToday, " of ", MATCH_DAILY_LIMIT, " used today"),
-        /*#__PURE__*/React.createElement("div", {
-          style:{ fontSize:11, opacity:.55, marginTop:2 }
-        }, matchCallsUsedToday >= MATCH_DAILY_LIMIT ? 'All used — resets tomorrow ⏰' : 'Resets daily · log in for more credits'),
-        /*#__PURE__*/React.createElement("div", {
-          style:{ marginTop:7, height:2, background:'rgba(96,165,250,.18)', width:'100%', overflow:'hidden' }
-        }, /*#__PURE__*/React.createElement("div", {
-          style:{ height:'100%', background:'#60a5fa', width:Math.min(100, Math.round(matchCallsUsedToday/MATCH_DAILY_LIMIT*100))+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
-        })))
-      ] : null)),
+      // ★ 修正（2026-09）：手機版 Home 頁最上方的黑卡「AI Search Credits」拿掉——
+      //   跟下面的習慣清單風格反差太大、一打開 App 就先看到一個跟打卡無關的區塊。
+      //   這個 widget 原本的資料（matchCallsUsedToday / MATCH_DAILY_LIMIT）現在改顯示
+      //   在 Profile 頁三格統計的中間格（取代原本幾乎都是 0、資訊量最低的 Posts），
+      //   見下面 renderProfile()。桌面版 DesktopHomeSidebar 那份 widget維持不變。
       habits.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
@@ -11727,8 +11782,14 @@ function MainApp(_ref16) {
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Habits")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, myPosts.length),
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Posts")
+      // ★ 修正（2026-09）：手機版把這格從「Posts」（幾乎所有人都是 0，資訊量最低）
+      //   換成 AI Credits 使用量，取代原本搬去 Home 頁最上方黑卡的那份資料。
+      //   桌面版維持原本的 Posts，不重複顯示（桌面版 AI Credits 已經在
+      //   DesktopHomeSidebar 那邊看得到）。
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value", style: isDesktop ? undefined : { color: '#3b82c4' } },
+        isDesktop ? myPosts.length : (matchCallsUsedToday != null ? (matchCallsUsedToday + "/" + MATCH_DAILY_LIMIT) : "—")
+      ),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, isDesktop ? "Posts" : "AI Searches Today")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, rate, "%"),
@@ -14866,8 +14927,15 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         }
 
         if (checkData.already_answered) {
-          // 使用者已經在任何一個習慣上填過問卷 → 全站只問一次，直接進入配對
-          _proceedToMatching(habit);
+          // [FIX 2026-09] 之前是「全站只問一次，之後每次都靜默直接進配對」——
+          // Andy 覺得完全沒有互動缺一點「解鎖配對」的儀式感，但每次都重填一輪
+          // 一樣的 5 題又太重複、沒意義（人的價值觀本來就不會常常變）。
+          // 改成：第一次填的是完整問卷（上面 checkData.questions 那個分支，不變）；
+          // 之後每次解鎖（不管是哪個習慣）都會看到這個輕量的「確認」畫面——
+          // 秀出上次填的摘要、明確標出「這是為了《habit.name》解鎖配對」，
+          // 一個按鈕確認沿用、一個按鈕可以重新用自由輸入更新。真的要重填才會
+          // 再跑一次 Claude/存檔，單純確認不會。
+          _openValuesConfirmModal(habit);
           return;
         }
 
@@ -14890,6 +14958,71 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
     // Fallback: skip survey（例如未登入、網路/CORS 失敗、或 Claude 產題失敗）
     _proceedToMatching(habit);
+  };
+
+  // ── [FIX 2026-09] 每次解鎖配對（不是第一次）都會看到的「確認」畫面 ──────────
+  // 借用跟完整問卷同一個 overlay/DOM（valuesSurveyOverlay + surveyBody），
+  // 只是內容換成「上次填的摘要 + 這次要解鎖的習慣名稱 + 兩個按鈕」，
+  // 不會再問一次五題選擇題——儀式感留著（每次解鎖都要動一下手確認），
+  // 但不會逼使用者重複回答同一件事。
+  async function _openValuesConfirmModal(habit) {
+    document.getElementById('matchingOverlay').style.display = 'none';
+    document.getElementById('surveyHabitName').textContent = habit.name;
+    document.getElementById('surveyLoading').style.display = 'none';
+    document.getElementById('surveyError').style.display = 'none';
+    document.getElementById('surveyBody').style.display = '';
+    document.getElementById('valuesSurveyOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    document.getElementById('surveyStepFill').style.width = '100%';
+
+    var summaryLines = [];
+    try {
+      var uid = getCurrentUid();
+      if (uid) {
+        var vr = await _supabase.from('user_values').select('summary, updated_at').eq('user_id', uid).maybeSingle();
+        var summary = vr && vr.data && vr.data.summary;
+        if (Array.isArray(summary)) {
+          summaryLines = summary.slice(0, 3).map(function(s) { return (s && (s.description || s.text)) || ''; }).filter(Boolean);
+        } else if (typeof summary === 'string' && summary.trim()) {
+          summaryLines = [summary.trim()];
+        }
+      }
+    } catch (e) {
+      console.warn('[values-confirm] failed to load existing values summary:', e && e.message);
+    }
+
+    var body = document.getElementById('surveyBody');
+    body.innerHTML =
+      '<div style="padding:16px 20px 0;">' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">Unlocking AI matching for &ldquo;' + (habit.name || '').replace(/</g,'&lt;') + '&rdquo;</div>' +
+        '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:14px;font-family:var(--din);letter-spacing:.3px;">Still sound like you?</div>' +
+        (summaryLines.length
+          ? '<div style="border-left:2px solid #1a1a1a;padding:10px 14px;margin-bottom:16px;">' +
+              summaryLines.map(function(l){ return '<div style="font-size:11px;color:#ccc;line-height:1.6;margin-bottom:4px;">' + l.replace(/</g,'&lt;') + '</div>'; }).join('') +
+            '</div>'
+          : '<div style="font-size:11px;color:#888;line-height:1.6;margin-bottom:16px;">This is your saved values profile from before.</div>'
+        ) +
+        '<div style="font-size:10px;color:#888;line-height:1.6;margin-bottom:16px;">We use this — not a fresh questionnaire — to find your next partner too. Confirm it still fits, or update it if things have changed.</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;padding-bottom:20px;">' +
+          '<button onclick="window._confirmValuesStillFit()" style="background:#fff;color:#0a0a0a;border:none;padding:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;font-family:inherit;">✓ Still feels right — find my partner</button>' +
+          '<button onclick="window._updateValuesInstead()" style="background:none;color:#ccc;border:1px solid #333;padding:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;font-family:inherit;">✏ Update my answers</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  window._confirmValuesStillFit = function() {
+    document.getElementById('valuesSurveyOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    _proceedToMatching(_currentHabit);
+  };
+
+  window._updateValuesInstead = function() {
+    // 借用自由輸入路徑重新描述一次 → interpret-values-text 會覆蓋 user_values
+    // 那一列，等於「更新我的答案」；跟第一次填問卷用的是同一套送出邏輯
+    // （_submitFreeTextValues），不用另外寫一套存檔流程。
+    _surveyQuestions = [];
+    _surveyFreeTextMode = true;
+    _renderFreeTextSurvey();
   };
 
   function _openSurveyModal(habit) {
