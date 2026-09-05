@@ -5356,9 +5356,9 @@ function FeedCard(_ref5) {
     className: "feed-user-info"
   }, /*#__PURE__*/React.createElement("h4", null, post.user), /*#__PURE__*/React.createElement("div", {
     className: "feed-time"
-  }, post.time))), /*#__PURE__*/React.createElement("div", {
+  }, post.time, (isHidden && !isOwner) && renderModerationInlineTag(post.moderationCategory)))), /*#__PURE__*/React.createElement("div", {
     className: "feed-content"
-  }, (isHidden && !isOwner) ? renderModerationHiddenOther(post.moderationCategory, post.isHabitClip ? 'clip' : 'post') : /*#__PURE__*/React.createElement(React.Fragment, null,
+  }, (isHidden && !isOwner) ? renderModerationHiddenOther(post.moderationCategory, post.isHabitClip ? 'clip' : 'post', { text: post.text, hasMedia: !!(post.hasImage || post.hasVideo) }) : /*#__PURE__*/React.createElement(React.Fragment, null,
   isHidden && isOwner && renderModerationAuthorBanner(post.moderationCategory, post.isHabitClip ? 'clip' : 'post'),
   post.text && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
@@ -5392,7 +5392,7 @@ function FeedCard(_ref5) {
     className: "feed-media-placeholder"
   }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), (!isHidden || isOwner) && /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
@@ -5544,7 +5544,7 @@ function FeedCard(_ref5) {
     // everyone except the person who wrote it (see renderModerationHiddenOther /
     // renderModerationAuthorBanner, defined once and shared with FeedCard).
     (c.moderationStatus === 'hidden' && !isOwnComment)
-      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment'))
+      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text }))
       : /*#__PURE__*/React.createElement("div", { className: "comment-text" },
           c.moderationStatus === 'hidden' && isOwnComment && renderModerationAuthorBanner(c.moderationCategory, 'comment'),
           (function() {
@@ -5565,7 +5565,7 @@ function FeedCard(_ref5) {
       /*#__PURE__*/React.createElement("div", {
         className:"comment-time",
         style:{flex:1}
-      }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now'),
+      }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now', (c.moderationStatus === 'hidden' && !isOwnComment) && renderModerationInlineTag(c.moderationCategory)),
       /*#__PURE__*/React.createElement("button", {
         onClick: handleCommentLike,
         style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:10,color:cLiked?'var(--black)':'var(--gray-400)',fontWeight:600,padding:0,fontFamily:'var(--font)'}
@@ -5745,33 +5745,58 @@ function _moderationWatermark(info, opts) {
   }, (lbl + ' · · · ' ).repeat(6)));
 }
 
-// What everyone EXCEPT the author sees for a hidden post/comment: the real
-// content is still in the DOM (blurred + desaturated, non-interactive) so the
-// card keeps its natural size/shape, with a frosted glass panel + watermark
-// and a small centered badge on top — nicer than a flat "blocked" banner.
-function renderModerationHiddenOther(category, kind, realContentNode) {
-  var info = MODERATION_CATEGORY_INFO[category] || MODERATION_CATEGORY_INFO.IRRELEVANT;
-  return /*#__PURE__*/React.createElement("div", {
-    style: { position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid ' + info.border }
-  },
-    realContentNode && /*#__PURE__*/React.createElement("div", {
-      style: { filter: 'blur(9px) saturate(.6)', opacity: .55, pointerEvents: 'none', userSelect: 'none' },
+// [v4 2026-09 REDESIGN] What everyone EXCEPT the author sees for a hidden
+// post/comment. Per Andy's feedback, this no longer uses a frosted panel /
+// watermark / big colored block — the card should look like a completely
+// normal post. Only two things differ from a normal post: (1) the photo or
+// video is not rendered at all (not even blurred — just omitted), with a
+// tiny icon + label hint so people know media was originally attached
+// without revealing it, and (2) the caption text renders blurred/unreadable
+// instead of legible. Which category it was flagged as is shown separately
+// as a small inline tag next to the timestamp (see renderModerationInlineTag
+// + its call sites in FeedCard's header and the comment list) — not here.
+function renderModerationHiddenOther(category, kind, opts) {
+  opts = opts || {};
+  var hasText = !!(opts.text && String(opts.text).trim());
+  var isComment = kind === 'comment';
+  // Inline styles (not the .feed-text/.comment-text classNames) so this
+  // renders correctly whichever container it's dropped into -- FeedCard's
+  // bare "feed-content" div for posts/clips, or the "comment-text" wrapper
+  // for comments -- without double-applying/clashing font rules.
+  var textStyle = isComment
+    ? { fontSize: 12, color: 'var(--gray-700)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }
+    : { fontSize: 13, color: 'var(--gray-800)', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: 10 };
+  textStyle.filter = 'blur(3.5px)';
+  textStyle.userSelect = 'none';
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    hasText && /*#__PURE__*/React.createElement("div", {
+      style: textStyle,
       "aria-hidden": "true"
-    }, realContentNode),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: realContentNode ? 'absolute' : 'static', inset: 0,
-        background: info.bg + (realContentNode ? 'e6' : ''), // ~90% opacity frosted tint over the blur
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        textAlign: 'center', padding: realContentNode ? '18px 14px' : '16px 14px', minHeight: realContentNode ? 90 : 'auto'
-      }
+    }, opts.text),
+    opts.hasMedia && /*#__PURE__*/React.createElement("div", {
+      style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--gray-400)', margin: '0 0 10px' }
     },
-      _moderationWatermark(info, { fontSize: 11, opacity: .14 }),
-      /*#__PURE__*/React.createElement("span", { style: { fontSize: 20, marginBottom: 4, position: 'relative' } }, info.icon),
-      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 800, fontSize: 12.5, color: info.fg, position: 'relative' } }, 'Hidden · ' + info.label),
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: info.fg, opacity: .75, marginTop: 2, position: 'relative', maxWidth: 220 } }, 'This ' + (kind || 'post') + ' was flagged by our AI filter.')
-    )
+      /*#__PURE__*/React.createElement("svg", {
+        width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor"
+      }, /*#__PURE__*/React.createElement("path", {
+        strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 1.5,
+        d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+      })),
+      /*#__PURE__*/React.createElement("span", null, (kind === 'clip' ? 'Video' : 'Photo') + ' attached (hidden)')
+    ),
+    !hasText && !opts.hasMedia && /*#__PURE__*/React.createElement("div", {
+      style: { color: 'var(--gray-400)', fontStyle: 'italic', fontSize: isComment ? 12 : 13 }
+    }, 'This ' + (kind || 'post') + ' was hidden.')
   );
+}
+
+// [v4 2026-09] Small inline "why this is hidden" tag appended next to a
+// hidden post/comment's timestamp, colored with the category's own accent —
+// lets you tell at a glance what it was flagged as, without a big colored
+// panel dominating the card the way the previous design did.
+function renderModerationInlineTag(category) {
+  var info = MODERATION_CATEGORY_INFO[category] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+  return /*#__PURE__*/React.createElement("span", { style: { color: info.fg, fontWeight: 700 } }, ' · ' + info.icon + ' ' + info.label);
 }
 
 // What the AUTHOR sees on their own flagged post/comment: their real content,
