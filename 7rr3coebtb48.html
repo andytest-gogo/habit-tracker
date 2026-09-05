@@ -244,6 +244,14 @@ tr:hover td{background:var(--g50)}
         Reports
         <span id="reportsBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
       </button>
+      <!-- ★ 新增（2026-09）：內容審查改成「不擋貼文，AI 判定有害才隱藏」之後，
+           後台需要一個地方讓 Andy 巡查被隱藏的貼文/留言/打卡 clip caption，
+           不然「隱藏」等於憑空消失、沒人看得到。查詢邏輯見 loadFlaggedContent()。 -->
+      <button class="nav-btn" data-page="flagged" id="navFlagged">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        Flagged Content
+        <span id="flaggedBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+      </button>
       <button class="nav-btn" data-page="cleanup" id="navCleanup">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         Cleanup
@@ -1121,6 +1129,45 @@ await supabase.from('claude_api_calls').insert({
       </div>
     </div>
 
+    <!-- ══ FLAGGED CONTENT PAGE ══ -->
+    <!-- ★ 新增（2026-09）：內容審查改成「不擋貼文，AI 判定有害才隱藏＋分類色標」
+         之後（見 index.html 的 FeedCard / handleSendComment / ClipShareModal），
+         被隱藏的貼文／留言／打卡 clip 說明文字對一般使用者是看不到的，只有這裡
+         看得到——巡查、還原（Unhide）或直接刪除都在這頁做。 -->
+    <div class="pg" id="pg-flagged">
+      <div class="pg-title">Flagged Content</div>
+      <div class="pg-sub">Posts, comments and habit-clip captions that moderate-content flagged. They're still hidden from other users — review here, then Unhide (false positive) or Delete.</div>
+
+      <div class="stat-grid" style="margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Total Hidden</div><div class="stat-val" id="flgTotal">—</div><div class="stat-note">Posts + comments + clips</div></div>
+        <div class="stat" style="border-left:3px solid #99315f"><div class="stat-lbl">Sexual / Violent / Hateful</div><div class="stat-val" id="flgHarmful" style="color:#99315f">—</div><div class="stat-note">Safety categories</div></div>
+        <div class="stat" style="border-left:3px solid #9ca3af"><div class="stat-lbl">Spam / Scam / Off-topic</div><div class="stat-val" id="flgQuality" style="color:#6b7280">—</div><div class="stat-note">Quality categories</div></div>
+      </div>
+
+      <div class="tbl-card">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Hidden Items</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="flgCategoryFilter" onchange="renderFlaggedContent()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+              <option value="all">All categories</option>
+              <option value="ADULT">Sexual content</option>
+              <option value="VIOLENCE">Violent content</option>
+              <option value="HATE">Hateful language</option>
+              <option value="POLITICAL">Political content</option>
+              <option value="SCAM">Scam / suspicious</option>
+              <option value="SPAM">Spam</option>
+              <option value="IRRELEVANT">Off-topic</option>
+            </select>
+            <button class="refresh" onclick="loadFlaggedContent()">Refresh</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>User</th><th>Type</th><th>Category</th><th>Content</th><th>Flagged</th><th>Action</th></tr></thead>
+          <tbody id="flaggedTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ══ EMAIL TEMPLATES PAGE ══ -->
     <div class="pg" id="pg-emailtemplates">
       <div class="pg-title">Email Templates</div>
@@ -1892,6 +1939,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (btn.dataset.page === 'engagement') loadEngagement();
     if (btn.dataset.page === 'growth') loadGrowthRetention();
     if (btn.dataset.page === 'emailtemplates') loadEmailTemplates();
+    if (btn.dataset.page === 'flagged') loadFlaggedContent();
   };
 });
 
@@ -4945,6 +4993,107 @@ async function loadTokenUsage() {
   } catch(e) {
     document.getElementById('tokensByEndpointTbody').innerHTML = '<tr><td colspan="6">Error: ' + htmlEsc(e.message) + '</td></tr>';
     document.getElementById('tokensTbody').innerHTML = '<tr><td colspan="4">Error: ' + htmlEsc(e.message) + '</td></tr>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Flagged Content 頁（2026-09 新增）：內容審查改成「不擋貼文，AI 判定有害
+// 才隱藏＋分類色標」之後（見主 App index.html 的 FeedCard / handleSendComment /
+// ClipShareModal），posts / comments 兩張表多了 moderation_status /
+// moderation_category 這兩欄；moderation_status='hidden' 的貼文對一般使用者
+// （除了發文者本人）是看不到原文的，只有這裡看得到、可以巡查、Unhide 或刪除。
+// ════════════════════════════════════════════════════════════════════
+var _flaggedItems = []; // 合併 posts + comments 兩張表撈回來的結果
+var MODERATION_CATEGORY_LABELS = {
+  ADULT: 'Sexual content', VIOLENCE: 'Violent content', HATE: 'Hateful language',
+  POLITICAL: 'Political content', SCAM: 'Scam / suspicious', SPAM: 'Spam', IRRELEVANT: 'Off-topic'
+};
+var _HARMFUL_CATEGORIES = ['ADULT', 'VIOLENCE', 'HATE'];
+
+async function loadFlaggedContent() {
+  var tbody = document.getElementById('flaggedTbody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Loading...</td></tr>';
+  try {
+    var [postsRes, commentsRes] = await Promise.all([
+      _supabase.from('posts').select('id, user_id, text, moderation_category, created_at, is_habit_clip')
+        .eq('moderation_status', 'hidden').order('created_at', { ascending: false }).limit(500),
+      _supabase.from('comments').select('id, user_id, post_id, text, moderation_category, created_at')
+        .eq('moderation_status', 'hidden').order('created_at', { ascending: false }).limit(500)
+    ]);
+    if (postsRes.error) throw postsRes.error;
+    if (commentsRes.error) throw commentsRes.error;
+
+    var items = [];
+    (postsRes.data || []).forEach(function(p) {
+      items.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: p.moderation_category, createdAt: p.created_at, kind: p.is_habit_clip ? 'Clip caption' : 'Post' });
+    });
+    (commentsRes.data || []).forEach(function(c) {
+      items.push({ table: 'comments', id: c.id, userId: c.user_id, text: c.text, category: c.moderation_category, createdAt: c.created_at, kind: 'Comment' });
+    });
+    items.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+
+    _flaggedItems = items;
+    document.getElementById('flgTotal').textContent = items.length;
+    document.getElementById('flgHarmful').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) !== -1; }).length;
+    document.getElementById('flgQuality').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) === -1; }).length;
+    var badge = document.getElementById('flaggedBadge');
+    if (items.length > 0) { badge.style.display = 'inline-block'; badge.textContent = items.length; }
+    else { badge.style.display = 'none'; }
+
+    renderFlaggedContent();
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6">Error: ' + htmlEsc(e.message) + '</td></tr>';
+  }
+}
+
+function renderFlaggedContent() {
+  var tbody = document.getElementById('flaggedTbody');
+  var filter = document.getElementById('flgCategoryFilter').value;
+  var rows = filter === 'all' ? _flaggedItems : _flaggedItems.filter(function(i){ return i.category === filter; });
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">Nothing flagged right now 🎉</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(item) {
+    var label = MODERATION_CATEGORY_LABELS[item.category] || item.category || '—';
+    var isHarmful = _HARMFUL_CATEGORIES.indexOf(item.category) !== -1;
+    var catColor = isHarmful ? '#99315f' : '#6b7280';
+    return '<tr>' +
+      '<td style="font-size:11px">' + htmlEsc(resolveUserName(item.userId)) + '</td>' +
+      '<td style="font-size:11px">' + item.kind + '</td>' +
+      '<td><span class="badge" style="background:' + catColor + '20;color:' + catColor + '">' + htmlEsc(label) + '</span></td>' +
+      '<td style="font-size:11px;max-width:320px;white-space:normal">' + htmlEsc((item.text || '').slice(0, 200)) + '</td>' +
+      '<td style="font-size:11px;color:var(--g400)">' + (item.createdAt ? new Date(item.createdAt).toLocaleString() : '—') + '</td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="refresh" style="margin-right:6px" onclick="unhideFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Unhide</button>' +
+        '<button class="refresh" style="color:#dc2626;border-color:#dc2626" onclick="deleteFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Delete</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// 誤判（false positive）：解除隱藏，改回一般可見的貼文/留言。
+async function unhideFlaggedItem(table, id) {
+  try {
+    var { error } = await _supabase.from(table).update({ moderation_status: 'ok', moderation_category: null }).eq('id', id);
+    if (error) throw error;
+    loadFlaggedContent();
+  } catch (e) {
+    alert('Unhide failed: ' + e.message);
+  }
+}
+
+// 確認真的違規：直接刪除這篇貼文/留言（跟 Posts 頁既有的刪除邏輯一致，
+// 不額外處理 Bunny 媒體清理——這裡刪的是已經被隱藏、沒人看得到的內容，
+// 之後仍會被既有的 Media Cleanup 頁掃到孤兒檔案）。
+async function deleteFlaggedItem(table, id) {
+  if (!window.confirm('Permanently delete this ' + (table === 'posts' ? 'post' : 'comment') + '? This cannot be undone.')) return;
+  try {
+    var { error } = await _supabase.from(table).delete().eq('id', id);
+    if (error) throw error;
+    loadFlaggedContent();
+  } catch (e) {
+    alert('Delete failed: ' + e.message);
   }
 }
 
