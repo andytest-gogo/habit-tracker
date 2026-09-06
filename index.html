@@ -3009,7 +3009,10 @@ if (isFirebaseConfigured) {
       //   renderModerationAuthorBanner），不補進這張白名單的話，讀出來的 post/comment
       //   就只會有 moderation_status/moderation_category（snake_case），跟上面
       //   is_habit_clip 那次一樣的問題重演一次。
-      'moderation_status':'moderationStatus','moderation_category':'moderationCategory'
+      'moderation_status':'moderationStatus','moderation_category':'moderationCategory',
+      // ★ 新增（2026-09）：作者「申請複查」功能要讀 moderationAppealStatus/
+      //   moderationAppealAt，同樣的坑先在這裡補上，避免又重演一次上面的問題。
+      'moderation_appeal_status':'moderationAppealStatus','moderation_appeal_at':'moderationAppealAt'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];
@@ -4001,6 +4004,46 @@ async function _moderateClipCaption(caption) {
     console.warn('[Clip] Moderation check failed, proceeding:', e);
     return { approved: true };
   }
+}
+
+// [NEW 2026-09] 送出後被 AI 隱藏時用的提示 toast，可以附一個可點擊的動作按鈕
+// （「Edit now」）。頁尾（AUTO INIT 那段）雖然已經有一支同名概念的 showToast()，
+// 但那支定義在另一個獨立的 <script> IIFE 裡，這裡的程式碼（React 這支 script）
+// 取用不到，而且那支也只顯示純文字、沒有動作按鈕，滿足不了「要重新編輯嗎？」
+// 這種需要可點擊動作的提示——所以這裡自己做一個，不動舊的那支。
+function _showAppToast(message, opts) {
+  opts = opts || {};
+  try {
+    var existing = document.getElementById('_famstreak_app_toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.id = '_famstreak_app_toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);' +
+      'background:#0a0a0a;color:#fff;padding:12px 16px;font-size:12px;font-weight:600;' +
+      'z-index:20000;max-width:calc(100% - 40px);width:340px;text-align:center;' +
+      'box-shadow:0 4px 16px rgba(0,0,0,.25);border-radius:10px;display:flex;' +
+      'flex-direction:column;align-items:center;gap:8px;';
+    var msgEl = document.createElement('div');
+    msgEl.textContent = message;
+    msgEl.style.cssText = 'line-height:1.5;font-weight:600;';
+    toast.appendChild(msgEl);
+    if (opts.actionLabel && typeof opts.onAction === 'function') {
+      var btn = document.createElement('button');
+      btn.textContent = opts.actionLabel;
+      btn.style.cssText = 'background:#fff;color:#0a0a0a;border:none;border-radius:6px;' +
+        'padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;';
+      btn.onclick = function() {
+        try { opts.onAction(); } catch (e) {}
+        if (toast.parentNode) toast.remove();
+      };
+      toast.appendChild(btn);
+    }
+    document.body.appendChild(toast);
+    var _dur = opts.duration || (opts.actionLabel ? 8000 : 3000);
+    setTimeout(function() { if (toast.parentNode) toast.remove(); }, _dur);
+  } catch (e) { console.warn('[Toast] failed:', e); }
 }
 
 /* ── Upload image to Bunny Storage（透過 Edge Function 代理，不碰金鑰）── */
@@ -5125,9 +5168,102 @@ function FeedCard(_ref5) {
     hideLikeAction = _ref5.hideLikeAction;
   var isOwner = !!(currentUser && post.userId && currentUser.uid === post.userId);
   // [FIX 2026-09] hidden+color-tag moderation instead of blocking at submit time —
-  // see renderModerationHiddenOther() / renderModerationAuthorBanner() below,
+  // see renderModerationHiddenOther() / renderModerationActionButtons() below,
   // and the post/comment/clip submit handlers.
-  var isHidden = post.moderationStatus === 'hidden';
+  // [v5 2026-09] 編輯重新送出後的樂觀更新覆蓋——post 是外層傳進來的 prop 不能直接
+  // 改，審查結果／文字改用這組 local state 覆蓋（見 handleSaveEditPost），跟
+  // postAppealStatus 同一種「用 local state 影子覆蓋 prop」的寫法。
+  var _useStateModOverride = useState(null),
+    _useStateModOverride2 = _slicedToArray(_useStateModOverride, 2),
+    modOverride = _useStateModOverride2[0],
+    setModOverride = _useStateModOverride2[1];
+  var effectiveModStatus = modOverride ? modOverride.status : post.moderationStatus;
+  var effectiveModCategory = modOverride ? modOverride.category : post.moderationCategory;
+  var effectiveText = (modOverride && modOverride.text != null) ? modOverride.text : post.text;
+  var isHidden = effectiveModStatus === 'hidden';
+  // [NEW 2026-09] 作者「申請複查」——用 post.moderationAppealStatus 當初始值(讀取
+  // 已經走過 _snakeToCamel 白名單),樂觀更新 + 失敗時回滾,寫法跟其他樂觀更新一致。
+  var _useStatePostAppeal = useState(post.moderationAppealStatus || null),
+    _useStatePostAppeal2 = _slicedToArray(_useStatePostAppeal, 2),
+    postAppealStatus = _useStatePostAppeal2[0],
+    setPostAppealStatus = _useStatePostAppeal2[1];
+  function handleRequestPostAppeal() {
+    if (postAppealStatus) return; // 已經送出過,不能重複點
+    setPostAppealStatus('pending');
+    db.collection('posts').doc(post.id).update({
+      moderationAppealStatus: 'pending',
+      moderationAppealAt: FieldValue.serverTimestamp()
+    }).catch(function(e) {
+      console.error('[Appeal] Failed to submit post review request:', e && e.message);
+      setPostAppealStatus(null); // 失敗回滾,讓使用者可以重試
+    });
+  }
+  // [NEW 2026-09] 作者「✎ Edit」重新編輯被隱藏的貼文/clip caption——見
+  // renderModerationEditPanel。存的是「編輯中」的 UI 狀態跟 textarea 內容，
+  // 跟真正儲存後的 modOverride 分開，Cancel 的話這裡的內容直接丟掉不影響任何東西。
+  var _useStateIsEditingPost = useState(false),
+    _useStateIsEditingPost2 = _slicedToArray(_useStateIsEditingPost, 2),
+    isEditingPost = _useStateIsEditingPost2[0],
+    setIsEditingPost = _useStateIsEditingPost2[1];
+  var _useStateEditPostText = useState(''),
+    _useStateEditPostText2 = _slicedToArray(_useStateEditPostText, 2),
+    editPostText = _useStateEditPostText2[0],
+    setEditPostText = _useStateEditPostText2[1];
+  var _useStateSavingPostEdit = useState(false),
+    _useStateSavingPostEdit2 = _slicedToArray(_useStateSavingPostEdit, 2),
+    savingPostEdit = _useStateSavingPostEdit2[0],
+    setSavingPostEdit = _useStateSavingPostEdit2[1];
+  function handleStartEditPost() {
+    setEditPostText(effectiveText || '');
+    setIsEditingPost(true);
+  }
+  function handleCancelEditPost() {
+    setIsEditingPost(false);
+  }
+  function handleSaveEditPost() {
+    var _newText = editPostText.trim();
+    if (!_newText && !(post.hasImage || post.hasVideo)) { alert('Please enter some text.'); return; }
+    setSavingPostEdit(true);
+    _moderateClipCaption(_newText).then(function(mod) {
+      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+      var _newStatus = _modViolation ? 'hidden' : 'ok';
+      db.collection('posts').doc(post.id).update({
+        text: _newText,
+        moderationStatus: _newStatus,
+        moderationCategory: _modViolation,
+        // 重新編輯等於重新提交一次，之前的申訴不再適用——順便清掉，不然
+        // Admin Dashboard 的 Pending Appeals 會一直卡著一個已經改過的舊申訴。
+        moderationAppealStatus: null,
+        moderationAppealAt: null
+      }).then(function() {
+        setModOverride({ status: _newStatus, category: _modViolation, text: _newText });
+        setPostAppealStatus(null);
+        setIsEditingPost(false);
+        setSavingPostEdit(false);
+        if (typeof _showAppToast === 'function') {
+          _showAppToast(_modViolation
+            ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
+            : 'Updated — visible to everyone again.');
+        }
+      }).catch(function(e) {
+        setSavingPostEdit(false);
+        alert('Failed to save changes: ' + (e && e.message));
+      });
+    });
+  }
+  // [NEW 2026-09] 接住送出貼文/clip 後跳出的 toast 上「Edit now」按鈕——那顆按鈕
+  // 按下去的當下，這則貼文的 FeedCard 通常已經在畫面上了（同一頁即時訂閱新貼文），
+  // 用一個全域 window 事件通知「就是這篇」，這裡自己觸發編輯模式，不用另外接
+  // context/props 一路傳下來（見 handlePostSubmit / ClipShareModal.handleSubmit）。
+  useEffect(function() {
+    function _onAutoEditPost(e) {
+      if (e && e.detail && e.detail.postId === post.id) {
+        handleStartEditPost();
+      }
+    }
+    window.addEventListener('famstreak:autoEditPost', _onAutoEditPost);
+    return function() { window.removeEventListener('famstreak:autoEditPost', _onAutoEditPost); };
+  }, [post.id]);
   var _useState17 = useState(false),
     _useState18 = _slicedToArray(_useState17, 2),
     showComments = _useState18[0],
@@ -5162,6 +5298,82 @@ function FeedCard(_ref5) {
     _useState30 = _slicedToArray(_useState29, 2),
     expandedComments = _useState30[0],
     setExpandedComments = _useState30[1];
+  // [NEW 2026-09] 留言「申請複查」——用 comment id 當 key,同一支 FeedCard 底下
+  // 每則留言各自獨立記錄(跟 expandedComments 同一種寫法)。
+  var _useStateCommentAppeals = useState({}),
+    _useStateCommentAppeals2 = _slicedToArray(_useStateCommentAppeals, 2),
+    commentAppeals = _useStateCommentAppeals2[0],
+    setCommentAppeals = _useStateCommentAppeals2[1];
+  function handleRequestCommentAppeal(c) {
+    if (commentAppeals[c.id] || c.moderationAppealStatus) return; // 已經送出過
+    setCommentAppeals(function(prev) { var n = Object.assign({}, prev); n[c.id] = 'pending'; return n; });
+    db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
+      moderationAppealStatus: 'pending',
+      moderationAppealAt: FieldValue.serverTimestamp()
+    }).catch(function(e) {
+      console.error('[Appeal] Failed to submit comment review request:', e && e.message);
+      setCommentAppeals(function(prev) { var n = Object.assign({}, prev); delete n[c.id]; return n; });
+    });
+  }
+  // [NEW 2026-09] 留言「✎ Edit」重新編輯——跟貼文那組不同的是，comments 本來就是
+  // FeedCard 自己 local state 管理的（comments/setComments），不用另外弄一個
+  // override 影子欄位，編輯存檔直接更新 comments 陣列裡對應那筆就好。同一時間只
+  // 開一個留言的編輯面板（editingCommentId 是單一 id，不是每則各自的 boolean）。
+  var _useStateEditingCommentId = useState(null),
+    _useStateEditingCommentId2 = _slicedToArray(_useStateEditingCommentId, 2),
+    editingCommentId = _useStateEditingCommentId2[0],
+    setEditingCommentId = _useStateEditingCommentId2[1];
+  var _useStateEditCommentText = useState(''),
+    _useStateEditCommentText2 = _slicedToArray(_useStateEditCommentText, 2),
+    editCommentText = _useStateEditCommentText2[0],
+    setEditCommentText = _useStateEditCommentText2[1];
+  var _useStateSavingCommentEdit = useState(false),
+    _useStateSavingCommentEdit2 = _slicedToArray(_useStateSavingCommentEdit, 2),
+    savingCommentEdit = _useStateSavingCommentEdit2[0],
+    setSavingCommentEdit = _useStateSavingCommentEdit2[1];
+  function handleStartEditComment(c) {
+    setEditCommentText(c.text || '');
+    setEditingCommentId(c.id);
+  }
+  function handleCancelEditComment() {
+    setEditingCommentId(null);
+  }
+  function handleSaveEditComment(c) {
+    var _newText = editCommentText.trim();
+    if (!_newText) { alert('Please enter some text.'); return; }
+    setSavingCommentEdit(true);
+    _moderateClipCaption(_newText).then(function(mod) {
+      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+      var _newStatus = _modViolation ? 'hidden' : 'ok';
+      db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
+        text: _newText,
+        moderationStatus: _newStatus,
+        moderationCategory: _modViolation,
+        moderationAppealStatus: null,
+        moderationAppealAt: null
+      }).then(function() {
+        setComments(function(prev) {
+          return prev.map(function(x) {
+            return x.id === c.id ? Object.assign({}, x, {
+              text: _newText, moderationStatus: _newStatus, moderationCategory: _modViolation,
+              moderationAppealStatus: null, moderationAppealAt: null
+            }) : x;
+          });
+        });
+        setCommentAppeals(function(prev) { var n = Object.assign({}, prev); delete n[c.id]; return n; });
+        setEditingCommentId(null);
+        setSavingCommentEdit(false);
+        if (typeof _showAppToast === 'function') {
+          _showAppToast(_modViolation
+            ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
+            : 'Updated — visible to everyone again.');
+        }
+      }).catch(function(e) {
+        setSavingCommentEdit(false);
+        alert('Failed to save changes: ' + (e && e.message));
+      });
+    });
+  }
   // ★ 按讚名單彈窗：點擊讚數（不是愛心本身）時開啟，抓 users 表資料
   //   查詢 pattern 跟既有的批次查詢慣例一致（id, display_name, photo_url, last_active）
   var _useStateShowLikers = useState(false),
@@ -5314,16 +5526,37 @@ function FeedCard(_ref5) {
       var _avatarUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('avatar_' + currentUser.uid) : null;
       if (_avatarUrl) _commentData.userAvatarUrl = _avatarUrl;
 
-      db.collection('posts').doc(post.id).collection('comments').add(_commentData).then(function() {
+      db.collection('posts').doc(post.id).collection('comments').add(_commentData).then(function(_commentRef) {
+        // ★ 修正（2026-09）：這裡原本用 Date.now().toString() 當本地樂觀更新的
+        //   假 id，跟資料庫實際那筆的真正 id 對不起來——之後任何用 c.id 去操作
+        //   這筆留言的動作（讚、刪除、現在新增的編輯）在使用者重新整理/重新展開
+        //   留言列表之前都會打到一個不存在的 id，安靜地失敗。改用 add() 真正
+        //   回傳的 id，跟資料庫保持一致。
+        var _realCommentId = (_commentRef && _commentRef.id) || Date.now().toString();
         // 立即 append 到本地 state，讓留言馬上顯示
         setComments(function(prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _commentData.text, userName: _commentData.userName, userAvatar: _commentData.userAvatar, userId: _commentData.userId, moderationStatus: _commentData.moderationStatus, moderationCategory: _commentData.moderationCategory, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [{ id: _realCommentId, text: _commentData.text, userName: _commentData.userName, userAvatar: _commentData.userAvatar, userId: _commentData.userId, moderationStatus: _commentData.moderationStatus, moderationCategory: _commentData.moderationCategory, createdAt: null }]);
         });
         setLocalCommentCount(function(c) { return (c != null ? c : (post.commentCount != null ? post.commentCount : (post.comments || 0))) + 1; });
         setCommentText('');
         setSendingComment(false);
         // 更新貼文留言數（fire-and-forget）
         db.collection('posts').doc(post.id).update({ comments: FieldValue.increment(1), commentCount: FieldValue.increment(1) }).catch(function(){});
+        // [NEW 2026-09] 送出的留言被 AI 標記隱藏的話，提示「這則留言AI已標記XX類，
+        // 目前只有你看得到，要重新編輯嗎？」——這裡跟貼文不一樣，同一支 FeedCard
+        // 本來就在畫面上（本來就是在這則貼文底下留言的），直接就地開編輯面板就好，
+        // 不需要另外接全域事件。
+        if (_modViolation) {
+          var _catInfo2 = MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+          _showAppToast(
+            'This comment has been AI-flagged as ' + _catInfo2.label.toLowerCase() + '. Only you can see it right now — want to edit it?',
+            { actionLabel: 'Edit now', onAction: function() {
+                setEditCommentText(_commentData.text);
+                setEditingCommentId(_realCommentId);
+              }
+            }
+          );
+        }
       }).catch(function(_err) {
         // insert 失敗：仍在本地顯示作為 fallback
         console.error('[Comment] Failed:', _err && _err.message);
@@ -5356,15 +5589,18 @@ function FeedCard(_ref5) {
     className: "feed-user-info"
   }, /*#__PURE__*/React.createElement("h4", null, post.user), /*#__PURE__*/React.createElement("div", {
     className: "feed-time"
-  }, post.time, (isHidden && !isOwner) && renderModerationInlineTag(post.moderationCategory)))), /*#__PURE__*/React.createElement("div", {
+  }, post.time, isHidden && renderModerationInlineTag(effectiveModCategory)))), /*#__PURE__*/React.createElement("div", {
     className: "feed-content"
-  }, (isHidden && !isOwner) ? renderModerationHiddenOther(post.moderationCategory, post.isHabitClip ? 'clip' : 'post', { text: post.text, hasMedia: !!(post.hasImage || post.hasVideo) }) : /*#__PURE__*/React.createElement(React.Fragment, null,
-  isHidden && isOwner && renderModerationAuthorBanner(post.moderationCategory, post.isHabitClip ? 'clip' : 'post'),
-  post.text && /*#__PURE__*/React.createElement("div", {
+  }, isEditingPost ? renderModerationEditPanel({
+    kind: post.isHabitClip ? 'clip caption' : 'post',
+    value: editPostText, onChange: setEditPostText,
+    onCancel: handleCancelEditPost, onSave: handleSaveEditPost, saving: savingPostEdit
+  }) : isHidden ? renderModerationHiddenOther(effectiveModCategory, post.isHabitClip ? 'clip' : 'post', { text: effectiveText, hasMedia: !!(post.hasImage || post.hasVideo) }) : /*#__PURE__*/React.createElement(React.Fragment, null,
+  effectiveText && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
   }, (function() {
-    var postNeedsTrunc = needsTruncation(post.text, POST_LINE_LIMIT);
-    var displayText = postNeedsTrunc && !showFullPostText ? truncateText(post.text, POST_LINE_LIMIT) : post.text;
+    var postNeedsTrunc = needsTruncation(effectiveText, POST_LINE_LIMIT);
+    var displayText = postNeedsTrunc && !showFullPostText ? truncateText(effectiveText, POST_LINE_LIMIT) : effectiveText;
     return [
       /*#__PURE__*/React.createElement("span", { key: "txt", style: { whiteSpace: 'pre-wrap' } }, displayText),
       postNeedsTrunc ? /*#__PURE__*/React.createElement("span", {
@@ -5392,7 +5628,7 @@ function FeedCard(_ref5) {
     className: "feed-media-placeholder"
   }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), !isEditingPost && /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
@@ -5442,7 +5678,11 @@ function FeedCard(_ref5) {
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap:"round", strokeLinejoin:"round", strokeWidth:2,
     d:"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-  })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Delete"))),
+  })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Delete")),
+  isHidden && isOwner && renderModerationActionButtons(
+    { status: postAppealStatus, onRequest: handleRequestPostAppeal },
+    handleStartEditPost
+  )),
   showLikers && /*#__PURE__*/React.createElement("div", {
     className: "likers-popover"
   }, /*#__PURE__*/React.createElement("div", { className: "likers-popover-hdr" },
@@ -5539,14 +5779,20 @@ function FeedCard(_ref5) {
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-user"
     }, c.userName),
-    // [FIX 2026-09] Same hidden+watermark treatment as FeedCard posts: a
-    // flagged comment is never blocked at send time, it's just hidden from
-    // everyone except the person who wrote it (see renderModerationHiddenOther /
-    // renderModerationAuthorBanner, defined once and shared with FeedCard).
-    (c.moderationStatus === 'hidden' && !isOwnComment)
+    // [v5 2026-09 REDESIGN] Same treatment as FeedCard posts now: hidden
+    // content looks the same whether you wrote it or not (blurred, no extra
+    // banner) — see renderModerationHiddenOther. The comment's own author
+    // additionally gets Edit + Request-a-review in the action row below
+    // (renderModerationActionButtons) and, while editing, this inline panel
+    // (renderModerationEditPanel) instead of the blurred/normal text.
+    editingCommentId === c.id
+      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationEditPanel({
+          kind: 'comment', value: editCommentText, onChange: setEditCommentText,
+          onCancel: handleCancelEditComment, onSave: function() { handleSaveEditComment(c); }, saving: savingCommentEdit
+        }))
+      : (c.moderationStatus === 'hidden')
       ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text }))
       : /*#__PURE__*/React.createElement("div", { className: "comment-text" },
-          c.moderationStatus === 'hidden' && isOwnComment && renderModerationAuthorBanner(c.moderationCategory, 'comment'),
           (function() {
       var commentNeedsTrunc = needsTruncation(c.text, COMMENT_LINE_LIMIT);
       var isExpanded = !!expandedComments[c.id];
@@ -5559,13 +5805,13 @@ function FeedCard(_ref5) {
           style: { display: 'block', color: 'var(--gray-500)', fontSize: 10, fontWeight: 700, cursor: 'pointer', marginTop: 3, userSelect: 'none' }
         }, isExpanded ? 'Show less ▲' : '... Show more ▼') : null
       ];
-    })()), /*#__PURE__*/React.createElement("div", {
+    })()), (editingCommentId !== c.id) && /*#__PURE__*/React.createElement("div", {
       style:{display:'flex',alignItems:'center',gap:10,marginTop:5}
     },
       /*#__PURE__*/React.createElement("div", {
         className:"comment-time",
         style:{flex:1}
-      }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now', (c.moderationStatus === 'hidden' && !isOwnComment) && renderModerationInlineTag(c.moderationCategory)),
+      }, (_c$createdAt = c.createdAt) !== null && _c$createdAt !== void 0 && _c$createdAt.toDate ? c.createdAt.toDate().toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Just now', c.moderationStatus === 'hidden' && renderModerationInlineTag(c.moderationCategory)),
       /*#__PURE__*/React.createElement("button", {
         onClick: handleCommentLike,
         style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:10,color:cLiked?'var(--black)':'var(--gray-400)',fontWeight:600,padding:0,fontFamily:'var(--font)'}
@@ -5603,7 +5849,11 @@ function FeedCard(_ref5) {
         style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.7,marginLeft:'auto'}
       }, /*#__PURE__*/React.createElement("svg",{width:11,height:11,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
           /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'})
-        ), "Delete")
+        ), "Delete"),
+      isOwnComment && c.moderationStatus === 'hidden' && renderModerationActionButtons(
+        { status: commentAppeals[c.id] || c.moderationAppealStatus, onRequest: function() { handleRequestCommentAppeal(c); } },
+        function() { handleStartEditComment(c); }
+      )
     )));
   }), comments.length === 0 && !loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5726,35 +5976,21 @@ var MODERATION_CATEGORY_INFO = {
   IRRELEVANT: { label: 'Off-topic',        icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' }
 };
 
-// Faint repeating diagonal watermark text, layered behind/over flagged content
-// (same idea as a document watermark) — purely decorative, pointer-events:none.
-function _moderationWatermark(info, opts) {
-  opts = opts || {};
-  var lbl = (info.label || '').toUpperCase();
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none',
-      display: 'flex', alignItems: 'center', justifyContent: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      transform: 'rotate(-16deg)', whiteSpace: 'nowrap',
-      fontSize: opts.fontSize || 13, fontWeight: 800, letterSpacing: 3,
-      color: info.fg, opacity: opts.opacity || 0.16
-    }
-  }, (lbl + ' · · · ' ).repeat(6)));
-}
-
-// [v4 2026-09 REDESIGN] What everyone EXCEPT the author sees for a hidden
-// post/comment. Per Andy's feedback, this no longer uses a frosted panel /
-// watermark / big colored block — the card should look like a completely
-// normal post. Only two things differ from a normal post: (1) the photo or
-// video is not rendered at all (not even blurred — just omitted), with a
-// tiny icon + label hint so people know media was originally attached
-// without revealing it, and (2) the caption text renders blurred/unreadable
-// instead of legible. Which category it was flagged as is shown separately
-// as a small inline tag next to the timestamp (see renderModerationInlineTag
-// + its call sites in FeedCard's header and the comment list) — not here.
+// [v5 2026-09 REDESIGN] What everyone — including the author now, per Andy's
+// "作者看到的也跟其他人一樣就好" feedback — sees for a hidden post/comment.
+// No frosted panel / watermark / big colored block: the card should look
+// like a completely normal post. Only two things differ from a normal post:
+// (1) the photo or video is not rendered at all (not even blurred — just
+// omitted), with a tiny icon + label hint so people know media was
+// originally attached without revealing it, and (2) the caption text renders
+// blurred/unreadable instead of legible. Which category it was flagged as is
+// shown separately as a small inline tag next to the timestamp (see
+// renderModerationInlineTag + its call sites in FeedCard's header and the
+// comment list) — not here. The author gets two extra things the card
+// doesn't show here: an Edit + Request-a-review pair of actions in the
+// action row (see renderModerationActionButtons below) and, when they tap
+// Edit, an inline panel with the real (unblurred) text to fix and resubmit
+// (see renderModerationEditPanel below) — both live in FeedCard itself.
 function renderModerationHiddenOther(category, kind, opts) {
   opts = opts || {};
   var hasText = !!(opts.text && String(opts.text).trim());
@@ -5799,25 +6035,90 @@ function renderModerationInlineTag(category) {
   return /*#__PURE__*/React.createElement("span", { style: { color: info.fg, fontWeight: 700 } }, ' · ' + info.icon + ' ' + info.label);
 }
 
-// What the AUTHOR sees on their own flagged post/comment: their real content,
-// completely legible (not blurred — they wrote it, they should be able to
-// review/edit/delete it), with a slim tinted banner on top telling them it's
-// hidden from everyone else and why. A faint watermark ties it visually to
-// the "flagged" state without getting in the way of reading.
-function renderModerationAuthorBanner(category, kind) {
-  var info = MODERATION_CATEGORY_INFO[category] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+// [v5 2026-09 REDESIGN] What the AUTHOR gets in ADDITION to the same blurred
+// view everyone else sees (renderModerationHiddenOther, above): two extra
+// items appended into the action row (next to Like/Comment/Delete) — not a
+// distinct colored banner around the content anymore, per Andy's feedback.
+// appeal 是 { status, onRequest }：status 為 falsy 時顯示可點的申訴按鈕；
+// 'pending' 時顯示已送出的靜態文字（不能重複點）。onEdit 沒給時就不顯示 Edit
+// （呼叫端還沒接上編輯功能時安全）。回傳的是一組 action-row 用的元素，不是
+// 獨立區塊，直接混在 feed-actions / 留言那排按鈕裡就好。
+function renderModerationActionButtons(appeal, onEdit) {
+  appeal = appeal || {};
+  var btnStyle = {
+    background: 'none', border: 'none', cursor: 'pointer', display: 'flex',
+    alignItems: 'center', gap: 4, padding: '0 2px', fontFamily: 'var(--font)'
+  };
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    onEdit && /*#__PURE__*/React.createElement("button", {
+      className: "feed-action",
+      title: "Edit and resubmit for review",
+      "aria-label": "Edit and resubmit for review",
+      style: Object.assign({}, btnStyle, { color: '#2563eb', fontWeight: 700 }),
+      onClick: function(e) { e.stopPropagation(); onEdit(); }
+    }, /*#__PURE__*/React.createElement("span", { style: { fontSize: 11 } }, '✎'), /*#__PURE__*/React.createElement("span", { style: { fontSize: 10 } }, 'Edit')),
+    appeal.onRequest && (appeal.status === 'pending'
+      ? /*#__PURE__*/React.createElement("span", {
+          style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--gray-400)', fontStyle: 'italic' }
+        }, '⚑ Review requested')
+      : /*#__PURE__*/React.createElement("button", {
+          className: "feed-action",
+          title: "Think this was a mistake? Request a review",
+          "aria-label": "Request a review",
+          style: Object.assign({}, btnStyle, { color: '#b45309', fontWeight: 700 }),
+          onClick: function(e) { e.stopPropagation(); appeal.onRequest(); }
+        }, /*#__PURE__*/React.createElement("span", { style: { fontSize: 11 } }, '⚑'), /*#__PURE__*/React.createElement("span", { style: { fontSize: 10 } }, 'Request a review'))
+    )
+  );
+}
+
+// [NEW 2026-09] 作者按下「✎ Edit」之後跳出的原地編輯面板——文字先前是模糊
+// 顯示的，只有進到這個編輯模式作者才會看到真正的原文（本來就要看得懂才能改）。
+// 「Save & Resubmit」會重新呼叫 moderate-content 跑一次審查：通過的話整張卡片
+// 就變回正常樣子（跟從沒被標記過一樣，不會留下任何「曾經被擋」的痕跡）；沒通過
+// 一樣照原本的隱藏方式顯示（只是文字換成新的），等於原地再走一次同樣的流程。
+// kind 用來決定標籤文字（'post' / 'clip caption' / 'comment'），value/onChange
+// 是受控 textarea，onCancel/onSave 是動作，saving 是送出中的 loading 狀態。
+function renderModerationEditPanel(opts) {
+  opts = opts || {};
   return /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'relative', overflow: 'hidden', display: 'flex', gap: 8, alignItems: 'center',
-      background: info.bg, borderLeft: '3px solid ' + info.fg, color: info.fg,
-      borderRadius: 4, padding: '8px 10px', fontSize: 11, lineHeight: 1.5, marginBottom: 10
-    }
+    style: { border: '1.5px dashed #2563eb', borderRadius: 8, padding: 10, background: '#eff6ff' },
+    onClick: function(e) { e.stopPropagation(); }
   },
-    _moderationWatermark(info, { fontSize: 10, opacity: .10 }),
-    /*#__PURE__*/React.createElement("span", { style: { fontSize: 14, position: 'relative' } }, info.icon),
-    /*#__PURE__*/React.createElement("span", { style: { position: 'relative' } },
-      /*#__PURE__*/React.createElement("b", null, 'Only you can see this ' + (kind || 'post') + '. '),
-      'Flagged as ' + info.label.toLowerCase() + ' and hidden from everyone else.'
+    /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }
+    }, 'Editing your ' + (opts.kind || 'post')),
+    /*#__PURE__*/React.createElement("textarea", {
+      autoFocus: true,
+      value: opts.value,
+      onChange: function(e) { opts.onChange(e.target.value); },
+      rows: 3,
+      maxLength: 2000,
+      style: {
+        width: '100%', border: '1px solid #bfdbfe', borderRadius: 6, padding: 8,
+        fontFamily: 'inherit', fontSize: 12.5, lineHeight: 1.5, marginBottom: 8,
+        background: '#fff', resize: 'vertical', boxSizing: 'border-box'
+      }
+    }),
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: opts.onCancel,
+        disabled: opts.saving,
+        style: {
+          fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 6,
+          border: '1px solid var(--gray-200)', background: '#fff', color: 'var(--gray-500)',
+          cursor: opts.saving ? 'default' : 'pointer', fontFamily: 'var(--font)'
+        }
+      }, 'Cancel'),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: opts.onSave,
+        disabled: opts.saving || !(opts.value || '').trim(),
+        style: {
+          fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 6, border: 'none',
+          background: 'var(--black)', color: '#fff', fontFamily: 'var(--font)',
+          cursor: opts.saving ? 'default' : 'pointer', opacity: (opts.saving || !(opts.value || '').trim()) ? .6 : 1
+        }
+      }, opts.saving ? 'Saving…' : 'Save & Resubmit')
     )
   );
 }
@@ -5920,6 +6221,7 @@ function ClipShareModal(props) {
           return db.collection('posts').doc(editingPost.id).update(updates).then(function() {
             // 真的換了新影片才需要清掉 Bunny 上的舊檔，不然舊的會變成孤兒檔案一直占空間
             if (result) _deletePostBunnyMedia(editingPost, user);
+            return null; // 不是新建 clip，沒有新 id，下面不用跳「要重新編輯嗎」toast
           });
         }
         var avatar = ((user.displayName || user.email || 'U')[0] || 'U').toUpperCase();
@@ -5936,11 +6238,28 @@ function ClipShareModal(props) {
           hasImage: false,
           hasVideo: true
         }, updates);
-        if (!isFirebaseConfigured) return Promise.resolve();
-        return db.collection('posts').add(Object.assign({}, newClip, { createdAt: FieldValue.serverTimestamp() }));
-      }).then(function() {
+        if (!isFirebaseConfigured) return Promise.resolve(null);
+        // [NEW 2026-09] 記住新建 clip 的 id + 審查結果，讓下面 .then() 可以在
+        // 被隱藏時跳「這則貼文AI已標記XX類...要重新編輯嗎?」的 toast——跟一般
+        // 貼文用同一支 famstreak:autoEditPost 事件、同一支 FeedCard，Challenger/
+        // Buddies 頁點開的 clip 也是靠 FeedCard 渲染，不用另外處理。
+        return db.collection('posts').add(Object.assign({}, newClip, { createdAt: FieldValue.serverTimestamp() }))
+          .then(function(_ref) { return { id: _ref && _ref.id, violation: _modViolation }; });
+      }).then(function(_created) {
         setUploading(false);
         if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (e) {} }
+        if (_created && _created.id && _created.violation && typeof _showAppToast === 'function') {
+          (function(_pid, _cat) {
+            var _catInfo = MODERATION_CATEGORY_INFO[_cat] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+            _showAppToast(
+              'This clip has been AI-flagged as ' + _catInfo.label.toLowerCase() + '. Only you can see it right now — want to edit it?',
+              { actionLabel: 'Edit now', onAction: function() {
+                  try { window.dispatchEvent(new CustomEvent('famstreak:autoEditPost', { detail: { postId: _pid } })); } catch (e) {}
+                }
+              }
+            );
+          })(_created.id, _created.violation);
+        }
         onPosted && onPosted();
       }).catch(function(e) {
         console.warn('[ClipShare] upload/post failed:', e);
@@ -6140,10 +6459,17 @@ function ClipGridModal(props) {
                 //   comment_count，這裡沒轉成 camelCase 的話 FeedCard 的留言數 badge
                 //   還是只能 fallback 顯示 0，要手動點開留言列表那支即時查詢跑完才會更新，
                 //   造成「第一次點開沒有留言、留言數也是 0，要點第二次才對」的感覺。
+                // ★ 修正（2026-09）：同理，p 上的 moderation_status/moderation_category/
+                //   moderation_appeal_status/moderation_appeal_at 是 snake_case 原始查詢
+                //   結果，也要手動轉成 camelCase 帶進去，FeedCard 才讀得到——這裡不是走
+                //   db.collection() 那層有自動轉欄位名稱的 shim，是直接呼叫 _supabase，
+                //   沒列出來的欄位不會自動出現。
                 setViewingPost(Object.assign({}, p, {
                   userId: challenger.userId, user: challenger.displayName, avatarUrl: challenger.userAvatar,
                   habit: challenger.name, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
-                  commentCount: p.comment_count || 0
+                  commentCount: p.comment_count || 0,
+                  moderationStatus: p.moderation_status, moderationCategory: p.moderation_category,
+                  moderationAppealStatus: p.moderation_appeal_status, moderationAppealAt: p.moderation_appeal_at
                 }));
               },
               style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
@@ -6312,6 +6638,68 @@ function UserCommentsPage(_ref_ucp) {
   var _sc1 = useState([]),   _sc1a = _slicedToArray(_sc1, 2), allComments = _sc1a[0], setAllComments = _sc1a[1];
   var _sc2 = useState(0),    _sc2a = _slicedToArray(_sc2, 2), page = _sc2a[0],       setPage = _sc2a[1];
   var _sc3 = useState(true), _sc3a = _slicedToArray(_sc3, 2), loading = _sc3a[0],    setLoading = _sc3a[1];
+  // [FIX 2026-09] 這頁原本是完全獨立、手寫的畫面，沒有套用跟 FeedCard／Community
+  // 動態牆一致的隱藏邏輯——被 AI 標記隱藏的留言，在這裡會直接顯示原文，跟其他地方
+  // 看到的樣子（模糊+分類標籤）對不起來。這裡補上跟 FeedCard 同一套的隱藏／編輯／
+  // 申訴渲染邏輯（因為每則留言都是自己的，不用另外判斷 isOwnComment）。
+  var _sc4 = useState(null),  _sc4a = _slicedToArray(_sc4, 2), editingCommentId = _sc4a[0], setEditingCommentId = _sc4a[1];
+  var _sc5 = useState(''),    _sc5a = _slicedToArray(_sc5, 2), editCommentText = _sc5a[0],  setEditCommentText = _sc5a[1];
+  var _sc6 = useState(false), _sc6a = _slicedToArray(_sc6, 2), savingCommentEdit = _sc6a[0], setSavingCommentEdit = _sc6a[1];
+  var _sc7 = useState({}),    _sc7a = _slicedToArray(_sc7, 2), commentAppeals = _sc7a[0],   setCommentAppeals = _sc7a[1];
+  function handleStartEditComment(c) {
+    setEditCommentText(c.text || '');
+    setEditingCommentId(c.id);
+  }
+  function handleCancelEditComment() {
+    setEditingCommentId(null);
+  }
+  function handleSaveEditComment(c) {
+    var _newText = editCommentText.trim();
+    if (!_newText) { alert('Please enter some text.'); return; }
+    setSavingCommentEdit(true);
+    _moderateClipCaption(_newText).then(function(mod) {
+      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+      var _newStatus = _modViolation ? 'hidden' : 'ok';
+      db.collection('posts').doc(c.postId).collection('comments').doc(c.id).update({
+        text: _newText,
+        moderationStatus: _newStatus,
+        moderationCategory: _modViolation,
+        moderationAppealStatus: null,
+        moderationAppealAt: null
+      }).then(function() {
+        setAllComments(function(prev) {
+          return prev.map(function(x) {
+            return x.id === c.id ? Object.assign({}, x, {
+              text: _newText, moderationStatus: _newStatus, moderationCategory: _modViolation,
+              moderationAppealStatus: null, moderationAppealAt: null
+            }) : x;
+          });
+        });
+        setCommentAppeals(function(prev) { var n = Object.assign({}, prev); delete n[c.id]; return n; });
+        setEditingCommentId(null);
+        setSavingCommentEdit(false);
+        if (typeof _showAppToast === 'function') {
+          _showAppToast(_modViolation
+            ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
+            : 'Updated — visible to everyone again.');
+        }
+      }).catch(function(e) {
+        setSavingCommentEdit(false);
+        alert('Failed to save changes: ' + (e && e.message));
+      });
+    });
+  }
+  function handleRequestCommentAppeal(c) {
+    if (commentAppeals[c.id] || c.moderationAppealStatus) return; // 已經送出過
+    setCommentAppeals(function(prev) { var n = Object.assign({}, prev); n[c.id] = 'pending'; return n; });
+    db.collection('posts').doc(c.postId).collection('comments').doc(c.id).update({
+      moderationAppealStatus: 'pending',
+      moderationAppealAt: FieldValue.serverTimestamp()
+    }).catch(function(e) {
+      console.error('[Appeal] Failed to submit comment review request:', e && e.message);
+      setCommentAppeals(function(prev) { var n = Object.assign({}, prev); delete n[c.id]; return n; });
+    });
+  }
 
   useEffect(function() {
     if (!user) return;
@@ -6465,9 +6853,16 @@ function UserCommentsPage(_ref_ucp) {
                     ),
                     /*#__PURE__*/React.createElement('div', { className: 'comment-body' },
                       /*#__PURE__*/React.createElement('div', { className: 'comment-user' }, displayName),
-                      /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, c.text),
-                      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 } },
-                        /*#__PURE__*/React.createElement('div', { className: 'comment-time' }, c.timeStr),
+                      editingCommentId === c.id
+                        ? /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, renderModerationEditPanel({
+                            kind: 'comment', value: editCommentText, onChange: setEditCommentText,
+                            onCancel: handleCancelEditComment, onSave: function() { handleSaveEditComment(c); }, saving: savingCommentEdit
+                          }))
+                        : (c.moderationStatus === 'hidden'
+                            ? /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text }))
+                            : /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, c.text)),
+                      (editingCommentId !== c.id) && /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' } },
+                        /*#__PURE__*/React.createElement('div', { className: 'comment-time' }, c.timeStr, c.moderationStatus === 'hidden' && renderModerationInlineTag(c.moderationCategory)),
                         /*#__PURE__*/React.createElement('button', {
                           onClick: function() { handleCommentLike(c.id, c.postId); },
                           style: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: cLiked ? 'var(--black)' : 'var(--gray-400)', fontWeight: 600, padding: 0, fontFamily: 'var(--font)' }
@@ -6485,6 +6880,10 @@ function UserCommentsPage(_ref_ucp) {
                             /*#__PURE__*/React.createElement('path', {strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'})
                           ),
                           /*#__PURE__*/React.createElement('span', null, 'Delete')
+                        ),
+                        c.moderationStatus === 'hidden' && renderModerationActionButtons(
+                          { status: commentAppeals[c.id] || c.moderationAppealStatus, onRequest: function() { handleRequestCommentAppeal(c); } },
+                          function() { handleStartEditComment(c); }
                         )
                       )
                     )
@@ -8442,7 +8841,11 @@ function MainApp(_ref16) {
     //   undefined、只能 fallback 顯示 0——不管 DB 裡實際有幾則留言，第一次點開
     //   都會看到「0」，要手動點開留言列表（觸發另一支即時查詢）才會看到正確數字。
     //   這裡補上 comment_count，下面組 viewingPost 時也要記得轉成 camelCase 帶過去。
-    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count')
+    // ★ 修正（2026-09）：這裡原本沒選 moderation_status/moderation_category/
+    //   moderation_appeal_status/moderation_appeal_at，害這幾個欄位在 p 上永遠是
+    //   undefined——FeedCard 判斷 isHidden 靠 post.moderationStatus === 'hidden'，
+    //   undefined 恆為 false，等於被 AI 標記隱藏的 clip 在這裡完全被當成正常內容處理。
+    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
       .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
       .order('created_at', { ascending: false })
       .limit(500)
@@ -8993,8 +9396,11 @@ function MainApp(_ref16) {
         }
         // ★ 修正：同一個「comment_count 沒選到」的問題也存在於 Challenger 頁的
         //   clip 查詢，補上，跟下面 myClipStatusByHabit 那份查詢保持一致。
+        // ★ 修正（2026-09）：同理，moderation_status/moderation_category 也沒選到——
+        //   別人被 AI 標記隱藏的 clip，在 Challenger 頁點開會整支影片+文字正常播放，
+        //   完全沒有套用隱藏邏輯。一併補上 appeal 欄位，跟其他查詢保持一致。
         _sbClient.from('posts')
-          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count')
+          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
           .in('habit_id', _habitIds)
           .eq('is_habit_clip', true)
           .eq('clip_visibility', 'everyone')
@@ -10396,7 +10802,7 @@ function MainApp(_ref16) {
   var handlePostSubmit = /*#__PURE__*/function () {
     var _ref27 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1() {
       var _ref28;
-      var avatar, newPost, localPost, _t9, _t0, _t1;
+      var avatar, newPost, localPost, _t9, _t0, _t1, _newPostRef, _createdPostId;
       return _regenerator().w(function (_context1) {
         while (1) switch (_context1.p = _context1.n) {
           case 0:
@@ -10556,6 +10962,10 @@ function MainApp(_ref16) {
               createdAt: FieldValue.serverTimestamp()
             }));
           case 15:
+            // [NEW 2026-09] 記住剛送出的貼文 id，被 AI 隱藏的話下面 case 19 要用
+            // 來跳「這則貼文AI已標記XX類...要重新編輯嗎?」的 toast。
+            _newPostRef = _context1.v;
+            _createdPostId = _newPostRef && _newPostRef.id;
             _context1.n = 17;
             break;
           case 16:
@@ -10573,6 +10983,7 @@ function MainApp(_ref16) {
               liked: false,
               isOwn: true
             });
+            _createdPostId = localPost.id;
             setMyPosts(function (prev) {
               return [localPost].concat(_toConsumableArray(prev));
             });
@@ -10580,6 +10991,22 @@ function MainApp(_ref16) {
               return [localPost].concat(_toConsumableArray(prev));
             });
           case 19:
+            // [NEW 2026-09] 被 AI 標記隱藏的話，提示作者「這則貼文AI已標記XX類，
+            // 目前只有你看得到，要重新編輯嗎？」——點「立即編輯」會透過
+            // famstreak:autoEditPost 這個全域事件，通知這則貼文將要 mount 出來的
+            // FeedCard 自己跳進編輯模式（見 FeedCard 內的對應 useEffect）。
+            if (_modViolation && _createdPostId && typeof _showAppToast === 'function') {
+              (function(_pid, _cat) {
+                var _catInfo = MODERATION_CATEGORY_INFO[_cat] || MODERATION_CATEGORY_INFO.IRRELEVANT;
+                _showAppToast(
+                  'This post has been AI-flagged as ' + _catInfo.label.toLowerCase() + '. Only you can see it right now — want to edit it?',
+                  { actionLabel: 'Edit now', onAction: function() {
+                      try { window.dispatchEvent(new CustomEvent('famstreak:autoEditPost', { detail: { postId: _pid } })); } catch (e) {}
+                    }
+                  }
+                );
+              })(_createdPostId, _modViolation);
+            }
             // Update daily post count and cooldown timestamp
             var _todaySave = new Date().toISOString().slice(0, 10);
             var _limitKeySave = 'postLimit_' + user.uid + '_' + _todaySave;
@@ -13173,7 +13600,9 @@ function BuddiesPage(_ref_buddies) {
       }).filter(Boolean);
       if (partnerHabitIds.length > 0) {
         // ★ 修正：同一份 comment_count 沒選到的問題，跟另外兩處 clip 查詢一起補上。
-        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count')
+        // ★ 修正（2026-09）：moderation_status/moderation_category/appeal 欄位也一起補，
+        //   不然 Buddies 頁點開夥伴分享的 clip，被隱藏的內容一樣會被當正常內容顯示。
+        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
           .in('habit_id', partnerHabitIds)
           .eq('is_habit_clip', true)
           .in('clip_visibility', ['everyone', 'buddies'])
@@ -13494,11 +13923,15 @@ function BuddiesPage(_ref_buddies) {
                       //   跟 ClipGridModal 之前修過的是同一個 bug——FeedCard 判斷要不要渲染
                       //   播放器靠 post.hasVideo && post.mediaUrl，這裡漏掉的話，點開夥伴分享
                       //   的 clip 只會看到空白（播放器沒被渲染出來），留言數也會一樣卡在 0。
+                      // ★ 修正（2026-09）：同理補上 moderation 相關欄位的 camelCase 映射，
+                      //   不然被 AI 標記隱藏的夥伴 clip 在這裡一樣會被當正常內容顯示。
                       setViewingBuddyClip(Object.assign({}, clip, {
                         userId: partnerId, user: partnerName || 'Your buddy', avatarUrl: partnerAvatarUrl,
                         habit: habitName || pair.habit_name,
                         hasVideo: true, mediaUrl: clip.media_url, thumbnailUrl: clip.thumbnail_url,
-                        commentCount: clip.comment_count || 0
+                        commentCount: clip.comment_count || 0,
+                        moderationStatus: clip.moderation_status, moderationCategory: clip.moderation_category,
+                        moderationAppealStatus: clip.moderation_appeal_status, moderationAppealAt: clip.moderation_appeal_at
                       }));
                     }
                   }, React.createElement(_ClipThumb, { url: clip.thumbnail_url })),
