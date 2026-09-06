@@ -1148,12 +1148,13 @@ await supabase.from('claude_api_calls').insert({
          看得到——巡查、還原（Unhide）或直接刪除都在這頁做。 -->
     <div class="pg" id="pg-flagged">
       <div class="pg-title">Flagged Content</div>
-      <div class="pg-sub">Posts, comments and habit-clip captions that moderate-content flagged. They're still hidden from other users — review here, then Unhide (false positive) or Delete.</div>
+      <div class="pg-sub">Posts, comments and habit-clip captions that moderate-content flagged. They're still hidden from other users — review here, then Unhide (false positive) or Delete. Items where the author tapped "Request a review" are pinned to the top and highlighted — Mark Reviewed keeps it hidden but clears it from the queue.</div>
 
       <div class="stat-grid" style="margin-bottom:20px">
         <div class="stat dark"><div class="stat-lbl">Total Hidden</div><div class="stat-val" id="flgTotal">—</div><div class="stat-note">Posts + comments + clips</div></div>
         <div class="stat" style="border-left:3px solid #99315f"><div class="stat-lbl">Sexual / Violent / Hateful</div><div class="stat-val" id="flgHarmful" style="color:#99315f">—</div><div class="stat-note">Safety categories</div></div>
         <div class="stat" style="border-left:3px solid #9ca3af"><div class="stat-lbl">Spam / Scam / Off-topic</div><div class="stat-val" id="flgQuality" style="color:#6b7280">—</div><div class="stat-note">Quality categories</div></div>
+        <div class="stat" style="border-left:3px solid #d97706"><div class="stat-lbl">Pending Appeals</div><div class="stat-val" id="flgAppeals" style="color:#b45309">—</div><div class="stat-note">Author asked for a review</div></div>
       </div>
 
       <div class="tbl-card">
@@ -5027,9 +5028,9 @@ async function loadFlaggedContent() {
   tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Loading...</td></tr>';
   try {
     var [postsRes, commentsRes] = await Promise.all([
-      _supabase.from('posts').select('id, user_id, text, moderation_category, created_at, is_habit_clip')
+      _supabase.from('posts').select('id, user_id, text, moderation_category, created_at, is_habit_clip, moderation_appeal_status, moderation_appeal_at')
         .eq('moderation_status', 'hidden').order('created_at', { ascending: false }).limit(500),
-      _supabase.from('comments').select('id, user_id, post_id, text, moderation_category, created_at')
+      _supabase.from('comments').select('id, user_id, post_id, text, moderation_category, created_at, moderation_appeal_status, moderation_appeal_at')
         .eq('moderation_status', 'hidden').order('created_at', { ascending: false }).limit(500)
     ]);
     if (postsRes.error) throw postsRes.error;
@@ -5037,17 +5038,26 @@ async function loadFlaggedContent() {
 
     var items = [];
     (postsRes.data || []).forEach(function(p) {
-      items.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: p.moderation_category, createdAt: p.created_at, kind: p.is_habit_clip ? 'Clip caption' : 'Post' });
+      items.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: p.moderation_category, createdAt: p.created_at, kind: p.is_habit_clip ? 'Clip caption' : 'Post', appealStatus: p.moderation_appeal_status, appealAt: p.moderation_appeal_at });
     });
     (commentsRes.data || []).forEach(function(c) {
-      items.push({ table: 'comments', id: c.id, userId: c.user_id, text: c.text, category: c.moderation_category, createdAt: c.created_at, kind: 'Comment' });
+      items.push({ table: 'comments', id: c.id, userId: c.user_id, text: c.text, category: c.moderation_category, createdAt: c.created_at, kind: 'Comment', appealStatus: c.moderation_appeal_status, appealAt: c.moderation_appeal_at });
     });
-    items.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+    // 有待複查申請的排最前面（用申請時間排序）,其餘照原本的建立時間排序。
+    items.sort(function(a, b) {
+      var aPending = a.appealStatus === 'pending', bPending = b.appealStatus === 'pending';
+      if (aPending && !bPending) return -1;
+      if (bPending && !aPending) return 1;
+      if (aPending && bPending) return new Date(a.appealAt || a.createdAt) - new Date(b.appealAt || b.createdAt);
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 
     _flaggedItems = items;
     document.getElementById('flgTotal').textContent = items.length;
     document.getElementById('flgHarmful').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) !== -1; }).length;
     document.getElementById('flgQuality').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) === -1; }).length;
+    var appealEl = document.getElementById('flgAppeals');
+    if (appealEl) appealEl.textContent = items.filter(function(i){ return i.appealStatus === 'pending'; }).length;
     var badge = document.getElementById('flaggedBadge');
     if (items.length > 0) { badge.style.display = 'inline-block'; badge.textContent = items.length; }
     else { badge.style.display = 'none'; }
@@ -5070,14 +5080,22 @@ function renderFlaggedContent() {
     var label = MODERATION_CATEGORY_LABELS[item.category] || item.category || '—';
     var isHarmful = _HARMFUL_CATEGORIES.indexOf(item.category) !== -1;
     var catColor = isHarmful ? '#99315f' : '#6b7280';
-    return '<tr>' +
+    var isPendingAppeal = item.appealStatus === 'pending';
+    // 有申請複查的那一列加左邊色條 + 小標籤,讓它在畫面上比較顯眼(不用另外
+    // 開分頁——排序已經把它們放最前面了,這裡只是視覺上再強調一次)。
+    var rowStyle = isPendingAppeal ? ' style="border-left:3px solid #d97706;background:#fffaf0"' : '';
+    var appealNote = isPendingAppeal
+      ? '<div style="margin-top:3px;font-size:10px;font-weight:700;color:#b45309">⚑ Review requested' + (item.appealAt ? ' · ' + new Date(item.appealAt).toLocaleDateString() : '') + '</div>'
+      : '';
+    return '<tr' + rowStyle + '>' +
       '<td style="font-size:11px">' + htmlEsc(resolveUserName(item.userId)) + '</td>' +
       '<td style="font-size:11px">' + item.kind + '</td>' +
-      '<td><span class="badge" style="background:' + catColor + '20;color:' + catColor + '">' + htmlEsc(label) + '</span></td>' +
+      '<td><span class="badge" style="background:' + catColor + '20;color:' + catColor + '">' + htmlEsc(label) + '</span>' + appealNote + '</td>' +
       '<td style="font-size:11px;max-width:320px;white-space:normal">' + htmlEsc((item.text || '').slice(0, 200)) + '</td>' +
       '<td style="font-size:11px;color:var(--g400)">' + (item.createdAt ? new Date(item.createdAt).toLocaleString() : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
         '<button class="refresh" style="margin-right:6px" onclick="unhideFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Unhide</button>' +
+        (isPendingAppeal ? '<button class="refresh" style="margin-right:6px" onclick="dismissFlaggedAppeal(\'' + item.table + '\',\'' + item.id + '\')" title="Reviewed, keeping it hidden">Mark Reviewed</button>' : '') +
         '<button class="refresh" style="color:#dc2626;border-color:#dc2626" onclick="deleteFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Delete</button>' +
       '</td>' +
     '</tr>';
@@ -5085,13 +5103,29 @@ function renderFlaggedContent() {
 }
 
 // 誤判（false positive）：解除隱藏，改回一般可見的貼文/留言。
+// 順便把申請複查的欄位一起清掉——內容都已經不隱藏了，這兩欄留著沒意義。
 async function unhideFlaggedItem(table, id) {
   try {
-    var { error } = await _supabase.from(table).update({ moderation_status: 'ok', moderation_category: null }).eq('id', id);
+    var { error } = await _supabase.from(table).update({
+      moderation_status: 'ok', moderation_category: null,
+      moderation_appeal_status: null, moderation_appeal_at: null
+    }).eq('id', id);
     if (error) throw error;
     loadFlaggedContent();
   } catch (e) {
     alert('Unhide failed: ' + e.message);
+  }
+}
+
+// 複查過、但確認維持隱藏（不是誤判）：只清掉「待複查」狀態，讓它從
+// Pending Appeals 計數 / 列表最前面消失，但貼文/留言本身還是隱藏的。
+async function dismissFlaggedAppeal(table, id) {
+  try {
+    var { error } = await _supabase.from(table).update({ moderation_appeal_status: 'reviewed' }).eq('id', id);
+    if (error) throw error;
+    loadFlaggedContent();
+  } catch (e) {
+    alert('Failed to mark reviewed: ' + e.message);
   }
 }
 
@@ -5123,10 +5157,15 @@ var ADMIN_SEND_TEST_EMAIL_FN = SUPABASE_URL + '/functions/v1/admin-send-test-ema
 var EMAIL_TEMPLATE_VARS = {
   'match_found': ['userName', 'habitName', 'ctaUrl'],
   'partner_left': ['userName', 'leavingUserName', 'habitName', 'ctaUrl'],
+  // ★ 新增：手動按 End Partnership 時寄的通知信——雙方帳號都還在，跟
+  //   partner_left（對方帳號被刪除）是不同情境，文案也不一樣，見
+  //   notify-partnership-ended Edge Function 呼叫 send-email 時帶的變數。
+  'partnership_ended': ['userName', 'leavingUserName', 'habitName', 'ctaUrl'],
 };
 var EMAIL_TEMPLATE_SAMPLE_DATA = {
   'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
   'partner_left': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
+  'partnership_ended': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
 };
 
 var _etTemplates = [];
