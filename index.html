@@ -3979,6 +3979,105 @@ function _fileToBase64(file) {
   });
 }
 
+// [NEW 2026-09] 照片視覺審查用：把照片縮到最長邊 800px 轉成 base64 jpeg，送給
+// moderate-content 的 imageBase64 欄位。從 handlePostSubmit 原本寫死在裡面那段
+// 邏輯抽出來變成共用 function，這樣留言附照片時也能用同一套，不用複製貼上。
+function _resizeImageForModeration(file) {
+  return new Promise(function(resolve) {
+    try {
+      var MAX_SIZE = 800;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          var w = img.width, h = img.height;
+          if (w > MAX_SIZE || h > MAX_SIZE) {
+            if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+            else       { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+          }
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          resolve(dataUrl.split(',')[1]);
+        };
+        img.onerror = function() { resolve(null); };
+        img.src = e.target.result;
+      };
+      reader.onerror = function() { resolve(null); };
+      reader.readAsDataURL(file);
+    } catch (e) { resolve(null); }
+  });
+}
+
+// [NEW 2026-09] 影片畫面視覺審查：從影片檔案(File/Blob)擷取一張畫面（約影片
+// 5%處，最多0.5秒，跟既有縮圖邏輯 _extractFrame 抓同一個時間點）轉成 base64
+// jpeg，送給 moderate-content 的 imageBase64 欄位——影片畫面本身第一次真的
+// 被送去給 AI 看，不再只送文字說明。不依賴任何預先掛載的 <video> DOM 元素，
+// 自己建立一個暫時的 <video>，讓 Community 貼文／習慣影片／留言都能共用同一支。
+function _extractVideoFrameBase64(file) {
+  return new Promise(function(resolve) {
+    var url;
+    try { url = URL.createObjectURL(file); } catch (e) { resolve(null); return; }
+    var video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    var done = false;
+    var timer;
+    function cleanup() {
+      clearTimeout(timer);
+      video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onErr);
+      try { video.pause(); } catch (e) {}
+      video.src = '';
+      try { URL.revokeObjectURL(url); } catch (e) {}
+    }
+    function finish(b64) {
+      if (done) return; done = true;
+      cleanup();
+      resolve(b64);
+    }
+    function onMeta() {
+      try { video.currentTime = Math.min(0.5, (video.duration || 10) * 0.05); }
+      catch (e) { finish(null); }
+    }
+    function onSeeked() {
+      try {
+        var MAX_SIZE = 800;
+        var w = video.videoWidth || 0, h = video.videoHeight || 0;
+        if (!w || !h) { finish(null); return; }
+        if (w > MAX_SIZE || h > MAX_SIZE) {
+          if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+          else       { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        finish(dataUrl.length > 2000 ? dataUrl.split(',')[1] : null);
+      } catch (e) { finish(null); }
+    }
+    function onErr() { finish(null); }
+    timer = setTimeout(function() { finish(null); }, 8000);
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('error', onErr);
+    video.src = url;
+    video.load();
+  });
+}
+
+// [NEW 2026-09] 統一入口：依檔案類型自動選擇「照片縮圖」或「影片擷影格」，
+// 給任何送出流程（貼文／習慣影片／留言）在審查前呼叫，回傳 base64 或 null。
+function _mediaFileToModerationBase64(file, type) {
+  if (!file) return Promise.resolve(null);
+  if (type === 'video') return _extractVideoFrameBase64(file);
+  if (type === 'image') return _resizeImageForModeration(file);
+  return Promise.resolve(null);
+}
+
 // 依 checkedDates 換算某支 clip 是打卡的第幾天（統計「小於等於該日」的打卡次數）
 function _clipDayNumber(checkedDates, clipCreatedAt) {
   if (!checkedDates || !checkedDates.length || !clipCreatedAt) return null;
@@ -3988,15 +4087,19 @@ function _clipDayNumber(checkedDates, clipCreatedAt) {
   return count > 0 ? count : null;
 }
 
-// 習慣打卡 clip 的文字審查（沿用 moderate-content edge function，跟社群貼文/留言同一套）
-async function _moderateClipCaption(caption) {
+// 習慣打卡 clip 的審查（沿用 moderate-content edge function，跟社群貼文/留言同一套）。
+// [2026-09] 加上可選的 imageBase64 參數——影片會先擷一張畫面送進來，這裡就能一起
+// 送給 Claude 視覺分析；沒有帶這個參數的舊呼叫點（純文字）行為完全不變。
+async function _moderateClipCaption(caption, imageBase64) {
   try {
     var token = await _getAccessToken();
     if (!token) return { approved: true };
+    var payload = { caption: caption || '' };
+    if (imageBase64) { payload.imageBase64 = imageBase64; payload.imageMediaType = 'image/jpeg'; }
     var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ caption: caption || '' })
+      body: JSON.stringify(payload)
     });
     if (!res.ok) return { approved: true };
     return await res.json();
@@ -4004,6 +4107,77 @@ async function _moderateClipCaption(caption) {
     console.warn('[Clip] Moderation check failed, proceeding:', e);
     return { approved: true };
   }
+}
+
+// [NEW 2026-09] 「編輯已隱藏內容 + 重新送審」的共用核心邏輯——貼文、留言、
+// 打卡影片的快速編輯面板（renderModerationEditPanel）都共用同一套規則,不用
+// 各自重寫一次。opts:
+//   text          — 編輯後的文字
+//   mediaAction   — 'keep'（媒體不動,可能原本就沒有媒體）/ 'remove'（移除媒體）/
+//                    'replace'（換一個新檔案，搭配 mediaFile）
+//   mediaFile     — mediaAction==='replace' 時的新 File
+//   hasOriginalMedia / originalCategory — 編輯前的媒體狀態跟分類（'keep' 分支要用）
+//   onProgress    — 上傳進度 callback（只有 replace 會呼叫）
+// 回傳 Promise<{status, category, mediaChanged, updates?, forcedHidden}>——
+// updates 只有 mediaChanged 時才有值（要寫進資料庫的媒體欄位，不含 text）。
+// ★ 關鍵規則（對應 Andy 提的「文字+媒體(新的或已移除)要一起送審」）：如果這則
+// 內容本來就有附媒體、這次編輯卻完全沒去動它（既沒換也沒移除），代表那個媒體
+// 從頭到尾沒有被重新看過——即使這次文字改完通過審查，也不能只靠文字結果就把
+// 隱藏解除，不然真正違規的舊媒體會原封不動地重新曝光給所有人看。這種情況下
+// 會強制維持 hidden、分類維持原本的，讓使用者知道要嘛換掉、要嘛移除媒體才有
+// 機會恢復公開；如果他們覺得媒體其實沒問題、只是文字誤判，正常管道是走
+// 「⚑ Request a review」讓後台人工看過媒體本身再決定。
+function _resolveModerationEditSave(opts) {
+  opts = opts || {};
+  var newText = opts.text || '';
+  var mediaAction = opts.mediaAction || 'keep';
+  var hasOriginalMedia = !!opts.hasOriginalMedia;
+
+  if (mediaAction === 'replace' && opts.mediaFile) {
+    var kind = (opts.mediaFile.type || '').indexOf('video/') === 0 ? 'video' : 'image';
+    return Promise.all([
+      _mediaFileToModerationBase64(opts.mediaFile, kind).catch(function() { return null; }),
+      uploadToBunny(opts.mediaFile, kind, opts.onProgress || function() {})
+    ]).then(function(r) {
+      var b64 = r[0], up = r[1];
+      return _moderateClipCaption(newText, b64).then(function(mod) {
+        var violation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+        return {
+          status: violation ? 'hidden' : 'ok',
+          category: violation,
+          mediaChanged: true,
+          updates: {
+            hasImage: kind === 'image', hasVideo: kind === 'video',
+            mediaUrl: up.url, mediaPublicId: up.publicId, thumbnailUrl: up.thumbnail || null
+          }
+        };
+      });
+    });
+  }
+
+  if (mediaAction === 'remove' && hasOriginalMedia) {
+    return _moderateClipCaption(newText).then(function(mod) {
+      var violation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+      return {
+        status: violation ? 'hidden' : 'ok',
+        category: violation,
+        mediaChanged: true,
+        updates: { hasImage: false, hasVideo: false, mediaUrl: null, mediaPublicId: null, thumbnailUrl: null }
+      };
+    });
+  }
+
+  // 'keep'（媒體不動——可能原本就沒有媒體，也可能有但這次沒去處理它）
+  return _moderateClipCaption(newText).then(function(mod) {
+    var violation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+    var forcedHidden = hasOriginalMedia && !violation;
+    return {
+      status: (violation || forcedHidden) ? 'hidden' : 'ok',
+      category: violation || (forcedHidden ? opts.originalCategory : null),
+      mediaChanged: false,
+      forcedHidden: forcedHidden
+    };
+  });
 }
 
 // [NEW 2026-09] 送出後被 AI 隱藏時用的提示 toast，可以附一個可點擊的動作按鈕
@@ -5180,6 +5354,12 @@ function FeedCard(_ref5) {
   var effectiveModStatus = modOverride ? modOverride.status : post.moderationStatus;
   var effectiveModCategory = modOverride ? modOverride.category : post.moderationCategory;
   var effectiveText = (modOverride && modOverride.text != null) ? modOverride.text : post.text;
+  // [NEW 2026-09] 編輯時換掉/移除媒體，跟文字一樣需要用 modOverride 蓋掉 prop
+  // 顯示——這頁面如果是一次性 .get()（例如 View all posts）而不是即時訂閱，
+  // 存檔後不會自動拿到新的 post prop，沒有這層 override 畫面會繼續顯示舊媒體。
+  var effectiveHasImage = (modOverride && modOverride.media) ? modOverride.media.hasImage : post.hasImage;
+  var effectiveHasVideo = (modOverride && modOverride.media) ? modOverride.media.hasVideo : post.hasVideo;
+  var effectiveMediaUrl = (modOverride && modOverride.media) ? modOverride.media.mediaUrl : post.mediaUrl;
   var isHidden = effectiveModStatus === 'hidden';
   // [NEW 2026-09] 作者「申請複查」——用 post.moderationAppealStatus 當初始值(讀取
   // 已經走過 _snakeToCamel 白名單),樂觀更新 + 失敗時回滾,寫法跟其他樂觀更新一致。
@@ -5213,42 +5393,111 @@ function FeedCard(_ref5) {
     _useStateSavingPostEdit2 = _slicedToArray(_useStateSavingPostEdit, 2),
     savingPostEdit = _useStateSavingPostEdit2[0],
     setSavingPostEdit = _useStateSavingPostEdit2[1];
+  // [NEW 2026-09] 編輯面板裡的媒體移除/替換 state——'keep'/'remove'/'replace'，
+  // 見 renderModerationEditPanel / _resolveModerationEditSave。
+  var _useStateEditMediaAction = useState('keep'),
+    _useStateEditMediaAction2 = _slicedToArray(_useStateEditMediaAction, 2),
+    editMediaAction = _useStateEditMediaAction2[0],
+    setEditMediaAction = _useStateEditMediaAction2[1];
+  var _useStateEditMediaFile = useState(null),
+    _useStateEditMediaFile2 = _slicedToArray(_useStateEditMediaFile, 2),
+    editMediaFile = _useStateEditMediaFile2[0],
+    setEditMediaFile = _useStateEditMediaFile2[1];
+  var _useStateEditMediaPreviewUrl = useState(null),
+    _useStateEditMediaPreviewUrl2 = _slicedToArray(_useStateEditMediaPreviewUrl, 2),
+    editMediaPreviewUrl = _useStateEditMediaPreviewUrl2[0],
+    setEditMediaPreviewUrl = _useStateEditMediaPreviewUrl2[1];
+  var _useStateEditMediaUploading = useState(false),
+    _useStateEditMediaUploading2 = _slicedToArray(_useStateEditMediaUploading, 2),
+    editMediaUploading = _useStateEditMediaUploading2[0],
+    setEditMediaUploading = _useStateEditMediaUploading2[1];
+  var _useStateEditMediaProgress = useState(0),
+    _useStateEditMediaProgress2 = _slicedToArray(_useStateEditMediaProgress, 2),
+    editMediaProgress = _useStateEditMediaProgress2[0],
+    setEditMediaProgress = _useStateEditMediaProgress2[1];
+  var editMediaFileInputRef = useRef(null);
+  function _resetEditMediaState() {
+    setEditMediaAction('keep');
+    setEditMediaFile(null);
+    setEditMediaProgress(0);
+    setEditMediaUploading(false);
+    setEditMediaPreviewUrl(function(prev) { if (prev) { try { URL.revokeObjectURL(prev); } catch (e) {} } return null; });
+  }
   function handleStartEditPost() {
     setEditPostText(effectiveText || '');
+    _resetEditMediaState();
     setIsEditingPost(true);
   }
   function handleCancelEditPost() {
+    _resetEditMediaState();
     setIsEditingPost(false);
   }
+  function handlePickReplaceMedia() {
+    if (editMediaFileInputRef.current) editMediaFileInputRef.current.click();
+  }
+  function handleEditMediaFileChange(e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    var isVid = effectiveHasVideo;
+    if (isVid && (!f.type || f.type.indexOf('video/') !== 0)) { alert('Please choose a video file.'); return; }
+    if (!isVid && (!f.type || f.type.indexOf('image/') !== 0)) { alert('Please choose an image file.'); return; }
+    var limitMB = isVid ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB;
+    if (f.size > limitMB * 1024 * 1024) { alert('That file is ' + _fmtMB(f.size) + 'MB — please keep it under ' + limitMB + 'MB.'); return; }
+    setEditMediaPreviewUrl(function(prev) { if (prev) { try { URL.revokeObjectURL(prev); } catch (e) {} } return URL.createObjectURL(f); });
+    setEditMediaFile(f);
+    setEditMediaAction('replace');
+  }
+  function handleRemoveEditMedia() { setEditMediaAction('remove'); }
+  function handleUndoRemoveEditMedia() { setEditMediaAction('keep'); }
   function handleSaveEditPost() {
     var _newText = editPostText.trim();
-    if (!_newText && !(post.hasImage || post.hasVideo)) { alert('Please enter some text.'); return; }
+    var _hasOrigMedia = !!(effectiveHasImage || effectiveHasVideo);
+    if (!_newText && !_hasOrigMedia && editMediaAction !== 'replace') { alert('Please enter some text.'); return; }
+    if (!_newText && editMediaAction === 'remove') { alert('Please enter some text.'); return; }
     setSavingPostEdit(true);
-    _moderateClipCaption(_newText).then(function(mod) {
-      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
-      var _newStatus = _modViolation ? 'hidden' : 'ok';
-      db.collection('posts').doc(post.id).update({
+    if (editMediaAction === 'replace') setEditMediaUploading(true);
+    _resolveModerationEditSave({
+      text: _newText,
+      mediaAction: editMediaAction,
+      mediaFile: editMediaFile,
+      hasOriginalMedia: _hasOrigMedia,
+      originalCategory: effectiveModCategory,
+      onProgress: setEditMediaProgress
+    }).then(function(result) {
+      var dbUpdates = Object.assign({
         text: _newText,
-        moderationStatus: _newStatus,
-        moderationCategory: _modViolation,
-        // 重新編輯等於重新提交一次，之前的申訴不再適用——順便清掉，不然
-        // Admin Dashboard 的 Pending Appeals 會一直卡著一個已經改過的舊申訴。
+        moderationStatus: result.status,
+        moderationCategory: result.category,
         moderationAppealStatus: null,
         moderationAppealAt: null
-      }).then(function() {
-        setModOverride({ status: _newStatus, category: _modViolation, text: _newText });
+      }, result.updates || {});
+      return db.collection('posts').doc(post.id).update(dbUpdates).then(function() {
+        // 換掉或移除了原本的媒體——記得清掉 Bunny 上的舊檔案，不然變孤兒檔案。
+        if (result.mediaChanged && _hasOrigMedia) {
+          _deletePostBunnyMedia({ hasImage: effectiveHasImage, hasVideo: effectiveHasVideo, mediaUrl: effectiveMediaUrl, mediaPublicId: post.mediaPublicId }, currentUser);
+        }
+        var _overridePayload = { status: result.status, category: result.category, text: _newText };
+        if (result.mediaChanged) {
+          _overridePayload.media = result.updates ? { hasImage: result.updates.hasImage, hasVideo: result.updates.hasVideo, mediaUrl: result.updates.mediaUrl } : { hasImage: false, hasVideo: false, mediaUrl: null };
+        }
+        setModOverride(_overridePayload);
         setPostAppealStatus(null);
+        _resetEditMediaState();
         setIsEditingPost(false);
         setSavingPostEdit(false);
         if (typeof _showAppToast === 'function') {
-          _showAppToast(_modViolation
-            ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
-            : 'Updated — visible to everyone again.');
+          _showAppToast(result.forcedHidden
+            ? 'Text updated, but this stays hidden until you replace or remove the attached media.'
+            : (result.category
+              ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[result.category] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
+              : 'Updated — visible to everyone again.'));
         }
-      }).catch(function(e) {
-        setSavingPostEdit(false);
-        alert('Failed to save changes: ' + (e && e.message));
       });
+    }).catch(function(e) {
+      setSavingPostEdit(false);
+      setEditMediaUploading(false);
+      alert('Failed to save changes: ' + (e && e.message));
     });
   }
   // [NEW 2026-09] 接住送出貼文/clip 後跳出的 toast 上「Edit now」按鈕——那顆按鈕
@@ -5280,6 +5529,39 @@ function FeedCard(_ref5) {
     _useState24 = _slicedToArray(_useState23, 2),
     sendingComment = _useState24[0],
     setSendingComment = _useState24[1];
+  // [NEW 2026-09] 留言附加照片/影片——跟貼文的 postMedia 概念一樣，但這裡選檔案
+  // 「不」馬上上傳（每張貼文卡片都會有自己一份留言輸入框，用全域 window._mediaPickerCallbacks
+  // 那套單例寫法會互相打架），送出當下才上傳，跟 ClipShareModal 的做法一致。
+  var _useStateCM = useState(null), // { type:'image'|'video', file, previewUrl }
+    _useStateCM2 = _slicedToArray(_useStateCM, 2),
+    commentMedia = _useStateCM2[0],
+    setCommentMedia = _useStateCM2[1];
+  var _useStateCMP = useState(0),
+    _useStateCMP2 = _slicedToArray(_useStateCMP, 2),
+    commentMediaProgress = _useStateCMP2[0],
+    setCommentMediaProgress = _useStateCMP2[1];
+  var commentImageInputRef = useRef(null);
+  var commentVideoInputRef = useRef(null);
+  function handleCommentMediaChange(e, mediaKind) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = ''; // 允許使用者重選同一個檔案
+    if (!f) return;
+    if (mediaKind === 'video' && f.size > UPLOAD_LIMITS.VIDEO_MAX_MB * 1024 * 1024) {
+      alert('That video is ' + _fmtMB(f.size) + 'MB — please keep clips under ' + UPLOAD_LIMITS.VIDEO_MAX_MB + 'MB.');
+      return;
+    }
+    if (mediaKind === 'image' && f.size > UPLOAD_LIMITS.IMAGE_MAX_MB * 1024 * 1024) {
+      alert('That photo is ' + _fmtMB(f.size) + 'MB — please keep photos under ' + UPLOAD_LIMITS.IMAGE_MAX_MB + 'MB.');
+      return;
+    }
+    if (commentMedia && commentMedia.previewUrl) { try { URL.revokeObjectURL(commentMedia.previewUrl); } catch (_e) {} }
+    setCommentMedia({ type: mediaKind, file: f, previewUrl: URL.createObjectURL(f) });
+  }
+  function handleRemoveCommentMedia() {
+    if (commentMedia && commentMedia.previewUrl) { try { URL.revokeObjectURL(commentMedia.previewUrl); } catch (_e) {} }
+    setCommentMedia(null);
+    setCommentMediaProgress(0);
+  }
   // 本地留言數 override：留言成功後立即 +1，不等 DB / prop 刷新
   var _useStateLCC = useState(null),
     _useStateLCC2 = _slicedToArray(_useStateLCC, 2),
@@ -5331,47 +5613,109 @@ function FeedCard(_ref5) {
     _useStateSavingCommentEdit2 = _slicedToArray(_useStateSavingCommentEdit, 2),
     savingCommentEdit = _useStateSavingCommentEdit2[0],
     setSavingCommentEdit = _useStateSavingCommentEdit2[1];
+  // [NEW 2026-09] 留言編輯面板的媒體移除/替換——同一時間只有一則留言在編輯，
+  // 用單一 state 就夠了，不用像 commentAppeals 那樣用 id 當 key。
+  var _useStateEditCommentMediaAction = useState('keep'),
+    _useStateEditCommentMediaAction2 = _slicedToArray(_useStateEditCommentMediaAction, 2),
+    editCommentMediaAction = _useStateEditCommentMediaAction2[0],
+    setEditCommentMediaAction = _useStateEditCommentMediaAction2[1];
+  var _useStateEditCommentMediaFile = useState(null),
+    _useStateEditCommentMediaFile2 = _slicedToArray(_useStateEditCommentMediaFile, 2),
+    editCommentMediaFile = _useStateEditCommentMediaFile2[0],
+    setEditCommentMediaFile = _useStateEditCommentMediaFile2[1];
+  var _useStateEditCommentMediaPreviewUrl = useState(null),
+    _useStateEditCommentMediaPreviewUrl2 = _slicedToArray(_useStateEditCommentMediaPreviewUrl, 2),
+    editCommentMediaPreviewUrl = _useStateEditCommentMediaPreviewUrl2[0],
+    setEditCommentMediaPreviewUrl = _useStateEditCommentMediaPreviewUrl2[1];
+  var _useStateEditCommentMediaUploading = useState(false),
+    _useStateEditCommentMediaUploading2 = _slicedToArray(_useStateEditCommentMediaUploading, 2),
+    editCommentMediaUploading = _useStateEditCommentMediaUploading2[0],
+    setEditCommentMediaUploading = _useStateEditCommentMediaUploading2[1];
+  var _useStateEditCommentMediaProgress = useState(0),
+    _useStateEditCommentMediaProgress2 = _slicedToArray(_useStateEditCommentMediaProgress, 2),
+    editCommentMediaProgress = _useStateEditCommentMediaProgress2[0],
+    setEditCommentMediaProgress = _useStateEditCommentMediaProgress2[1];
+  var editCommentMediaFileInputRef = useRef(null);
+  function _resetEditCommentMediaState() {
+    setEditCommentMediaAction('keep');
+    setEditCommentMediaFile(null);
+    setEditCommentMediaProgress(0);
+    setEditCommentMediaUploading(false);
+    setEditCommentMediaPreviewUrl(function(prev) { if (prev) { try { URL.revokeObjectURL(prev); } catch (e) {} } return null; });
+  }
   function handleStartEditComment(c) {
     setEditCommentText(c.text || '');
+    _resetEditCommentMediaState();
     setEditingCommentId(c.id);
   }
   function handleCancelEditComment() {
+    _resetEditCommentMediaState();
     setEditingCommentId(null);
   }
+  function handlePickReplaceCommentMedia() {
+    if (editCommentMediaFileInputRef.current) editCommentMediaFileInputRef.current.click();
+  }
+  function handleEditCommentMediaFileChange(e, currentIsVideo) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    if (currentIsVideo && (!f.type || f.type.indexOf('video/') !== 0)) { alert('Please choose a video file.'); return; }
+    if (!currentIsVideo && (!f.type || f.type.indexOf('image/') !== 0)) { alert('Please choose an image file.'); return; }
+    var limitMB = currentIsVideo ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB;
+    if (f.size > limitMB * 1024 * 1024) { alert('That file is ' + _fmtMB(f.size) + 'MB — please keep it under ' + limitMB + 'MB.'); return; }
+    setEditCommentMediaPreviewUrl(function(prev) { if (prev) { try { URL.revokeObjectURL(prev); } catch (e) {} } return URL.createObjectURL(f); });
+    setEditCommentMediaFile(f);
+    setEditCommentMediaAction('replace');
+  }
+  function handleRemoveEditCommentMedia() { setEditCommentMediaAction('remove'); }
+  function handleUndoRemoveEditCommentMedia() { setEditCommentMediaAction('keep'); }
   function handleSaveEditComment(c) {
     var _newText = editCommentText.trim();
-    if (!_newText) { alert('Please enter some text.'); return; }
+    var _hasOrigMedia = !!(c.hasImage || c.hasVideo);
+    if (!_newText && !_hasOrigMedia && editCommentMediaAction !== 'replace') { alert('Please enter some text.'); return; }
+    if (!_newText && editCommentMediaAction === 'remove') { alert('Please enter some text.'); return; }
     setSavingCommentEdit(true);
-    _moderateClipCaption(_newText).then(function(mod) {
-      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
-      var _newStatus = _modViolation ? 'hidden' : 'ok';
-      db.collection('posts').doc(post.id).collection('comments').doc(c.id).update({
+    if (editCommentMediaAction === 'replace') setEditCommentMediaUploading(true);
+    _resolveModerationEditSave({
+      text: _newText,
+      mediaAction: editCommentMediaAction,
+      mediaFile: editCommentMediaFile,
+      hasOriginalMedia: _hasOrigMedia,
+      originalCategory: c.moderationCategory,
+      onProgress: setEditCommentMediaProgress
+    }).then(function(result) {
+      var dbUpdates = Object.assign({
         text: _newText,
-        moderationStatus: _newStatus,
-        moderationCategory: _modViolation,
+        moderationStatus: result.status,
+        moderationCategory: result.category,
         moderationAppealStatus: null,
         moderationAppealAt: null
-      }).then(function() {
+      }, result.updates || {});
+      return db.collection('posts').doc(post.id).collection('comments').doc(c.id).update(dbUpdates).then(function() {
+        if (result.mediaChanged && _hasOrigMedia) {
+          _deletePostBunnyMedia({ hasImage: c.hasImage, hasVideo: c.hasVideo, mediaUrl: c.mediaUrl, mediaPublicId: c.mediaPublicId }, currentUser);
+        }
         setComments(function(prev) {
           return prev.map(function(x) {
-            return x.id === c.id ? Object.assign({}, x, {
-              text: _newText, moderationStatus: _newStatus, moderationCategory: _modViolation,
-              moderationAppealStatus: null, moderationAppealAt: null
-            }) : x;
+            return x.id === c.id ? Object.assign({}, x, dbUpdates) : x;
           });
         });
         setCommentAppeals(function(prev) { var n = Object.assign({}, prev); delete n[c.id]; return n; });
+        _resetEditCommentMediaState();
         setEditingCommentId(null);
         setSavingCommentEdit(false);
         if (typeof _showAppToast === 'function') {
-          _showAppToast(_modViolation
-            ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
-            : 'Updated — visible to everyone again.');
+          _showAppToast(result.forcedHidden
+            ? 'Text updated, but this stays hidden until you replace or remove the attached media.'
+            : (result.category
+              ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[result.category] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
+              : 'Updated — visible to everyone again.'));
         }
-      }).catch(function(e) {
-        setSavingCommentEdit(false);
-        alert('Failed to save changes: ' + (e && e.message));
       });
+    }).catch(function(e) {
+      setSavingCommentEdit(false);
+      setEditCommentMediaUploading(false);
+      alert('Failed to save changes: ' + (e && e.message));
     });
   }
   // ★ 按讚名單彈窗：點擊讚數（不是愛心本身）時開啟，抓 users 表資料
@@ -5450,12 +5794,14 @@ function FeedCard(_ref5) {
     };
   }, [showComments, post.id]);
   var handleSendComment = function handleSendComment() {
-    if (!commentText.trim() || !currentUser) return;
+    if ((!commentText.trim() && !commentMedia) || !currentUser) return;
     var _text = commentText.trim();
     var _avatar = ((currentUser.displayName || currentUser.email || 'U')[0] || 'U').toUpperCase();
     setSendingComment(true);
 
-    // ── 留言文字審查（先查快取，命中就不呼叫 Claude）──
+    // ── 留言文字審查（先查快取，命中就不呼叫 Claude）── 純文字留言才走這條快取；
+    // 有附照片/影片的話，下面 _modPromise 會改走另一條路，不查這個快取（快取只
+    // 存文字結果，圖影審查每次都要重新判斷真正的畫面內容）。
     function _moderateCommentText() {
       try {
         // 1) 先查共享快取（前端只能讀，不能寫；寫入由 edge function 用 service_role 處理）
@@ -5493,9 +5839,22 @@ function FeedCard(_ref5) {
       } catch(e) { return Promise.resolve({ approved: true }); }
     }
 
-    var _modPromise = isFirebaseConfigured ? _moderateCommentText() : Promise.resolve({ approved: true });
+    // [NEW 2026-09] 有附照片/影片的話，不走文字快取，改成：照片縮圖/影片擷影格
+    // 之後，跟文字一起送進 moderate-content 判斷（跟貼文/習慣影片同一套邏輯）。
+    var _modPromise = commentMedia
+      ? _mediaFileToModerationBase64(commentMedia.file, commentMedia.type).then(function(b64) {
+          return _moderateClipCaption(_text, b64);
+        })
+      : (isFirebaseConfigured ? _moderateCommentText() : Promise.resolve({ approved: true }));
 
-    _modPromise.then(function(mod) {
+    // [NEW 2026-09] 上傳跟審查平行跑，不互相等——反正不管審查結果如何都會照常
+    // 送出留言（只是隱藏與否的差別），沒有「先審過才上傳」的必要。
+    var _uploadPromise = commentMedia
+      ? uploadToBunny(commentMedia.file, commentMedia.type, function(pct) { setCommentMediaProgress(pct); })
+      : Promise.resolve(null);
+
+    Promise.all([_modPromise, _uploadPromise]).then(function(_results) {
+      var mod = _results[0], _uploaded = _results[1];
       // [FIX 2026-09] Don't block comments anymore -- always post them. If
       // moderate-content flags it (any of SCAM/ADULT/VIOLENCE/HATE/SPAM/
       // IRRELEVANT/POLITICAL), stash the verdict on the comment instead of
@@ -5503,11 +5862,17 @@ function FeedCard(_ref5) {
       // for everyone except the comment's own author (renderModerationHiddenOther /
       // renderModerationAuthorBanner -- same helpers FeedCard's posts use).
       var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
+      var _mediaFields = _uploaded ? {
+        hasImage: commentMedia.type === 'image',
+        hasVideo: commentMedia.type === 'video',
+        mediaUrl: _uploaded.url,
+        thumbnail_url: _uploaded.thumbnail || null
+      } : { hasImage: false, hasVideo: false, mediaUrl: null, thumbnail_url: null };
       if (!isFirebaseConfigured) {
         setComments(function (prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, userId: currentUser.uid, moderationStatus: _modViolation ? 'hidden' : 'ok', moderationCategory: _modViolation, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [Object.assign({ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, userId: currentUser.uid, moderationStatus: _modViolation ? 'hidden' : 'ok', moderationCategory: _modViolation, createdAt: null }, _mediaFields)]);
         });
-        setCommentText('');
+        setCommentText(''); handleRemoveCommentMedia();
         setSendingComment(false);
         return;
       }
@@ -5523,6 +5888,13 @@ function FeedCard(_ref5) {
         moderationCategory: _modViolation,
         createdAt: FieldValue.serverTimestamp()
       };
+      if (_uploaded) {
+        _commentData.hasImage = _mediaFields.hasImage;
+        _commentData.hasVideo = _mediaFields.hasVideo;
+        _commentData.mediaUrl = _uploaded.url;
+        _commentData.mediaPublicId = _uploaded.publicId || null;
+        if (_uploaded.thumbnail) _commentData.thumbnailUrl = _uploaded.thumbnail; // → thumbnail_url（camelToSnake regex fallback）
+      }
       var _avatarUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('avatar_' + currentUser.uid) : null;
       if (_avatarUrl) _commentData.userAvatarUrl = _avatarUrl;
 
@@ -5533,12 +5905,12 @@ function FeedCard(_ref5) {
         //   留言列表之前都會打到一個不存在的 id，安靜地失敗。改用 add() 真正
         //   回傳的 id，跟資料庫保持一致。
         var _realCommentId = (_commentRef && _commentRef.id) || Date.now().toString();
-        // 立即 append 到本地 state，讓留言馬上顯示
+        // 立即 append 到本地 state，讓留言馬上顯示（含附加的照片/影片）
         setComments(function(prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: _realCommentId, text: _commentData.text, userName: _commentData.userName, userAvatar: _commentData.userAvatar, userId: _commentData.userId, moderationStatus: _commentData.moderationStatus, moderationCategory: _commentData.moderationCategory, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [Object.assign({ id: _realCommentId, text: _commentData.text, userName: _commentData.userName, userAvatar: _commentData.userAvatar, userId: _commentData.userId, moderationStatus: _commentData.moderationStatus, moderationCategory: _commentData.moderationCategory, createdAt: null }, _mediaFields)]);
         });
         setLocalCommentCount(function(c) { return (c != null ? c : (post.commentCount != null ? post.commentCount : (post.comments || 0))) + 1; });
-        setCommentText('');
+        setCommentText(''); handleRemoveCommentMedia();
         setSendingComment(false);
         // 更新貼文留言數（fire-and-forget）
         db.collection('posts').doc(post.id).update({ comments: FieldValue.increment(1), commentCount: FieldValue.increment(1) }).catch(function(){});
@@ -5546,6 +5918,8 @@ function FeedCard(_ref5) {
         // 目前只有你看得到，要重新編輯嗎？」——這裡跟貼文不一樣，同一支 FeedCard
         // 本來就在畫面上（本來就是在這則貼文底下留言的），直接就地開編輯面板就好，
         // 不需要另外接全域事件。
+        // 注意：編輯面板目前只能改文字，附加的照片/影片改不了——要換圖/換片
+        // 只能刪掉這則留言重發一則。
         if (_modViolation) {
           var _catInfo2 = MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT;
           _showAppToast(
@@ -5561,11 +5935,15 @@ function FeedCard(_ref5) {
         // insert 失敗：仍在本地顯示作為 fallback
         console.error('[Comment] Failed:', _err && _err.message);
         setComments(function (prev) {
-          return [].concat(_toConsumableArray(prev), [{ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, userId: currentUser.uid, moderationStatus: _modViolation ? 'hidden' : 'ok', moderationCategory: _modViolation, createdAt: null }]);
+          return [].concat(_toConsumableArray(prev), [Object.assign({ id: Date.now().toString(), text: _text, userName: currentUser.displayName || 'User', userAvatar: _avatar, userId: currentUser.uid, moderationStatus: _modViolation ? 'hidden' : 'ok', moderationCategory: _modViolation, createdAt: null }, _mediaFields)]);
         });
-        setCommentText('');
+        setCommentText(''); handleRemoveCommentMedia();
         setSendingComment(false);
       });
+    }).catch(function(_e) {
+      console.error('[Comment] Upload/moderation failed:', _e && _e.message);
+      alert('Something went wrong sending your comment. Please try again.');
+      setSendingComment(false);
     });
   };
   var likeCount = post.likes + (post.liked ? 0 : 0); // likes already updated by parent
@@ -5594,8 +5972,16 @@ function FeedCard(_ref5) {
   }, isEditingPost ? renderModerationEditPanel({
     kind: post.isHabitClip ? 'clip caption' : 'post',
     value: editPostText, onChange: setEditPostText,
-    onCancel: handleCancelEditPost, onSave: handleSaveEditPost, saving: savingPostEdit
-  }) : isHidden ? renderModerationHiddenOther(effectiveModCategory, post.isHabitClip ? 'clip' : 'post', { text: effectiveText, hasMedia: !!(post.hasImage || post.hasVideo) }) : /*#__PURE__*/React.createElement(React.Fragment, null,
+    onCancel: handleCancelEditPost, onSave: handleSaveEditPost, saving: savingPostEdit,
+    media: (effectiveHasImage || effectiveHasVideo) ? { kind: effectiveHasVideo ? 'video' : 'image', url: effectiveMediaUrl } : null,
+    mediaAction: editMediaAction, mediaPreviewUrl: editMediaPreviewUrl,
+    mediaRemovable: !post.isHabitClip, mediaUploading: editMediaUploading, mediaProgress: editMediaProgress,
+    onPickReplaceMedia: handlePickReplaceMedia, onRemoveMedia: handleRemoveEditMedia, onUndoRemoveMedia: handleUndoRemoveEditMedia,
+    fileInput: /*#__PURE__*/React.createElement("input", {
+      type: "file", ref: editMediaFileInputRef, accept: effectiveHasVideo ? "video/*" : "image/*",
+      onChange: handleEditMediaFileChange, style: { display: 'none' }
+    })
+  }) : isHidden ? renderModerationHiddenOther(effectiveModCategory, post.isHabitClip ? 'clip' : 'post', { text: effectiveText, hasMedia: !!(effectiveHasImage || effectiveHasVideo) }) : /*#__PURE__*/React.createElement(React.Fragment, null,
   effectiveText && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
   }, (function() {
@@ -5611,10 +5997,10 @@ function FeedCard(_ref5) {
     ];
   })()), post.habit && /*#__PURE__*/React.createElement("span", {
     className: "feed-habit-tag"
-  }, post.habit), post.hasImage && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
+  }, post.habit), effectiveHasImage && effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
   }, /*#__PURE__*/React.createElement("img", {
-    src: post.mediaUrl,
+    src: effectiveMediaUrl,
     alt: "post",
     style: {
       width: '100%',
@@ -5622,13 +6008,13 @@ function FeedCard(_ref5) {
       objectFit: 'cover',
       display: 'block'
     }
-  })), post.hasImage && !post.mediaUrl && /*#__PURE__*/React.createElement("div", {
+  })), effectiveHasImage && !effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
   }, /*#__PURE__*/React.createElement("div", {
     className: "feed-media-placeholder"
-  }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), post.hasVideo && post.mediaUrl && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), effectiveHasVideo && effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, renderPostVideo(post.mediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), !isEditingPost && /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(effectiveMediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), !isEditingPost && /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
@@ -5788,10 +6174,18 @@ function FeedCard(_ref5) {
     editingCommentId === c.id
       ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationEditPanel({
           kind: 'comment', value: editCommentText, onChange: setEditCommentText,
-          onCancel: handleCancelEditComment, onSave: function() { handleSaveEditComment(c); }, saving: savingCommentEdit
+          onCancel: handleCancelEditComment, onSave: function() { handleSaveEditComment(c); }, saving: savingCommentEdit,
+          media: (c.hasImage || c.hasVideo) ? { kind: c.hasVideo ? 'video' : 'image', url: c.mediaUrl } : null,
+          mediaAction: editCommentMediaAction, mediaPreviewUrl: editCommentMediaPreviewUrl,
+          mediaRemovable: true, mediaUploading: editCommentMediaUploading, mediaProgress: editCommentMediaProgress,
+          onPickReplaceMedia: handlePickReplaceCommentMedia, onRemoveMedia: handleRemoveEditCommentMedia, onUndoRemoveMedia: handleUndoRemoveEditCommentMedia,
+          fileInput: /*#__PURE__*/React.createElement("input", {
+            type: "file", ref: editCommentMediaFileInputRef, accept: c.hasVideo ? "video/*" : "image/*",
+            onChange: function(e) { handleEditCommentMediaFileChange(e, !!c.hasVideo); }, style: { display: 'none' }
+          })
         }))
       : (c.moderationStatus === 'hidden')
-      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text }))
+      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text, hasMedia: !!(c.hasImage || c.hasVideo), mediaKind: c.hasVideo ? 'video' : 'image' }))
       : /*#__PURE__*/React.createElement("div", { className: "comment-text" },
           (function() {
       var commentNeedsTrunc = needsTruncation(c.text, COMMENT_LINE_LIMIT);
@@ -5803,7 +6197,18 @@ function FeedCard(_ref5) {
           key: "ctog",
           onClick: function(e) { e.stopPropagation(); setExpandedComments(function(prev){ var n = Object.assign({}, prev); n[c.id] = !prev[c.id]; return n; }); },
           style: { display: 'block', color: 'var(--gray-500)', fontSize: 10, fontWeight: 700, cursor: 'pointer', marginTop: 3, userSelect: 'none' }
-        }, isExpanded ? 'Show less ▲' : '... Show more ▼') : null
+        }, isExpanded ? 'Show less ▲' : '... Show more ▼') : null,
+        // [NEW 2026-09] 留言附加的照片/影片——只有沒被隱藏才會顯示到這裡。
+        c.hasImage && c.mediaUrl ? /*#__PURE__*/React.createElement("img", {
+          key: "cmedia", src: c.mediaUrl, alt: "",
+          style: { display: 'block', marginTop: 6, maxWidth: 200, maxHeight: 200, borderRadius: 8, objectFit: 'cover', cursor: 'pointer' },
+          onClick: function(e) { e.stopPropagation(); window.open(c.mediaUrl, '_blank'); }
+        }) : null,
+        c.hasVideo && c.mediaUrl ? /*#__PURE__*/React.createElement("video", {
+          key: "cmedia", src: c.mediaUrl, poster: c.thumbnail_url || undefined, controls: true,
+          style: { display: 'block', marginTop: 6, maxWidth: 220, maxHeight: 260, borderRadius: 8 },
+          onClick: function(e) { e.stopPropagation(); }
+        }) : null
       ];
     })()), (editingCommentId !== c.id) && /*#__PURE__*/React.createElement("div", {
       style:{display:'flex',alignItems:'center',gap:10,marginTop:5}
@@ -5862,8 +6267,52 @@ function FeedCard(_ref5) {
       padding: '4px 0 8px'
     }
   }, "No comments yet. Be the first!"), currentUser && /*#__PURE__*/React.createElement("div", {
+    style: { display: 'flex', flexDirection: 'column', gap: 6 }
+  },
+  // [NEW 2026-09] 附加照片/影片的預覽（送出前可以移除）
+  commentMedia && /*#__PURE__*/React.createElement("div", {
+    className: "composer-media-preview",
+    style: { position: 'relative', width: 90, height: 90, margin: 0 }
+  },
+    commentMedia.type === 'image'
+      ? /*#__PURE__*/React.createElement("img", { src: commentMedia.previewUrl, style: { width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, display: 'block' } })
+      : /*#__PURE__*/React.createElement("video", { src: commentMedia.previewUrl, muted: true, style: { width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, display: 'block' } }),
+    /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "composer-media-remove",
+      "aria-label": "Remove attachment",
+      onClick: handleRemoveCommentMedia
+    }, "✕"),
+    sendingComment && commentMediaProgress > 0 && commentMediaProgress < 100 && /*#__PURE__*/React.createElement("div", {
+      style: { position: 'absolute', bottom: 3, left: 3, right: 3, fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,.6)', borderRadius: 4, padding: '2px 0', textAlign: 'center' }
+    }, commentMediaProgress + '%')
+  ),
+  /*#__PURE__*/React.createElement("div", {
     className: "comment-input-row"
-  }, /*#__PURE__*/React.createElement("textarea", {
+  },
+  /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 2 } },
+    /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "composer-media-btn",
+      title: "Attach a photo",
+      "aria-label": "Attach a photo",
+      style: { width: 30, height: 30, padding: 0, justifyContent: 'center' },
+      onClick: function(e) { e.preventDefault(); commentImageInputRef.current && commentImageInputRef.current.click(); }
+    }, /*#__PURE__*/React.createElement("svg", { fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2, width: 14, height: 14 },
+      /*#__PURE__*/React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" }))),
+    /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "composer-media-btn",
+      title: "Attach a video",
+      "aria-label": "Attach a video",
+      style: { width: 30, height: 30, padding: 0, justifyContent: 'center' },
+      onClick: function(e) { e.preventDefault(); commentVideoInputRef.current && commentVideoInputRef.current.click(); }
+    }, /*#__PURE__*/React.createElement("svg", { fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2, width: 14, height: 14 },
+      /*#__PURE__*/React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M15 10l4.553-2.069A1 1 0 0121 8.868v6.264a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" }))),
+    /*#__PURE__*/React.createElement("input", { ref: commentImageInputRef, type: "file", accept: "image/*", style: { display: 'none' }, onChange: function(e) { handleCommentMediaChange(e, 'image'); } }),
+    /*#__PURE__*/React.createElement("input", { ref: commentVideoInputRef, type: "file", accept: "video/*", style: { display: 'none' }, onChange: function(e) { handleCommentMediaChange(e, 'video'); } })
+  ),
+  /*#__PURE__*/React.createElement("textarea", {
     className: "comment-input",
     placeholder: "Add a comment...",
     value: commentText,
@@ -5885,8 +6334,8 @@ function FeedCard(_ref5) {
   }), /*#__PURE__*/React.createElement("button", {
     className: "comment-send",
     onClick: handleSendComment,
-    disabled: !commentText.trim() || sendingComment
-  }, sendingComment ? '…' : 'Send'))));
+    disabled: (!commentText.trim() && !commentMedia) || sendingComment
+  }, sendingComment ? '…' : 'Send')))));
 }
 
 /* ── Clip Viewer：從 Challenger 卡片縮圖點進來的全螢幕影片畫面（Concept B）──
@@ -6018,7 +6467,10 @@ function renderModerationHiddenOther(category, kind, opts) {
         strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 1.5,
         d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
       })),
-      /*#__PURE__*/React.createElement("span", null, (kind === 'clip' ? 'Video' : 'Photo') + ' attached (hidden)')
+      // opts.mediaKind：留言現在也能附影片，光靠 kind==='clip' 判斷不出留言裡
+      // 附的到底是照片還影片，明確傳 mediaKind 進來就用它；沒傳的話（貼文/習慣
+      // 影片既有呼叫點）維持原本用 kind 猜的行為，不影響原本畫面。
+      /*#__PURE__*/React.createElement("span", null, (opts.mediaKind ? (opts.mediaKind === 'video' ? 'Video' : 'Photo') : (kind === 'clip' ? 'Video' : 'Photo')) + ' attached (hidden)')
     ),
     !hasText && !opts.hasMedia && /*#__PURE__*/React.createElement("div", {
       style: { color: 'var(--gray-400)', fontStyle: 'italic', fontSize: isComment ? 12 : 13 }
@@ -6040,15 +6492,41 @@ function renderModerationInlineTag(category) {
 // items appended into the action row (next to Like/Comment/Delete) — not a
 // distinct colored banner around the content anymore, per Andy's feedback.
 // appeal 是 { status, onRequest }：status 為 falsy 時顯示可點的申訴按鈕；
-// 'pending' 時顯示已送出的靜態文字（不能重複點）。onEdit 沒給時就不顯示 Edit
-// （呼叫端還沒接上編輯功能時安全）。回傳的是一組 action-row 用的元素，不是
-// 獨立區塊，直接混在 feed-actions / 留言那排按鈕裡就好。
+// 'pending' 時顯示已送出的靜態文字（不能重複點）。
+// ★ 修正（2026-09）：後台 Mark Reviewed 會把 moderation_appeal_status 設成
+// 'reviewed'（申訴已經被人工看過、但維持隱藏）——這裡原本只認得 'pending'，
+// 'reviewed' 會直接掉進 else 分支，跟「從沒申訴過」顯示成一模一樣的可點擊
+// 按鈕，使用者完全感覺不出「有人已經看過、做了決定」，可能還以為系統壞掉又
+// 點一次。現在補上 'reviewed' 自己的靜態文字，跟 pending 一樣不能再點。
+// onEdit 沒給時就不顯示 Edit（呼叫端還沒接上編輯功能時安全）。回傳的是一組
+// action-row 用的元素，不是獨立區塊，直接混在 feed-actions / 留言那排按鈕裡就好。
 function renderModerationActionButtons(appeal, onEdit) {
   appeal = appeal || {};
   var btnStyle = {
     background: 'none', border: 'none', cursor: 'pointer', display: 'flex',
     alignItems: 'center', gap: 4, padding: '0 2px', fontFamily: 'var(--font)'
   };
+  var appealNode = null;
+  if (appeal.onRequest) {
+    if (appeal.status === 'pending') {
+      appealNode = /*#__PURE__*/React.createElement("span", {
+        style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--gray-400)', fontStyle: 'italic' }
+      }, '⚑ Review requested');
+    } else if (appeal.status === 'reviewed') {
+      appealNode = /*#__PURE__*/React.createElement("span", {
+        title: "An admin reviewed your request and kept this hidden",
+        style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--gray-400)', fontStyle: 'italic' }
+      }, '✓ Reviewed — kept hidden');
+    } else {
+      appealNode = /*#__PURE__*/React.createElement("button", {
+        className: "feed-action",
+        title: "Think this was a mistake? Request a review",
+        "aria-label": "Request a review",
+        style: Object.assign({}, btnStyle, { color: '#b45309', fontWeight: 700 }),
+        onClick: function(e) { e.stopPropagation(); appeal.onRequest(); }
+      }, /*#__PURE__*/React.createElement("span", { style: { fontSize: 11 } }, '⚑'), /*#__PURE__*/React.createElement("span", { style: { fontSize: 10 } }, 'Request a review'));
+    }
+  }
   return /*#__PURE__*/React.createElement(React.Fragment, null,
     onEdit && /*#__PURE__*/React.createElement("button", {
       className: "feed-action",
@@ -6057,18 +6535,7 @@ function renderModerationActionButtons(appeal, onEdit) {
       style: Object.assign({}, btnStyle, { color: '#2563eb', fontWeight: 700 }),
       onClick: function(e) { e.stopPropagation(); onEdit(); }
     }, /*#__PURE__*/React.createElement("span", { style: { fontSize: 11 } }, '✎'), /*#__PURE__*/React.createElement("span", { style: { fontSize: 10 } }, 'Edit')),
-    appeal.onRequest && (appeal.status === 'pending'
-      ? /*#__PURE__*/React.createElement("span", {
-          style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--gray-400)', fontStyle: 'italic' }
-        }, '⚑ Review requested')
-      : /*#__PURE__*/React.createElement("button", {
-          className: "feed-action",
-          title: "Think this was a mistake? Request a review",
-          "aria-label": "Request a review",
-          style: Object.assign({}, btnStyle, { color: '#b45309', fontWeight: 700 }),
-          onClick: function(e) { e.stopPropagation(); appeal.onRequest(); }
-        }, /*#__PURE__*/React.createElement("span", { style: { fontSize: 11 } }, '⚑'), /*#__PURE__*/React.createElement("span", { style: { fontSize: 10 } }, 'Request a review'))
-    )
+    appealNode
   );
 }
 
@@ -6079,8 +6546,63 @@ function renderModerationActionButtons(appeal, onEdit) {
 // 一樣照原本的隱藏方式顯示（只是文字換成新的），等於原地再走一次同樣的流程。
 // kind 用來決定標籤文字（'post' / 'clip caption' / 'comment'），value/onChange
 // 是受控 textarea，onCancel/onSave 是動作，saving 是送出中的 loading 狀態。
+//
+// [NEW 2026-09] 補上媒體（照片/影片）的移除/替換——跟 _resolveModerationEditSave
+// 的規則配合。media 有值代表這則內容原本附了照片或影片：
+//   media: { kind:'image'|'video', url, thumbnailUrl }
+//   mediaAction: 'keep' | 'remove' | 'replace'（呼叫端自己管理的 state）
+//   mediaPreviewUrl: mediaAction==='replace' 時，本地選取新檔案的預覽 blob URL
+//   mediaRemovable: false 時不給「移除」（打卡影片一定要有影片，只能換）
+//   mediaUploading / mediaProgress: 換媒體時的上傳狀態
+//   onPickReplaceMedia / onRemoveMedia / onUndoRemoveMedia: 對應動作
+//   fileInput: 呼叫端自己渲染、傳進來的隱藏 <input type=file>（accept/onChange
+//     要對應正確的媒體種類跟大小限制，各呼叫端不完全一樣，這裡不內建）
 function renderModerationEditPanel(opts) {
   opts = opts || {};
+  var media = opts.media || null;
+  var mediaAction = opts.mediaAction || 'keep';
+  var mediaKindLabel = media && media.kind === 'video' ? 'video' : 'photo';
+
+  var mediaBlock = null;
+  if (media) {
+    if (mediaAction === 'remove') {
+      mediaBlock = /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          width: '100%', minHeight: 56, borderRadius: 6, marginBottom: 8,
+          border: '1.5px dashed var(--gray-300)', background: '#fafafa', color: 'var(--gray-500)', fontSize: 11.5
+        }
+      }, 'Removed attached ' + mediaKindLabel,
+        /*#__PURE__*/React.createElement("button", {
+          type: 'button', onClick: opts.onUndoRemoveMedia,
+          style: { fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 20, border: '1px solid var(--gray-300)', background: '#fff', color: 'var(--gray-700)', cursor: 'pointer', fontFamily: 'var(--font)' }
+        }, '↩ Undo')
+      );
+    } else {
+      var showUrl = (mediaAction === 'replace' && opts.mediaPreviewUrl) ? opts.mediaPreviewUrl : media.url;
+      mediaBlock = /*#__PURE__*/React.createElement("div", {
+        style: { position: 'relative', width: '100%', maxHeight: 160, borderRadius: 6, overflow: 'hidden', marginBottom: 8, background: '#000' }
+      },
+        media.kind === 'video'
+          ? /*#__PURE__*/React.createElement("video", { src: showUrl, muted: true, controls: mediaAction === 'replace', style: { width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block' } })
+          : /*#__PURE__*/React.createElement("img", { src: showUrl, style: { width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block' } }),
+        /*#__PURE__*/React.createElement("div", { style: { position: 'absolute', top: 6, right: 6, display: 'flex', gap: 6 } },
+          /*#__PURE__*/React.createElement("button", {
+            type: 'button', disabled: opts.mediaUploading, onClick: opts.onPickReplaceMedia,
+            style: { fontSize: 10, fontWeight: 700, padding: '4px 9px', borderRadius: 20, border: 'none', cursor: opts.mediaUploading ? 'default' : 'pointer', background: 'rgba(17,17,17,.72)', color: '#fff', fontFamily: 'var(--font)' }
+          }, '🔄 ' + (media.kind === 'video' ? 'Replace video' : 'Replace')),
+          opts.mediaRemovable !== false && /*#__PURE__*/React.createElement("button", {
+            type: 'button', disabled: opts.mediaUploading, onClick: opts.onRemoveMedia,
+            style: { fontSize: 10, fontWeight: 700, padding: '4px 9px', borderRadius: 20, border: 'none', cursor: opts.mediaUploading ? 'default' : 'pointer', background: 'rgba(220,38,38,.85)', color: '#fff', fontFamily: 'var(--font)' }
+          }, '🗑 Remove')
+        ),
+        opts.mediaUploading && /*#__PURE__*/React.createElement("div", {
+          style: { position: 'absolute', bottom: 4, left: 4, right: 4, fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,.6)', borderRadius: 4, padding: '2px 0', textAlign: 'center' }
+        }, (opts.mediaProgress || 0) + '%')
+      );
+    }
+  }
+
   return /*#__PURE__*/React.createElement("div", {
     style: { border: '1.5px dashed #2563eb', borderRadius: 8, padding: 10, background: '#eff6ff' },
     onClick: function(e) { e.stopPropagation(); }
@@ -6088,6 +6610,8 @@ function renderModerationEditPanel(opts) {
     /*#__PURE__*/React.createElement("div", {
       style: { fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }
     }, 'Editing your ' + (opts.kind || 'post')),
+    mediaBlock,
+    opts.fileInput || null,
     /*#__PURE__*/React.createElement("textarea", {
       autoFocus: true,
       value: opts.value,
@@ -6100,6 +6624,9 @@ function renderModerationEditPanel(opts) {
         background: '#fff', resize: 'vertical', boxSizing: 'border-box'
       }
     }),
+    media && mediaAction === 'keep' && /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 10.5, color: '#2563eb', background: '#dbeafe', borderRadius: 6, padding: '6px 8px', marginBottom: 8, lineHeight: 1.5 }
+    }, 'ℹ️ Save & Resubmit only re-checks your text — the attached ' + mediaKindLabel + " hasn't been reviewed again, so this will stay hidden. Replace or remove it above if you think that was the real issue, or use Request a review to have an admin look at it as-is."),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } },
       /*#__PURE__*/React.createElement("button", {
         onClick: opts.onCancel,
@@ -6112,11 +6639,12 @@ function renderModerationEditPanel(opts) {
       }, 'Cancel'),
       /*#__PURE__*/React.createElement("button", {
         onClick: opts.onSave,
-        disabled: opts.saving || !(opts.value || '').trim(),
+        disabled: opts.saving || opts.mediaUploading || (!(opts.value || '').trim() && !media),
         style: {
           fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 6, border: 'none',
           background: 'var(--black)', color: '#fff', fontFamily: 'var(--font)',
-          cursor: opts.saving ? 'default' : 'pointer', opacity: (opts.saving || !(opts.value || '').trim()) ? .6 : 1
+          cursor: (opts.saving || opts.mediaUploading) ? 'default' : 'pointer',
+          opacity: (opts.saving || opts.mediaUploading || (!(opts.value || '').trim() && !media)) ? .6 : 1
         }
       }, opts.saving ? 'Saving…' : 'Save & Resubmit')
     )
@@ -6194,7 +6722,12 @@ function ClipShareModal(props) {
     if (!file && !editingPost) return; // 沒選影片、也不是在編輯既有的 clip，沒什麼好送出的
     setUploading(true);
     setErrorMsg('');
-    _moderateClipCaption(caption).then(function(mod) {
+    // [NEW 2026-09] 真的換了新影片才需要擷取畫面送審——沒換片（editingPost 且沒選新檔）
+    // 就沿用原本審查結果，不用重新判斷視覺內容。
+    var _modInput = file ? _extractVideoFrameBase64(file) : Promise.resolve(null);
+    _modInput.then(function(frameB64) {
+      return _moderateClipCaption(caption, frameB64);
+    }).then(function(mod) {
       // [FIX 2026-09] Don't block the clip from posting anymore. If the caption
       // is flagged (any of SCAM/ADULT/VIOLENCE/HATE/SPAM/IRRELEVANT/POLITICAL),
       // the clip still uploads as usual; the verdict just gets stashed on
@@ -6646,47 +7179,94 @@ function UserCommentsPage(_ref_ucp) {
   var _sc5 = useState(''),    _sc5a = _slicedToArray(_sc5, 2), editCommentText = _sc5a[0],  setEditCommentText = _sc5a[1];
   var _sc6 = useState(false), _sc6a = _slicedToArray(_sc6, 2), savingCommentEdit = _sc6a[0], setSavingCommentEdit = _sc6a[1];
   var _sc7 = useState({}),    _sc7a = _slicedToArray(_sc7, 2), commentAppeals = _sc7a[0],   setCommentAppeals = _sc7a[1];
+  // [NEW 2026-09] 跟 FeedCard 同一套媒體移除/替換，這裡是獨立實作（見上面
+  // parsePost 附近的說明），所以也獨立補一份 state/handler。
+  var _sc8 = useState('keep'), _sc8a = _slicedToArray(_sc8, 2), editCommentMediaAction = _sc8a[0], setEditCommentMediaAction = _sc8a[1];
+  var _sc9 = useState(null),   _sc9a = _slicedToArray(_sc9, 2), editCommentMediaFile = _sc9a[0], setEditCommentMediaFile = _sc9a[1];
+  var _sc10 = useState(null),  _sc10a = _slicedToArray(_sc10, 2), editCommentMediaPreviewUrl = _sc10a[0], setEditCommentMediaPreviewUrl = _sc10a[1];
+  var _sc11 = useState(false), _sc11a = _slicedToArray(_sc11, 2), editCommentMediaUploading = _sc11a[0], setEditCommentMediaUploading = _sc11a[1];
+  var _sc12 = useState(0),     _sc12a = _slicedToArray(_sc12, 2), editCommentMediaProgress = _sc12a[0], setEditCommentMediaProgress = _sc12a[1];
+  var editCommentMediaFileInputRef = useRef(null);
+  function _resetEditCommentMediaState() {
+    setEditCommentMediaAction('keep');
+    setEditCommentMediaFile(null);
+    setEditCommentMediaProgress(0);
+    setEditCommentMediaUploading(false);
+    setEditCommentMediaPreviewUrl(function(prev) { if (prev) { try { URL.revokeObjectURL(prev); } catch (e) {} } return null; });
+  }
   function handleStartEditComment(c) {
     setEditCommentText(c.text || '');
+    _resetEditCommentMediaState();
     setEditingCommentId(c.id);
   }
   function handleCancelEditComment() {
+    _resetEditCommentMediaState();
     setEditingCommentId(null);
   }
+  function handlePickReplaceCommentMedia() {
+    if (editCommentMediaFileInputRef.current) editCommentMediaFileInputRef.current.click();
+  }
+  function handleEditCommentMediaFileChange(e, currentIsVideo) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    if (currentIsVideo && (!f.type || f.type.indexOf('video/') !== 0)) { alert('Please choose a video file.'); return; }
+    if (!currentIsVideo && (!f.type || f.type.indexOf('image/') !== 0)) { alert('Please choose an image file.'); return; }
+    var limitMB = currentIsVideo ? UPLOAD_LIMITS.VIDEO_MAX_MB : UPLOAD_LIMITS.IMAGE_MAX_MB;
+    if (f.size > limitMB * 1024 * 1024) { alert('That file is ' + _fmtMB(f.size) + 'MB — please keep it under ' + limitMB + 'MB.'); return; }
+    setEditCommentMediaPreviewUrl(function(prev) { if (prev) { try { URL.revokeObjectURL(prev); } catch (e) {} } return URL.createObjectURL(f); });
+    setEditCommentMediaFile(f);
+    setEditCommentMediaAction('replace');
+  }
+  function handleRemoveEditCommentMedia() { setEditCommentMediaAction('remove'); }
+  function handleUndoRemoveEditCommentMedia() { setEditCommentMediaAction('keep'); }
   function handleSaveEditComment(c) {
     var _newText = editCommentText.trim();
-    if (!_newText) { alert('Please enter some text.'); return; }
+    var _hasOrigMedia = !!(c.hasImage || c.hasVideo);
+    if (!_newText && !_hasOrigMedia && editCommentMediaAction !== 'replace') { alert('Please enter some text.'); return; }
+    if (!_newText && editCommentMediaAction === 'remove') { alert('Please enter some text.'); return; }
     setSavingCommentEdit(true);
-    _moderateClipCaption(_newText).then(function(mod) {
-      var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
-      var _newStatus = _modViolation ? 'hidden' : 'ok';
-      db.collection('posts').doc(c.postId).collection('comments').doc(c.id).update({
+    if (editCommentMediaAction === 'replace') setEditCommentMediaUploading(true);
+    _resolveModerationEditSave({
+      text: _newText,
+      mediaAction: editCommentMediaAction,
+      mediaFile: editCommentMediaFile,
+      hasOriginalMedia: _hasOrigMedia,
+      originalCategory: c.moderationCategory,
+      onProgress: setEditCommentMediaProgress
+    }).then(function(result) {
+      var dbUpdates = Object.assign({
         text: _newText,
-        moderationStatus: _newStatus,
-        moderationCategory: _modViolation,
+        moderationStatus: result.status,
+        moderationCategory: result.category,
         moderationAppealStatus: null,
         moderationAppealAt: null
-      }).then(function() {
+      }, result.updates || {});
+      return db.collection('posts').doc(c.postId).collection('comments').doc(c.id).update(dbUpdates).then(function() {
+        if (result.mediaChanged && _hasOrigMedia) {
+          _deletePostBunnyMedia({ hasImage: c.hasImage, hasVideo: c.hasVideo, mediaUrl: c.mediaUrl, mediaPublicId: c.mediaPublicId }, user);
+        }
         setAllComments(function(prev) {
           return prev.map(function(x) {
-            return x.id === c.id ? Object.assign({}, x, {
-              text: _newText, moderationStatus: _newStatus, moderationCategory: _modViolation,
-              moderationAppealStatus: null, moderationAppealAt: null
-            }) : x;
+            return x.id === c.id ? Object.assign({}, x, dbUpdates) : x;
           });
         });
         setCommentAppeals(function(prev) { var n = Object.assign({}, prev); delete n[c.id]; return n; });
+        _resetEditCommentMediaState();
         setEditingCommentId(null);
         setSavingCommentEdit(false);
         if (typeof _showAppToast === 'function') {
-          _showAppToast(_modViolation
-            ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[_modViolation] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
-            : 'Updated — visible to everyone again.');
+          _showAppToast(result.forcedHidden
+            ? 'Text updated, but this stays hidden until you replace or remove the attached media.'
+            : (result.category
+              ? ('Still flagged as ' + (MODERATION_CATEGORY_INFO[result.category] || MODERATION_CATEGORY_INFO.IRRELEVANT).label + ' — only you can see it.')
+              : 'Updated — visible to everyone again.'));
         }
-      }).catch(function(e) {
-        setSavingCommentEdit(false);
-        alert('Failed to save changes: ' + (e && e.message));
       });
+    }).catch(function(e) {
+      setSavingCommentEdit(false);
+      setEditCommentMediaUploading(false);
+      alert('Failed to save changes: ' + (e && e.message));
     });
   }
   function handleRequestCommentAppeal(c) {
@@ -6856,11 +7436,31 @@ function UserCommentsPage(_ref_ucp) {
                       editingCommentId === c.id
                         ? /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, renderModerationEditPanel({
                             kind: 'comment', value: editCommentText, onChange: setEditCommentText,
-                            onCancel: handleCancelEditComment, onSave: function() { handleSaveEditComment(c); }, saving: savingCommentEdit
+                            onCancel: handleCancelEditComment, onSave: function() { handleSaveEditComment(c); }, saving: savingCommentEdit,
+                            media: (c.hasImage || c.hasVideo) ? { kind: c.hasVideo ? 'video' : 'image', url: c.mediaUrl } : null,
+                            mediaAction: editCommentMediaAction, mediaPreviewUrl: editCommentMediaPreviewUrl,
+                            mediaRemovable: true, mediaUploading: editCommentMediaUploading, mediaProgress: editCommentMediaProgress,
+                            onPickReplaceMedia: handlePickReplaceCommentMedia, onRemoveMedia: handleRemoveEditCommentMedia, onUndoRemoveMedia: handleUndoRemoveEditCommentMedia,
+                            fileInput: /*#__PURE__*/React.createElement('input', {
+                              type: 'file', ref: editCommentMediaFileInputRef, accept: c.hasVideo ? 'video/*' : 'image/*',
+                              onChange: function(e) { handleEditCommentMediaFileChange(e, !!c.hasVideo); }, style: { display: 'none' }
+                            })
                           }))
                         : (c.moderationStatus === 'hidden'
-                            ? /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text }))
-                            : /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, c.text)),
+                            ? /*#__PURE__*/React.createElement('div', { className: 'comment-text' }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text, hasMedia: !!(c.hasImage || c.hasVideo), mediaKind: c.hasVideo ? 'video' : 'image' }))
+                            : /*#__PURE__*/React.createElement('div', { className: 'comment-text' },
+                                c.text,
+                                c.hasImage && c.mediaUrl ? /*#__PURE__*/React.createElement('img', {
+                                  key: 'cmedia', src: c.mediaUrl, alt: '',
+                                  style: { display: 'block', marginTop: 6, maxWidth: 200, maxHeight: 200, borderRadius: 8, objectFit: 'cover', cursor: 'pointer' },
+                                  onClick: function(e) { e.stopPropagation(); window.open(c.mediaUrl, '_blank'); }
+                                }) : null,
+                                c.hasVideo && c.mediaUrl ? /*#__PURE__*/React.createElement('video', {
+                                  key: 'cmedia', src: c.mediaUrl, poster: c.thumbnail_url || undefined, controls: true,
+                                  style: { display: 'block', marginTop: 6, maxWidth: 220, maxHeight: 260, borderRadius: 8 },
+                                  onClick: function(e) { e.stopPropagation(); }
+                                }) : null
+                              )),
                       (editingCommentId !== c.id) && /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' } },
                         /*#__PURE__*/React.createElement('div', { className: 'comment-time' }, c.timeStr, c.moderationStatus === 'hidden' && renderModerationInlineTag(c.moderationCategory)),
                         /*#__PURE__*/React.createElement('button', {
@@ -8937,6 +9537,13 @@ function MainApp(_ref16) {
     postMedia = _useState92[0],
     setPostMedia = _useState92[1]; // { type:'image'|'video', url, file }
   var mediaPublicIdRef = useRef(null); // stable ref to avoid React state timing issues
+  // [NEW 2026-09] 選好照片/影片的當下就先在背景把「要送審查用的畫面」準備好
+  // （照片縮圖 or 影片擷一張畫面),存成一個 promise。之所以不能等 handlePostSubmit
+  // 才從 postMedia.file 現抓——這個composer是「選檔案當下就馬上上傳」的設計，
+  // 上傳成功那一刻 postMedia.file 就會被清成 null（見 handleMediaSelect case 3），
+  // 送出當下早就讀不到原始檔案了。改成選檔案時就順便準備好這份 base64，跟上傳
+  // 平行跑，兩個都做完使用者才能按送出。
+  var modMediaPromiseRef = useRef(Promise.resolve(null));
   var _useStateReviewing = useState(false),
     _useStateReviewingArr = _slicedToArray(_useStateReviewing, 2),
     isReviewing = _useStateReviewingArr[0],
@@ -10632,6 +11239,9 @@ function MainApp(_ref16) {
               file: file,
               uploading: true
             });
+            // [NEW 2026-09] 現在就把送審用的畫面準備好（照片縮圖/影片擷影格），
+            // 跟底下的 Bunny 上傳平行跑——見上面 modMediaPromiseRef 宣告處的說明。
+            modMediaPromiseRef.current = _mediaFileToModerationBase64(file, type).catch(function() { return null; });
             setUploadingMedia(true);
             _setProgressDOM(1);
             // Show upload overlay immediately
@@ -10680,7 +11290,7 @@ function MainApp(_ref16) {
             _context9.p = 4;
             _t7 = _context9.v;
             alert('Upload failed: ' + _t7.message);
-            mediaPublicIdRef.current = null; setPostMedia(null);
+            mediaPublicIdRef.current = null; setPostMedia(null); modMediaPromiseRef.current = Promise.resolve(null);
           case 5:
             _context9.p = 5;
             setUploadingMedia(false);
@@ -10868,31 +11478,18 @@ function MainApp(_ref16) {
                     });
                   });
                 }
-                // 先審後傳：圖片轉 base64 送審，不先上傳到 Bunny
-                if (postMedia && postMedia.type === 'image' && postMedia.file) {
-                  return new Promise(function(resolve, reject) {
-                    var MAX_SIZE = 800;
-                    var reader = new FileReader();
-                    reader.onload = function(e) {
-                      var img = new Image();
-                      img.onload = function() {
-                        var canvas = document.createElement('canvas');
-                        var w = img.width, h = img.height;
-                        if (w > MAX_SIZE || h > MAX_SIZE) {
-                          if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
-                          else       { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
-                        }
-                        canvas.width = w; canvas.height = h;
-                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                        var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-                        resolve(dataUrl.split(',')[1]);
-                      };
-                      img.onerror = function() { resolve(null); };
-                      img.src = e.target.result;
-                    };
-                    reader.onerror = function() { resolve(null); };
-                    reader.readAsDataURL(postMedia.file);
-                  }).then(function(b64) {
+                // ── 圖片／影片：送審用的畫面在選檔案當下就已經在背景準備好了
+                //   （modMediaPromiseRef——見宣告處註解），這裡不用再重新從
+                //   postMedia.file 抓一次。
+                //   ★ 修正（2026-09）：這裡原本只處理「postMedia.file 還在」的情況，
+                //   但這個 composer 是「選檔案當下就馬上上傳」的設計，上傳成功那一刻
+                //   postMedia.file 早就被清成 null 了（見 handleMediaSelect case 3），
+                //   等使用者按下送出、真的跑到這裡時，這個條件其實永遠不會成立——
+                //   等於「先審後傳」這段圖片視覺審查其實從來沒有真的執行過，一直
+                //   都只送了文字說明。同時影片也完全沒有對應的分支，一樣只送文字。
+                //   現在圖片跟影片統一都走 modMediaPromiseRef 這個已經算好的 base64。
+                if (postMedia && (postMedia.type === 'image' || postMedia.type === 'video')) {
+                  return modMediaPromiseRef.current.then(function(b64) {
                     if (b64) {
                       _modPayload.imageBase64 = b64;
                       _modPayload.imageMediaType = 'image/jpeg';
@@ -11015,7 +11612,7 @@ function MainApp(_ref16) {
             localStorage.setItem('postCooldown_' + user.uid, String(Date.now()));
             setIsReviewing(false);
             setPostText('');
-            mediaPublicIdRef.current = null; setPostMedia(null);
+            mediaPublicIdRef.current = null; setPostMedia(null); modMediaPromiseRef.current = Promise.resolve(null);
             // Clear the stable video element after posting
             var _postOv = document.getElementById('composer-upload-overlay');
             if (_postOv) _postOv.classList.add('hidden');
@@ -12344,7 +12941,7 @@ function MainApp(_ref16) {
             status:    'pending'
           }).catch(function(){});
         }
-        mediaPublicIdRef.current = null; setPostMedia(null);
+        mediaPublicIdRef.current = null; setPostMedia(null); modMediaPromiseRef.current = Promise.resolve(null);
       }
     }, "✕") : null), /*#__PURE__*/React.createElement("div", {
       className: "composer-toolbar"
@@ -12815,6 +13412,18 @@ function PairWallPage(_ref_pw) {
   var _si = useState(''); var inputText = _si[0]; var setInputText = _si[1];
   var _ss = useState(false); var sending = _ss[0]; var setSending = _ss[1];
   var _scb = useState(null); var chatBlockedMsg = _scb[0]; var setChatBlockedMsg = _scb[1];
+  // ★ 新增（2026-09）：「回報誤判」——聊天室被擋的訊息/照片/影片本來就不會存
+  //   進 pair_messages（擋下來就直接不送出、不留任何紀錄），使用者如果覺得
+  //   AI 判斷錯了，完全沒地方講。這裡把 chatBlockedMsg 從單純一個字串
+  //   改成帶 { text, contentType, category, snippet, reportable } 的物件，
+  //   讓警示列可以多長出一個「Report as wrong」按鈕，點下去寫進新的
+  //   moderation_feedback 表（見 index.html 外的 SQL migration）。
+  //   chatFeedbackStatus：'idle'（可以點）/ 'sending' / 'sent'（已回報，換成感謝文字）。
+  var _scf = useState('idle'); var chatFeedbackStatus = _scf[0]; var setChatFeedbackStatus = _scf[1];
+  // 警示列自動消失的計時器 id——存進 ref 是因為使用者點了「回報」之後，要能
+  // 取消原本那個倒數、換成「顯示完『已回報』文字再消失」的較短倒數，不然
+  // 感謝文字可能還沒看到警示列就被原本的計時器關掉了。
+  var _chatBlockedTimerRef = useRef(null);
   // ★ 配對天數，用來決定聯絡方式分享要不要解鎖（滿 7 天解鎖），跟 Buddies
   //   卡片上 "Day X" 那個數字算法一致，都是用 pair.created_at 換算。
   var _pairDaysTogether = pair.created_at
@@ -13019,6 +13628,53 @@ function PairWallPage(_ref_pw) {
      還要等幾天解鎖，語氣用「說明」不用「禁止」），3 秒後自動收起。daysTogether
      一起傳給後端，配對滿 7 天後 CONTACT_INFO 規則就不再擋（SCAM 規則不受
      影響，一律照擋）。 */
+  // ★ 新增：跳出「訊息/媒體被擋」警示列的共用入口——文字被 regex 擋、圖片/
+  //   影片被 Claude 判定違規，兩邊現在共用同一個警示列 + 回報按鈕，不要各寫
+  //   一份（media 那邊原本是用 alert()，見 handleChatMediaSelect 的修正）。
+  function _showChatBlocked(opts) {
+    if (_chatBlockedTimerRef.current) { clearTimeout(_chatBlockedTimerRef.current); _chatBlockedTimerRef.current = null; }
+    setChatFeedbackStatus('idle');
+    // CONTACT_INFO 是「配對未滿 7 天」的固定規則，不是 AI 判斷對錯的問題，
+    // 訊息裡已經有倒數天數說明了，這裡就不提供「回報誤判」，避免使用者
+    // 誤以為回報了就能提早解鎖。
+    var reportable = !(opts.contentType === 'chat_text' && opts.category === 'CONTACT_INFO');
+    setChatBlockedMsg({
+      text: opts.text,
+      contentType: opts.contentType,
+      category: opts.category || null,
+      snippet: opts.snippet || null,
+      reportable: reportable
+    });
+    _chatBlockedTimerRef.current = setTimeout(function(){
+      setChatBlockedMsg(null); _chatBlockedTimerRef.current = null;
+    }, 8000);
+  }
+
+  // 使用者點「Report as wrong」——寫進 moderation_feedback，讓後台 Flagged
+  // Content 頁的「Chat "Reported as Wrong"」表格看得到（見 admin.html）。
+  // 這張表只負責收「使用者說 AI 判斷錯了」這個訊號，不會自動做任何事
+  // （不會自動解除擋下、不會通知對方）——純粹讓 Andy 之後人工檢視，判斷
+  // 是不是 moderate-content 的 prompt 需要調整。
+  function _reportChatModerationFeedback() {
+    if (!chatBlockedMsg || !chatBlockedMsg.reportable || chatFeedbackStatus !== 'idle') return;
+    setChatFeedbackStatus('sending');
+    _supabase.from('moderation_feedback').insert({
+      user_id: user.uid,
+      pair_id: pair.id,
+      content_type: chatBlockedMsg.contentType,
+      violation_category: chatBlockedMsg.category,
+      text_snippet: chatBlockedMsg.snippet
+    }).then(function() {
+      setChatFeedbackStatus('sent');
+      if (_chatBlockedTimerRef.current) clearTimeout(_chatBlockedTimerRef.current);
+      _chatBlockedTimerRef.current = setTimeout(function(){
+        setChatBlockedMsg(null); _chatBlockedTimerRef.current = null;
+      }, 3000);
+    }).catch(function() {
+      setChatFeedbackStatus('idle'); // 寫入失敗就讓按鈕恢復可以再按一次
+    });
+  }
+
   function sendMessage() {
     var text = inputText.trim();
     if (!text || sending) return;
@@ -13042,8 +13698,7 @@ function PairWallPage(_ref_pw) {
           var daysLeft = Math.max(1, 7 - _pairDaysTogether);
           msg = 'New matches get to know each other here first \u2014 you\u2019ll be able to share contact info once you\u2019ve been paired for 7 days. ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to go!';
         }
-        setChatBlockedMsg(msg);
-        setTimeout(function(){ setChatBlockedMsg(null); }, 4000);
+        _showChatBlocked({ text: msg, contentType: 'chat_text', category: mod.violation, snippet: text });
         return;
       }
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
@@ -13101,15 +13756,30 @@ function PairWallPage(_ref_pw) {
     }
     setChatMediaSending(true);
     setChatMediaProgress(0);
+    // [FIX 2026-09] 影片附件之前完全沒有真的做視覺判斉——caption 固定是空字串，
+    // 又沒帶任何畫面資料給 Claude，等於「沒文字、沒畫面」一定會過。現在跟
+    // Community/打卡/留言同一套做法：先擷一張畫面，跟社群那邊用同一支
+    // _extractVideoFrameBase64，擷取失敗（少數瀏覽器/格式問題）就照舊只送文字，
+    // 不會卡住整個傳送流程。
     var modP = isVid
-      ? _moderateContent('', null, 'video')
+      ? _extractVideoFrameBase64(file)
+          .then(function(b64) { return _moderateContent('', b64, 'video'); })
+          .catch(function() { return _moderateContent('', null, 'video'); })
       : _imageFileToBase64(file)
           .then(function(b64) { return _moderateContent('', b64, 'image'); })
           .catch(function() { return _moderateContent('', null, 'image'); });
     modP.then(function(mod) {
       if (mod.approved === false) {
         var v = mod.violation || 'IRRELEVANT';
-        alert('⚠️ Media not sent\n\n' + (VIOLATION_MESSAGES[v] || 'Please review our community guidelines.'));
+        // ★ 修正（2026-09）：原本這裡用原生 alert() 擋下——alert 沒辦法附按鈕，
+        //   使用者只能按確定關掉,看不到「這判斷錯了幫我回報」的入口,體驗也
+        //   跟文字訊息被擋（頁面內的警示列）不一致。現在跟文字訊息共用同一個
+        //   chatBlockedMsg 警示列 + Report as wrong 按鈕。
+        _showChatBlocked({
+          text: 'Media not sent — ' + (VIOLATION_MESSAGES[v] || 'Please review our community guidelines.'),
+          contentType: isVid ? 'chat_video' : 'chat_image',
+          category: v
+        });
         setChatMediaSending(false);
         return Promise.reject({ __modBlocked: true });
       }
@@ -13171,7 +13841,11 @@ function PairWallPage(_ref_pw) {
       var token = session.data.session && session.data.session.access_token;
       if (!token) return { approved: true };
       var payload = { caption: caption || '' };
-      if (imageBase64 && mediaType === 'image') {
+      // ★ 修正（2026-09）：這裡原本只有 mediaType==='image' 才會附上圖片資料，
+      // 影片擷出來的畫面（一樣是一張 JPEG 影格）永遠被漏掉，等於影片附件從頭到
+      // 尾沒有真的被看過畫面。不管是照片本身還是影片擷出來的影格，送給 Claude
+      // 的都是同一種「一張 JPEG 圖片」，只要有拿到 base64 就該附上。
+      if (imageBase64 && (mediaType === 'image' || mediaType === 'video')) {
         payload.imageBase64 = imageBase64;
         payload.imageMediaType = 'image/jpeg';
       }
@@ -13419,11 +14093,22 @@ function PairWallPage(_ref_pw) {
       )
     ),
 
-    /* CHAT BLOCKED WARNING — 訊息被 regex 擋下時顯示，3 秒自動消失 */
+    /* CHAT BLOCKED WARNING — 文字被 regex 擋下 / 照片影片被 Claude 判定違規時
+       顯示，8 秒自動消失。★ 新增：多了「Report as wrong」——擋下的內容從來
+       不會存進 pair_messages，使用者除了這個按鈕沒有其他管道說「這判斷錯了」。 */
     chatBlockedMsg && React.createElement('div', { style:{ maxWidth:640, width:'100%', margin:'0 auto', padding:'6px 14px 0', boxSizing:'border-box' } },
-      React.createElement('div', { style:{ fontSize:11, color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', padding:'8px 11px', display:'flex', alignItems:'center', gap:6 } },
+      React.createElement('div', { style:{ fontSize:11, color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', padding:'8px 11px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
         React.createElement('span', null, '⚠️'),
-        React.createElement('span', null, chatBlockedMsg)
+        React.createElement('span', { style:{ flex:1, minWidth:120 } }, chatBlockedMsg.text),
+        chatBlockedMsg.reportable && (
+          chatFeedbackStatus === 'sent'
+            ? React.createElement('span', { style:{ fontWeight:700, color:'#16a34a', whiteSpace:'nowrap', fontSize:11 } }, '✓ Reported — thanks')
+            : React.createElement('button', {
+                onClick: _reportChatModerationFeedback,
+                disabled: chatFeedbackStatus === 'sending',
+                style:{ fontSize:11, fontWeight:700, color:'#b45309', background:'none', border:'1px solid #d97706', borderRadius:6, padding:'3px 9px', cursor: chatFeedbackStatus === 'sending' ? 'default' : 'pointer', whiteSpace:'nowrap', flexShrink:0 }
+              }, chatFeedbackStatus === 'sending' ? 'Reporting…' : 'Report as wrong')
+        )
       )
     ),
 
