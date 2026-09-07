@@ -13,8 +13,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;600;700&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--black:#0a0a0a;--white:#fff;--g50:#f8f8f8;--g100:#f0f0f0;--g200:#e0e0e0;--g400:#9a9a9a;--g500:#737373;--g800:#2a2a2a;--font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--din:'Barlow Condensed',sans-serif}
-body{font-family:var(--font);background:var(--g50);color:var(--black);min-height:100vh;-webkit-font-smoothing:antialiased}
+/* [NEW 2026-09] 全站深色主題。--black/--white 保留原本的值不動——它們一直是
+   兩種角色混用：當「background」用時是「填滿黑/填滿白」的按鈕、側邊欄、頭像
+   這類本來就該維持黑白對比的元素（深色主題下不用改，黑底白字/白底黑字本來
+   就分得清楚）；但當「color」用在一般內文文字、表格文字時，原本假設「頁面是
+   淺色」所以文字用深色（--black/--g800）——頁面整個變深色之後，這些文字色
+   全部要改成淺色，不然會變成「深底深字」看不見。所以另外新增 --ink（取代原本
+   當「文字色」用的 --black / --g800）跟 --surface（取代原本當「卡片/表格
+   背景」用的 --white）這兩個新變數，--black/--white 本身完全不動。
+   g50/g100/g200（一直都只當背景/邊框用，沒有跟文字混用）直接改成深色系；
+   g400/g500（一直都只當文字用）稍微調亮一點，在深色背景上才看得清楚。 */
+:root{--black:#0a0a0a;--white:#fff;--g50:#1a1b1e;--g100:#222327;--g200:#34363b;--g400:#a4a4aa;--g500:#8f8f96;--g800:#2a2a2a;--ink:#e8e8ea;--surface:#1e2024;--font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--din:'Barlow Condensed',sans-serif}
+body{font-family:var(--font);background:var(--g50);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
 
 /* LOGIN */
 .loading-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--black);position:fixed;inset:0;z-index:9999}
@@ -23,7 +33,7 @@ body{font-family:var(--font);background:var(--g50);color:var(--black);min-height
 .loading-screen .dot:nth-child(3){animation-delay:.4s}
 @keyframes ldot{0%,80%,100%{opacity:.15}40%{opacity:1}}
 .login-wrap{display:none;align-items:center;justify-content:center;min-height:100vh;background:var(--black)}
-.login-box{background:var(--white);padding:40px 36px;width:100%;max-width:360px}
+.login-box{background:var(--surface);padding:40px 36px;width:100%;max-width:360px}
 .login-logo{font-family:var(--din);font-size:22px;font-weight:800;letter-spacing:1px}
 .login-sub{font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:2px;margin-bottom:32px}
 .g-btn{width:100%;padding:13px;background:var(--black);color:var(--white);border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:10px}
@@ -68,8 +78,8 @@ body{font-family:var(--font);background:var(--g50);color:var(--black);min-height
 
 /* STAT GRID */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
-.stat{background:var(--white);border:1px solid var(--g200);padding:18px}
-.stat.dark{background:var(--black);border-color:var(--black)}
+.stat{background:var(--surface);border:1px solid var(--g200);padding:18px}
+.stat.dark{background:var(--black);border-color:var(--ink)}
 .stat-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--g400);margin-bottom:6px}
 .stat.dark .stat-lbl{color:rgba(255,255,255,.4)}
 .stat-val{font-family:var(--din);font-size:36px;font-weight:800;line-height:1}
@@ -79,18 +89,18 @@ body{font-family:var(--font);background:var(--g50);color:var(--black);min-height
 
 /* CHARTS */
 .chart-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
-.chart-box{background:var(--white);border:1px solid var(--g200);padding:18px}
+.chart-box{background:var(--surface);border:1px solid var(--g200);padding:18px}
 .chart-ttl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g500);margin-bottom:14px}
 .chart-wrap{position:relative;height:190px}
 
 /* TABLE */
-.tbl-card{background:var(--white);border:1px solid var(--g200);margin-bottom:20px}
+.tbl-card{background:var(--surface);border:1px solid var(--g200);margin-bottom:20px}
 .tbl-hd{padding:14px 18px;border-bottom:1px solid var(--g100);display:flex;justify-content:space-between;align-items:center}
 .tbl-ttl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g500)}
 .tbl-cnt{font-size:11px;color:var(--g400);font-family:var(--mono)}
 table{width:100%;border-collapse:collapse}
 th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g400);padding:9px 18px;text-align:left;border-bottom:1px solid var(--g100);background:var(--g50)}
-td{font-size:12px;padding:11px 18px;border-bottom:1px solid var(--g50);color:var(--g800);vertical-align:middle}
+td{font-size:12px;padding:11px 18px;border-bottom:1px solid var(--g50);color:var(--ink);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--g50)}
 .av{width:26px;height:26px;background:var(--black);color:var(--white);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
@@ -102,10 +112,10 @@ tr:hover td{background:var(--g50)}
 .bar-track{flex:1;height:3px;background:var(--g100)}
 .bar-fill{height:100%;background:var(--black)}
 .bar-pct{font-size:10px;font-weight:700;color:var(--g500);font-family:var(--mono);width:30px;text-align:right;flex-shrink:0}
-.search{width:100%;padding:10px 14px;border:1px solid var(--g200);font-size:13px;font-family:var(--font);outline:none;margin-bottom:12px}
-.search:focus{border-color:var(--black)}
+.search{width:100%;padding:10px 14px;border:1px solid var(--g200);font-size:13px;font-family:var(--font);outline:none;margin-bottom:12px;background:var(--surface);color:var(--ink)}
+.search:focus{border-color:var(--ink)}
 .loading-row td{text-align:center;padding:28px;color:var(--g400);font-size:11px;text-transform:uppercase;letter-spacing:1px}
-.refresh{padding:7px 13px;background:var(--white);border:1px solid var(--g200);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:var(--g500);font-family:var(--font)}
+.refresh{padding:7px 13px;background:var(--surface);border:1px solid var(--g200);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;cursor:pointer;color:var(--g500);font-family:var(--font)}
 
 /* ── CHAT LOGS PAGE ── */
 .chatlogs-layout{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
@@ -127,11 +137,11 @@ tr:hover td{background:var(--g50)}
 .chat-msg-sender{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g400);margin-bottom:3px}
 .chat-msg-bubble{display:inline-block;padding:9px 13px;font-size:12px;line-height:1.5;text-align:left}
 .chat-msg.mine .chat-msg-bubble{background:var(--black);color:var(--white)}
-.chat-msg.theirs .chat-msg-bubble{background:var(--g100);color:var(--black)}
+.chat-msg.theirs .chat-msg-bubble{background:var(--g100);color:var(--ink)}
 .chat-msg-time{font-size:9px;color:var(--g400);margin-top:3px}
 .chat-msg-system{clear:both;text-align:center;font-size:10px;color:var(--g400);margin:10px 0;font-style:italic}
 .chat-msg-media a{color:inherit;text-decoration:underline}
-.refresh:hover{border-color:var(--black);color:var(--black)}
+.refresh:hover{border-color:var(--ink);color:var(--ink)}
 .quota-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
 .quota-warn{background:#fffbe6;border:1px solid #e0c060;padding:10px 14px;font-size:11px;color:#7a6000;margin-bottom:16px;display:none}
 .quota-warn.show{display:block}
@@ -140,7 +150,7 @@ tr:hover td{background:var(--g50)}
 .pct-fill.warn{background:#e0a800}
 .pct-fill.danger{background:#c00}
 .cleanup-uid{font-size:10px;color:var(--g400);font-family:var(--mono);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;title:"Click to copy"}
-.cleanup-uid:hover{color:var(--black)}
+.cleanup-uid:hover{color:var(--ink)}
 .btn-console{padding:5px 9px;background:var(--black);color:#fff;border:none;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;font-family:var(--font);margin-right:4px}
 .btn-console:hover{background:var(--g800)}
 .btn-del-fs{padding:5px 9px;background:none;border:1px solid #c00;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;color:#c00;font-family:var(--font)}
@@ -164,9 +174,9 @@ tr:hover td{background:var(--g50)}
 }
 
 /* ── Activity filter buttons ── */
-.act-filter{padding:6px 13px;border:1px solid var(--g200);background:var(--white);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;cursor:pointer;color:var(--g500);font-family:var(--font);transition:all .15s}
-.act-filter:hover{border-color:var(--black);color:var(--black)}
-.act-filter.on{background:var(--black);border-color:var(--black);color:var(--white)}
+.act-filter{padding:6px 13px;border:1px solid var(--g200);background:var(--surface);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;cursor:pointer;color:var(--g500);font-family:var(--font);transition:all .15s}
+.act-filter:hover{border-color:var(--ink);color:var(--ink)}
+.act-filter.on{background:var(--black);border-color:var(--ink);color:var(--white)}
 /* ── Activity status pills ── */
 .apill{display:inline-block;padding:3px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;line-height:1.6}
 .apill-active {background:#dcfce7;color:#15803d}
@@ -189,15 +199,15 @@ tr:hover td{background:var(--g50)}
 <div class="loading-screen" id="loadingScreen"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
 <div class="login-wrap" id="loginWrap">
   <div class="login-box">
-    <div class="login-logo">Habit Tracker</div>
+    <div class="login-logo">FamStreak</div>
     <div class="login-sub">Admin Dashboard</div>
     <div class="err-box" id="errBox"></div>
     <div id="loginForm">
       <div style="display:flex;flex-direction:column;gap:10px;">
         <input type="email" id="adminEmailInput" placeholder="Admin email" autocomplete="email"
-          style="width:100%;padding:11px 13px;border:1px solid #e0e0e0;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0a0a0a;box-sizing:border-box;" />
+          style="width:100%;padding:11px 13px;border:1px solid var(--g200);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--ink);box-sizing:border-box;" />
         <input type="password" id="adminPwInput" placeholder="Password" autocomplete="current-password"
-          style="width:100%;padding:11px 13px;border:1px solid #e0e0e0;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0a0a0a;box-sizing:border-box;"
+          style="width:100%;padding:11px 13px;border:1px solid var(--g200);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--ink);box-sizing:border-box;"
           onkeydown="if(event.key==='Enter')document.getElementById('loginBtn').click()" />
         <button id="loginBtn" style="width:100%;padding:12px;background:#0a0a0a;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;font-family:inherit;">Sign In</button>
       </div>
@@ -207,14 +217,14 @@ tr:hover td{background:var(--g50)}
       <p style="font-size:12px;color:#555;margin-bottom:14px;line-height:1.6;">Enter your admin email to receive a password reset link.</p>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <input type="email" id="resetEmailInput" placeholder="Admin email"
-          style="width:100%;padding:11px 13px;border:1px solid #e0e0e0;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0a0a0a;box-sizing:border-box;"
+          style="width:100%;padding:11px 13px;border:1px solid var(--g200);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--ink);box-sizing:border-box;"
           onkeydown="if(event.key==='Enter')document.getElementById('resetBtn').click()" />
         <button id="resetBtn" style="width:100%;padding:12px;background:#0a0a0a;color:#fff;border:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;font-family:inherit;">Send Reset Link</button>
       </div>
       <p class="login-note" style="cursor:pointer;text-decoration:underline;margin-top:12px;" onclick="showLoginForm()">← Back to sign in</p>
     </div>
     <div id="resetSuccess" style="display:none;text-align:center;padding:8px 0;">
-      <p style="font-size:13px;color:#0a0a0a;font-weight:700;margin-bottom:6px;">Reset link sent</p>
+      <p style="font-size:13px;color:var(--ink);font-weight:700;margin-bottom:6px;">Reset link sent</p>
       <p style="font-size:11px;color:#888;line-height:1.6;">Check your email and click the link to set a new password.</p>
       <p class="login-note" style="cursor:pointer;text-decoration:underline;margin-top:14px;" onclick="showLoginForm()">← Back to sign in</p>
     </div>
@@ -392,7 +402,7 @@ tr:hover td{background:var(--g50)}
           <button class="act-filter"    data-f="never"   onclick="setActFilter('never')">⚪ Never</button>
         </div>
         <select id="userSortSel" onchange="renderUsers(document.getElementById('userSearch').value||'')"
-          style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);background:var(--white);outline:none;cursor:pointer;flex-shrink:0">
+          style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);background:var(--surface);outline:none;cursor:pointer;flex-shrink:0">
           <option value="lastSeen">Sort: Last Seen ↓</option>
           <option value="habits">Sort: Habits ↓</option>
           <option value="posts">Sort: Posts ↓</option>
@@ -440,7 +450,7 @@ tr:hover td{background:var(--g50)}
       <div class="pg-title">Habits</div>
       <div class="pg-sub">Habit creation grouped by user</div>
       <input class="search" id="habitSearch" placeholder="Search by habit name / category / user...">
-      <div class="tbl-hd" style="margin-bottom:10px;background:var(--white);border:1px solid var(--g200);padding:14px 18px">
+      <div class="tbl-hd" style="margin-bottom:10px;background:var(--surface);border:1px solid var(--g200);padding:14px 18px">
         <div class="tbl-ttl">All Habits</div>
         <div class="tbl-cnt" id="habitCnt">—</div>
       </div>
@@ -488,7 +498,7 @@ tr:hover td{background:var(--g50)}
         <div class="tbl-hd">
           <div class="tbl-ttl">Per-User Upload Usage</div>
           <div style="display:flex;align-items:center;gap:8px">
-            <select id="quotaSort" style="padding:5px 8px;border:1px solid var(--g200);font-size:10px;font-family:var(--font);outline:none;cursor:pointer">
+            <select id="quotaSort" style="padding:5px 8px;border:1px solid var(--g200);font-size:10px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface);color:var(--ink)">
               <option value="totalMB">Sort: Total MB ↓</option>
               <option value="monthlyMB">Sort: This Month ↓</option>
               <option value="totalImages">Sort: Images ↓</option>
@@ -807,7 +817,32 @@ CREATE POLICY "habit_cheers_read"   ON habit_cheers FOR SELECT USING (auth.uid()
 CREATE OR REPLACE FUNCTION increment_cheer_count(habit_id UUID)
 RETURNS void AS $$
   UPDATE habits SET today_cheer_count = COALESCE(today_cheer_count, 0) + 1 WHERE id = habit_id;
-$$ LANGUAGE sql SECURITY DEFINER;</pre>
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- ── moderation_feedback（夥伴聊天室「回報誤判」：訊息/照片/影片被 AI 擋下時，
+--    使用者可以回報「這判斷錯了」。被擋的內容本來就不會存進 pair_messages，
+--    這張表是唯一的紀錄——後台 Flagged Content 頁下方有一張表格顯示這裡的內容）──
+CREATE TABLE IF NOT EXISTS moderation_feedback (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID NOT NULL,
+  pair_id UUID,                      -- 目前只有夥伴聊天室會寫入，先留著彈性
+  content_type TEXT NOT NULL,        -- 'chat_text' | 'chat_image' | 'chat_video'
+  violation_category TEXT,           -- 來自 moderate-content 的分類，例如 'SCAM' / 'HATE'
+  text_snippet TEXT,                 -- 只有文字被擋時才有值
+  reviewed_as TEXT,                  -- 'false_positive' | 'correct' | NULL，純記錄，不會補送訊息
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE moderation_feedback ADD COLUMN IF NOT EXISTS reviewed_as TEXT;
+ALTER TABLE moderation_feedback ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_moderation_feedback_created ON moderation_feedback (created_at DESC);
+ALTER TABLE moderation_feedback ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "moderation_feedback_insert" ON moderation_feedback;
+CREATE POLICY "moderation_feedback_insert" ON moderation_feedback FOR INSERT WITH CHECK (auth.uid()=user_id);
+DROP POLICY IF EXISTS "moderation_feedback_admin" ON moderation_feedback;
+CREATE POLICY "moderation_feedback_admin"  ON moderation_feedback FOR SELECT USING (is_admin());
+DROP POLICY IF EXISTS "moderation_feedback_admin_update" ON moderation_feedback;
+CREATE POLICY "moderation_feedback_admin_update" ON moderation_feedback FOR UPDATE USING (is_admin());</pre>
       </div>
 
 
@@ -904,11 +939,11 @@ $$ LANGUAGE sql SECURITY DEFINER;</pre>
         </table>
       </div>
 
-      <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
+      <div class="tbl-card" style="padding:16px 18px;background:var(--g100)">
         <div class="chart-ttl" style="margin-bottom:8px">📋 How to delete files in Supabase Storage</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.8">
           <strong>Option A — Supabase Dashboard (easiest):</strong><br>
-          Go to <a href="https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/storage/buckets" target="_blank" style="color:var(--black);font-weight:700">Supabase Storage ↗</a>,
+          Go to <a href="https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/storage/buckets" target="_blank" style="color:var(--ink);font-weight:700">Supabase Storage ↗</a>,
           open the bucket, find the file by path, and delete it.<br><br>
           <strong>Option B — Supabase CLI (recommended for bulk):</strong><br>
           <code style="background:#1e293b;color:#94a3b8;padding:4px 10px;display:inline-block;margin-top:4px">supabase storage rm &lt;bucket/path&gt;</code><br><br>
@@ -959,7 +994,7 @@ $$ LANGUAGE sql SECURITY DEFINER;</pre>
         <div class="tbl-hd">
           <div class="tbl-ttl">All Pairs</div>
           <div style="display:flex;gap:8px;align-items:center">
-            <select id="pairStatusFilter" onchange="loadPairs()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+            <select id="pairStatusFilter" onchange="loadPairs()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="pending">Pending</option>
@@ -1062,12 +1097,12 @@ $$ LANGUAGE sql SECURITY DEFINER;</pre>
           The table above shows your app's <strong>actual</strong> calls/minute — that's the number that matters for spotting a 429 coming, and it's real data from your own traffic, not a guess.<br><br>
           What it can't show is the <strong>ceiling</strong> Anthropic sets you (your RPM/ITPM/OTPM limit and monthly spend cap) — those live at the <strong>organization</strong> level and aren't safely readable from a browser-based dashboard like this one; reading them programmatically requires an <strong>Admin API key</strong>, which has broad read-write access and must never be embedded in client-side code.<br><br>
           Also worth knowing: Anthropic replaced the old numbered "Tier 1–4" system with three simpler tiers — <strong>Start / Build / Scale</strong> — on June 26, 2026, and raised limits at the same time (Haiku's RPM was brought up to match Opus/Sonnet within each tier). So if you're thinking "Tier 1, a few hundred RPM," that's the old system — your actual current tier and exact limits may well be different now. Check both here:
-          <a href="https://platform.claude.com/settings/limits" target="_blank" style="color:var(--black);font-weight:700">Claude Console → Settings → Limits ↗</a>.
-          The <a href="https://platform.claude.com/usage" target="_blank" style="color:var(--black);font-weight:700">Usage page ↗</a> also shows real per-minute charts and cache-hit rate.
+          <a href="https://platform.claude.com/settings/limits" target="_blank" style="color:var(--ink);font-weight:700">Claude Console → Settings → Limits ↗</a>.
+          The <a href="https://platform.claude.com/usage" target="_blank" style="color:var(--ink);font-weight:700">Usage page ↗</a> also shows real per-minute charts and cache-hit rate.
         </p>
       </div>
 
-      <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
+      <div class="tbl-card" style="padding:16px 18px;background:var(--g100)">
         <div class="chart-ttl" style="margin-bottom:8px">📋 One-time setup — enable real call logging</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.8">
           This page reads from a new <code style="background:var(--g100);padding:1px 5px;font-size:11px">claude_api_calls</code> table (SQL in Security &amp; Rules).
@@ -1108,7 +1143,7 @@ await supabase.from('claude_api_calls').insert({
         <div class="tbl-hd">
           <div class="tbl-ttl">Page Dwell Time per User (last 30 days)</div>
           <div style="display:flex;gap:8px;align-items:center">
-            <select id="egDwellMode" onchange="renderEngagementDwell()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+            <select id="egDwellMode" onchange="renderEngagementDwell()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
               <option value="total">Total time</option>
               <option value="avg">Avg per visit</option>
             </select>
@@ -1161,7 +1196,7 @@ await supabase.from('claude_api_calls').insert({
         <div class="tbl-hd">
           <div class="tbl-ttl">Hidden Items</div>
           <div style="display:flex;gap:8px;align-items:center">
-            <select id="flgCategoryFilter" onchange="renderFlaggedContent()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+            <select id="flgCategoryFilter" onchange="renderFlaggedContent()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
               <option value="all">All categories</option>
               <option value="ADULT">Sexual content</option>
               <option value="VIOLENCE">Violent content</option>
@@ -1177,6 +1212,26 @@ await supabase.from('claude_api_calls').insert({
         <table>
           <thead><tr><th>User</th><th>Type</th><th>Category</th><th>Content</th><th>Flagged</th><th>Action</th></tr></thead>
           <tbody id="flaggedTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- ══ CHAT "REPORTED AS WRONG" — 夥伴聊天室被 AI 擋下的訊息/照片/影片，
+           使用者按了「Report as wrong」才會出現在這裡。這些內容從來沒有被存
+           進 pair_messages（擋下來就直接不送、不留任何紀錄），所以這張表格
+           是唯一看得到「使用者覺得判斷錯了」這個訊號的地方。這裡目前只做
+           唯讀檢視，沒有處理動作——單純給你人工判斷 moderate-content 的
+           prompt 是不是需要調整。 -->
+      <div class="tbl-card" style="margin-top:20px">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">💬 Chat "Reported as Wrong" (PairWall)</div>
+          <button class="refresh" onclick="loadChatModerationFeedback()">Refresh</button>
+        </div>
+        <p style="font-size:11.5px;color:var(--g500);line-height:1.6;margin:0 0 12px">
+          Messages/photos/videos AI blocked in the 1-on-1 chat, where the user tapped "Report as wrong". Blocked chat content is never saved anywhere else — this is the only record of it.
+        </p>
+        <table>
+          <thead><tr><th>User</th><th>Type</th><th>Category</th><th>Text (if any)</th><th>Reported</th><th>Your call</th></tr></thead>
+          <tbody id="chatFeedbackTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1214,10 +1269,10 @@ await supabase.from('claude_api_calls').insert({
             </div>
 
             <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Subject</label>
-            <input id="etSubjectInput" type="text" style="width:100%;padding:9px 10px;border:1px solid var(--g200);font-size:13px;font-family:var(--font);margin-bottom:16px;box-sizing:border-box">
+            <input id="etSubjectInput" type="text" style="width:100%;padding:9px 10px;border:1px solid var(--g200);font-size:13px;font-family:var(--font);margin-bottom:16px;box-sizing:border-box;background:var(--surface);color:var(--ink)">
 
             <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">HTML Body</label>
-            <textarea id="etHtmlInput" style="width:100%;height:280px;padding:10px;border:1px solid var(--g200);font-size:11px;font-family:var(--mono);line-height:1.6;box-sizing:border-box;resize:vertical"></textarea>
+            <textarea id="etHtmlInput" style="width:100%;height:280px;padding:10px;border:1px solid var(--g200);font-size:11px;font-family:var(--mono);line-height:1.6;box-sizing:border-box;resize:vertical;background:var(--surface);color:var(--ink)"></textarea>
 
             <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
               <button onclick="saveEmailTemplate()" id="etSaveBtn"
@@ -1225,13 +1280,13 @@ await supabase.from('claude_api_calls').insert({
                 Save Template
               </button>
               <button onclick="renderEmailPreview()"
-                style="padding:8px 18px;background:var(--white);color:var(--black);border:1px solid var(--g200);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:.5px">
+                style="padding:8px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--g200);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:.5px">
                 Refresh Preview
               </button>
               <div style="flex:1"></div>
-              <input id="etTestEmailInput" type="email" placeholder="your@email.com" style="padding:8px 10px;border:1px solid var(--g200);font-size:12px;font-family:var(--font);width:200px">
+              <input id="etTestEmailInput" type="email" placeholder="your@email.com" style="padding:8px 10px;border:1px solid var(--g200);font-size:12px;font-family:var(--font);width:200px;background:var(--surface);color:var(--ink)">
               <button onclick="sendTestEmail()" id="etTestBtn"
-                style="padding:8px 18px;background:var(--white);color:var(--black);border:1px solid var(--g200);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:.5px">
+                style="padding:8px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--g200);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);letter-spacing:.5px">
                 Send Test Email
               </button>
             </div>
@@ -1294,7 +1349,7 @@ await supabase.from('claude_api_calls').insert({
         </table>
       </div>
 
-      <div class="tbl-card" style="padding:16px 18px;background:#f8f8f8">
+      <div class="tbl-card" style="padding:16px 18px;background:var(--g100)">
         <div class="chart-ttl" style="margin-bottom:8px">💰 Monetization</div>
         <p style="font-size:12px;color:var(--g500);line-height:1.8;margin:0">
           Not tracked yet — the old Subscriptions page was a hardcoded $3/mo estimate, not real payment data, and was removed for that reason.
@@ -1319,13 +1374,13 @@ await supabase.from('claude_api_calls').insert({
 
       <!-- Filter row -->
       <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-        <select id="reportStatusFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+        <select id="reportStatusFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
           <option value="all">All statuses</option>
           <option value="pending" selected>Pending only</option>
           <option value="reviewed">Reviewed</option>
           <option value="dismissed">Dismissed</option>
         </select>
-        <select id="reportReasonFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--white)">
+        <select id="reportReasonFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
           <option value="all">All reasons</option>
           <option value="spam">Spam</option>
           <option value="harassment">Harassment</option>
@@ -1952,7 +2007,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (btn.dataset.page === 'engagement') loadEngagement();
     if (btn.dataset.page === 'growth') loadGrowthRetention();
     if (btn.dataset.page === 'emailtemplates') loadEmailTemplates();
-    if (btn.dataset.page === 'flagged') loadFlaggedContent();
+    if (btn.dataset.page === 'flagged') { loadFlaggedContent(); loadChatModerationFeedback(); }
   };
 });
 
@@ -2409,12 +2464,36 @@ function renderUsers(f){
 // 管理員：瀏覽 / 刪除某用戶在 Bunny 上的所有圖片與影片
 // ════════════════════════════════════════════════════════════════════
 var BUNNY_ADMIN_FN = SUPABASE_URL + '/functions/v1/bunny-admin';
+var NOTIFY_APPEAL_FN = SUPABASE_URL + '/functions/v1/notify-moderation-appeal-resolved';
 
 async function _adminToken() {
   try {
     var r = await _authClient.auth.getSession();
     return (r.data.session && r.data.session.access_token) || null;
   } catch(e) { return null; }
+}
+
+// [FIX 2026-09] Flagged Content / Reports 頁按 Delete 之前只刪 Supabase 的 row，
+// 沒有連動清掉 Bunny 上真正的圖片/影片檔案——違規內容被刪掉之後，Bunny 上的檔案
+// 會變成完全沒人管、也不會被「Media Cleanup」頁的孤兒清單掃到（那份清單目前只收
+// 帳號刪除產生的孤兒，不含這個情境）的真孤兒檔案。這裡補上，跟主程式 index.html
+// 的 _deletePostBunnyMedia 用同一支 bunny-admin Edge Function、同一套
+// path（圖片）/videoId（影片）判斷方式，uid 帶原作者的（不是操作的 admin）。
+async function _adminCleanupBunnyMedia(uid, hasImage, hasVideo, mediaPublicId) {
+  if (!uid || (!hasImage && !hasVideo) || !mediaPublicId) return;
+  try {
+    var token = await _adminToken();
+    if (!token) { console.warn('[AdminCleanup] 無 token，略過 Bunny 清除'); return; }
+    var body = { action: 'delete-media', uid: uid };
+    if (hasVideo) body.videoId = mediaPublicId; else body.path = mediaPublicId;
+    var resp = await fetch(BUNNY_ADMIN_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) console.warn('[AdminCleanup] Bunny 清除失敗:', resp.status);
+    else console.log('[AdminCleanup] Bunny 媒體已清除', body);
+  } catch(e) { console.warn('[AdminCleanup] Bunny 清除錯誤:', e.message); }
 }
 
 function _fmtBytes(b) {
@@ -2430,10 +2509,10 @@ async function viewUserMedia(uid, name) {
     modal.id = 'mediaModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
     modal.onclick = function(e){ if(e.target===modal) modal.style.display='none'; };
-    modal.innerHTML = '<div style="background:#fff;max-width:780px;width:100%;max-height:85vh;overflow:auto;border-radius:6px;padding:0;color:#1a1a1a">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff">' +
-        '<div><div id="mmTitle" style="font-weight:800;font-size:15px"></div><div id="mmSub" style="font-size:11px;color:#999"></div></div>' +
-        '<button onclick="document.getElementById(\'mediaModal\').style.display=\'none\'" style="border:none;background:none;font-size:22px;cursor:pointer;color:#999">&times;</button>' +
+    modal.innerHTML = '<div style="background:var(--surface);max-width:780px;width:100%;max-height:85vh;overflow:auto;border-radius:6px;padding:0;color:var(--ink)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--g200);position:sticky;top:0;background:var(--surface)">' +
+        '<div><div id="mmTitle" style="font-weight:800;font-size:15px"></div><div id="mmSub" style="font-size:11px;color:var(--g400)"></div></div>' +
+        '<button onclick="document.getElementById(\'mediaModal\').style.display=\'none\'" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--g400)">&times;</button>' +
       '</div>' +
       '<div id="mmBody" style="padding:20px"></div>' +
     '</div>';
@@ -2481,7 +2560,7 @@ function _renderMediaModal(uid, name, data) {
     html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#666;margin-bottom:10px">Images (' + imgs.length + ')</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px">';
     imgs.forEach(function(f){
-      html += '<div style="border:1px solid #eee;border-radius:4px;overflow:hidden">' +
+      html += '<div style="border:1px solid var(--g200);border-radius:4px;overflow:hidden">' +
         '<img src="' + f.url + '" style="width:100%;height:110px;object-fit:cover;display:block" onerror="this.style.opacity=.3">' +
         '<div style="padding:6px 8px"><div style="font-size:9px;color:#999">' + _fmtBytes(f.size) + '</div>' +
         '<button class="del" style="width:100%;margin-top:4px;font-size:10px" onclick="adminDeleteMedia(\'' + uid + '\',\'' + name.replace(/'/g,"&#39;") + '\',{path:\'' + f.path + '\'},this)">Delete</button></div>' +
@@ -2493,7 +2572,7 @@ function _renderMediaModal(uid, name, data) {
     html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#666;margin-bottom:10px">Videos (' + vids.length + ')</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">';
     vids.forEach(function(v){
-      html += '<div style="border:1px solid #eee;border-radius:4px;overflow:hidden">' +
+      html += '<div style="border:1px solid var(--g200);border-radius:4px;overflow:hidden">' +
         '<img src="' + v.thumbnail + '" style="width:100%;height:100px;object-fit:cover;display:block;background:#000" onerror="this.style.opacity=.2">' +
         '<div style="padding:6px 8px"><div style="font-size:9px;color:#999">' + _fmtBytes(v.size) + ' · ' + (v.status||'') + '</div>' +
         '<button class="del" style="width:100%;margin-top:4px;font-size:10px" onclick="adminDeleteMedia(\'' + uid + '\',\'' + name.replace(/'/g,"&#39;") + '\',{videoId:\'' + v.videoId + '\'},this)">Delete</button></div>' +
@@ -2970,7 +3049,8 @@ function renderQuota(){
 
     // ── Orphan detection: quota record exists but users doc is gone ──
     var isOrphan = window.fsUsers && Object.keys(window.fsUsers).length > 0 && !window.fsUsers[q.id];
-    var rowStyle = isOrphan ? ' style="opacity:0.62;background:#fff8f0"' : '';
+    // [深色主題] 同上，淺色底配深色主題預設的淺色文字會看不清楚，改用半透明橘色疊底
+    var rowStyle = isOrphan ? ' style="opacity:0.62;background:rgba(217,119,6,0.14)"' : '';
     var orphanBadge = isOrphan
       ? ' <span style="display:inline-block;padding:1px 6px;font-size:9px;font-weight:700;'
         + 'text-transform:uppercase;letter-spacing:.5px;background:#fee2cc;color:#b45309;'
@@ -2996,7 +3076,7 @@ function renderQuota(){
         '<span style="'+vidCls+'">🎬 '+dVid+'/'+QUOTA_LIMITS.DAILY_VIDEO_COUNT+'</span></td>'+
       '<td style="min-width:160px">'+
         '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">'+
-          '<span style="font-family:var(--mono);font-weight:700;color:var(--black)">'+mMB.toFixed(1)+' MB</span>'+
+          '<span style="font-family:var(--mono);font-weight:700;color:var(--ink)">'+mMB.toFixed(1)+' MB</span>'+
           '<span style="color:var(--g400)">/ '+QUOTA_LIMITS.MONTHLY_TOTAL_MB+' MB &nbsp;('+mPct+'%)</span></div>'+
         '<div class="pct-bar" style="height:8px"><div class="pct-fill '+mCls+'" style="width:'+mPct+'%"></div></div>'+
         '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--g400);margin-top:2px">'+
@@ -3490,9 +3570,14 @@ function renderReports(){
     var contentId = isComment
       ? (r.commentId ? r.commentId.slice(0,8)+'...' : '-')
       : (r.postId ? r.postId.slice(0,8)+'...' : '-');
-    // Build media preview HTML for reported post
+    // Build media preview HTML for reported content.
+    // ★ 修正（2026-09）：這裡原本用 `if (!isComment)` 整段擋住——只有被檢舉的
+    //   貼文會顯示媒體預覽，被檢舉的留言完全不會，即使 reportDoc 早就存了
+    //   hasImage/hasVideo/mediaUrl（跟貼文用同一套欄位，檢舉當下不分是貼文
+    //   還是留言都會存）。現在留言也能附照片/影片了，這個限制不再合理，
+    //   拿掉讓兩種都能預覽。
     var mediaPreviewHtml = '';
-    if (!isComment) {
+    {
       if (r.mediaUrl && r.hasVideo) {
         mediaPreviewHtml = '<div style="margin-top:5px">'
           + '<video src="'+htmlEsc(r.mediaUrl)+'" controls preload="metadata" style="width:100%;max-height:120px;object-fit:contain;background:#000;display:block"></video>'
@@ -3705,7 +3790,7 @@ async function scanOrphanedQuotas() {
     deleteBtn.style.display = '';
     tbody.innerHTML = orphans.map(function(o, i) {
       var lastStr = o.lastUpload ? o.lastUpload.toLocaleString('en-US') : '—';
-      return '<tr style="background:#fff8f0">'
+      return '<tr style="background:rgba(217,119,6,0.14)">' /* 深色主題：同上改用半透明橘色疊底，避免淺色底+淺色文字看不清楚 */
         + '<td><strong style="font-size:12px">' + htmlEsc(o.displayName) + '</strong>'
         + '<div style="font-size:11px;color:var(--g500)">' + htmlEsc(o.email) + '</div></td>'
         + '<td><span style="font-family:var(--mono);font-size:11px;color:var(--g400)">' + htmlEsc(o.uid) + '</span></td>'
@@ -3815,11 +3900,19 @@ function setReportStatus(reportId, newStatus){
 }
 
 /* ─── Delete reported POST directly from Reports page ─── */
+// ★ 修正（2026-09）：同 deleteFlaggedItem，這裡原本也只刪 Supabase 的 row，
+// 沒連動清 Bunny 媒體。allPosts 是用 Firestore shim 讀出來的，media_public_id
+// 已經在 _snakeToCamel 白名單裡，直接讀 p.mediaPublicId 就有值，不用另外查。
 function deleteReportedPost(btn) {
   var postId = btn.getAttribute('data-pid');
   if (!confirm('Delete this post? This removes it for all users and clears ALL related reports.')) return;
   btn.disabled = true; btn.textContent = 'Deleting...';
+  var _delPost = allPosts.find(function(p){ return p.id === postId; });
   db.collection('posts').doc(postId).delete().then(function() {
+    if (_delPost) {
+      _adminCleanupBunnyMedia(_delPost.userId, _delPost.hasImage, _delPost.hasVideo, _delPost.mediaPublicId);
+      _notifyAppealResolved(_mkAppealItem(_delPost, _delPost.is_habit_clip ? 'Clip caption' : 'Post'), 'denied_deleted');
+    }
     // Delete ALL reports for this postId (not just the one clicked)
     return db.collection('reports').where('postId', '==', postId).get();
   }).then(function(snap) {
@@ -3836,12 +3929,23 @@ function deleteReportedPost(btn) {
 }
 
 /* ─── Delete reported COMMENT directly from Reports page ─── */
+// ★ 修正（2026-09）：同上，留言沒有預先載入任何陣列（不像 posts 有 allPosts），
+// 刪除前先讀一次留言本身拿 media_public_id 等欄位，刪完 row 之後再清 Bunny。
 function deleteReportedComment(btn) {
   var postId = btn.getAttribute('data-pid');
   var commentId = btn.getAttribute('data-cid');
   if (!confirm('Delete this comment? This also clears ALL related reports.')) return;
   btn.disabled = true; btn.textContent = 'Deleting...';
-  db.collection('posts').doc(postId).collection('comments').doc(commentId).delete().then(function() {
+  var _commentRef = db.collection('posts').doc(postId).collection('comments').doc(commentId);
+  _commentRef.get().then(function(doc) {
+    var _c = doc && doc.exists ? doc.data() : null;
+    return _commentRef.delete().then(function() {
+      if (_c) {
+        _adminCleanupBunnyMedia(_c.userId, _c.hasImage, _c.hasVideo, _c.mediaPublicId);
+        _notifyAppealResolved(_mkAppealItem(_c, 'Comment'), 'denied_deleted');
+      }
+    });
+  }).then(function() {
     db.collection('posts').doc(postId).update({
       comments: FieldValue.increment(-1),
       commentCount: FieldValue.increment(-1)
@@ -3941,10 +4045,10 @@ function openPostModal(postId) {
     modal = document.createElement('div');
     modal.id = 'postDetailModal';
     modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:flex-end;justify-content:center;';
-    modal.innerHTML = '<div style="background:#fff;width:100%;max-width:560px;max-height:80vh;overflow-y:auto;border-top:3px solid #000;display:flex;flex-direction:column;">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#fff;">'
+    modal.innerHTML = '<div style="background:var(--surface);color:var(--ink);width:100%;max-width:560px;max-height:80vh;overflow-y:auto;border-top:3px solid var(--white);display:flex;flex-direction:column;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--g200);position:sticky;top:0;background:var(--surface);">'
       + '<strong style="font-size:13px;font-family:var(--font);text-transform:uppercase;letter-spacing:.5px">Post Detail</strong>'
-      + '<button onclick="closePostModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#737373;padding:0 4px">&times;</button>'
+      + '<button onclick="closePostModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--g400);padding:0 4px">&times;</button>'
       + '</div>'
       + '<div id="postDetailContent" style="padding:20px;flex:1"></div>'
       + '</div>';
@@ -3957,7 +4061,7 @@ function openPostModal(postId) {
     + avatarHtml(post.userId, post.user)
     + '<div><strong style="font-size:14px">'+htmlEsc(post.user||'Unknown')+'</strong>'
     + '<div style="font-size:10px;color:var(--g400)">'+post.timeStr+'</div></div></div>'
-    + (post.text ? '<div style="font-size:13px;line-height:1.6;padding:12px;background:#f8f8f8;margin-bottom:16px;white-space:pre-wrap">'+htmlEsc(post.text)+'</div>' : '')
+    + (post.text ? '<div style="font-size:13px;line-height:1.6;padding:12px;background:var(--g100);margin-bottom:16px;white-space:pre-wrap">'+htmlEsc(post.text)+'</div>' : '')
     + (post.hasImage && post.mediaUrl ? '<img src="'+post.mediaUrl+'" style="width:100%;max-height:200px;object-fit:cover;margin-bottom:16px">' : '')
     + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--g400);margin-bottom:10px">Comments ('+(post.commentCount||0)+')</div>'
     + '<div id="postModalComments"><div style="text-align:center;padding:20px;color:var(--g400);font-size:12px">Loading comments...</div></div>';
@@ -3974,12 +4078,12 @@ function openPostModal(postId) {
       cd.innerHTML = snap.docs.map(function(doc){
         var d = doc.data();
         var ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
-        return '<div id="cm-'+doc.id+'" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0f0;align-items:flex-start">'
-          + '<div style="width:28px;height:28px;background:#f0f0f0;border:1px solid #e0e0e0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'
+        return '<div id="cm-'+doc.id+'" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--g200);align-items:flex-start">'
+          + '<div style="width:28px;height:28px;background:var(--g100);border:1px solid var(--g200);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'
           + htmlEsc(((d.userName||'?')[0]).toUpperCase())+'</div>'
           + '<div style="flex:1;min-width:0">'
           + '<div style="font-size:11px;font-weight:700;margin-bottom:2px">'+htmlEsc(d.userName||'-')+'</div>'
-          + '<div style="font-size:12px;line-height:1.5;color:#3d3d3d">'+htmlEsc(d.text||'')+'</div>'
+          + '<div style="font-size:12px;line-height:1.5;color:var(--ink)">'+htmlEsc(d.text||'')+'</div>'
           + '<div style="font-size:9px;color:var(--g400);margin-top:3px">'+ts+' &nbsp;·&nbsp; <span style="color:#dc2626">&#x2665;</span> '+(d.likes||0)+'</div>'
           + '</div>'
           + '<button class="del" style="flex-shrink:0;font-size:9px" onclick="deleteCommentFromModal(\\\'' + postId + '\\\',\\\'' + doc.id + '\\\')" >Delete</button>'
@@ -4080,7 +4184,7 @@ function loadCloudinaryQueue() {
           var type = typeof item === 'object' && item.type ? item.type : 'image';
           return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
             + '<span style="font-size:9px;padding:1px 5px;background:' + (type==='video'?'#dbeafe':'#dcfce7') + ';color:' + (type==='video'?'#1d4ed8':'#166534') + ';font-weight:700;text-transform:uppercase">' + type + '</span>'
-            + '<code style="font-size:10px;color:var(--g800);cursor:pointer;user-select:all" title="Click to copy" onclick="copyText(\'' + pid + '\')">' + pid + '</code>'
+            + '<code style="font-size:10px;color:var(--ink);cursor:pointer;user-select:all" title="Click to copy" onclick="copyText(\'' + pid + '\')">' + pid + '</code>'
             + '</div>';
         }).join('');
 
@@ -5017,6 +5121,7 @@ async function loadTokenUsage() {
 // （除了發文者本人）是看不到原文的，只有這裡看得到、可以巡查、Unhide 或刪除。
 // ════════════════════════════════════════════════════════════════════
 var _flaggedItems = []; // 合併 posts + comments 兩張表撈回來的結果
+var _chatFeedbackItems = []; // moderation_feedback 表撈回來的結果（聊天室「回報誤判」）
 var MODERATION_CATEGORY_LABELS = {
   ADULT: 'Sexual content', VIOLENCE: 'Violent content', HATE: 'Hateful language',
   POLITICAL: 'Political content', SCAM: 'Scam / suspicious', SPAM: 'Spam', IRRELEVANT: 'Off-topic'
@@ -5027,10 +5132,16 @@ async function loadFlaggedContent() {
   var tbody = document.getElementById('flaggedTbody');
   tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Loading...</td></tr>';
   try {
+    // ★ 修正（2026-09）：這兩個查詢原本沒選 has_image/has_video/media_url/
+    //   thumbnail_url 這幾欄——導致這頁完全看不到被標記的貼文/留言原本附的
+    //   照片或影片長什麼樣子，只能看到文字。現在補進來，畫面才有東西可以顯示。
+    // ★ 修正（2026-09）：補上 media_public_id——刪除違規內容時要連動清 Bunny
+    //   媒體，需要這欄才知道要刪 Bunny 上的哪個檔案（見 deleteFlaggedItem /
+    //   _adminCleanupBunnyMedia）。
     var [postsRes, commentsRes] = await Promise.all([
-      _supabase.from('posts').select('id, user_id, text, moderation_category, created_at, is_habit_clip, moderation_appeal_status, moderation_appeal_at')
+      _supabase.from('posts').select('id, user_id, text, moderation_category, created_at, is_habit_clip, moderation_appeal_status, moderation_appeal_at, has_image, has_video, media_url, media_public_id, thumbnail_url')
         .eq('moderation_status', 'hidden').order('created_at', { ascending: false }).limit(500),
-      _supabase.from('comments').select('id, user_id, post_id, text, moderation_category, created_at, moderation_appeal_status, moderation_appeal_at')
+      _supabase.from('comments').select('id, user_id, post_id, text, moderation_category, created_at, moderation_appeal_status, moderation_appeal_at, has_image, has_video, media_url, media_public_id, thumbnail_url')
         .eq('moderation_status', 'hidden').order('created_at', { ascending: false }).limit(500)
     ]);
     if (postsRes.error) throw postsRes.error;
@@ -5038,10 +5149,10 @@ async function loadFlaggedContent() {
 
     var items = [];
     (postsRes.data || []).forEach(function(p) {
-      items.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: p.moderation_category, createdAt: p.created_at, kind: p.is_habit_clip ? 'Clip caption' : 'Post', appealStatus: p.moderation_appeal_status, appealAt: p.moderation_appeal_at });
+      items.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: p.moderation_category, createdAt: p.created_at, kind: p.is_habit_clip ? 'Clip caption' : 'Post', appealStatus: p.moderation_appeal_status, appealAt: p.moderation_appeal_at, hasImage: p.has_image, hasVideo: p.has_video, mediaUrl: p.media_url, mediaPublicId: p.media_public_id, thumbnailUrl: p.thumbnail_url });
     });
     (commentsRes.data || []).forEach(function(c) {
-      items.push({ table: 'comments', id: c.id, userId: c.user_id, text: c.text, category: c.moderation_category, createdAt: c.created_at, kind: 'Comment', appealStatus: c.moderation_appeal_status, appealAt: c.moderation_appeal_at });
+      items.push({ table: 'comments', id: c.id, userId: c.user_id, text: c.text, category: c.moderation_category, createdAt: c.created_at, kind: 'Comment', appealStatus: c.moderation_appeal_status, appealAt: c.moderation_appeal_at, hasImage: c.has_image, hasVideo: c.has_video, mediaUrl: c.media_url, mediaPublicId: c.media_public_id, thumbnailUrl: c.thumbnail_url });
     });
     // 有待複查申請的排最前面（用申請時間排序）,其餘照原本的建立時間排序。
     items.sort(function(a, b) {
@@ -5083,15 +5194,30 @@ function renderFlaggedContent() {
     var isPendingAppeal = item.appealStatus === 'pending';
     // 有申請複查的那一列加左邊色條 + 小標籤,讓它在畫面上比較顯眼(不用另外
     // 開分頁——排序已經把它們放最前面了,這裡只是視覺上再強調一次)。
-    var rowStyle = isPendingAppeal ? ' style="border-left:3px solid #d97706;background:#fffaf0"' : '';
+    // [深色主題] 原本用 #fffaf0 這種淺色米黃底，在深色底+淺色文字下對比度太差
+    // （文字幾乎看不見），改成半透明琥珀色疊在深色底上，維持「這列要特別注意」
+    // 的視覺提示，但文字仍維持用 --ink，可讀性正常。
+    var rowStyle = isPendingAppeal ? ' style="border-left:3px solid #d97706;background:rgba(217,119,6,0.14)"' : '';
     var appealNote = isPendingAppeal
       ? '<div style="margin-top:3px;font-size:10px;font-weight:700;color:#b45309">⚑ Review requested' + (item.appealAt ? ' · ' + new Date(item.appealAt).toLocaleDateString() : '') + '</div>'
       : '';
+    // [NEW 2026-09] 被標記隱藏的貼文/留言如果本來有附照片或影片，這裡也要看得到
+    // 長什麼樣子才能真的判斷——跟 Reports 頁的媒體預覽用同一套寫法。
+    var mediaPreviewHtml = '';
+    if (item.mediaUrl && item.hasVideo) {
+      mediaPreviewHtml = '<div style="margin-top:5px">' +
+        '<video src="' + htmlEsc(item.mediaUrl) + '" controls preload="metadata" style="width:100%;max-width:220px;max-height:120px;object-fit:contain;background:#000;display:block"></video>' +
+      '</div>';
+    } else if (item.mediaUrl && item.hasImage) {
+      mediaPreviewHtml = '<div style="margin-top:5px">' +
+        '<img src="' + htmlEsc(item.mediaUrl) + '" style="width:100%;max-width:220px;max-height:120px;object-fit:cover;display:block;border:1px solid #e0e0e0" alt="flagged media">' +
+      '</div>';
+    }
     return '<tr' + rowStyle + '>' +
       '<td style="font-size:11px">' + htmlEsc(resolveUserName(item.userId)) + '</td>' +
       '<td style="font-size:11px">' + item.kind + '</td>' +
       '<td><span class="badge" style="background:' + catColor + '20;color:' + catColor + '">' + htmlEsc(label) + '</span>' + appealNote + '</td>' +
-      '<td style="font-size:11px;max-width:320px;white-space:normal">' + htmlEsc((item.text || '').slice(0, 200)) + '</td>' +
+      '<td style="font-size:11px;max-width:320px;white-space:normal">' + htmlEsc((item.text || '').slice(0, 200)) + mediaPreviewHtml + '</td>' +
       '<td style="font-size:11px;color:var(--g400)">' + (item.createdAt ? new Date(item.createdAt).toLocaleString() : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
         '<button class="refresh" style="margin-right:6px" onclick="unhideFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Unhide</button>' +
@@ -5102,15 +5228,153 @@ function renderFlaggedContent() {
   }).join('');
 }
 
+// [NEW 2026-09] 聊天室「回報誤判」——讀取 moderation_feedback 表，顯示在
+// Flagged Content 頁下方那張唯讀表格。跟 loadFlaggedContent 是兩張獨立的表，
+// 分開查、分開 render，彼此失敗互不影響。
+async function loadChatModerationFeedback() {
+  var tbody = document.getElementById('chatFeedbackTbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Loading...</td></tr>';
+  try {
+    var { data, error } = await _supabase.from('moderation_feedback')
+      .select('id, user_id, content_type, violation_category, text_snippet, reviewed_as, reviewed_at, created_at')
+      .order('created_at', { ascending: false }).limit(200);
+    if (error) throw error;
+    _chatFeedbackItems = data || [];
+    renderChatModerationFeedback();
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6">Error: ' + htmlEsc(e.message) + '</td></tr>';
+  }
+}
+
+function renderChatModerationFeedback() {
+  var tbody = document.getElementById('chatFeedbackTbody');
+  if (!tbody) return;
+  var rows = _chatFeedbackItems || [];
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">No reports yet 🎉</td></tr>';
+    return;
+  }
+  var TYPE_LABEL = { chat_text: 'Text message', chat_image: 'Photo', chat_video: 'Video' };
+  tbody.innerHTML = rows.map(function(item) {
+    var label = MODERATION_CATEGORY_LABELS[item.violation_category] || item.violation_category || '—';
+    // ★ 新增：純記錄用的複查——不會補送任何訊息（聊天室被擋的內容本來就沒
+    //   存下來，沒有東西可以「放行」），單純幫你標記「AI 判斷得準不準」，
+    //   之後拿來看要不要調整 moderate-content 的 prompt。
+    var verdictBadge = item.reviewed_as === 'false_positive'
+      ? '<div style="font-size:10px;font-weight:700;color:#16a34a;margin-bottom:4px">✓ AI was wrong</div>'
+      : item.reviewed_as === 'correct'
+        ? '<div style="font-size:10px;font-weight:700;color:#6b7280;margin-bottom:4px">✗ Correctly blocked</div>'
+        : '<div style="font-size:10px;color:var(--g400);margin-bottom:4px">Not reviewed</div>';
+    return '<tr>' +
+      '<td style="font-size:11px">' + htmlEsc(resolveUserName(item.user_id)) + '</td>' +
+      '<td style="font-size:11px">' + (TYPE_LABEL[item.content_type] || htmlEsc(item.content_type || '—')) + '</td>' +
+      '<td><span class="badge">' + htmlEsc(label) + '</span></td>' +
+      '<td style="font-size:11px;max-width:280px;white-space:normal">' + (item.text_snippet ? htmlEsc(item.text_snippet.slice(0, 200)) : '<span style="color:var(--g400)">—</span>') + '</td>' +
+      '<td style="font-size:11px;color:var(--g400)">' + (item.created_at ? new Date(item.created_at).toLocaleString() : '—') + '</td>' +
+      '<td style="white-space:nowrap">' + verdictBadge +
+        '<button class="refresh" style="margin-right:4px;font-size:10px;padding:3px 7px" onclick="_reviewChatFeedback(\'' + item.id + '\',\'false_positive\')">AI wrong</button>' +
+        '<button class="refresh" style="font-size:10px;padding:3px 7px" onclick="_reviewChatFeedback(\'' + item.id + '\',\'correct\')">AI correct</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// 按「AI wrong」/「AI correct」——只更新這筆記錄的 reviewed_as/reviewed_at，
+// 不會補送訊息、不會通知使用者（聊天室被擋的內容從來沒存下來，沒有訊息可以
+// 補送）。純粹留紀錄，之後要調整 moderate-content 的 prompt 時可以回頭看。
+async function _reviewChatFeedback(id, verdict) {
+  try {
+    var { error } = await _supabase.from('moderation_feedback')
+      .update({ reviewed_as: verdict, reviewed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+    loadChatModerationFeedback();
+  } catch (e) {
+    alert('Failed to save: ' + e.message);
+  }
+}
+
+// item.kind（'Post' / 'Comment' / 'Clip caption'）→ email 裡使用者看得懂的說法。
+// 特別把 clip 講成「habit check-in video」，不要留代號式的「clip」——這是
+// Home 頁上傳的打卡影片，使用者不一定知道「clip」指的是這個。
+function _appealSurfaceLabel(kind) {
+  if (kind === 'Clip caption') return 'your habit check-in video';
+  if (kind === 'Comment') return 'your comment';
+  return 'your Community post';
+}
+
+// Reports 頁（deleteReportedPost / deleteReportedComment）讀到的是
+// db.collection() shim 回來的原始物件（select('*') 展開，欄位是 snake_case，
+// 只有白名單裡的那幾個才有 camelCase 別名），跟 Flagged Content 頁的
+// _flaggedItems（已經是統一過的 camelCase 形狀）不一樣。這裡把兩種形狀
+// 轉成 _notifyAppealResolved 看得懂的同一種，才能共用同一支函式。
+function _mkAppealItem(raw, kind) {
+  if (!raw) return null;
+  return {
+    userId: raw.userId || raw.user_id,
+    appealStatus: raw.appealStatus || raw.moderation_appeal_status || null,
+    category: raw.category || raw.moderation_category || null,
+    kind: kind,
+    text: raw.text,
+    hasImage: raw.hasImage || raw.has_image,
+    hasVideo: raw.hasVideo || raw.has_video,
+    mediaUrl: raw.mediaUrl || raw.media_url,
+    thumbnailUrl: raw.thumbnailUrl || raw.thumbnail_url
+  };
+}
+
+// [NEW 2026-09] 申訴審核結果通知信——改走跟 partnership 通知同一條「已驗證
+// 真的會寄出去」的路：前端帶 admin 自己的登入 JWT 呼叫 notify-moderation-
+// appeal-resolved 這支專門的 Edge Function，由它在伺服器端驗證真的是 admin
+// 之後，才去呼叫 send-email（帶對應的 email 範本 + 變數）。之前那版直接寫進
+// notifications 表的做法已經拿掉——那張表查不到任何人在讀它，寫進去多半
+// 不會真的變成一封信；只有這條路是你其他通知信（match_found / partner_left /
+// partnership_ended）已經驗證過真的會寄出去的路。
+//
+// outcome 三選一：
+//   'approved'       Unhide（誤判，恢復公開）
+//   'denied_kept'     Mark Reviewed（維持隱藏，內容還在，信裡會附截圖/文字）
+//   'denied_deleted'  Delete（直接刪除，信裡不附截圖，因為 Bunny 檔案這個
+//                      動作本身就會一併清掉，網址隨時可能失效）
+// 只在「這次動作真的是在回覆一個待審核的申訴」時才會寄——單純手動整理內容、
+// 沒人申訴過的項目，不算「回覆申訴」，不寄信。
+function _notifyAppealResolved(item, outcome) {
+  if (!item || !item.userId || item.appealStatus !== 'pending') return Promise.resolve();
+  var includeMedia = outcome === 'denied_kept' && (item.hasImage || item.hasVideo) && !!item.mediaUrl;
+  var payload = {
+    userId: item.userId,
+    outcome: outcome,
+    surfaceLabel: _appealSurfaceLabel(item.kind),
+    categoryLabel: MODERATION_CATEGORY_LABELS[item.category] || item.category || null,
+    textSnippet: item.text ? String(item.text).slice(0, 300) : null,
+    mediaUrl: includeMedia ? item.mediaUrl : null,
+    mediaType: includeMedia ? (item.hasVideo ? 'video' : 'image') : null,
+    thumbnailUrl: includeMedia ? (item.thumbnailUrl || null) : null
+  };
+  return _adminToken().then(function(token) {
+    if (!token) { console.warn('[NotifyAppeal] 沒有登入 token，略過寄信'); return; }
+    return fetch(NOTIFY_APPEAL_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(payload)
+    }).then(function(resp) {
+      if (!resp.ok) console.warn('[NotifyAppeal] 寄信失敗:', resp.status);
+    });
+  }).catch(function(e) { console.warn('[NotifyAppeal] 錯誤:', e && e.message); });
+}
+
 // 誤判（false positive）：解除隱藏，改回一般可見的貼文/留言。
 // 順便把申請複查的欄位一起清掉——內容都已經不隱藏了，這兩欄留著沒意義。
 async function unhideFlaggedItem(table, id) {
   try {
+    var item = _flaggedItems.find(function(i){ return i.table === table && i.id === id; });
     var { error } = await _supabase.from(table).update({
       moderation_status: 'ok', moderation_category: null,
       moderation_appeal_status: null, moderation_appeal_at: null
     }).eq('id', id);
     if (error) throw error;
+    if (item) _notifyAppealResolved(item, 'approved');
     loadFlaggedContent();
   } catch (e) {
     alert('Unhide failed: ' + e.message);
@@ -5121,22 +5385,32 @@ async function unhideFlaggedItem(table, id) {
 // Pending Appeals 計數 / 列表最前面消失，但貼文/留言本身還是隱藏的。
 async function dismissFlaggedAppeal(table, id) {
   try {
+    var item = _flaggedItems.find(function(i){ return i.table === table && i.id === id; });
     var { error } = await _supabase.from(table).update({ moderation_appeal_status: 'reviewed' }).eq('id', id);
     if (error) throw error;
+    if (item) _notifyAppealResolved(item, 'denied_kept');
     loadFlaggedContent();
   } catch (e) {
     alert('Failed to mark reviewed: ' + e.message);
   }
 }
 
-// 確認真的違規：直接刪除這篇貼文/留言（跟 Posts 頁既有的刪除邏輯一致，
-// 不額外處理 Bunny 媒體清理——這裡刪的是已經被隱藏、沒人看得到的內容，
-// 之後仍會被既有的 Media Cleanup 頁掃到孤兒檔案）。
+// 確認真的違規：直接刪除這篇貼文/留言（跟 Posts 頁既有的刪除邏輯一致）。
+// ★ 修正（2026-09）：原本刪掉資料庫的 row 之後就結束了，完全沒清 Bunny 上的
+//   圖片/影片檔案，也不會被 Media Cleanup 頁的孤兒清單掃到（那份清單只收帳號
+//   刪除產生的孤兒）——等於這條路刪掉的違規內容，Bunny 上的檔案永遠沒人管。
+//   現在補上：刪 row 之前先從 _flaggedItems 找出這筆的媒體資訊，刪完 row 之後
+//   一起呼叫 bunny-admin 清掉對應檔案。
 async function deleteFlaggedItem(table, id) {
   if (!window.confirm('Permanently delete this ' + (table === 'posts' ? 'post' : 'comment') + '? This cannot be undone.')) return;
   try {
+    var item = _flaggedItems.find(function(i){ return i.table === table && i.id === id; });
     var { error } = await _supabase.from(table).delete().eq('id', id);
     if (error) throw error;
+    if (item) {
+      _adminCleanupBunnyMedia(item.userId, item.hasImage, item.hasVideo, item.mediaPublicId);
+      _notifyAppealResolved(item, 'denied_deleted');
+    }
     loadFlaggedContent();
   } catch (e) {
     alert('Delete failed: ' + e.message);
@@ -5161,11 +5435,29 @@ var EMAIL_TEMPLATE_VARS = {
   //   partner_left（對方帳號被刪除）是不同情境，文案也不一樣，見
   //   notify-partnership-ended Edge Function 呼叫 send-email 時帶的變數。
   'partnership_ended': ['userName', 'leavingUserName', 'habitName', 'ctaUrl'],
+  // ★ 新增：申訴審核結果通知信，見 notify-moderation-appeal-resolved Edge
+  //   Function（後台 Flagged Content 頁 Unhide / Mark Reviewed / Delete 動作
+  //   觸發）。contentPreviewHtml 是伺服器端組好的一整塊 HTML（文字引用 +
+  //   截圖），不是單純文字變數。
+  'moderation_appeal_approved': ['userName', 'surfaceLabel', 'ctaUrl'],
+  'moderation_appeal_denied_kept': ['userName', 'surfaceLabel', 'categoryLabel', 'contentPreviewHtml', 'ctaUrl'],
+  'moderation_appeal_denied_deleted': ['userName', 'surfaceLabel', 'categoryLabel', 'contentPreviewHtml', 'ctaUrl'],
 };
 var EMAIL_TEMPLATE_SAMPLE_DATA = {
   'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
   'partner_left': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
   'partnership_ended': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
+  'moderation_appeal_approved': { userName: 'Andy', surfaceLabel: 'your Community post', ctaUrl: 'https://famstreak.com/' },
+  'moderation_appeal_denied_kept': {
+    userName: 'Andy', surfaceLabel: 'your habit check-in video', categoryLabel: 'Violent content',
+    contentPreviewHtml: '<blockquote style="margin:0 0 14px;padding:12px 14px;background:#f7f7f7;border-left:3px solid #d1d5db;font-size:13px;color:#444;line-height:1.6;">Sample flagged caption text goes here.</blockquote><img src="https://placehold.co/400x220?text=Sample+Photo" style="max-width:100%;border-radius:6px;display:block;margin:0 0 14px;">',
+    ctaUrl: 'https://famstreak.com/'
+  },
+  'moderation_appeal_denied_deleted': {
+    userName: 'Andy', surfaceLabel: 'your comment', categoryLabel: 'Spam',
+    contentPreviewHtml: '<blockquote style="margin:0 0 14px;padding:12px 14px;background:#f7f7f7;border-left:3px solid #d1d5db;font-size:13px;color:#444;line-height:1.6;">Sample flagged text goes here.</blockquote>',
+    ctaUrl: 'https://famstreak.com/'
+  },
 };
 
 var _etTemplates = [];
@@ -5187,8 +5479,8 @@ async function loadEmailTemplates() {
     listEl.innerHTML = _etTemplates.map(function(t) {
       var active = t.name === _etCurrentName;
       return '<button onclick="_etSelectTemplate(\'' + t.name + '\')" style="text-align:left;padding:9px 10px;border:1px solid ' +
-        (active ? 'var(--black)' : 'var(--g200)') + ';background:' + (active ? 'var(--black)' : 'var(--white)') + ';color:' +
-        (active ? 'var(--white)' : 'var(--black)') + ';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">' +
+        (active ? 'var(--black)' : 'var(--g200)') + ';background:' + (active ? 'var(--black)' : 'var(--surface)') + ';color:' +
+        (active ? 'var(--white)' : 'var(--ink)') + ';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">' +
         htmlEsc(t.name) + '</button>';
     }).join('');
 
@@ -5213,8 +5505,8 @@ function _etSelectTemplate(name) {
   document.querySelectorAll('#etList button').forEach(function(btn) {
     var isActive = btn.textContent === name;
     btn.style.border = '1px solid ' + (isActive ? 'var(--black)' : 'var(--g200)');
-    btn.style.background = isActive ? 'var(--black)' : 'var(--white)';
-    btn.style.color = isActive ? 'var(--white)' : 'var(--black)';
+    btn.style.background = isActive ? 'var(--black)' : 'var(--surface)';
+    btn.style.color = isActive ? 'var(--white)' : 'var(--ink)';
   });
 
   document.getElementById('etEditorEmpty').style.display = 'none';
