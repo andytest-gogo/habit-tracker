@@ -6690,13 +6690,6 @@ function ClipShareModal(props) {
   var _progState = React.useState(0); var progress = _progState[0], setProgress = _progState[1];
   var _errState = React.useState(''); var errorMsg = _errState[0], setErrorMsg = _errState[1];
 
-  // ★ 新增：這個習慣有沒有已配對成功的夥伴——沒有的話 Buddies only 選了也沒人看得到
-  //   （Buddies 對象是靠這個習慣的配對關係去查詢的，不是一般好友名單），所以直接停用
-  //   這個選項，而不是讓使用者選了才發現沒人看到。
-  var hasPartner = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs))
-    ? window._myPairs.some(function(p) { return (p.habit_id === habit.id || p.partner_habit_id === habit.id) && p.status === 'active'; })
-    : false;
-
   function handleFileChange(e) {
     var f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -6851,29 +6844,6 @@ function ClipShareModal(props) {
       maxLength: 300,
       style: { width: '100%', minHeight: 50, fontSize: 12, fontFamily: 'var(--font)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 8, margin: '10px 0', resize: 'vertical', boxSizing: 'border-box' }
     }),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 6 } }, "Who can see this clip"),
-    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 6, marginBottom: 6 } },
-      ['everyone', 'buddies'].map(function(opt) {
-        var isDisabled = opt === 'buddies' && !hasPartner;
-        return /*#__PURE__*/React.createElement("span", {
-          key: opt,
-          onClick: function() { if (!isDisabled) setAudience(opt); },
-          style: {
-            display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-            cursor: isDisabled ? 'not-allowed' : 'pointer',
-            opacity: isDisabled ? 0.45 : 1,
-            border: '1px solid ' + (audience === opt ? 'var(--black)' : 'var(--gray-200)'),
-            background: audience === opt ? 'var(--black)' : 'var(--white)',
-            color: audience === opt ? 'var(--white)' : 'var(--gray-600)'
-          }
-        }, opt === 'everyone' ? 'Everyone' : 'Buddies only');
-      })
-    ),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', marginBottom: 10 } },
-      !hasPartner
-        ? "Match a partner on this habit to unlock Buddies-only sharing."
-        : (audience === 'buddies' ? "Only visible to your matched buddy on this habit \u2014 won't show on Challengers." : null)
-    ),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, background: 'var(--gray-50)', borderRadius: 8, padding: 10, marginBottom: 12 } },
       /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)', lineHeight: 1.5 } },
         "Don't want to show your face? Film your hands, your journal, or your setup instead \u2014 that counts too."
@@ -9812,6 +9782,52 @@ function MainApp(_ref16) {
       .eq('user_id', user.uid).eq('feature', 'match').eq('usage_date', todayKey)
       .then(function(r) { setMatchCallsUsedToday(r.count || 0); })
       .catch(function() { setMatchCallsUsedToday(null); }); // 讀不到（例如 RLS 還沒開 SELECT）就不顯示，不要顯示錯的數字
+  }, [user]);
+  // ★ 新增（2026-09）：是否收到「找到夥伴」通知信——對應 users.email_match_notifications，
+  //   預設 true（舊帳號沒這欄位、或還沒讀到之前，一律視為開啟）。這個開關只影響
+  //   check-pending-matches 寄的 match_found email 那一步，in-app 通知不受影響。
+  var [emailMatchNotify, setEmailMatchNotify] = React.useState(true);
+  React.useEffect(function() {
+    if (!user || !user.uid) return;
+    _supabase.from('users').select('email_match_notifications').eq('id', user.uid).single()
+      .then(function(r) {
+        var val = r && r.data ? r.data.email_match_notifications : true;
+        setEmailMatchNotify(val !== false); // null/undefined（舊資料沒這欄位）一律視為 true
+      })
+      .catch(function() {});
+  }, [user]);
+  function handleToggleEmailMatchNotify() {
+    if (!user || !user.uid) return;
+    var next = !emailMatchNotify;
+    setEmailMatchNotify(next); // 先樂觀更新，UI 立刻反應
+    _supabase.from('users').update({ email_match_notifications: next }).eq('id', user.uid)
+      .then(function(r) {
+        if (r && r.error) { console.warn('[Notifications] update failed:', r.error); setEmailMatchNotify(!next); }
+      })
+      .catch(function() { setEmailMatchNotify(!next); }); // 失敗就退回原本狀態
+  }
+  // ★ 新增：「找到夥伴」通知信裡的 profileSettingsUrl（?view=profile）深連結——
+  //   跟 habitId 深連結是分開的一組，用來讓使用者直接跳進 Profile 頁的
+  //   Notifications 那一段，不用自己在分頁裡找。notifSectionRef 掛在
+  //   renderProfile() 的 Notifications 區塊外層，捲動＋短暫高亮用。
+  var notifSectionRef = React.useRef(null);
+  var _highlightNotifState = React.useState(false);
+  var highlightNotifPrefs = _highlightNotifState[0], setHighlightNotifPrefs = _highlightNotifState[1];
+  React.useEffect(function() {
+    if (!user) return;
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('view') !== 'profile') return;
+    setActiveTab('profile');
+    setHighlightNotifPrefs(true);
+    setTimeout(function() {
+      if (notifSectionRef.current && notifSectionRef.current.scrollIntoView) {
+        notifSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150); // 等 Profile 頁真的切換渲染完再捲動
+    var _clearHighlight = setTimeout(function() { setHighlightNotifPrefs(false); }, 3000);
+    var cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, '', cleanUrl);
+    return function() { clearTimeout(_clearHighlight); };
   }, [user]);
   var [profileCheerStats, setProfileCheerStats] = React.useState({ total: 0, supporters: 0 });
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
@@ -12831,14 +12847,14 @@ function MainApp(_ref16) {
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Habits")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
-      // ★ 修正（2026-09）：手機版把這格從「Posts」（幾乎所有人都是 0，資訊量最低）
-      //   換成 AI Credits 使用量，取代原本搬去 Home 頁最上方黑卡的那份資料。
-      //   桌面版維持原本的 Posts，不重複顯示（桌面版 AI Credits 已經在
-      //   DesktopHomeSidebar 那邊看得到）。
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value", style: isDesktop ? undefined : { color: '#3b82c4' } },
-        isDesktop ? myPosts.length : (matchCallsUsedToday != null ? (matchCallsUsedToday + "/" + MATCH_DAILY_LIMIT) : "—")
+      // ★ 修正（2026-09）：這格從「Posts」（幾乎所有人都是 0，資訊量最低）換成
+      //   AI Credits 使用量。原本桌面版維持顯示 Posts（桌面版 AI Credits 已經在
+      //   DesktopHomeSidebar 看得到），但 Andy 要求 Profile 頁也統一顯示 AI credit，
+      //   所以桌面/手機都改成同一份資料，不再區分 isDesktop。
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value", style: { color: '#3b82c4' } },
+        matchCallsUsedToday != null ? (matchCallsUsedToday + "/" + MATCH_DAILY_LIMIT) : "—"
       ),
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, isDesktop ? "Posts" : "AI Searches Today")
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "AI Searches Today")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, rate, "%"),
@@ -13058,6 +13074,33 @@ function MainApp(_ref16) {
       }
     },
     /*#__PURE__*/React.createElement("div", {
+      ref: notifSectionRef,
+      style: {
+        margin: '0 0 8px',
+        borderRadius: 8,
+        transition: 'box-shadow .3s, background .3s',
+        boxShadow: highlightNotifPrefs ? '0 0 0 2px var(--black)' : 'none',
+        background: highlightNotifPrefs ? 'var(--gray-50)' : 'transparent'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "section-title",
+      style: { marginBottom: 12 }
+    }, "Notifications"), /*#__PURE__*/React.createElement("div", {
+      className: "priv-row",
+      style: { border: 'none', padding: '0 0 20px' }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "priv-row-info"
+    }, /*#__PURE__*/React.createElement("strong", null, "Email me when I'm matched"),
+       /*#__PURE__*/React.createElement("span", null, "\"Partner found\" emails from FamStreak. You can also turn this off from the link in any of those emails.")
+    ), /*#__PURE__*/React.createElement("label", {
+      className: "toggle-switch",
+      "aria-label": "Toggle partner-found email notifications"
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: emailMatchNotify,
+      onChange: handleToggleEmailMatchNotify
+    }), /*#__PURE__*/React.createElement("span", { className: "toggle-slider" })))
+    ), /*#__PURE__*/React.createElement("div", {
       className: "section-title",
       style: { marginBottom: 12 }
     }, "Privacy"), /*#__PURE__*/React.createElement("button", {
@@ -15967,7 +16010,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       </div>
       <div style="height:1px;background:#1a1a1a;"></div>
       <div style="padding:10px 16px 4px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;" id="matchResultsLabel">Invite anyone you like</div>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;" id="matchResultsLabel">Your best match</div>
         <div style="font-size:9px;color:#3d3d3d;" id="mRemainingLabel"><span id="mRemaining">—</span> credits left today</div>
       </div>
       <div id="matchResultsList" style="padding:0 10px 10px;"></div>
@@ -16697,14 +16740,16 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.log('[MatchDebug] fallback: candidate unlock days=7 (per-candidate bypass) | myChecked=', myChecked, '| candidates before day-filter=', candidates.length, '| scored after filter=', scored.length); // 🧪TEST MODE 診斷log
       if (scored.length === 0) throw new Error('No valid candidates (可能是候選人打卡天數 < 7 天且非白名單，或 mind-body/duration 資料不足)');
 
-      // Return top 5 matches
+      // ★ 修正（2026-09，改成單一配對）：Find Partner 不再一次給到 5 位讓使用者
+      //   自己滑卡片挑，只回傳分數最高的 1 位——跟 match-partner 那邊的邏輯
+      //   （見 index.html 這次的相關修改說明）保持一致。
       scored.sort(function(a, b) { return b.score - a.score; });
-      var top5 = scored.slice(0, 5).map(function(m) {
+      var topMatch = scored.slice(0, 1).map(function(m) {
         m._isFallback = true;
         m.reason = 'Matched by same activity type, with similar duration (' + m.breakdown.activityFit + '%), check-in rhythm (' + m.breakdown.rhythmScore + '%), mind-body alignment, and consistency.';
         return m;
       });
-      return top5;
+      return topMatch;
     } catch(e) {
       throw e;
     }
@@ -16830,9 +16875,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       }
 
       // Filter out already-paired users from AI result just in case
+      // ★ 修正（2026-09，改成單一配對）：match-partner 本身還是照舊回傳它排序好
+      //   的候選人列表（沒有動那支函式），這裡用 .slice(0, 1) 只留分數最高的
+      //   1 位——不用改 match-partner 就能讓使用者體驗變成「只給你最佳的 1 位」，
+      //   AI 評分成本也沒有變化（Claude 本來就要評完整個候選池才知道誰分數最高）。
       var matches = (data.matches || (data.match ? [data.match] : [])).filter(function(m) {
         return m && !alreadyPaired.has(m.userId);
-      });
+      }).slice(0, 1);
 
       if (matches.length === 0) throw new Error('AI returned no valid candidates');
 
@@ -16875,6 +16924,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     {bg:'#1a1200',fg:'#e8c040',border:'#8a7010'}
   ];
 
+  // ★ 修正（2026-09，改成單一配對）：Find Partner 現在只回傳 1 位最佳候選人，
+  //   不再是最多 5 位讓使用者滑卡片挑選——原本這裡「候選人沒湊滿 5 位就自動
+  //   打開背景補位」的機制（_topUpEnabled 那一整段）已經沒有意義：湊滿 1 位
+  //   就已經是「完整結果」了，沒有「還差幾位」這回事，整段拿掉。
+  //   背景「有新對象再通知我」的功能還在——只是現在只用在「一位候選人都還
+  //   沒有」的情境（見 showMatchingError 的 notifyOption 參數），不是這裡。
   function showMatchingResults(matches) {
     document.getElementById('matchingScanning').style.display = 'none';
     document.getElementById('matchingResult').style.display = '';
@@ -16884,24 +16939,22 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     _matchCardIdx = 0;
     _matchInvited = {};
     _matchSending = false;
+
+    var _label = document.getElementById('matchResultsLabel');
+    if (_label) _label.textContent = 'Your best match';
+
     _renderMatchCard();
   }
 
   function _renderMatchCard() {
     var container = document.getElementById('matchResultsList');
-    var total = _matchCards.length;
-    var idx = _matchCardIdx;
+    var idx = 0; // ★ 修正（2026-09，改成單一配對）：只會有 1 位候選人，不再需要 idx 遊走多張卡片
     var m = _matchCards[idx];
     var av = _avStyles[idx % _avStyles.length];
     var initials = (m.displayName || 'U').slice(0, 2).toUpperCase();
     var bd = m.breakdown || {};
     var score = m.score || 0;
     var invited = !!_matchInvited[idx];
-
-    // Dots
-    var dotsHtml = _matchCards.map(function(_, i) {
-      return '<div style="width:18px;height:2px;background:' + (i === idx ? av.fg : '#1a1a1a') + ';transition:background .3s;"></div>';
-    }).join('');
 
     // Values fit row (only if present)
     var valuesFitHtml = '';
@@ -16915,14 +16968,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
 
     container.innerHTML =
-      // dots + counter
-      '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px 0;">' +
-        '<div style="display:flex;gap:5px;">' + dotsHtml + '</div>' +
-        '<div style="font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;">' + (idx+1) + ' / ' + total + '</div>' +
-      '</div>' +
-
       // header: avatar + name + score
-      '<div style="padding:14px 16px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:14px;">' +
+      '<div style="padding:16px 16px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:14px;">' +
         '<div style="width:64px;height:64px;border-radius:50%;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0;border:2px solid ' + av.border + ';background:' + av.bg + ';color:' + av.fg + ';">' +
           initials +
           (m.avatarUrl ? '<img src="' + m.avatarUrl + '" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()">' : '') +
@@ -16971,26 +17018,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       //   它跟下面的 Next 幾乎做同一件事（切到下一位候選人），唯一差別只在
       //   最後一張卡片時 X 會關掉整個視窗——但最上面已經有一顆 ✕ 可以關閉整個
       //   配對視窗了，功能重複，容易讓人搞不清楚兩個 X 差在哪，直接拿掉。
-      '<div style="padding:12px 16px 10px;display:flex;gap:8px;align-items:center;">' +
+      '<div style="padding:12px 16px 16px;display:flex;gap:8px;align-items:center;">' +
         '<button id="mrcInviteBtn" onclick="window._mrcInviteCard()" ' + ((invited || _matchSending) ? 'disabled' : '') + ' style="flex:1;background:' + (invited ? '#1a2a1a' : '#fff') + ';color:' + (invited ? '#4caf50' : '#0a0a0a') + ';border:' + (invited ? '1px solid #2d4a2d' : 'none') + ';padding:11px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:' + ((invited || _matchSending) ? 'default' : 'pointer') + ';font-family:inherit;opacity:' + (_matchSending && !invited ? '.6' : '1') + ';">' + (invited ? 'Request sent ✓' : (_matchSending ? 'Sending…' : 'Send partner request')) + '</button>' +
-      '</div>' +
-
-      // prev / next nav
-      '<div style="display:flex;gap:8px;padding:0 16px 14px;">' +
-        '<button onclick="window._mrcPrev()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;" ' + (idx === 0 ? 'disabled style="flex:1;background:transparent;border:1px solid #111;color:#333;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:default;font-family:inherit;"' : '') + '>← Previous</button>' +
-        '<button onclick="window._mrcNext()" style="flex:1;background:transparent;border:1px solid #1a1a1a;color:#888;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:inherit;" ' + (idx === total - 1 ? 'disabled style="flex:1;background:transparent;border:1px solid #111;color:#333;padding:9px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:default;font-family:inherit;"' : '') + '>Next →</button>' +
-      '</div>' +
-
-      // notify row (show when on last card)
-      (idx === total - 1 ? '<div style="margin:0 12px 14px;padding:12px;background:#0f0f0f;border:1px solid #111;display:flex;align-items:center;gap:10px;">' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#888;">Notify me when more matches appear</div>' +
-          '<div style="font-size:8px;color:#333;margin-top:3px;">We\'ll alert you when a new partner joins for this habit</div>' +
-        '</div>' +
-        '<div id="matchNotifyToggle" onclick="this.classList.toggle(\'on\');window._toggleMatchNotify(this)" style="width:32px;height:18px;background:#222;border-radius:9px;position:relative;cursor:pointer;flex-shrink:0;">' +
-          '<div style="position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#555;transition:transform .2s;"></div>' +
-        '</div>' +
-      '</div>' : '');
+      '</div>';
+      // ★ 修正（2026-09，改成單一配對）：拿掉了 prev/next 卡片導覽（只剩 1 位
+      //   候選人，沒有「下一位」）跟最後一張卡片才出現的「還差幾位、要不要
+      //   打開背景補位通知」區塊——湊到 1 位就已經是完整結果，沒有「還差幾位」
+      //   這回事了。
 
     // store match data for invite
     container._currentMatchData = m;
@@ -17006,10 +17040,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     '</div>';
   }
 
-  window._mrcPrev = function() { if (_matchCardIdx > 0) { _matchCardIdx--; _renderMatchCard(); } };
-  window._mrcNext = function() {
-    if (_matchCardIdx < _matchCards.length - 1) { _matchCardIdx++; _renderMatchCard(); }
-  };
+  // ★ 修正（2026-09，改成單一配對）：window._mrcPrev / window._mrcNext 已隨著
+  //   多候選人卡片導覽一起移除，不再需要。
   // ── Helper：幫任何 promise 加上逾時保護，避免網路/DB 卡住時畫面永遠不動 ──
   function _withTimeout(promise, ms, label) {
     var timeoutId;
@@ -17161,7 +17193,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     // ★ 這是系統背景排程已經算好、存起來的結果，不是這次使用者按 Find Partner
     //   才呼叫的，所以不扣 matching credit（那是給「這次真的用掉一次配對」的
     //   動作用的）——看到這個結果本身不該讓使用者的錢包數字變少。
-    showMatchingResults([matchData]);
+    // ★ 修正：match_data 可能是舊資料留下的陣列形狀，也可能是單一物件——用
+    //   Array.isArray 防呆，兩種形狀都能正確處理，避免陣列包陣列讓畫面壞掉。
+    var _preloadedArr = Array.isArray(matchData) ? matchData : [matchData];
+    showMatchingResults(_preloadedArr);
 
     // 顯示過一次就從資料庫刪掉，避免下次深連結或重新整理又跳出同一筆舊資料。
     if (window._supabaseClient && window._currentUser) {
