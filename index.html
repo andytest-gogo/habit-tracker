@@ -3012,12 +3012,7 @@ if (isFirebaseConfigured) {
       'moderation_status':'moderationStatus','moderation_category':'moderationCategory',
       // ★ 新增（2026-09）：作者「申請複查」功能要讀 moderationAppealStatus/
       //   moderationAppealAt，同樣的坑先在這裡補上，避免又重演一次上面的問題。
-      'moderation_appeal_status':'moderationAppealStatus','moderation_appeal_at':'moderationAppealAt',
-      // ★ 新增（2026-09，match-partner v11 每日冷卻）：habits.last_ai_match_attempt_at
-      //   一樣要補進這張白名單，不然前端讀 habit.lastAiMatchAttemptAt 會永遠是
-      //   undefined——跟上面 is_habit_clip / habit_id / moderation_status 那幾次
-      //   一模一樣的坑，這次先補上避免重演。
-      'last_ai_match_attempt_at':'lastAiMatchAttemptAt'
+      'moderation_appeal_status':'moderationAppealStatus','moderation_appeal_at':'moderationAppealAt'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];
@@ -7817,36 +7812,6 @@ function calcCompletionRate(habit) {
   return Math.min(100, Math.round(totalDone / totalExpected * 100));
 }
 
-/* ── ★ 新增（match-partner v11）：算出這個 habit 目前的 Find Partner 狀態 ──
-   取代原本的「AI Credit / matching credit 錢包」顯示，統一成三種狀態：
-     'waiting'  — 上次按了、沒找到人，使用者選了「找到再通知我」，正在等
-                  背景排程（check-pending-matches）每天幫他重跑，不能再手動按
-                  （反正背景排程今天已經用一樣的條件搜過一次了，使用者自己
-                  再按一次只是白白多打一次 Claude，不會有不同結果）。
-     'cooldown' — 今天已經真的跑過一次配對（不管有沒有找到人），要等到
-                  下一個 UTC 午夜才能再按。
-     'ready'    — 可以按 Find Partner。
-   habit.lastAiMatchAttemptAt 是從 habits.last_ai_match_attempt_at 讀回來的
-   （見 _snakeToCamel 白名單），waitingMatchHabitIds 是 match_notifications
-   enabled=true 的 habitId 集合（見 MainApp 的 loadWaitingMatchNotifications）。 */
-function getFindPartnerState(habit, waitingMatchHabitIds) {
-  if (waitingMatchHabitIds && waitingMatchHabitIds.has(String(habit.id))) {
-    return { state: 'waiting', label: 'Searching — we’ll email you', disabled: true };
-  }
-  var last = habit.lastAiMatchAttemptAt;
-  if (last) {
-    var lastDay = new Date(last).toISOString().slice(0, 10);
-    var todayDay = new Date().toISOString().slice(0, 10);
-    if (lastDay === todayDay) {
-      var next = new Date();
-      next.setUTCHours(24, 0, 0, 0);
-      var hoursLeft = Math.max(1, Math.ceil((next.getTime() - Date.now()) / 3600000));
-      return { state: 'cooldown', label: 'Available in ' + hoursLeft + 'h', disabled: true };
-    }
-  }
-  return { state: 'ready', label: null, disabled: false };
-}
-
 /* ── Check if today is a scheduled day ──
    Starting from habit start date, every intervalDays-day cycle, day 1 */
 function isTodayActiveDay(habit, todayKey) {
@@ -8797,7 +8762,9 @@ function HistoryPage(_ref15) {
     archivedHabits = _ref15.archivedHabits,
     percentile = _ref15.percentile,
     user = _ref15.user,
-    waitingMatchHabitIds = _ref15.waitingMatchHabitIds || new Set(),
+    matchingCredits = _ref15.matchingCredits || {},
+    matchCallsUsedToday = _ref15.matchCallsUsedToday,
+    matchDailyLimit = _ref15.matchDailyLimit || 10,
     onBack = _ref15.onBack;
   var _useStateHP = useState(10),
     _useStateHP2 = _slicedToArray(_useStateHP, 2),
@@ -8892,12 +8859,46 @@ function HistoryPage(_ref15) {
     d: "M15 19l-7-7 7-7"
   })), "Back"), /*#__PURE__*/React.createElement("div", {
     className: "history-nav-title"
-  }, "Habit History")),
-  /* ★ 修正（match-partner v11）：這裡原本是「AI Search Credits」全域每日額度圓環——
-     整套 AI Credit 概念拿掉後，這個數字沒有對應的後端資料可以顯示了（現在是
-     每個 habit 各自的每日冷卻，不是一個全域數字），整個 history-chart-section
-     移除。冷卻狀態改顯示在下面每張習慣卡片自己的 Find Partner 按鈕旁邊。 */
-  /*#__PURE__*/React.createElement("div", {
+  }, "Habit History")), /*#__PURE__*/React.createElement("div", {
+    className: "history-chart-section"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "history-chart-title"
+  }, "AI Search Credits"), /*#__PURE__*/React.createElement("div", {
+    className: "active-now-card"
+  }, matchCallsUsedToday !== null ? [
+    /*#__PURE__*/React.createElement("div", {
+      key:"aicalls-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width:64, height:64, style:{ transform:'rotate(-90deg)' }
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx:32, cy:32, r:26, fill:"none", stroke:"rgba(96,165,250,0.18)", strokeWidth:7
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx:32, cy:32, r:26, fill:"none", stroke:"#60a5fa", strokeWidth:7,
+      strokeDasharray: (Math.max(0, matchDailyLimit - matchCallsUsedToday)/matchDailyLimit * 2*Math.PI*26) + " " + (2*Math.PI*26),
+      strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
+    })), /*#__PURE__*/React.createElement("div", {
+      style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+        textAlign:'center', width:'100%', lineHeight:1 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#60a5fa', lineHeight:1 }
+    }, Math.max(0, matchDailyLimit - matchCallsUsedToday)), /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:7, opacity:.7, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#60a5fa' }
+    }, "LEFT"))),
+    /*#__PURE__*/React.createElement("div", {
+      key:"aicalls-info", className:"active-now-info"
+    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Today's AI Searches"),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:14, fontWeight:700, fontFamily:'var(--din)', lineHeight:1.3, color:'#60a5fa', marginBottom:4 }
+    }, matchCallsUsedToday, " of ", matchDailyLimit, " used today"),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:11, opacity:.55, marginTop:2 }
+    }, matchCallsUsedToday >= matchDailyLimit ? 'All used — resets tomorrow \u23f0' : 'Resets daily \u00b7 log in for more credits'),
+    /*#__PURE__*/React.createElement("div", {
+      style:{ marginTop:7, height:2, background:'rgba(96,165,250,.18)', width:'100%', overflow:'hidden' }
+    }, /*#__PURE__*/React.createElement("div", {
+      style:{ height:'100%', background:'#60a5fa', width:Math.min(100, Math.round(matchCallsUsedToday/matchDailyLimit*100))+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
+    })))
+  ] : null)), /*#__PURE__*/React.createElement("div", {
     className: "archive-list-section"
   }, /*#__PURE__*/React.createElement("div", {
     className: "archive-list-header"
@@ -9028,13 +9029,25 @@ function HistoryPage(_ref15) {
       className: "archive-tag"
     }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
       className: "archive-tag"
-    }, h.durLabel))
-    /* ★ 修正（2026-09）：History 頁的 Find Partner 入口整塊拿掉——這批過期習慣的
-       數量沒有上限（不像進行中習慣卡在最多 3 個），每個 habit 都各自享有一天一次、
-       永遠不會用完的配對額度，過期習慣一多就等於每天可以疊加無限次 Claude API
-       呼叫，燒錢風險跟「進行中習慣最多 3 個」的原始設計初衷不符。Find Partner
-       現在只保留在進行中的 active 習慣卡片上。 */
-    );
+    }, h.durLabel)),
+    /* ★ 新增：到期但仍在 habits 表裡（沒被手動刪除）、打卡天數已經 ≥ PARTNER_UNLOCK_DAYS
+       的習慣，補一個 Find Partner 入口——之前這批已經證明過自己會堅持的習慣，挑戰一到期
+       就再也叫不出配對按鈕了。已經有 active 夥伴的排除掉，避免對同一個習慣重複發邀請。
+       真正擋濫用的門檻在 match-partner Edge Function（habit_ai_usage 每人每日 10 次，
+       跟這個使用者手上有幾個符合資格的習慣無關），不是靠這裡藏不藏按鈕，所以這裡開放
+       完全不會重新打開之前討論過的濫用缺口。 */
+    (h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS &&
+      !((typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) &&
+        window._myPairs.some(function(p){ return (p.habit_id === h.id || p.partner_habit_id === h.id) && p.status === 'active'; }))
+    ) && /*#__PURE__*/React.createElement("div", {
+      style: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, padding:'10px 16px 14px', borderTop:'1px solid var(--gray-100)', marginTop:10 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:'var(--gray-400)' }
+    }, (matchingCredits[h.id] || 0) + ' AI match credit' + ((matchingCredits[h.id] || 0) === 1 ? '' : 's') + ' left'
+    ), /*#__PURE__*/React.createElement("button", {
+      className: "seek-find-btn",
+      onClick: function(e){ e.stopPropagation(); window.openMatchingModal(h); }
+    }, "Find Partner")));
   }), hasMore && /*#__PURE__*/React.createElement("div", {
     style: { padding: '16px 0 0', textAlign: 'center' }
   }, /*#__PURE__*/React.createElement("button", {
@@ -9132,6 +9145,8 @@ function DesktopTopbar(props) {
 function DesktopHomeSidebar(props) {
   var habits = props.habits || [];
   var archivedHabits = props.archivedHabits || [];
+  var matchCallsUsedToday = props.matchCallsUsedToday;
+  var matchDailyLimit = props.matchDailyLimit || 10;
   // ★ getCatColours() 是 MainApp 內部的私有函式，這個元件在 MainApp 外層拿不到，
   //   所以這裡用同一份對照表自帶一份，不去動原本的程式碼
   var _catColourMap = {
@@ -9155,11 +9170,27 @@ function DesktopHomeSidebar(props) {
     byCategory[c] = (byCategory[c] || 0) + 1;
   });
   var catList = Object.keys(byCategory).map(function(c) { return { name: c, count: byCategory[c], color: catColour(c) }; });
-  if (bestStreak === 0 && catList.length === 0) return null;
+  var showAiCredits = matchCallsUsedToday !== null && matchCallsUsedToday !== undefined;
+  if (!showAiCredits && bestStreak === 0 && catList.length === 0) return null;
   return React.createElement("div", { className: "desktop-sidebar" },
-    // ── ★ 修正（match-partner v11）：這裡原本是「AI Search Credits」淺色版——
-    //   全域每日額度的顯示數字已經沒有對應的後端資料了（現在是每個 habit
-    //   各自的每日冷卻），整塊移除。
+    // ── AI Search Credits（淺色版）──
+    showAiCredits && React.createElement(React.Fragment, null,
+      React.createElement("div", { style: { display: 'flex', alignItems: 'flex-end', gap: 10 } },
+        React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 26, lineHeight: 1 } },
+          Math.max(0, matchDailyLimit - matchCallsUsedToday)
+        ),
+        React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', lineHeight: 1.3, paddingBottom: 2 } },
+          "of " + matchDailyLimit + " AI searches", React.createElement("br", null), "left today"
+        )
+      ),
+      React.createElement("div", { style: { marginTop: 14, height: 3, background: 'var(--gray-100)', width: '100%', overflow: 'hidden' } },
+        React.createElement("div", { style: { height: '100%', background: 'var(--black)', width: Math.min(100, Math.round(matchCallsUsedToday / matchDailyLimit * 100)) + '%', transition: 'width 1s cubic-bezier(.4,0,.2,1)' } })
+      ),
+      React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 8, marginBottom: 24 } },
+        matchCallsUsedToday >= matchDailyLimit ? 'All used — resets tomorrow' : 'Resets daily · log in for more credits'
+      ),
+      (bestStreak > 0 || catList.length > 0) && React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 22 } })
+    ),
     // ── Best streak ──
     bestStreak > 0 && React.createElement(React.Fragment, null,
       React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 26 } }, bestStreak),
@@ -9734,51 +9765,24 @@ function MainApp(_ref16) {
   var [habitCheers, setHabitCheers] = React.useState({});
   var [habitCheerers, setHabitCheerers] = React.useState({}); // habitId -> [{senderId, date, createdAt}]（最新在前），CheerDetailPanel 顯示真人卡片用
   var [cheererInfoMap, setCheererInfoMap] = React.useState({}); // senderId -> {id, display_name, photo_url}
-  // ★ 修正（match-partner v11）：AI Credit 整套拿掉了——原本這裡的
-  //   matchingCredits（每個習慣完成挑戰後發的 10 點錢包）跟 matchCallsUsedToday/
-  //   MATCH_DAILY_LIMIT（全域每天 10 次的顯示用數字）都已經沒有對應的後端概念，
-  //   改成單純「每個 habit 一天一次」的冷卻，直接讀 habit.lastAiMatchAttemptAt
-  //   （見 getFindPartnerState()，跟 habit 資料本身一起讀回來，不用再另外打表）。
-  //   唯一還需要另外讀一次的，是「這個 habit 現在是不是在等背景排程通知」——
-  //   對應 match_notifications.enabled，跟冷卻是兩件事：冷卻只管「今天按過了沒」，
-  //   等待通知則是「上次按了、沒找到人、使用者選了『找到再通知我』」。
-  var [waitingMatchHabitIds, setWaitingMatchHabitIds] = React.useState(new Set());
-  var loadWaitingMatchNotifications = React.useCallback(function() {
+  var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
+  // ★ 新增：今天真正打過 match-partner（呼叫 Claude）的次數，讀 habit_ai_usage 表。
+  //   跟上面 matchingCredits 不是同一件事——matchingCredits 只是每個習慣自己的
+  //   「錢包」數字，目前並沒有真的擋住 _proceedToMatching() 呼叫 match-partner
+  //   （credits 用完了案子照樣送出去，只是不再 -1 而已）；真正會擋下請求、
+  //   回 429 的是 match-partner Edge Function 裡的 DAILY_LIMIT（見那支程式碼），
+  //   這裡讀的就是同一張表、同樣的每日 10 次上限，數字才會跟後端行為一致。
+  var MATCH_DAILY_LIMIT = 10; // ⚠️ 要跟 match-partner/index.ts 的 DAILY_LIMIT 保持一致
+  var [matchCallsUsedToday, setMatchCallsUsedToday] = React.useState(null); // null = 還沒讀到
+  var loadMatchCallsToday = React.useCallback(function() {
     if (!user || !user.uid || !window._supabaseClient) return;
-    window._supabaseClient.from('match_notifications')
-      .select('habit_id').eq('user_id', user.uid).eq('enabled', true)
-      .then(function(r) {
-        setWaitingMatchHabitIds(new Set((r.data || []).map(function(row) { return String(row.habit_id); })));
-      })
-      .catch(function() { setWaitingMatchHabitIds(new Set()); });
+    var todayKey = toISODay();
+    window._supabaseClient.from('habit_ai_usage')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.uid).eq('feature', 'match').eq('usage_date', todayKey)
+      .then(function(r) { setMatchCallsUsedToday(r.count || 0); })
+      .catch(function() { setMatchCallsUsedToday(null); }); // 讀不到（例如 RLS 還沒開 SELECT）就不顯示，不要顯示錯的數字
   }, [user]);
-  // ── 讓 vanilla JS 那支配對 modal（跟這個 React 元件不是同一個世界）可以
-  //   即時通知這裡：使用者切了「找到再通知我」開關、或是真的按了一次
-  //   Find Partner（不管有沒有找到人）——這樣習慣卡片上的按鈕文字可以馬上
-  //   反映最新狀態，不用整頁重新整理、重新打一次 API 才看得到。純樂觀更新，
-  //   之後重新載入 habits/match_notifications 一樣會被伺服器端的真實值蓋過去。
-  React.useEffect(function() {
-    window._onMatchNotifyToggled = function(habitId, isOn) {
-      setWaitingMatchHabitIds(function(prev) {
-        var next = new Set(prev);
-        var key = String(habitId);
-        if (isOn) next.add(key); else next.delete(key);
-        return next;
-      });
-    };
-    window._onFindPartnerAttempted = function(habitId) {
-      var nowIso = new Date().toISOString();
-      setHabits(function(prev) {
-        return prev.map(function(h) {
-          return h.id === habitId ? Object.assign({}, h, { lastAiMatchAttemptAt: nowIso }) : h;
-        });
-      });
-    };
-    return function() {
-      delete window._onMatchNotifyToggled;
-      delete window._onFindPartnerAttempted;
-    };
-  }, []);
   // ★ 新增（2026-09）：是否收到「找到夥伴」通知信——對應 users.email_match_notifications，
   //   預設 true（舊帳號沒這欄位、或還沒讀到之前，一律視為開啟）。這個開關只影響
   //   check-pending-matches 寄的 match_found email 那一步，in-app 通知不受影響。
@@ -9829,10 +9833,6 @@ function MainApp(_ref16) {
   var [cheerPanelHabitId, setCheerPanelHabitId] = React.useState(null);
   var [visibilityPrompt, setVisibilityPrompt] = React.useState(null); // 建立習慣後詢問是否公開到 Challengers：{ id, tempId, name }
   var [deleteConfirmId, setDeleteConfirmId] = React.useState(null);
-  // ★ 新增（2026-09）：刪除習慣加第二層確認，防止手滑——第一層按下「Delete Habit」
-  //   後不會直接刪除，只是切到第二層更明確的警告畫面，要再按一次才會真的呼叫
-  //   deleteHabit()。Active、Completed Challenges 兩邊的刪除按鈕共用同一個流程。
-  var [deleteConfirmStep2, setDeleteConfirmStep2] = React.useState(false);
   var [todayPick, setTodayPick] = React.useState(null);
   // 🧪TEST MODE：僅下列測試帳號 (s1002506 / andytestlih) 略過解鎖門檻，
   // 其他真實使用者完全不受影響。測試完畢後請刪除這兩行，
@@ -10171,17 +10171,73 @@ function MainApp(_ref16) {
     }).catch(function(){});
   }, [user, isFirebaseConfigured]);
 
+  // ── Load + daily-login credit logic ─────────────────────────────────────
+  var loadMatchingCredits = React.useCallback(function() {
+    if (!isFirebaseConfigured || !user) return;
+    db.collection('matching_credits').where('userId', '==', user.uid).get().then(function(snap) {
+      var credits = {};
+      snap.docs.forEach(function(d) { credits[d.data().habitId] = d.data().credits || 0; });
+      setMatchingCredits(credits);
+    }).catch(function(){});
+  }, [user, isFirebaseConfigured]);
+
+  var awardDailyLoginCredit = React.useCallback(function() {
+    if (!isFirebaseConfigured || !user) return;
+    var todayKey = toISODay();
+    // For each completed habit that has no active partner, award +1 if not awarded today
+    habits.forEach(function(h) {
+      var _nc = (h.checkedDates||[]).map(function(d){
+        if(/\d{4}-\d{2}-\d{2}/.test(d)) return d;
+        var p = new Date(d); return isNaN(p)?null:toISODay(p);
+      }).filter(Boolean);
+      var isCompleted = new Set(_nc).size >= CHALLENGE_COMPLETE_DAYS;
+      if (!isCompleted) return;
+      // Check if already awarded today
+      db.collection('matching_credits')
+        .where('userId','==',user.uid)
+        .where('habitId','==',h.id)
+        .limit(1).get().then(function(snap) {
+          var MAX_CREDITS_PER_HABIT = 10;
+          // Check if this habit already has an active partner — if so, skip awarding
+          var hasActivePartner = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs))
+            ? window._myPairs.some(function(p) {
+                return (p.habit_id === h.id || p.partner_habit_id === h.id) && p.status === 'active';
+              })
+            : false;
+          if (hasActivePartner) return; // already paired — no more credits needed
+
+          if (snap.empty) {
+            // First time: award 10 credits for completing challenge
+            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: MAX_CREDITS_PER_HABIT, lastAwardDate: todayKey });
+            setMatchingCredits(function(prev){ var n={}; n[h.id]=MAX_CREDITS_PER_HABIT; return Object.assign({},prev,n); });
+          } else {
+            var doc = snap.docs[0];
+            var data = doc.data();
+            if (data.lastAwardDate !== todayKey) {
+              var currentCredits = data.credits || 0;
+              // Cap at MAX_CREDITS_PER_HABIT — prevent unlimited accumulation from idle users
+              if (currentCredits >= MAX_CREDITS_PER_HABIT) return;
+              var newCredits = currentCredits + 1;
+              doc.ref.update({ credits: newCredits, lastAwardDate: todayKey });
+              setMatchingCredits(function(prev){ var n={}; n[h.id]=newCredits; return Object.assign({},prev,n); });
+            }
+          }
+        }).catch(function(){});
+    });
+  }, [user, isFirebaseConfigured, habits]);
+
   useEffect(function() {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
       loadChallengers(); loadMyHabitCheers(); loadMySentCheers();
     }
     if (activeTab === 'home') {
       loadMyHabitCheers();
-      // ★ 修正（match-partner v11）：原本這裡呼叫的 loadMatchingCredits() /
-      //   awardDailyLoginCredit()（完成挑戰發 10 點錢包）/ loadMatchCallsToday()
-      //   （全域每天 10 次的顯示數字）都拿掉了，整套 AI Credit 概念不存在了。
-      //   唯一還需要另外查的是「哪些習慣正在等背景排程通知」。
-      loadWaitingMatchNotifications();
+      loadMatchingCredits();
+      awardDailyLoginCredit();
+      // ★ 新增：AI Search Credits widget 從 Habit History 搬到 Home 頁後，
+      //   原本只有點「Habit History」按鈕才會呼叫的 loadMatchCallsToday()
+      //   要在 Home 頁本身載入時就叫一次，widget 才有數字可以顯示。
+      loadMatchCallsToday();
     }
     // Load cheer stats when profile tab is opened
     if (activeTab === 'profile') {
@@ -10359,17 +10415,17 @@ function MainApp(_ref16) {
       intervalDays = _ref19.intervalDays;
     var _today0 = toISODay();
     var _today0str = _today0;
-    // ★ 修正（2026-09）：3 個名額現在算「日期範圍還沒到期」的全部習慣（進行中 +
-    //   已完成挑戰但未到期），不再是「打卡天數 < 21 天」——完成挑戰不再自動讓出
-    //   名額，因為 Completed Challenges 現在也保留 Find Partner，這個名額要跟
-    //   Find Partner 的每日冷卻額度綁在一起，才能維持「最多 3 個」的燒錢上限。
-    //   要騰出名額，使用者要手動刪除已完成的習慣，或等它日期範圍到期進 History。
     var _activeCount0 = habits.filter(function(h){
       var e=parseTimeRange(h.timeRange).end;
-      return !e||e>=_today0str;
+      if (!e||e>=_today0str) {
+        // only count as active if NOT completed (checkedDates < CHALLENGE_COMPLETE_DAYS)
+        var _nc = (h.checkedDates||[]).map(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
+        return new Set(_nc).size < CHALLENGE_COMPLETE_DAYS;
+      }
+      return false;
     }).length;
     if (_activeCount0 >= 3) {
-      alert('You can have at most 3 habits at a time (in progress or completed). Delete a completed challenge to free up a slot!');
+      alert('You can have at most 3 active habits at a time. Complete a 21-day challenge to free up a slot!');
       return;
     }
     var habit = {
@@ -11971,7 +12027,9 @@ function MainApp(_ref16) {
     archivedHabits: archivedHabits,
     percentile: percentile,
     user: user,
-    waitingMatchHabitIds: waitingMatchHabitIds,
+    matchingCredits: matchingCredits,
+    matchCallsUsedToday: matchCallsUsedToday,
+    matchDailyLimit: MATCH_DAILY_LIMIT,
     onBack: function onBack() {
       return setShowHistory(false);
     }
@@ -12018,9 +12076,9 @@ function MainApp(_ref16) {
     return /*#__PURE__*/React.createElement("div", null,
       // ★ 修正（2026-09）：手機版 Home 頁最上方的黑卡「AI Search Credits」拿掉——
       //   跟下面的習慣清單風格反差太大、一打開 App 就先看到一個跟打卡無關的區塊。
-      //   （2026-09 後續：match-partner v11 整套 AI Credit 概念退休後，這個
-      //   widget 原本移去的 Profile 頁三格統計中間格、跟桌面版 DesktopHomeSidebar
-      //   那份，也都一併拿掉了，見 renderProfile() 跟 DesktopHomeSidebar。）
+      //   這個 widget 原本的資料（matchCallsUsedToday / MATCH_DAILY_LIMIT）現在改顯示
+      //   在 Profile 頁三格統計的中間格（取代原本幾乎都是 0、資訊量最低的 Posts），
+      //   見下面 renderProfile()。桌面版 DesktopHomeSidebar 那份 widget維持不變。
       habits.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
@@ -12041,31 +12099,27 @@ function MainApp(_ref16) {
         textTransform: 'uppercase',
         letterSpacing: .8
       }
-      /* ★ 修正（2026-09）：這個「X / 3」現在算「日期範圍還沒到期」的全部習慣（進行中
-         + 已完成挑戰但未到期），不再只算進行中的——完成挑戰不再自動讓出名額，見
-         addHabit() 開頭的說明。跟下面 allActive 是同一套算法，這裡沒辦法直接共用
-         那個變數（在另一個 IIFE 裡），所以重算一次。 */
-    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=t; }).length; })(), " / 3")), (function(){
+    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; if(!e||e>=t){ var nc=(h.checkedDates||[]).filter(Boolean); return new Set(nc).size < CHALLENGE_COMPLETE_DAYS; } return false; }).length; })(), " / 3 active")), (function(){
       var _today = toISODay();
-      // ★ 修正（2026-09）：Active / Completed Challenges 完全改成看日期範圍，不再看
-      //   有沒有打滿 21 天打卡——日期還沒到 = Active，日期已經到 = Completed
-      //   Challenges（不管打卡天數有沒有達標）。打卡天數只影響卡片上的徽章文字跟
-      //   Find Partner 解鎖門檻，不影響歸類。這兩個 bucket 加起來就是 habits 表
-      //   裡使用者還沒手動刪除的全部習慣（最多 3 個），日期到了也不會自動搬走。
-      var inProgressHabits = habits.filter(function(h) {
+      // Split habits: in-progress vs completed (>= CHALLENGE_COMPLETE_DAYS checkedDates)
+      var allActive = habits.filter(function(h) {
         var _end = parseTimeRange(h.timeRange).end;
         return !_end || _end >= _today;
       });
+      var inProgressHabits = allActive.filter(function(h) {
+        var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
+        return new Set(_nc).size < CHALLENGE_COMPLETE_DAYS;
+      });
       var completedHabits = habits.filter(function(h) {
-        var _end = parseTimeRange(h.timeRange).end;
-        return _end && _end < _today;
+        var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
+        return new Set(_nc).size >= CHALLENGE_COMPLETE_DAYS;
       });
       return React.createElement(React.Fragment, null,
         inProgressHabits.length === 0 && completedHabits.length === 0 ? React.createElement("div", { className: "empty-state" },
           React.createElement(HomeIcon, null), React.createElement("h3", null, "No habits yet"), React.createElement("p", null, "Tap + Create your first habit")
         ) : null,
         inProgressHabits.length > 0 && React.createElement(React.Fragment, null,
-          React.createElement("div", { className: "completed-section-label" }, "Active"),
+          React.createElement("div", { className: "completed-section-label" }, "Active (" + inProgressHabits.length + " / 3)"),
           inProgressHabits.map(function (habit) {
       var todayKey = currentDay;
       var progPct = calcCompletionRate(habit);
@@ -12111,7 +12165,7 @@ function MainApp(_ref16) {
       React.createElement("button", {
         className: "habit-card-x",
         "aria-label": "Delete habit",
-        onClick: function(e) { e.stopPropagation(); setDeleteConfirmStep2(false); setDeleteConfirmId(habit.id); }
+        onClick: function(e) { e.stopPropagation(); setDeleteConfirmId(habit.id); }
       }, React.createElement("svg", { viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:2.2, strokeLinecap:"round", strokeLinejoin:"round" },
         React.createElement("path", { d:"M18 6L6 18M6 6l12 12" })
       )),
@@ -12179,15 +12233,10 @@ function MainApp(_ref16) {
               React.createElement("div", { className: "unlock-progress-fill", style:{ width: unlockPct + "%" } })
             )
           ),
-          isQualified && (function() {
-            var _fpsActive = getFindPartnerState(habit, waitingMatchHabitIds);
-            return React.createElement("button", {
-              className: "find-partner-btn",
-              disabled: _fpsActive.disabled,
-              style: _fpsActive.disabled ? { opacity:.4, cursor:'default' } : null,
-              onClick: function(e) { e.stopPropagation(); if (!_fpsActive.disabled) window.openMatchingModal(habit); }
-            }, _fpsActive.label ? _fpsActive.label : "+ Find Partner");
-          })()
+          isQualified && React.createElement("button", {
+            className: "find-partner-btn",
+            onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
+          }, "+ Find Partner")
         ),
         /* right side: cheer bar（顯示收到的鼓勵）— 僅當習慣公開時顯示；選擇 private 則隱藏 */
         /* ★ 點擊開啟 CheerDetailPanel——手機版程式碼裡這個面板本來就有寫，只是從未接上觸發點 */
@@ -12282,34 +12331,11 @@ function MainApp(_ref16) {
         ), // end inProgressHabits section
         /* ── COMPLETED CHALLENGES SECTION ── */
         completedHabits.length > 0 && React.createElement(React.Fragment, null,
-          React.createElement("div", { className: "completed-section-label" }, "✓ Completed Challenges"),
+          React.createElement("div", { className: "completed-section-label" }, "✓ Completed Challenges (" + completedHabits.length + ")"),
           completedHabits.map(function(habit) {
             var _catCol2 = getCatColours(habit.category);
             var habitCheerData2 = habitCheers[habit.id] || null;
-            // ★ 修正（2026-09）：這區塊不再有任何 21 天門檻（徽章也拿掉了）——Find Partner
-            //   解鎖統一只看 7 天（PARTNER_UNLOCK_DAYS），算法跟 Active 卡片同一套「累計
-            //   打卡天數」（checkedDates ∪ todayCounts≥1 聯集去重，不要求連續）。沒打滿
-            //   7 天的話，日期到了也不會有 Find Partner——反正沒解鎖過，本來就不可能配對
-            //   到夥伴。
-            var _nc21c = (habit.checkedDates || []).map(function(d) {
-              if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-              var p = new Date(d); return isNaN(p) ? null : toISODay(p);
-            }).filter(Boolean);
-            var _unlockDaysC = new Set(_nc21c);
-            var _tcC = habit.todayCounts || {};
-            Object.keys(_tcC).forEach(function(dayKey) {
-              if ((_tcC[dayKey] || 0) >= 1) {
-                var _normC = /^\d{4}-\d{2}-\d{2}$/.test(dayKey)
-                  ? dayKey
-                  : (function(){ var p = new Date(dayKey); return isNaN(p) ? null : toISODay(p); })();
-                if (_normC) _unlockDaysC.add(_normC);
-              }
-            });
-            var _isUnlockedC = _unlockDaysC.size >= PARTNER_UNLOCK_DAYS;
-            // 現在「最多 3 個」名額改成算「日期範圍還沒到期」的全部習慣（進行中 +
-            //   已完成），完成挑戰不再自動讓出名額，所以這裡的 Find Partner 一樣受
-            //   同一套 3 個名額 + 每日冷卻管制，燒錢風險跟進行中習慣一樣有界。
-            var _fpsCompleted = _isUnlockedC ? getFindPartnerState(habit, waitingMatchHabitIds) : null;
+            var credits = matchingCredits[habit.id] || 0;
             // Find active pair for this habit
             // We use pairs from Buddies tab — check window._myPairs if available
             var _activePair = null;
@@ -12326,22 +12352,11 @@ function MainApp(_ref16) {
             }
             return React.createElement("div", { key: habit.id, className: "habit-card", onClick: function(){ setSelectedHabit(habit.id); } },
               React.createElement("div", { className: "habit-card-accent" }),
-              /* ── 右上角刪除 X（點擊跳確認視窗）──★ 新增（2026-09）：Completed Challenges
-                 之前完全沒有刪除入口，習慣打滿 21 天後不再自動讓出「最多 3 個」的名額，
-                 使用者要騰出空間做新挑戰，只能靠這顆按鈕手動刪除——跟進行中卡片的刪除
-                 邏輯共用同一個 setDeleteConfirmId/deleteHabit，行為完全一致 */
-              React.createElement("button", {
-                className: "habit-card-x",
-                "aria-label": "Delete habit",
-                onClick: function(e) { e.stopPropagation(); setDeleteConfirmStep2(false); setDeleteConfirmId(habit.id); }
-              }, React.createElement("svg", { viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:2.2, strokeLinecap:"round", strokeLinejoin:"round" },
-                React.createElement("path", { d:"M18 6L6 18M6 6l12 12" })
-              )),
               React.createElement("div", { className: "habit-card-body" },
-                /* title — ★ 修正（2026-09）：拿掉「✓ 21 days / Challenge ended」徽章，這區塊
-                   不再有任何 21 天門檻，Find Partner 解鎖統一只看 7 天（PARTNER_UNLOCK_DAYS） */
+                /* title + done badge */
                 React.createElement("div", { className: "habit-title", style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
-                  habit.name
+                  habit.name,
+                  React.createElement("span", { className: "completed-done-badge" }, "✓ 21 days")
                 ),
                 React.createElement("div", { className: "habit-meta", style:{ marginTop:6 } },
                   React.createElement("span", { className: "habit-category", style:{ background:_catCol2.bg, color:_catCol2.text, borderColor:_catCol2.bd } },
@@ -12384,38 +12399,30 @@ function MainApp(_ref16) {
                         )
                       ),
                       React.createElement("div", { className: "ended-footer" },
-                        _fpsCompleted.label && React.createElement("div", { className: "credit-pill" },
-                          React.createElement("span", { className: "credit-pill-txt" }, _fpsCompleted.label)
+                        React.createElement("div", { className: "credit-pill" },
+                          React.createElement("span", { className: "credit-pill-num" }, credits),
+                          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
                         ),
-                        React.createElement("button", {
-                          className: "seek-find-btn", disabled: _fpsCompleted.disabled,
-                          style: _fpsCompleted.disabled ? { opacity:.4, cursor:'default' } : null,
-                          onClick: function(e){ e.stopPropagation(); if (!_fpsCompleted.disabled) window.openMatchingModal(habit); }
-                        }, "Find New Partner")
+                        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ e.stopPropagation(); window.openMatchingModal(habit); } }, "Find New Partner")
                       )
                     )
-                  : _isUnlockedC
-                  ? /* No partner yet — seeking（沒解鎖過 7 天就不會走到這裡，見上面 _isUnlockedC）*/
+                  : /* No partner yet — seeking */
                     React.createElement("div", { className: "seek-block", onClick: function(e){ e.stopPropagation(); } },
                       React.createElement("div", { className: "seek-top" },
                         React.createElement("div", { className: "seek-icon" }, "🔍"),
                         React.createElement("div", null,
                           React.createElement("div", { className: "seek-title" }, "Looking for your accountability partner"),
-                          React.createElement("div", { className: "seek-sub" }, "Search once a day until you find the right fit")
+                          React.createElement("div", { className: "seek-sub" }, "Log in daily to earn +1 credit and keep searching")
                         )
                       ),
                       React.createElement("div", { className: "seek-footer" },
-                        _fpsCompleted.label && React.createElement("div", { className: "credit-pill" },
-                          React.createElement("span", { className: "credit-pill-txt" }, _fpsCompleted.label)
+                        React.createElement("div", { className: "credit-pill" },
+                          React.createElement("span", { className: "credit-pill-num" }, credits),
+                          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
                         ),
-                        React.createElement("button", {
-                          className: "seek-find-btn", disabled: _fpsCompleted.disabled,
-                          style: _fpsCompleted.disabled ? { opacity:.4, cursor:'default' } : null,
-                          onClick: function(e){ e.stopPropagation(); if (!_fpsCompleted.disabled) window.openMatchingModal(habit); }
-                        }, "Find Partner")
+                        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ e.stopPropagation(); window.openMatchingModal(habit); } }, "Find Partner")
                       )
                     )
-                  : null
               ),
               /* cheer static — 僅當習慣公開且有收到 cheer 時顯示；選擇 private 則隱藏 */
               habit.challengeVisibility !== 'private' && habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { className: "habit-card-divider" }),
@@ -12840,12 +12847,14 @@ function MainApp(_ref16) {
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Habits")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
-      // ★ 修正（match-partner v11）：這格原本顯示 AI Credits 使用量
-      //   （matchCallsUsedToday/MATCH_DAILY_LIMIT）——整套 AI Credit 概念退休後
-      //   沒有對應的全域數字可以顯示了（現在是每個 habit 各自的每日冷卻），
-      //   改回顯示 Posts（這格在改成 AI Credits 之前本來就是這個）。
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, myPosts.length),
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "Posts")
+      // ★ 修正（2026-09）：這格從「Posts」（幾乎所有人都是 0，資訊量最低）換成
+      //   AI Credits 使用量。原本桌面版維持顯示 Posts（桌面版 AI Credits 已經在
+      //   DesktopHomeSidebar 看得到），但 Andy 要求 Profile 頁也統一顯示 AI credit，
+      //   所以桌面/手機都改成同一份資料，不再區分 isDesktop。
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-value", style: { color: '#3b82c4' } },
+        matchCallsUsedToday != null ? (matchCallsUsedToday + "/" + MATCH_DAILY_LIMIT) : "—"
+      ),
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "AI Searches Today")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, rate, "%"),
@@ -13211,16 +13220,19 @@ function MainApp(_ref16) {
       }
     }, "Cancel")))));
   };
-  /* ★ 桌面版頂欄「+ New habit」按鈕共用邏輯，跟手機版浮動按鈕的 3 個上限檢查一致──
-     算法同步改成「日期範圍還沒到期」的全部習慣數，見 addHabit() 開頭的說明 */
+  /* ★ 桌面版頂欄「+ New habit」按鈕共用邏輯，跟手機版浮動按鈕的 3 個上限檢查一致 */
   function handleAddHabitClick() {
     var _todayChk = toISODay();
     var _activeCnt = habits.filter(function(h){
       var e=parseTimeRange(h.timeRange).end;
-      return !e||e>=_todayChk;
+      if(!e||e>=_todayChk){
+        var _nc2=(h.checkedDates||[]).map(function(d){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;var p=new Date(d);return isNaN(p)?null:toISODay(p);}).filter(Boolean);
+        return new Set(_nc2).size < CHALLENGE_COMPLETE_DAYS;
+      }
+      return false;
     }).length;
     if (_activeCnt >= 3) {
-      alert('You can have at most 3 habits at a time (in progress or completed). Delete a completed challenge to free up a slot!');
+      alert('Max 3 active habits. Complete a 21-day challenge to free up a slot!');
       return;
     }
     setShowModal(true);
@@ -13229,7 +13241,8 @@ function MainApp(_ref16) {
     className: isDesktop ? "desktop-content" : "content"
   }, activeTab === 'home' && (isDesktop && !selectedHabit
     ? /*#__PURE__*/React.createElement("div", { className: "desktop-home-grid" }, renderHome(), /*#__PURE__*/React.createElement(DesktopHomeSidebar, {
-        habits: habits, archivedHabits: archivedHabits
+        habits: habits, archivedHabits: archivedHabits,
+        matchCallsUsedToday: matchCallsUsedToday, matchDailyLimit: MATCH_DAILY_LIMIT
       }))
     : renderHome()
   ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits, isDesktop: isDesktop }),
@@ -13305,8 +13318,8 @@ function MainApp(_ref16) {
     /*#__PURE__*/React.createElement("div", { className: "vis-modal-hint" }, "Private habits stay off the Challengers list \u2014 only you can see them.")
   )),
 
-  /* ── 刪除習慣確認視窗（兩層，防止手滑）── */
-  deleteConfirmId && !deleteConfirmStep2 && /*#__PURE__*/React.createElement("div", {
+  /* ── 刪除習慣確認視窗 ── */
+  deleteConfirmId && /*#__PURE__*/React.createElement("div", {
     className: "danger-modal",
     onClick: function(e) { if (e.target === e.currentTarget) setDeleteConfirmId(null); }
   }, /*#__PURE__*/React.createElement("div", {
@@ -13324,33 +13337,11 @@ function MainApp(_ref16) {
     ),
     /*#__PURE__*/React.createElement("button", {
       className: "danger-confirm-btn",
-      onClick: function() { setDeleteConfirmStep2(true); }
+      onClick: function() { var _id = deleteConfirmId; setDeleteConfirmId(null); deleteHabit(_id); }
     }, "Delete Habit"),
     /*#__PURE__*/React.createElement("button", {
       className: "danger-cancel-btn",
       onClick: function() { setDeleteConfirmId(null); }
-    }, "Cancel")
-  )),
-  /* ── 第二層：再問一次，才是真的刪除（★ 新增，2026-09） ── */
-  deleteConfirmId && deleteConfirmStep2 && /*#__PURE__*/React.createElement("div", {
-    className: "danger-modal",
-    onClick: function(e) { if (e.target === e.currentTarget) { setDeleteConfirmId(null); setDeleteConfirmStep2(false); } }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "danger-modal-box"
-  },
-    /*#__PURE__*/React.createElement("div", { className: "danger-modal-title" }, "\u26A0\uFE0F Are you sure?"),
-    /*#__PURE__*/React.createElement("div", { className: "danger-modal-body" },
-      "This is your last chance to back out. Deleting ",
-      /*#__PURE__*/React.createElement("strong", null, (function(){ var h = habits.find(function(x){ return x.id === deleteConfirmId; }); return h ? ('\u201C' + h.name + '\u201D') : 'this habit'; })()),
-      " is permanent and cannot be undone."
-    ),
-    /*#__PURE__*/React.createElement("button", {
-      className: "danger-confirm-btn",
-      onClick: function() { var _id = deleteConfirmId; setDeleteConfirmId(null); setDeleteConfirmStep2(false); deleteHabit(_id); }
-    }, "Yes, Delete It"),
-    /*#__PURE__*/React.createElement("button", {
-      className: "danger-cancel-btn",
-      onClick: function() { setDeleteConfirmId(null); setDeleteConfirmStep2(false); }
     }, "Cancel")
   )),
 
@@ -13374,14 +13365,17 @@ function MainApp(_ref16) {
       opacity: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? 0.4 : 1; })()
     },
     onClick: function onClick() {
-      // 算法同步改成「日期範圍還沒到期」的全部習慣數，見 addHabit() 開頭的說明
       var _todayChk = toISODay();
       var _activeCnt = habits.filter(function(h){
         var e=parseTimeRange(h.timeRange).end;
-        return !e||e>=_todayChk;
+        if(!e||e>=_todayChk){
+          var _nc2=(h.checkedDates||[]).map(function(d){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;var p=new Date(d);return isNaN(p)?null:toISODay(p);}).filter(Boolean);
+          return new Set(_nc2).size < CHALLENGE_COMPLETE_DAYS;
+        }
+        return false;
       }).length;
       if (_activeCnt >= 3) {
-        alert('You can have at most 3 habits at a time (in progress or completed). Delete a completed challenge to free up a slot!');
+        alert('Max 3 active habits. Complete a 21-day challenge to free up a slot!');
         return;
       }
       setShowModal(true);
@@ -15994,7 +15988,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           <div class="match-cell"><div class="match-cell-lbl">Avg Duration</div><div class="match-cell-val" id="mAvgDur">—</div><div class="match-cell-sub">min / session</div></div>
           <div class="match-cell"><div class="match-cell-lbl">Habit Lifespan</div><div class="match-cell-val" id="mLifespan">—</div><div class="match-cell-sub">days avg</div></div>
           <div class="match-cell"><div class="match-cell-lbl">Mind-Body</div><div class="match-cell-val" id="mMindBody" style="font-size:13px;">—</div><div class="match-cell-sub">balance</div></div>
-          <div class="match-cell"><div class="match-cell-lbl">Category</div><div class="match-cell-val" id="mCategory" style="font-size:13px;">—</div><div class="match-cell-sub">habit type</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Remaining</div><div class="match-cell-val" id="mRemaining">3</div><div class="match-cell-sub">matches today</div></div>
         </div>
         <div id="matchingProgRows">
           <div class="prog-row"><div class="prog-lbl">Avg Duration</div><div class="prog-track"><div class="prog-fill" id="prog1" style="width:0%"></div></div><div class="prog-val" id="progVal1">—</div></div>
@@ -16017,6 +16011,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       <div style="height:1px;background:#1a1a1a;"></div>
       <div style="padding:10px 16px 4px;display:flex;align-items:center;justify-content:space-between;">
         <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;" id="matchResultsLabel">Your best match</div>
+        <div style="font-size:9px;color:#3d3d3d;" id="mRemainingLabel"><span id="mRemaining">—</span> credits left today</div>
       </div>
       <div id="matchResultsList" style="padding:0 10px 10px;"></div>
       <!-- ★ 這裡原本還有一個靜態的 Notify toggle（id="matchNotifyRow"），
@@ -16475,13 +16470,37 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   // ── 直接進入配對（年齡/性別偏好 modal 已移除，這裡取代原本的 _startMatchingWithPrefs）──
   function _proceedToMatching(habit) {
     if (!habit) return;
-    // ★ 修正（match-partner v11）：matching_credits 那套「完成挑戰發 10 點
-    //   錢包、每次顯示結果扣 1 點」的機制整套退休了，改成後端 habits.
-    //   last_ai_match_attempt_at 的每日冷卻（見 match-partner 跟 callMatchPartner()
-    //   裡的 window._onFindPartnerAttempted 樂觀更新）。真正擋濫用的門檻一樣
-    //   在後端，這裡不用再處理任何錢包相關邏輯。
+
+    // ★ 修正：credit 不再「按下 Find Partner 就先扣」，改成只有在真的
+    //   秀出配對結果（showMatchingResults）當下才扣。
+    //   原因：舊邏輯在這裡就無條件扣 1 點，但這時候根本還沒呼叫
+    //   match-partner，也不知道結果是找到人、noMatch、還是整個 API 出錯——
+    //   等於使用者「找不到對象」也照樣被扣一次，錢包數字跟實際使用感受對不上。
+    //   實際防濫用的門檻本來就是後端 habit_ai_usage（DAILY_LIMIT=10，這個才是
+    //   真的擋 Claude 呼叫次數的地方），這裡的 matching_credits 只是給使用者看
+    //   的「錢包」數字，所以改成有找到才扣，對後端額度沒有任何影響。
+    //   實際扣點呼叫見下面新增的 _deductMatchingCredit()，呼叫點在
+    //   callMatchPartner() 裡「真的要顯示配對結果」的兩個地方（AI 配對成功 /
+    //   fallback 演算法配對成功），noMatch、429、403、AI 完全找不到人都不會扣。
+
     _openScanningModal(habit);
     callMatchPartner(habit); // ★ 真正發送配對請求的唯一入口
+  }
+
+  // ── 扣 1 點 matching credit：只在「確定要把配對結果卡片秀給使用者看」的
+  //   那一刻呼叫，而不是一按 Find Partner 就扣。──────────────────────────
+  function _deductMatchingCredit(habit) {
+    if (!habit || !window._supabaseClient || !window._currentUser) return;
+    var _uid = window._currentUser.uid;
+    window._supabaseClient.from('matching_credits')
+      .select('*').eq('userId', _uid).eq('habitId', habit.id).limit(1).single()
+      .then(function(r) {
+        if (r.data && r.data.credits > 0) {
+          window._supabaseClient.from('matching_credits')
+            .update({ credits: r.data.credits - 1 })
+            .eq('id', r.data.id).then(function(){});
+        }
+      }).catch(function(){});
   }
 
   // ── Helper: get already-paired user IDs (to exclude from results) ────────
@@ -16721,16 +16740,16 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.log('[MatchDebug] fallback: candidate unlock days=7 (per-candidate bypass) | myChecked=', myChecked, '| candidates before day-filter=', candidates.length, '| scored after filter=', scored.length); // 🧪TEST MODE 診斷log
       if (scored.length === 0) throw new Error('No valid candidates (可能是候選人打卡天數 < 7 天且非白名單，或 mind-body/duration 資料不足)');
 
-      // ★ 修正（2026-09，改成單一配對）：Find Partner 不再一次給到 5 位讓使用者
-      //   自己滑卡片挑，只回傳分數最高的 1 位——跟 match-partner 那邊的邏輯
-      //   （見 index.html 這次的相關修改說明）保持一致。
+      // 客戶端 fallback 演算法一樣最多給 5 位（分數排序後取前 5），
+      // 跟 match-partner v10 走 Claude 評分時的候選人數量一致，讓使用者
+      // 不管是走 AI 評分還是走 fallback，體驗都是同一套 Prev/Next 滑卡片瀏覽。
       scored.sort(function(a, b) { return b.score - a.score; });
-      var topMatch = scored.slice(0, 1).map(function(m) {
+      var topMatches = scored.slice(0, 5).map(function(m) {
         m._isFallback = true;
         m.reason = 'Matched by same activity type, with similar duration (' + m.breakdown.activityFit + '%), check-in rhythm (' + m.breakdown.rhythmScore + '%), mind-body alignment, and consistency.';
         return m;
       });
-      return topMatch;
+      return topMatches;
     } catch(e) {
       throw e;
     }
@@ -16758,11 +16777,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('mLifespan').textContent = lifespan !== null ? lifespan : '—';
 
     document.getElementById('mMindBody').textContent = '...';
-    // ★ 修正（match-partner v11）：這格原本是「Remaining / matches today」——
-    //   AI Credit 整套拿掉後改顯示 habit 分類，純粹是掃描動畫的裝飾性資訊，
-    //   跟 mAvgDur/mLifespan 一樣一開始就有值可以顯示，不用等 API 回應。
-    var mCategoryEl = document.getElementById('mCategory');
-    if (mCategoryEl) mCategoryEl.textContent = habit.category || '—';
     document.getElementById('matchingStatusText').textContent = 'Searching users...';
     document.getElementById('matchNote').textContent = 'Claude is analysing your habit duration, lifespan, mind-body balance and rhythm stability to find your best match.';
 
@@ -16836,17 +16850,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.log('[MatchDebug] match-partner status=', res.status, 'body=', data); // 🧪TEST MODE 診斷log，確認完可刪除
 
       if (!res.ok) {
-        if (res.status === 429 && data.error === 'cooldown_active') {
-          // ★ 修正（match-partner v11）：DAILY_LIMIT/habit_ai_usage 那套全域
-          //   額度拿掉了，429 現在只會是「這個 habit 今天已經按過」的每日冷卻。
-          showMatchingError('Search again tomorrow ⏳', data.message || 'You’ve already searched for a partner on this habit today. Try again tomorrow.');
+        if (res.status === 429) {
+          showMatchingError('Daily limit reached', data.message || 'You have used all 10 matches for today. Try again tomorrow.');
         } else if (res.status === 403 && data.error === 'not_qualified') {
           // 伺服器端 7 天門檻擋下 → 顯示原因，絕不降級走程式碼配對（否則門檻會被繞過）
           showMatchingError('Not unlocked yet 🔒', data.message || 'This habit needs more check-in days before partner matching unlocks.');
-        } else if (res.status === 429) {
-          // 保留一個保守的 fallback 文案，避免以後後端又新增其他 429 情況時，
-          // 前端完全沒有對應文字可以顯示（雖然目前只剩 cooldown_active 這一種）。
-          showMatchingError('Please try again later', data.message || 'Please try again in a little while.');
         } else {
           // 503 = Claude 掛掉 → 走程式碼配對
           throw new Error('API_ERROR');
@@ -16861,24 +16869,22 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           data.reason || 'No suitable partner found right now. Try again later.',
           true // ★ 真的沒有候選人 → 顯示「有新對象再通知我」選項
         );
-        // ★ 修正（match-partner v11）：這是一次「真的跑了」的請求（後端已經
-        //   把 habits.last_ai_match_attempt_at 蓋成現在），樂觀更新這個 habit
-        //   的前端狀態，讓卡片上的按鈕立刻反映「今天已經按過」，不用等重新整理。
-        window._onFindPartnerAttempted && window._onFindPartnerAttempted(habit.id);
+        document.getElementById('mRemaining').textContent =
+          data.remaining !== undefined ? data.remaining : '—';
         return;
       }
 
       // Filter out already-paired users from AI result just in case
-      // ★ 修正（match-partner v11）：match-partner 現在本身就只回傳 1 位分數
-      //   最高的候選人了（見那支函式的 changelog），這裡的 .slice(0, 1) 純粹是
-      //   保險，不是真正在做篩選。
+      // match-partner v10 回傳最多 5 位候選人（pickDiverseResults 的 3+2 分桶
+      // 結果），這裡最多留 5 位讓使用者用 Prev/Next 滑卡片瀏覽挑選。
       var matches = (data.matches || (data.match ? [data.match] : [])).filter(function(m) {
         return m && !alreadyPaired.has(m.userId);
-      }).slice(0, 1);
+      }).slice(0, 5);
 
       if (matches.length === 0) throw new Error('AI returned no valid candidates');
 
-      window._onFindPartnerAttempted && window._onFindPartnerAttempted(habit.id); // ★ 同上，真的找到人了，一樣要樂觀更新冷卻狀態
+      document.getElementById('mRemaining').textContent = data.remaining !== undefined ? data.remaining : '—';
+      _deductMatchingCredit(habit); // ★ 確定有結果要秀出來了，這裡才扣 1 點
       showMatchingResults(matches);
 
     } catch(err) {
@@ -16891,10 +16897,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         document.getElementById('matchingStatusText').textContent = 'Switching to algorithm match...';
         try {
           var fbMatches = await runFallbackMatch(habit);
-          // ★ fallback 演算法配對沒有真的打到 match-partner，後端不會記錄冷卻——
-          //   這裡樂觀更新純粹是為了跟「按下去有結果」的體驗一致，跟真正的
-          //   AI 配對一樣算用掉今天這一次，避免使用者馬上又點一次重複觸發。
-          window._onFindPartnerAttempted && window._onFindPartnerAttempted(habit.id);
+          _deductMatchingCredit(habit); // ★ fallback 演算法配對也是「有結果」，同樣算一次
           showMatchingResults(fbMatches);
         } catch(fbErr) {
           console.log('[MatchDebug] runFallbackMatch failed:', fbErr.message); // 🧪TEST MODE 診斷log
@@ -16919,12 +16922,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     {bg:'#1a1200',fg:'#e8c040',border:'#8a7010'}
   ];
 
-  // ★ 修正（2026-09，改成單一配對）：Find Partner 現在只回傳 1 位最佳候選人，
-  //   不再是最多 5 位讓使用者滑卡片挑選——原本這裡「候選人沒湊滿 5 位就自動
-  //   打開背景補位」的機制（_topUpEnabled 那一整段）已經沒有意義：湊滿 1 位
-  //   就已經是「完整結果」了，沒有「還差幾位」這回事，整段拿掉。
-  //   背景「有新對象再通知我」的功能還在——只是現在只用在「一位候選人都還
-  //   沒有」的情境（見 showMatchingError 的 notifyOption 參數），不是這裡。
+  // ── Find Partner 最多回傳 5 位候選人（match-partner v10 的 3+2 分桶結果），
+  //   讓使用者用 Prev/Next 滑卡片瀏覽、挑一位喜歡的送出邀請。
   function showMatchingResults(matches) {
     document.getElementById('matchingScanning').style.display = 'none';
     document.getElementById('matchingResult').style.display = '';
@@ -16936,14 +16935,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     _matchSending = false;
 
     var _label = document.getElementById('matchResultsLabel');
-    if (_label) _label.textContent = 'Your best match';
+    if (_label) _label.textContent = matches.length > 1 ? ('Your top ' + matches.length + ' matches') : 'Your best match';
 
     _renderMatchCard();
   }
 
   function _renderMatchCard() {
     var container = document.getElementById('matchResultsList');
-    var idx = 0; // ★ 修正（2026-09，改成單一配對）：只會有 1 位候選人，不再需要 idx 遊走多張卡片
+    var idx = _matchCardIdx;
     var m = _matchCards[idx];
     var av = _avStyles[idx % _avStyles.length];
     var initials = (m.displayName || 'U').slice(0, 2).toUpperCase();
@@ -16970,7 +16969,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           (m.avatarUrl ? '<img src="' + m.avatarUrl + '" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()">' : '') +
         '</div>' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:4px;">Best match found</div>' +
+          '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:4px;">' + (_matchCards.length > 1 ? ('Match ' + (idx + 1) + ' of ' + _matchCards.length) : 'Best match found') + '</div>' +
           '<div style="font-size:18px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#fff;line-height:1;font-family:var(--din);">@' + (m.displayName || 'partner') + '</div>' +
           '<div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#555;margin-top:5px;">' + (m.habitName || '—') + '</div>' +
         '</div>' +
@@ -17009,17 +17008,18 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       '</div>' +
 
       // actions
-      // ★ 移除了原本 Send Partner Request 左邊的 X（跳過候選人）按鈕：
-      //   它跟下面的 Next 幾乎做同一件事（切到下一位候選人），唯一差別只在
-      //   最後一張卡片時 X 會關掉整個視窗——但最上面已經有一顆 ✕ 可以關閉整個
-      //   配對視窗了，功能重複，容易讓人搞不清楚兩個 X 差在哪，直接拿掉。
+      // ★ 拿掉了獨立的「X（跳過候選人）」按鈕：它跟 Prev/Next 幾乎做同一件事
+      //   （切到下一/上一位候選人），功能重複，容易讓人搞不清楚差在哪，
+      //   直接用下面的 Prev/Next 取代。只有 1 位候選人時 Prev/Next 不顯示。
       '<div style="padding:12px 16px 16px;display:flex;gap:8px;align-items:center;">' +
+        (_matchCards.length > 1 ?
+          '<button onclick="window._mrcPrev()" ' + (idx === 0 ? 'disabled' : '') + ' aria-label="Previous match" style="width:44px;height:44px;flex-shrink:0;background:#111;color:' + (idx === 0 ? '#333' : '#ccc') + ';border:1px solid #222;border-radius:6px;font-size:16px;cursor:' + (idx === 0 ? 'default' : 'pointer') + ';font-family:inherit;">‹</button>'
+          : '') +
         '<button id="mrcInviteBtn" onclick="window._mrcInviteCard()" ' + ((invited || _matchSending) ? 'disabled' : '') + ' style="flex:1;background:' + (invited ? '#1a2a1a' : '#fff') + ';color:' + (invited ? '#4caf50' : '#0a0a0a') + ';border:' + (invited ? '1px solid #2d4a2d' : 'none') + ';padding:11px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:' + ((invited || _matchSending) ? 'default' : 'pointer') + ';font-family:inherit;opacity:' + (_matchSending && !invited ? '.6' : '1') + ';">' + (invited ? 'Request sent ✓' : (_matchSending ? 'Sending…' : 'Send partner request')) + '</button>' +
+        (_matchCards.length > 1 ?
+          '<button onclick="window._mrcNext()" ' + (idx === _matchCards.length - 1 ? 'disabled' : '') + ' aria-label="Next match" style="width:44px;height:44px;flex-shrink:0;background:#111;color:' + (idx === _matchCards.length - 1 ? '#333' : '#ccc') + ';border:1px solid #222;border-radius:6px;font-size:16px;cursor:' + (idx === _matchCards.length - 1 ? 'default' : 'pointer') + ';font-family:inherit;">›</button>'
+          : '') +
       '</div>';
-      // ★ 修正（2026-09，改成單一配對）：拿掉了 prev/next 卡片導覽（只剩 1 位
-      //   候選人，沒有「下一位」）跟最後一張卡片才出現的「還差幾位、要不要
-      //   打開背景補位通知」區塊——湊到 1 位就已經是完整結果，沒有「還差幾位」
-      //   這回事了。
 
     // store match data for invite
     container._currentMatchData = m;
@@ -17035,8 +17035,18 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     '</div>';
   }
 
-  // ★ 修正（2026-09，改成單一配對）：window._mrcPrev / window._mrcNext 已隨著
-  //   多候選人卡片導覽一起移除，不再需要。
+  window._mrcPrev = function() {
+    if (_matchCardIdx <= 0) return;
+    _matchCardIdx--;
+    _renderMatchCard();
+  };
+
+  window._mrcNext = function() {
+    if (_matchCardIdx >= _matchCards.length - 1) return;
+    _matchCardIdx++;
+    _renderMatchCard();
+  };
+
   // ── Helper：幫任何 promise 加上逾時保護，避免網路/DB 卡住時畫面永遠不動 ──
   function _withTimeout(promise, ms, label) {
     var timeoutId;
@@ -17185,17 +17195,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     var elNameResult = document.getElementById('matchingHabitNameResult');
     if (elNameResult) elNameResult.textContent = habit.name;
 
+    // ★ 這是系統背景排程已經算好、存起來的結果，不是這次使用者按 Find Partner
+    //   才呼叫的，所以不扣 matching credit（那是給「這次真的用掉一次配對」的
+    //   動作用的）——看到這個結果本身不該讓使用者的錢包數字變少。
     // ★ 修正：match_data 可能是舊資料留下的陣列形狀，也可能是單一物件——用
     //   Array.isArray 防呆，兩種形狀都能正確處理，避免陣列包陣列讓畫面壞掉。
     var _preloadedArr = Array.isArray(matchData) ? matchData : [matchData];
     showMatchingResults(_preloadedArr);
-
-    // ★ 新增（match-partner v11）：背景排程找到配對時，後端已經把這個 habit
-    //   的 match_notifications.enabled 關掉、cooldown 也結清了——這裡順手
-    //   樂觀更新一下 React 那邊的「搜尋中」狀態，使用者從信件點進來看到這個
-    //   結果的當下，習慣卡片上的按鈕就能立刻顯示正常狀態，不用等下次切回
-    //   Home 頁重新查一次 match_notifications 才會更新。
-    window._onMatchNotifyToggled && window._onMatchNotifyToggled(habit.id, false);
 
     // 顯示過一次就從資料庫刪掉，避免下次深連結或重新整理又跳出同一筆舊資料。
     if (window._supabaseClient && window._currentUser) {
@@ -17269,10 +17275,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         enabled: isOn,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id,habit_id' }).then(function(){}).catch(function(){});
-      // ★ 新增（match-partner v11）：通知 React 那邊（跟這支 vanilla JS 不是
-      //   同一個世界），讓習慣卡片上的 Find Partner 按鈕立刻反映「搜尋中，
-      //   等通知」的狀態，不用等重新整理、重新打一次 match_notifications。
-      window._onMatchNotifyToggled && window._onMatchNotifyToggled(_currentHabit.id, isOn);
     }
   };
 

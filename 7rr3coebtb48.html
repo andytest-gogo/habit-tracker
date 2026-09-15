@@ -5429,7 +5429,7 @@ var ADMIN_SEND_TEST_EMAIL_FN = SUPABASE_URL + '/functions/v1/admin-send-test-ema
 // 每個模板名稱對應「這個模板可以用哪些 {{變數}}」，純粹顯示用途，
 // 方便你編輯文案時知道有哪些欄位可以插進去；新增模板時記得也在這裡補一筆。
 var EMAIL_TEMPLATE_VARS = {
-  'match_found': ['userName', 'habitName', 'ctaUrl'],
+  'match_found': ['userName', 'habitName', 'ctaUrl', 'matchCount', 'unsubscribeUrl', 'profileSettingsUrl'],
   'partner_left': ['userName', 'leavingUserName', 'habitName', 'ctaUrl'],
   // ★ 新增：手動按 End Partnership 時寄的通知信——雙方帳號都還在，跟
   //   partner_left（對方帳號被刪除）是不同情境，文案也不一樣，見
@@ -5444,7 +5444,7 @@ var EMAIL_TEMPLATE_VARS = {
   'moderation_appeal_denied_deleted': ['userName', 'surfaceLabel', 'categoryLabel', 'contentPreviewHtml', 'ctaUrl'],
 };
 var EMAIL_TEMPLATE_SAMPLE_DATA = {
-  'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
+  'match_found': { userName: 'Andy', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/', matchCount: 1, unsubscribeUrl: 'https://famstreak.com/unsubscribe?token=sample', profileSettingsUrl: 'https://famstreak.com/profile' },
   'partner_left': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
   'partnership_ended': { userName: 'Andy', leavingUserName: 'Jamie', habitName: 'Morning Run', ctaUrl: 'https://famstreak.com/' },
   'moderation_appeal_approved': { userName: 'Andy', surfaceLabel: 'your Community post', ctaUrl: 'https://famstreak.com/' },
