@@ -6851,6 +6851,33 @@ function ClipShareModal(props) {
       maxLength: 300,
       style: { width: '100%', minHeight: 50, fontSize: 12, fontFamily: 'var(--font)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 8, margin: '10px 0', resize: 'vertical', boxSizing: 'border-box' }
     }),
+    // \u2605 \u4fee\u6b63\uff082026-09\uff09\uff1a\u4e0a\u9762 6394 \u884c\u7684\u820a\u8a3b\u89e3\u8aaa\u9019\u88e1\u300c\u5c0d\u8c61\u53ea\u6709 Everyone / Buddies
+    //   only \u5169\u7a2e\u300d\uff0c\u4f46\u5be6\u969b\u4e0a audience/setAudience \u9019\u500b state \u5f9e\u982d\u5230\u5c3e\u6c92\u6709\u88ab\u4efb\u4f55
+    //   UI \u5143\u7d20\u7528\u5230\u904e\u2014\u2014handleSubmit \u9001\u51fa\u7684 clipVisibility \u6c38\u9060\u662f\u521d\u59cb\u503c
+    //   'everyone'\uff0c\u7b49\u65bc\u4f7f\u7528\u8005\u5f9e\u4f86\u6c92\u6709\u6a5f\u6703\u9078\u904e Buddies only\uff0c\u9019\u652f toggle \u672c\u8eab
+    //   \u907a\u5931\u4e86\u3002\u9019\u88e1\u88dc\u56de\u4f86\uff0c\u9078\u9805\u53ea\u6709\u9019\u5169\u500b\uff08\u6c92\u6709 just me\uff09\uff0c\u8ddf\u539f\u672c\u8a2d\u8a08\u610f\u5716\u4e00\u81f4\u3002
+    /*#__PURE__*/React.createElement("div", { style: { marginBottom: 12 } },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6 } }, "Who can see this"),
+      /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 6 } },
+        [
+          { key: 'everyone', label: '\ud83c\udf0d Everyone' },
+          { key: 'buddies', label: '\ud83e\udd1d Buddies only' }
+        ].map(function(opt) {
+          var active = audience === opt.key;
+          return /*#__PURE__*/React.createElement("button", {
+            key: opt.key,
+            type: 'button',
+            onClick: function() { setAudience(opt.key); },
+            style: {
+              flex: 1, fontSize: 11, fontWeight: 700, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+              border: active ? 'none' : '1px solid var(--gray-200)',
+              background: active ? 'var(--black)' : 'var(--white)',
+              color: active ? 'var(--white)' : 'var(--gray-600)'
+            }
+          }, opt.label);
+        })
+      )
+    ),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, background: 'var(--gray-50)', borderRadius: 8, padding: 10, marginBottom: 12 } },
       /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)', lineHeight: 1.5 } },
         "Don't want to show your face? Film your hands, your journal, or your setup instead \u2014 that counts too."
@@ -6994,6 +7021,122 @@ function ClipGridModal(props) {
     viewingPost && /*#__PURE__*/React.createElement(ClipViewerModal, {
       post: viewingPost,
       currentUser: currentUser,
+      onClose: function() { setViewingPost(null); }
+    })
+  ));
+}
+
+// ── Buddy Album：一對配對成功的夥伴，把「雙方」在各自對應的習慣底下貼過的
+//   所有 clip 收進同一個 grid wall，跟 ClipGridModal（單人、只看自己全部
+//   clip 用）是不同情境——這裡永遠鎖定這一組配對的兩個人，不會混進其他
+//   使用者的內容，每張縮圖左上角用小徽章標明是誰貼的（You / 對方名字），
+//   一眼就能分清楚。查詢條件跟 BuddiesPage 卡片上「夥伴最新一支 clip」
+//   用的是同一組規則（is_habit_clip=true 且 clip_visibility 為
+//   everyone 或 buddies）——buddies-only 的 clip 本來就只有配對到的這個人
+//   看得到，這裡沿用同一個門檻，不會多洩漏或少顯示。
+// ★ 只抓一次、不分頁：兩人一個習慣單位時間內能貼的 clip 本來就有限（一天
+//   最多一支/人），不會像社群 Feed 那樣量大到需要分頁載入。
+function BuddyAlbumModal(props) {
+  var user = props.user, myHabitId = props.myHabitId, partnerHabitId = props.partnerHabitId,
+    partnerName = props.partnerName, partnerAvatarUrl = props.partnerAvatarUrl,
+    habitLabel = props.habitLabel, onClose = props.onClose;
+  var _lp = React.useState(true); var loading = _lp[0], setLoading = _lp[1];
+  var _cl = React.useState([]); var clips = _cl[0], setClips = _cl[1];
+  var _vp = React.useState(null); var viewingPost = _vp[0], setViewingPost = _vp[1];
+
+  React.useEffect(function() {
+    var habitIds = [myHabitId, partnerHabitId].filter(Boolean);
+    if (habitIds.length === 0) { setLoading(false); return; }
+    _supabase.from('posts')
+      .select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
+      .in('habit_id', habitIds)
+      .eq('is_habit_clip', true)
+      .in('clip_visibility', ['everyone', 'buddies'])
+      .order('created_at', { ascending: false })
+      .then(function(r) { setClips((r && r.data) || []); setLoading(false); })
+      .catch(function() { setLoading(false); });
+  }, [myHabitId, partnerHabitId]);
+
+  function isMine(p) { return p.user_id === user.uid; }
+  function labelFor(p) { return isMine(p) ? 'You' : (partnerName || 'Buddy'); }
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+    onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: 'var(--white)', maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 12, padding: 16 }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: onClose, "aria-label": "Back",
+        style: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }
+      }, /*#__PURE__*/React.createElement(BackIcon, null)),
+      /*#__PURE__*/React.createElement("div", { className: "pair-avs" },
+        /*#__PURE__*/React.createElement("div", { className: "pair-av" }, "YOU"),
+        /*#__PURE__*/React.createElement("div", { className: "pair-av", style: { position: 'relative' } },
+          ((partnerName || '?')[0] || '?').toUpperCase(),
+          partnerAvatarUrl && /*#__PURE__*/React.createElement("img", {
+            src: partnerAvatarUrl, alt: "",
+            style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
+            onError: function(e) { e.target.remove(); }
+          })
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700 } }, "Shared Album"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, habitLabel || 'Habit clips')
+      )
+    ),
+    loading
+      ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, "Loading…")
+      : clips.length === 0
+        ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, "No clips shared yet — post one from Home to start your album.")
+        : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 } },
+            clips.map(function(p) {
+              var mine = isMine(p);
+              return /*#__PURE__*/React.createElement("div", {
+                key: p.id,
+                onClick: function() {
+                  // ★ 同 ClipGridModal 修過的欄位映射：snake_case 查詢結果要手動補
+                  //   camelCase 別名，FeedCard 才讀得到（hasVideo/mediaUrl 決定要不要
+                  //   渲染播放器、commentCount 是留言數 badge、moderation* 是隱藏判斷）。
+                  setViewingPost(Object.assign({}, p, {
+                    userId: p.user_id, user: labelFor(p), avatarUrl: mine ? null : partnerAvatarUrl,
+                    habit: habitLabel, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
+                    commentCount: p.comment_count || 0,
+                    moderationStatus: p.moderation_status, moderationCategory: p.moderation_category,
+                    moderationAppealStatus: p.moderation_appeal_status, moderationAppealAt: p.moderation_appeal_at
+                  }));
+                },
+                style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
+              },
+                /*#__PURE__*/React.createElement(_ClipThumb, { url: p.thumbnail_url }),
+                /*#__PURE__*/React.createElement("span", {
+                  style: {
+                    position: 'absolute', top: 5, left: 5, display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 9, fontWeight: 700, color: '#fff', maxWidth: 'calc(100% - 10px)',
+                    background: mine ? 'rgba(0,0,0,0.65)' : 'rgba(61,94,106,0.85)',
+                    borderRadius: 20, padding: '3px 7px 3px 3px'
+                  }
+                },
+                  /*#__PURE__*/React.createElement("span", {
+                    style: { width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, flexShrink: 0, overflow: 'hidden' }
+                  }, (!mine && partnerAvatarUrl)
+                    ? /*#__PURE__*/React.createElement("img", { src: partnerAvatarUrl, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' } })
+                    : (mine ? ((user.displayName || user.email || 'U')[0] || 'U').toUpperCase() : ((partnerName || '?')[0] || '?').toUpperCase())
+                  ),
+                  /*#__PURE__*/React.createElement("span", { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, labelFor(p))
+                ),
+                p.clip_visibility === 'buddies' && /*#__PURE__*/React.createElement("span", {
+                  title: "Buddies only",
+                  style: { position: 'absolute', bottom: 5, right: 5, fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: 4, padding: '2px 5px' }
+                }, "🤝")
+              );
+            })
+          ),
+    viewingPost && /*#__PURE__*/React.createElement(ClipViewerModal, {
+      post: viewingPost,
+      currentUser: user,
       onClose: function() { setViewingPost(null); }
     })
   ));
@@ -7789,6 +7932,230 @@ function countCheckedDays(habit) {
     if ((habit.todayCounts[k] || 0) >= 1) dayset[String(k).slice(0,10)] = true;
   });
   return Object.keys(dayset).length;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── [新增 2026-09] 習慣卡片的「夥伴狀態」共用邏輯 ─────────────────────────
+// 首頁（進行中、已解鎖夥伴配對的習慣）跟 Habit History（已到期、當初有
+// 解鎖過夥伴配對的習慣）現在共用同一套判斷 + 同一個渲染函式，不再各寫
+// 一份——這正是之前 habit_id 那個 bug 能一直沒被發現的原因之一：同一件事
+// 在不同地方各自用不同（而且都有問題）的方式判斷。
+// ══════════════════════════════════════════════════════════════════════
+
+// ★ 依「狀態優先權，同狀態內再比時間」規則，從 window._myPairs 裡挑出這個
+//   習慣目前該顯示的那一筆配對紀錄。優先權：active > pending > declined
+//   > ended；withdrawn（自己取消，或被系統自動撤回）視為「這次嘗試已經
+//   過去」，不特別顯示。declined 只有在「我是原本送出邀請的那一方」時才
+//   算數——我拒絕別人這件事，對我自己這個習慣不需要特別顯示。
+//   目前用 habit_name 比對（habit_id/partner_habit_id 這兩欄是這次才
+//   補上，資料庫遷移、舊資料回填之前，用名稱比對比較保險）。
+function getHabitPairState(habit, myUid) {
+  var all = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) ? window._myPairs : [];
+  var mine = all.filter(function(p) {
+    var iAmUser = p.user_id === myUid && p.habit_name === habit.name;
+    var iAmPartner = p.partner_id === myUid && p.partner_habit_name === habit.name;
+    if (!iAmUser && !iAmPartner) return false;
+    if (p.status === 'withdrawn') return false;
+    if (p.status === 'declined' && !iAmUser) return false;
+    return true;
+  });
+  if (mine.length === 0) return { kind: 'seeking' };
+
+  var PRECEDENCE = { active: 0, pending: 1, declined: 2, ended: 3 };
+  mine.sort(function(a, b) {
+    var pa = PRECEDENCE[a.status]; if (pa == null) pa = 99;
+    var pb = PRECEDENCE[b.status]; if (pb == null) pb = 99;
+    if (pa !== pb) return pa - pb;
+    return (b.created_at || '') > (a.created_at || '') ? 1 : -1;
+  });
+
+  var top = mine[0];
+  var iAmUser = top.user_id === myUid;
+  var partnerId = iAmUser ? top.partner_id : top.user_id;
+  var partnerHabitName = iAmUser ? top.partner_habit_name : top.habit_name;
+
+  if (top.status === 'active') return { kind: 'active', pair: top, partnerId: partnerId, partnerHabitName: partnerHabitName };
+  if (top.status === 'pending') return { kind: iAmUser ? 'pending_outgoing' : 'pending_incoming', pair: top, partnerId: partnerId, partnerHabitName: partnerHabitName };
+  if (top.status === 'declined') return { kind: 'declined', pair: top };
+  if (top.status === 'ended') return { kind: 'ended', pair: top };
+  return { kind: 'seeking' };
+}
+
+// ★ created_at 是唯一確定會被寫入、可以拿來算「配對第幾天」的時間欄位
+//   （原本卡片讀的 days_together 欄位從來沒被寫入過，一直顯示 Day 1）。
+function calcPairDaysTogether(pair) {
+  if (!pair || !pair.created_at) return 1;
+  var start = new Date(pair.created_at);
+  if (isNaN(start)) return 1;
+  return Math.max(1, Math.floor((Date.now() - start.getTime()) / 86400000) + 1);
+}
+
+// ★ 新增（2026-09）：手動 End Partnership 時，通知還留在配對裡的另一方——
+//   notify-partnership-ended 這支 Edge Function 早就寫好、部署好了（後台
+//   email_templates 也已經有 partnership_ended 範本），但整份 client code
+//   之前從來沒有真的呼叫過它，等於「後端已經準備好」，實際上一封信都沒寄出去過。
+//   這裡補上呼叫：用使用者自己的登入 JWT（跟 match-partner 同一套驗證方式，
+//   不是 INTERNAL_FUNCTION_SECRET——那把密鑰只能留在伺服器端，絕對不能出現在
+//   瀏覽器）打給這支函式、帶 pairId，剩下的(判斷誰是留下來的那一方、寄哪個
+//   範本)都交給伺服器端處理。信寄不寄得出去不該影響「結束配對」這個主要動作
+//   本身，所以整段是 fire-and-forget，錯誤只 log，不 throw、不擋 UI。
+var NOTIFY_PARTNERSHIP_ENDED_FN = SUPABASE_URL + '/functions/v1/notify-partnership-ended';
+function _notifyPartnershipEndedEmail(pairId) {
+  if (!pairId || !window._supabaseClient) return;
+  window._supabaseClient.auth.getSession().then(function(sessionRes) {
+    var token = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token;
+    if (!token) return;
+    return fetch(NOTIFY_PARTNERSHIP_ENDED_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ pairId: pairId })
+    });
+  }).catch(function(e) { console.warn('[notifyPartnershipEndedEmail] failed:', e && e.message); });
+}
+
+function endPartnershipDirect(pair, onDone) {
+  if (!pair || !pair.id || !window._supabaseClient) return;
+  if (!confirm('End this partnership?')) return;
+  window._supabaseClient.from('pairs').update({ status: 'ended', ended_reason: 'user_request', ended_at: new Date().toISOString() })
+    .eq('id', pair.id)
+    .then(function() {
+      var notifBase = { type: 'partnership_ended', pair_id: pair.id, message: 'Your partnership has ended.' };
+      return Promise.all([
+        window._supabaseClient.from('notifications').insert(Object.assign({}, notifBase, { user_id: pair.user_id })),
+        window._supabaseClient.from('notifications').insert(Object.assign({}, notifBase, { user_id: pair.partner_id }))
+      ]);
+    })
+    .then(function() {
+      _notifyPartnershipEndedEmail(pair.id);
+      if (window._refreshMyPairs) window._refreshMyPairs();
+      if (onDone) onDone();
+    })
+    .catch(function(){});
+}
+
+function cancelPendingRequestDirect(pair, onDone) {
+  if (!pair || !pair.id || !window._supabaseClient) return;
+  window._supabaseClient.from('pairs').update({ status: 'withdrawn' }).eq('id', pair.id)
+    .then(function() { if (window._refreshMyPairs) window._refreshMyPairs(); if (onDone) onDone(); })
+    .catch(function(){});
+}
+
+// ★ opts: { credits, onFindPartner, onEndPartnership, onCancelRequest, onGoToBuddies }
+//   partner 顯示名稱/大頭貼從 window._myPairPartnerInfo 這個對照表查
+//   （另外查 users 表建立的，pairs 資料列裡的 partner_username 欄位
+//   從來沒被寫入過，不能直接用）。
+function renderHabitPartnerStatus(state, opts) {
+  opts = opts || {};
+  var partnerInfo = (state.partnerId && window._myPairPartnerInfo && window._myPairPartnerInfo[state.partnerId]) || null;
+  var partnerName = (partnerInfo && partnerInfo.display_name) || 'Partner';
+  var partnerInitial = partnerName ? partnerName[0].toUpperCase() : '?';
+  var stop = function(e) { e.stopPropagation(); };
+  // ★ 2026-09 修正：active 以外的五種狀態原本完全沒提到習慣名稱——卡片雖然
+  //   本來就放在對應那張 habit-card 裡面（標題已經看得到），但文字內容本身
+  //   讀起來很像通用模板，一個人有兩三個習慣同時在找夥伴時容易搞混是哪一個。
+  //   這裡統一補一行跟 active 狀態一樣風格的「📖 習慣名稱」，opts.habitName
+  //   由呼叫端傳入（Home/History 都傳自己正在渲染那個 habit 的 name）。
+  var habitNameLine = opts.habitName
+    ? React.createElement("div", { className: "partner-habit-txt" }, "📖 " + opts.habitName)
+    : null;
+
+  if (state.kind === 'active') {
+    return React.createElement("div", { className: "partner-block", onClick: stop },
+      React.createElement("div", { className: "partner-top" },
+        React.createElement("div", { className: "partner-av" }, partnerInitial),
+        React.createElement("div", null,
+          React.createElement("div", { className: "partner-name" }, partnerName),
+          React.createElement("div", { className: "partner-habit-txt" }, "📖 " + (state.partnerHabitName || ''))
+        )
+      ),
+      React.createElement("div", { className: "partner-footer" },
+        React.createElement("span", { className: "partner-days" }, "🔥 Partnership · Day " + calcPairDaysTogether(state.pair)),
+        React.createElement("button", { className: "partner-end-btn", onClick: function(e){ stop(e); opts.onEndPartnership && opts.onEndPartnership(state.pair); } }, "End Partnership")
+      )
+    );
+  }
+  if (state.kind === 'pending_outgoing') {
+    return React.createElement("div", { className: "seek-block", onClick: stop },
+      React.createElement("div", { className: "seek-top" },
+        React.createElement("div", { className: "seek-icon" }, "⏳"),
+        React.createElement("div", null,
+          React.createElement("div", { className: "seek-title" }, "Waiting for " + partnerName + " to respond"),
+          React.createElement("div", { className: "seek-sub" }, "You sent a partner request for this habit"),
+          habitNameLine
+        )
+      ),
+      React.createElement("div", { className: "ended-footer" },
+        React.createElement("button", { className: "seek-find-btn", style:{ background:'none', color:'var(--gray-500)', border:'1px solid var(--gray-300)' }, onClick: function(e){ stop(e); opts.onCancelRequest && opts.onCancelRequest(state.pair); } }, "Cancel Request")
+      )
+    );
+  }
+  if (state.kind === 'pending_incoming') {
+    return React.createElement("div", { className: "seek-block", onClick: stop },
+      React.createElement("div", { className: "seek-top" },
+        React.createElement("div", { className: "seek-icon" }, "🔔"),
+        React.createElement("div", null,
+          React.createElement("div", { className: "seek-title" }, partnerName + " wants to be your partner"),
+          React.createElement("div", { className: "seek-sub" }, "Respond in Buddies"),
+          habitNameLine
+        )
+      ),
+      React.createElement("div", { className: "ended-footer" },
+        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onGoToBuddies && opts.onGoToBuddies(); } }, "Go to Buddies")
+      )
+    );
+  }
+  if (state.kind === 'declined') {
+    return React.createElement("div", { className: "seek-block", onClick: stop },
+      React.createElement("div", { className: "seek-top" },
+        React.createElement("div", { className: "seek-icon" }, "🔍"),
+        React.createElement("div", null,
+          React.createElement("div", { className: "seek-title" }, "Your last request wasn't accepted"),
+          React.createElement("div", { className: "seek-sub" }, "Want to try finding someone else?"),
+          habitNameLine
+        )
+      ),
+      React.createElement("div", { className: "ended-footer" },
+        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, "Find Partner")
+      )
+    );
+  }
+  if (state.kind === 'ended') {
+    return React.createElement("div", { className: "ended-block", onClick: stop },
+      React.createElement("div", { className: "ended-top" },
+        React.createElement("div", { className: "ended-icon" }, "👋"),
+        React.createElement("div", null,
+          React.createElement("div", { className: "ended-title" }, "Your previous partnership has ended"),
+          React.createElement("div", { className: "ended-sub" }, "Ready to find someone new who shares this habit?"),
+          habitNameLine
+        )
+      ),
+      React.createElement("div", { className: "ended-footer" },
+        opts.credits != null && React.createElement("div", { className: "credit-pill" },
+          React.createElement("span", { className: "credit-pill-num" }, opts.credits),
+          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
+        ),
+        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, "Find New Partner")
+      )
+    );
+  }
+  // seeking（這個習慣完全沒有任何配對紀錄）
+  return React.createElement("div", { className: "seek-block", onClick: stop },
+    React.createElement("div", { className: "seek-top" },
+      React.createElement("div", { className: "seek-icon" }, "🔍"),
+      React.createElement("div", null,
+        React.createElement("div", { className: "seek-title" }, "Looking for your accountability partner"),
+        React.createElement("div", { className: "seek-sub" }, "Log in daily to earn +1 credit and keep searching"),
+        habitNameLine
+      )
+    ),
+    opts.credits != null && React.createElement("div", { className: "seek-footer" },
+      React.createElement("div", { className: "credit-pill" },
+        React.createElement("span", { className: "credit-pill-num" }, opts.credits),
+        React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
+      ),
+      React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, "Find Partner")
+    )
+  );
 }
 
 /* ── Calculate cumulative completion rate (shared helper) ──
@@ -8772,6 +9139,7 @@ function HistoryPage(_ref15) {
     matchingCredits = _ref15.matchingCredits || {},
     matchCallsUsedToday = _ref15.matchCallsUsedToday,
     matchDailyLimit = _ref15.matchDailyLimit || 10,
+    onGoToBuddies = _ref15.onGoToBuddies,
     onBack = _ref15.onBack;
   var _useStateHP = useState(10),
     _useStateHP2 = _slicedToArray(_useStateHP, 2),
@@ -9037,24 +9405,25 @@ function HistoryPage(_ref15) {
     }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
       className: "archive-tag"
     }, h.durLabel)),
-    /* ★ 新增：到期但仍在 habits 表裡（沒被手動刪除）、打卡天數已經 ≥ PARTNER_UNLOCK_DAYS
-       的習慣，補一個 Find Partner 入口——之前這批已經證明過自己會堅持的習慣，挑戰一到期
-       就再也叫不出配對按鈕了。已經有 active 夥伴的排除掉，避免對同一個習慣重複發邀請。
-       真正擋濫用的門檻在 match-partner Edge Function（habit_ai_usage 每人每日 10 次，
-       跟這個使用者手上有幾個符合資格的習慣無關），不是靠這裡藏不藏按鈕，所以這裡開放
-       完全不會重新打開之前討論過的濫用缺口。 */
-    (h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS &&
-      !((typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) &&
-        window._myPairs.some(function(p){ return (p.habit_id === h.id || p.partner_habit_id === h.id) && p.status === 'active'; }))
-    ) && /*#__PURE__*/React.createElement("div", {
-      style: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, padding:'10px 16px 14px', borderTop:'1px solid var(--gray-100)', marginTop:10 }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: { fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:'var(--gray-400)' }
-    }, (matchingCredits[h.id] || 0) + ' AI match credit' + ((matchingCredits[h.id] || 0) === 1 ? '' : 's') + ' left'
-    ), /*#__PURE__*/React.createElement("button", {
-      className: "seek-find-btn",
-      onClick: function(e){ e.stopPropagation(); window.openMatchingModal(h); }
-    }, "Find Partner")));
+    /* ★ 2026-09 統一：到期但仍在 habits 表裡（沒被手動刪除）、打卡天數已經
+       ≥ PARTNER_UNLOCK_DAYS 的習慣——之前這批已經證明過自己會堅持的習慣，
+       挑戰一到期就再也叫不出配對按鈕了。跟 Home 共用同一套
+       getHabitPairState/renderHabitPartnerStatus，active/pending/declined/
+       ended/seeking 都能正確顯示，不再只是「有沒有 active」這個永遠判斷
+       不出結果的舊邏輯（habit_id/partner_habit_id 這兩欄資料庫裡根本不存在）。
+       沒解鎖過 Find Partner 的習慣（_checkedDays < PARTNER_UNLOCK_DAYS）
+       維持不顯示任何東西。 */
+    (h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS) && /*#__PURE__*/React.createElement("div", {
+      style: { padding:'10px 16px 14px', borderTop:'1px solid var(--gray-100)', marginTop:10 },
+      onClick: function(e) { e.stopPropagation(); }
+    }, renderHabitPartnerStatus(getHabitPairState(h, user.uid), {
+      habitName: h.name,
+      credits: matchingCredits[h.id] || 0,
+      onFindPartner: function() { window.openMatchingModal(h); },
+      onEndPartnership: function(pair) { endPartnershipDirect(pair); },
+      onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
+      onGoToBuddies: function() { if (onGoToBuddies) onGoToBuddies(); }
+    })));
   }), hasMore && /*#__PURE__*/React.createElement("div", {
     style: { padding: '16px 0 0', textAlign: 'center' }
   }, /*#__PURE__*/React.createElement("button", {
@@ -9739,6 +10108,58 @@ function MainApp(_ref16) {
     }
   }, [archivedHabits, user]);
 
+  // ══════════════════════════════════════════════════════════════════
+  // ── [新增 2026-09] MainApp 層級抓 pairs + 夥伴基本資料，不再依賴使用者
+  //   有沒有點過 Buddies 分頁——這是「Completed Challenges 卡片幾乎沒正常
+  //   顯示過」的第三個成因：原本 window._myPairs 只有 BuddiesPage 自己的
+  //   useEffect 會填，使用者這次登入還沒點開 Buddies 分頁的話，Home／
+  //   History 讀到的就是 undefined。這裡在 MainApp 掛載、user 一確定就抓，
+  //   跟使用者有沒有切過分頁無關。
+  //   ★ 這裡特意把 'declined' 也一起抓進來（BuddiesPage 自己那份 pairs
+  //   查詢原本沒抓 declined，因為 Pair Wall 清單本來就不需要顯示「被拒絕」
+  //   這件事）——getHabitPairState() 需要看到 declined 記錄，才能判斷
+  //   「我送出的邀請被拒絕了」該不該顯示第 4 種卡片狀態。
+  // ══════════════════════════════════════════════════════════════════
+  var _useState_pairsDataTick = React.useState(0);
+  var _bumpPairsDataTick = function() { _useState_pairsDataTick[1](function(n) { return n + 1; }); };
+  useEffect(function() {
+    if (!user || !user.uid || !_supabase) return;
+    var cancelled = false;
+    function fetchMyPairsAndPartnerInfo() {
+      _supabase.from('pairs').select('*')
+        .or('user_id.eq.' + user.uid + ',partner_id.eq.' + user.uid)
+        .in('status', ['active', 'pending', 'declined', 'ended'])
+        .order('created_at', { ascending: false })
+        .then(function(r) {
+          if (cancelled) return;
+          var pairsData = (r && r.data) || [];
+          window._myPairs = pairsData;
+          var partnerIds = pairsData.map(function(p) {
+            return p.user_id === user.uid ? p.partner_id : p.user_id;
+          }).filter(Boolean);
+          if (partnerIds.length === 0) {
+            window._myPairPartnerInfo = {};
+            _bumpPairsDataTick();
+            return;
+          }
+          _supabase.from('users').select('id, display_name, photo_url').in('id', partnerIds)
+            .then(function(ur) {
+              if (cancelled) return;
+              var map = {};
+              ((ur && ur.data) || []).forEach(function(u) { map[u.id] = u; });
+              window._myPairPartnerInfo = map;
+              _bumpPairsDataTick();
+            }).catch(function() { if (!cancelled) _bumpPairsDataTick(); });
+        }).catch(function() { if (!cancelled) _bumpPairsDataTick(); });
+    }
+    window._refreshMyPairs = fetchMyPairsAndPartnerInfo;
+    fetchMyPairsAndPartnerInfo();
+    return function() {
+      cancelled = true;
+      if (window._refreshMyPairs === fetchMyPairsAndPartnerInfo) window._refreshMyPairs = null;
+    };
+  }, [user]);
+
   // ── BroadcastChannel: 接收來自其他 PWA 視窗的習慣同步通知 ──
   // 當手機刪除/新增習慣後，電腦的 PWA 視窗會立即收到更新，不需重整
   useEffect(function () {
@@ -9854,7 +10275,14 @@ function MainApp(_ref16) {
   //   成立，白名單帳號登入時 Challengers 頁面因此永遠是空的——這正是你這次
   //   遇到的狀況。改成獨立、固定是 7 的常數，不受目前登入者是否為測試白名單影響。
   var CHALLENGER_UNLOCK_DAYS = 7;
-  var CHALLENGE_COMPLETE_DAYS = 21;  // 達成 21 天打卡 → 真正完成挑戰，移入 Completed
+  // ★ 2026-09 修正：這個常數不再跟「首頁 3 個名額會不會空出來」有任何關係
+  //   （名額現在只看習慣自訂的執行日期到不到期，見 addHabit / handleAddHabitClick
+  //   / 桌面版新增按鈕三處的 3 個上限檢查——到期的習慣本來就會離開首頁、
+  //   進 Habit History，用不著再靠這個 21 天數字額外判斷一次）。
+  //   CHALLENGE_COMPLETE_DAYS 現在只剩兩個用途：① awardDailyLoginCredit()
+  //   打滿 21 天發一次性 10 點配對點數獎勵、② CheerDetailPanel 決定鼓勵訊息
+  //   要顯示「今天」還是「整段旅程」的文案，跟名額/Habit History 完全無關。
+  var CHALLENGE_COMPLETE_DAYS = 21;
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
   // 用於 visibilitychange 回前台、pull-to-refresh 觸發
@@ -10422,17 +10850,14 @@ function MainApp(_ref16) {
       intervalDays = _ref19.intervalDays;
     var _today0 = toISODay();
     var _today0str = _today0;
+    // ★ 2026-09 修正：名額只看習慣自訂的執行日期到不到期，打滿 21 天不再
+    //   提前空出名額——到期後習慣本來就會自動離開這份清單、進 Habit History。
     var _activeCount0 = habits.filter(function(h){
       var e=parseTimeRange(h.timeRange).end;
-      if (!e||e>=_today0str) {
-        // only count as active if NOT completed (checkedDates < CHALLENGE_COMPLETE_DAYS)
-        var _nc = (h.checkedDates||[]).map(function(d){ if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
-        return new Set(_nc).size < CHALLENGE_COMPLETE_DAYS;
-      }
-      return false;
+      return !e||e>=_today0str;
     }).length;
     if (_activeCount0 >= 3) {
-      alert('You can have at most 3 active habits at a time. Complete a 21-day challenge to free up a slot!');
+      alert('You can have at most 3 active habits at a time. A slot frees up once a habit reaches its end date.');
       return;
     }
     var habit = {
@@ -12037,6 +12462,7 @@ function MainApp(_ref16) {
     matchingCredits: matchingCredits,
     matchCallsUsedToday: matchCallsUsedToday,
     matchDailyLimit: MATCH_DAILY_LIMIT,
+    onGoToBuddies: function() { setShowHistory(false); setActiveTab('buddies'); },
     onBack: function onBack() {
       return setShowHistory(false);
     }
@@ -12106,28 +12532,24 @@ function MainApp(_ref16) {
         textTransform: 'uppercase',
         letterSpacing: .8
       }
-    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; if(!e||e>=t){ var nc=(h.checkedDates||[]).filter(Boolean); return new Set(nc).size < CHALLENGE_COMPLETE_DAYS; } return false; }).length; })(), " / 3 active")), (function(){
+    }, (function(){ var t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=t; }).length; })(), " / 3 active")), (function(){
       var _today = toISODay();
-      // Split habits: in-progress vs completed (>= CHALLENGE_COMPLETE_DAYS checkedDates)
+      // ★ 2026-09 統一：不再切成 in-progress / completed 兩個各自獨立的區塊——
+      //   到期才會被收進 Habit History（見 HistoryPage），只要習慣的日期範圍
+      //   還沒到期，不管有沒有打滿 21 天，都留在這裡同一份清單裡，差別只在
+      //   卡片標題旁的「✓ 21 days」小標籤，跟下面 footer 是顯示解鎖進度條
+      //   還是換成夥伴狀態卡（getHabitPairState/renderHabitPartnerStatus，
+      //   跟 Habit History 共用同一套邏輯，不再各寫一份）。
       var allActive = habits.filter(function(h) {
         var _end = parseTimeRange(h.timeRange).end;
         return !_end || _end >= _today;
       });
-      var inProgressHabits = allActive.filter(function(h) {
-        var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
-        return new Set(_nc).size < CHALLENGE_COMPLETE_DAYS;
-      });
-      var completedHabits = habits.filter(function(h) {
-        var _nc = (h.checkedDates||[]).map(function(d){ if(/\d{4}-\d{2}-\d{2}/.test(d))return d; var p=new Date(d); return isNaN(p)?null:toISODay(p); }).filter(Boolean);
-        return new Set(_nc).size >= CHALLENGE_COMPLETE_DAYS;
-      });
       return React.createElement(React.Fragment, null,
-        inProgressHabits.length === 0 && completedHabits.length === 0 ? React.createElement("div", { className: "empty-state" },
+        allActive.length === 0 ? React.createElement("div", { className: "empty-state" },
           React.createElement(HomeIcon, null), React.createElement("h3", null, "No habits yet"), React.createElement("p", null, "Tap + Create your first habit")
         ) : null,
-        inProgressHabits.length > 0 && React.createElement(React.Fragment, null,
-          React.createElement("div", { className: "completed-section-label" }, "Active (" + inProgressHabits.length + " / 3)"),
-          inProgressHabits.map(function (habit) {
+        allActive.length > 0 && React.createElement(React.Fragment, null,
+          allActive.map(function (habit) {
       var todayKey = currentDay;
       var progPct = calcCompletionRate(habit);
       var streak = habit.streak || 0;
@@ -12158,6 +12580,8 @@ function MainApp(_ref16) {
         ? Math.round((dateFromISO(_habitTr.end) - dateFromISO(_habitTr.start)) / 86400000) + 1
         : 999;
       var habitTooShort = _habitDuration < PARTNER_UNLOCK_DAYS;
+      var credits = matchingCredits[habit.id] || 0;
+      var pairState = isQualified ? getHabitPairState(habit, user.uid) : null;
       var habitCheerData = habitCheers[habit.id] || null;
       var _catCol = getCatColours(habit.category);
       var _cheerUid = habit.id + '-cheer';
@@ -12221,12 +12645,27 @@ function MainApp(_ref16) {
       ),
       /* ── divider ── */
       React.createElement("div", { className: "habit-card-divider" }),
+      /* ── ★ 已解鎖 Find Partner 的習慣：不管有沒有打滿 21 天，都用跟 Habit
+         History 共用的同一套夥伴狀態卡（active/pending/declined/ended/seeking），
+         取代原本各自獨立、而且一直有 bug 的「+ Find Partner」按鈕跟舊版
+         Completed Challenges 卡片。 ── */
+      isQualified && React.createElement("div", { style:{ padding:'10px 16px 0' } },
+        renderHabitPartnerStatus(pairState, {
+          habitName: habit.name,
+          credits: credits,
+          onFindPartner: function() { window.openMatchingModal(habit); },
+          onEndPartnership: function(pair) { endPartnershipDirect(pair); },
+          onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
+          onGoToBuddies: function() { setActiveTab('buddies'); }
+        })
+      ),
       /* ── card footer ── */
       React.createElement("div", {
         className: "habit-card-footer",
         onClick: function(e) { e.stopPropagation(); }
       },
-        /* left side: unlock bar OR find partner btn */
+        /* left side: unlock bar（未解鎖時）；已解鎖的話上面已經有夥伴狀態卡了，
+           這裡留空當 spacer，讓 cheer-bar 繼續靠右對齊 */
         React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 } },
           !isQualified && !habitTooShort && React.createElement("div", {
             className: "unlock-progress-wrap", style:{ margin:0, flex:1 },
@@ -12239,11 +12678,7 @@ function MainApp(_ref16) {
             React.createElement("div", { className: "unlock-progress-track" },
               React.createElement("div", { className: "unlock-progress-fill", style:{ width: unlockPct + "%" } })
             )
-          ),
-          isQualified && React.createElement("button", {
-            className: "find-partner-btn",
-            onClick: function(e) { e.stopPropagation(); window.openMatchingModal(habit); }
-          }, "+ Find Partner")
+          )
         ),
         /* right side: cheer bar（顯示收到的鼓勵）— 僅當習慣公開時顯示；選擇 private 則隱藏 */
         /* ★ 點擊開啟 CheerDetailPanel——手機版程式碼裡這個面板本來就有寫，只是從未接上觸發點 */
@@ -12334,119 +12769,8 @@ function MainApp(_ref16) {
         })()
       )
       );
-    }) // end inProgressHabits.map
-        ), // end inProgressHabits section
-        /* ── COMPLETED CHALLENGES SECTION ── */
-        completedHabits.length > 0 && React.createElement(React.Fragment, null,
-          React.createElement("div", { className: "completed-section-label" }, "✓ Completed Challenges (" + completedHabits.length + ")"),
-          completedHabits.map(function(habit) {
-            var _catCol2 = getCatColours(habit.category);
-            var habitCheerData2 = habitCheers[habit.id] || null;
-            var credits = matchingCredits[habit.id] || 0;
-            // Find active pair for this habit
-            // We use pairs from Buddies tab — check window._myPairs if available
-            var _activePair = null;
-            if (typeof window._myPairs !== 'undefined') {
-              _activePair = window._myPairs.find(function(p) {
-                return (p.habit_id === habit.id || p.partner_habit_id === habit.id) && p.status === 'active';
-              }) || null;
-            }
-            var _endedPair = null;
-            if (typeof window._myPairs !== 'undefined') {
-              _endedPair = window._myPairs.find(function(p) {
-                return (p.habit_id === habit.id || p.partner_habit_id === habit.id) && p.status === 'ended';
-              }) || null;
-            }
-            return React.createElement("div", { key: habit.id, className: "habit-card", onClick: function(){ setSelectedHabit(habit.id); } },
-              React.createElement("div", { className: "habit-card-accent" }),
-              React.createElement("div", { className: "habit-card-body" },
-                /* title + done badge */
-                React.createElement("div", { className: "habit-title", style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
-                  habit.name,
-                  React.createElement("span", { className: "completed-done-badge" }, "✓ 21 days")
-                ),
-                React.createElement("div", { className: "habit-meta", style:{ marginTop:6 } },
-                  React.createElement("span", { className: "habit-category", style:{ background:_catCol2.bg, color:_catCol2.text, borderColor:_catCol2.bd } },
-                    React.createElement("i", { className: "habit-category-spark" }, "✨"), habit.category
-                  ),
-                  habit.freqLabel && React.createElement("span", { className: "habit-tag-pill" }, habit.freqLabel),
-                  habit.durLabel  && React.createElement("span", { className: "habit-tag-pill" }, habit.durLabel)
-                ),
-                habit.timeRange && React.createElement("div", { className: "habit-time-range", style:{ marginTop:6, marginBottom:10 } },
-                  React.createElement("svg", { width:11, height:11, viewBox:"0 0 16 16", fill:"none", style:{flexShrink:0} },
-                    React.createElement("rect", { x:1, y:3, width:14, height:12, rx:2, stroke:"currentColor", strokeWidth:1.5 }),
-                    React.createElement("path", { d:"M5 1v3M11 1v3M1 7h14", stroke:"currentColor", strokeWidth:1.5, strokeLinecap:"round" })
-                  ),
-                  habit.timeRange
-                ),
-                /* partner state block */
-                _activePair
-                  ? /* Has active partner */
-                    React.createElement("div", { className: "partner-block", onClick: function(e){ e.stopPropagation(); } },
-                      React.createElement("div", { className: "partner-top" },
-                        React.createElement("div", { className: "partner-av" }, (_activePair.partner_username||'?')[0].toUpperCase()),
-                        React.createElement("div", null,
-                          React.createElement("div", { className: "partner-name" }, _activePair.partner_username || 'Partner'),
-                          React.createElement("div", { className: "partner-habit-txt" }, "📖 " + (_activePair.partner_habit_name || ''))
-                        )
-                      ),
-                      React.createElement("div", { className: "partner-footer" },
-                        React.createElement("span", { className: "partner-days" }, "🔥 Partnership · Day " + (_activePair.days_together || 1)),
-                        React.createElement("button", { className: "partner-end-btn", onClick: function(e){ e.stopPropagation(); } }, "End Partnership")
-                      )
-                    )
-                  : _endedPair
-                  ? /* Partnership ended */
-                    React.createElement("div", { className: "ended-block", onClick: function(e){ e.stopPropagation(); } },
-                      React.createElement("div", { className: "ended-top" },
-                        React.createElement("div", { className: "ended-icon" }, "👋"),
-                        React.createElement("div", null,
-                          React.createElement("div", { className: "ended-title" }, "Your previous partnership has ended"),
-                          React.createElement("div", { className: "ended-sub" }, "Ready to find someone new who shares this habit?")
-                        )
-                      ),
-                      React.createElement("div", { className: "ended-footer" },
-                        React.createElement("div", { className: "credit-pill" },
-                          React.createElement("span", { className: "credit-pill-num" }, credits),
-                          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
-                        ),
-                        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ e.stopPropagation(); window.openMatchingModal(habit); } }, "Find New Partner")
-                      )
-                    )
-                  : /* No partner yet — seeking */
-                    React.createElement("div", { className: "seek-block", onClick: function(e){ e.stopPropagation(); } },
-                      React.createElement("div", { className: "seek-top" },
-                        React.createElement("div", { className: "seek-icon" }, "🔍"),
-                        React.createElement("div", null,
-                          React.createElement("div", { className: "seek-title" }, "Looking for your accountability partner"),
-                          React.createElement("div", { className: "seek-sub" }, "Log in daily to earn +1 credit and keep searching")
-                        )
-                      ),
-                      React.createElement("div", { className: "seek-footer" },
-                        React.createElement("div", { className: "credit-pill" },
-                          React.createElement("span", { className: "credit-pill-num" }, credits),
-                          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
-                        ),
-                        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ e.stopPropagation(); window.openMatchingModal(habit); } }, "Find Partner")
-                      )
-                    )
-              ),
-              /* cheer static — 僅當習慣公開且有收到 cheer 時顯示；選擇 private 則隱藏 */
-              habit.challengeVisibility !== 'private' && habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", { className: "habit-card-divider" }),
-              habit.challengeVisibility !== 'private' && habitCheerData2 && habitCheerData2.totalCount > 0 && React.createElement("div", {
-                style:{ padding:'9px 15px 10px', cursor:'pointer' },
-                onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(habit.id); }
-              },
-                React.createElement("span", { className: "completed-cheer-static" },
-                  React.createElement("svg", { width:"11", height:"11", viewBox:"0 0 24 24", fill:"none", stroke:"#993556", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":"true", style:{ marginRight:'4px', flexShrink:0 } },
-                    React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572" })
-                  ),
-                  habitCheerData2.totalCount.toLocaleString() + " people cheered this journey"
-                )
-              )
-            );
-          }) // end completedHabits.map
-        ) // end completed section
+    }) // end allActive.map
+        ) // end allActive section
       ); // end Fragment
     }()));
   };
@@ -13069,10 +13393,40 @@ function MainApp(_ref16) {
       strokeWidth: 1.5,
       d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
     })), /*#__PURE__*/React.createElement("h3", null, "No posts yet"), /*#__PURE__*/React.createElement("p", null, "Share your first post and start your habit journey"))),
-      // ★ 移除：Profile 頁的「Analytics」區塊（原本只有一個 Habit History 入口）已整個拿掉。
-      //   裡面唯一有用的 AI Search Credits widget 搬去 Home 頁了（手機版最上方／桌面版右側欄），
-      //   Habit History 頁本身（HistoryPage 元件、showHistory 狀態）保留在程式碼裡沒刪，
-      //   只是沒有入口能開了——archived 習慣的統計資料本身也還在，沒有跟著被刪除。
+      // ★ 2026-09 修復：補回 Habit History 入口。之前拿掉的其實只是舊版
+      //   Analytics 區塊裡唯一還有用的 AI Search Credits widget（已經搬去
+      //   Home 頁），卻連帶把 Habit History 唯一的入口一起拿掉，變成功能
+      //   還在、完全沒地方點得進去。HistoryPage 元件、showHistory 狀態、
+      //   archived 習慣資料一直都保留在程式碼裡，這裡只是重新接一個入口回來，
+      //   位置比照舊版放在 Profile 頁。
+      /*#__PURE__*/React.createElement("div", {
+        style: {
+          margin: '24px 0 8px',
+          borderTop: '1px solid var(--gray-100)',
+          paddingTop: 20
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "section-title",
+        style: { marginBottom: 12 }
+      }, "History"), /*#__PURE__*/React.createElement("button", {
+        className: "privacy-settings-entry",
+        onClick: function onClick() { setShowHistory(true); },
+        "aria-label": "Open Habit History"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "privacy-settings-entry-left"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "privacy-settings-entry-icon",
+        "aria-hidden": "true"
+      }, "📜"), /*#__PURE__*/React.createElement("div", {
+        className: "privacy-settings-entry-text"
+      }, /*#__PURE__*/React.createElement("strong", null, "Habit History"), /*#__PURE__*/React.createElement("span", null, "See habits that have reached their end date"))), /*#__PURE__*/React.createElement("span", {
+        className: "history-entry-arrow",
+        "aria-hidden": "true"
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "16", height: "16", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor"
+      }, /*#__PURE__*/React.createElement("path", {
+        strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M9 5l7 7-7 7"
+      }))))),
       /*#__PURE__*/React.createElement("div", {
       style: {
         margin: '24px 0 8px',
@@ -13232,14 +13586,10 @@ function MainApp(_ref16) {
     var _todayChk = toISODay();
     var _activeCnt = habits.filter(function(h){
       var e=parseTimeRange(h.timeRange).end;
-      if(!e||e>=_todayChk){
-        var _nc2=(h.checkedDates||[]).map(function(d){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;var p=new Date(d);return isNaN(p)?null:toISODay(p);}).filter(Boolean);
-        return new Set(_nc2).size < CHALLENGE_COMPLETE_DAYS;
-      }
-      return false;
+      return !e||e>=_todayChk;
     }).length;
     if (_activeCnt >= 3) {
-      alert('Max 3 active habits. Complete a 21-day challenge to free up a slot!');
+      alert('Max 3 active habits. A slot frees up once a habit reaches its end date.');
       return;
     }
     setShowModal(true);
@@ -13375,14 +13725,10 @@ function MainApp(_ref16) {
       var _todayChk = toISODay();
       var _activeCnt = habits.filter(function(h){
         var e=parseTimeRange(h.timeRange).end;
-        if(!e||e>=_todayChk){
-          var _nc2=(h.checkedDates||[]).map(function(d){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;var p=new Date(d);return isNaN(p)?null:toISODay(p);}).filter(Boolean);
-          return new Set(_nc2).size < CHALLENGE_COMPLETE_DAYS;
-        }
-        return false;
+        return !e||e>=_todayChk;
       }).length;
       if (_activeCnt >= 3) {
-        alert('Max 3 active habits. Complete a 21-day challenge to free up a slot!');
+        alert('Max 3 active habits. A slot frees up once a habit reaches its end date.');
         return;
       }
       setShowModal(true);
@@ -13565,7 +13911,15 @@ function PairWallPage(_ref_pw) {
           _supabase.from('notifications').insert(Object.assign({}, notifBase, { user_id: pair.partner_id }))
         ]);
       })
-      .then(function() { setEnding(false); onBack(); })
+      .then(function() {
+        // ★ 新增（2026-09）：跟 endPartnershipDirect() 共用同一支
+        //   _notifyPartnershipEndedEmail()，聊天室這顆 End Partnership 按鈕
+        //   之前也一樣從沒真的觸發過通知信，這裡補齊，跟 Home/Buddies/History
+        //   三個入口保持一致。
+        _notifyPartnershipEndedEmail(pair.id);
+        setEnding(false);
+        onBack();
+      })
       .catch(function() { setEnding(false); });
   }
 
@@ -14223,6 +14577,10 @@ function BuddiesPage(_ref_buddies) {
   var reactedMap = _useState_reacted[0], setReactedMap = _useState_reacted[1];
   var _useState_viewingClip = useState(null);
   var viewingBuddyClip = _useState_viewingClip[0], setViewingBuddyClip = _useState_viewingClip[1];
+  // ★ 新增：兩人專屬相簿(BuddyAlbumModal)——存正在看哪一組配對的相簿，
+  //   不是存 clip 本身，實際的 clip 清單交給 BuddyAlbumModal 自己查。
+  var _useState_viewingAlbum = useState(null);
+  var viewingAlbumForPair = _useState_viewingAlbum[0], setViewingAlbumForPair = _useState_viewingAlbum[1];
 
   // ★ 修正：momentum 進度條原本借用配對前 Find Partner 解鎖用的 PARTNER_UNLOCK_DAYS=7，
   //   但雙方既然已經配對成功，這個「距離解鎖還差幾天」的門檻早就跨過去了，繼續用同一個
@@ -14306,9 +14664,13 @@ function BuddiesPage(_ref_buddies) {
 
   useEffect(function() {
     if (!user) return;
+    // ★ declined 也一起抓——不是要顯示在下面的 Pair Wall 清單裡（visiblePairs/
+    //   pastPairs 仍然把 declined 排除在外），而是這裡同時也是 window._myPairs
+    //   的其中一個寫入來源，Home/History 的 getHabitPairState() 需要看得到
+    //   declined 記錄才能判斷「我送出的邀請被拒絕了」。
     var q = _supabase.from('pairs').select('*')
       .or('user_id.eq.' + user.uid + ',partner_id.eq.' + user.uid)
-      .in('status', ['active','pending','ended'])
+      .in('status', ['active','pending','ended','declined'])
       .order('created_at', { ascending: false });
     q.then(function(r) {
       var pairsData = r.data || [];
@@ -14398,9 +14760,11 @@ function BuddiesPage(_ref_buddies) {
 
   var qualifiedHabits = habits; // qualification conditions temporarily removed for testing
 
-  // ★ 新增：pairs 現在同時包含 active / pending / ended 三種狀態（見上面 useEffect），
-  //   主清單只該顯示 active + pending，ended 的獨立放到下面「過去的夥伴」那排小頭像。
-  var visiblePairs = pairs.filter(function(p) { return p.status !== 'ended'; });
+  // ★ 修正：pairs 現在同時包含 active / pending / ended / declined 四種狀態
+  //   （見上面 useEffect），但 declined 不是「配對關係」——沒人接受過，不該
+  //   出現在 Pair Wall 主清單，也不算「過去的夥伴」。declined 只透過 Home／
+  //   History 的 getHabitPairState() 卡片顯示，這裡兩份清單都排除掉它。
+  var visiblePairs = pairs.filter(function(p) { return p.status !== 'ended' && p.status !== 'declined'; });
   var pastPairs = pairs.filter(function(p) { return p.status === 'ended'; });
 
   // ★ 修正：pairs 這個 state 其實同時包含 status='active' 跟 status='pending' 兩種
@@ -14487,14 +14851,38 @@ function BuddiesPage(_ref_buddies) {
                   .then(function() {
                     setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
                     if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
-                    // Auto-withdraw other pending invites involving either user in this pair
+                    // ★ [FIX 2026-09] 原本這裡是「這兩人身上其他所有還在 pending 的邀請
+                    //   全部撤回」，用 user_id/partner_id 查，沒有限定同一個習慣。使用者
+                    //   最多可以有 3 個進行中習慣、每個都能各自找夥伴，這樣寫會導致：
+                    //   只要其中一個習慣配對成功，另一個完全無關的習慣還在等的邀請也會被
+                    //   無聲撤回。改成只撤回「同一個習慣」還在 pending 的其他邀請——
+                    //   habit_id/partner_habit_id 這兩欄目前從送出邀請那邊看起來沒有被
+                    //   實際寫入過（只有 habit_name/partner_habit_name 這兩個文字欄位
+                    //   確定每次都會存），所以改用 habit_name 比對；先把候選列抓下來、
+                    //   在 JS 裡比對名稱是否相符再決定要撤回哪幾筆，不用 PostgREST 的
+                    //   .or()/.and() 字串語法直接塞習慣名稱——習慣名稱是使用者自由輸入的
+                    //   文字，可能包含逗號、括號這類會弄壞 filter 字串語法的字元。
                     var acceptedUserId = pair.user_id;
                     var acceptedPartnerId = pair.partner_id;
+                    var acceptedUserHabitName = pair.habit_name;
+                    var acceptedPartnerHabitName = pair.partner_habit_name;
                     _supabase.from('pairs')
-                      .update({ status: 'withdrawn' })
+                      .select('id, user_id, partner_id, habit_name, partner_habit_name')
                       .eq('status', 'pending')
                       .neq('id', pair.id)
                       .or('user_id.eq.' + acceptedUserId + ',partner_id.eq.' + acceptedUserId + ',user_id.eq.' + acceptedPartnerId + ',partner_id.eq.' + acceptedPartnerId)
+                      .then(function(r) {
+                        var candidates = (r && r.data) || [];
+                        var toWithdrawIds = candidates.filter(function(p) {
+                          var mineMatches = (p.user_id === acceptedUserId && p.habit_name === acceptedUserHabitName) ||
+                                            (p.partner_id === acceptedUserId && p.partner_habit_name === acceptedUserHabitName);
+                          var theirsMatches = (p.user_id === acceptedPartnerId && p.habit_name === acceptedPartnerHabitName) ||
+                                              (p.partner_id === acceptedPartnerId && p.partner_habit_name === acceptedPartnerHabitName);
+                          return mineMatches || theirsMatches;
+                        }).map(function(p) { return p.id; });
+                        if (toWithdrawIds.length === 0) return;
+                        return _supabase.from('pairs').update({ status: 'withdrawn' }).in('id', toWithdrawIds);
+                      })
                       .then(function(){}).catch(function(){});
                   });
               }
@@ -14689,6 +15077,19 @@ function BuddiesPage(_ref_buddies) {
                     React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'#555' } }, clipReacted ? 'You cheered this on' : 'Cheer on')
                   )
                 ),
+                // ★ 新增：兩人專屬相簿入口——上面那個區塊只顯示「夥伴最新一支 clip」，
+                //   自己貼過的、雙方過去貼過的都看不到。這裡不管有沒有 clip 都顯示
+                //   （哪怕雙方都還沒貼過，也可以先點進去看到空狀態的引導文案），
+                //   點進去交給 BuddyAlbumModal 把雙方全部 clip 收在同一個 grid 裡。
+                !isIncoming && pair.status === 'active' && React.createElement("div", {
+                  style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' },
+                  onClick: function(e){ e.stopPropagation(); }
+                },
+                  React.createElement("button", {
+                    onClick: function(){ setViewingAlbumForPair(pair); },
+                    style:{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, fontSize:11, fontWeight:700, color:'var(--gray-600)', background:'var(--gray-50)', border:'none', borderRadius:8, padding:'8px 10px', cursor:'pointer' }
+                  }, '🖼️ Shared album')
+                ),
                 // ★ FIX (夥伴卡片重新設計)：score 跟 reason 現在已經在上面新的
                 // 「values match」區塊一直顯示了，這裡展開時不用再重複一次，只補上完整
                 // 五個面向的細項（上面平常只挑最高的兩個當 chip）。用的還是同一個
@@ -14770,7 +15171,22 @@ function BuddiesPage(_ref_buddies) {
       cheered: !!reactedMap[viewingBuddyClip.id],
       onCheer: function() { toggleClipReaction(viewingBuddyClip.id, viewingBuddyClip.userId); },
       onClose: function() { setViewingBuddyClip(null); }
-    })
+    }),
+    viewingAlbumForPair && (function() {
+      var vp = viewingAlbumForPair;
+      var vIsUser = vp.user_id === user.uid;
+      var vPartnerId = vIsUser ? vp.partner_id : vp.user_id;
+      var vPartnerInfo = partnerInfoMap[vPartnerId];
+      return React.createElement(BuddyAlbumModal, {
+        user: user,
+        myHabitId: vIsUser ? vp.habit_id : vp.partner_habit_id,
+        partnerHabitId: vIsUser ? vp.partner_habit_id : vp.habit_id,
+        partnerName: (vPartnerInfo && vPartnerInfo.display_name) || null,
+        partnerAvatarUrl: (vPartnerInfo && vPartnerInfo.photo_url) || null,
+        habitLabel: vIsUser ? vp.habit_name : vp.partner_habit_name,
+        onClose: function() { setViewingAlbumForPair(null); }
+      });
+    })()
   );
 
   // ★ 新增：桌面版才包右側欄，手機版維持原本只回傳 mainContent（跟 Home 頁的
@@ -17145,11 +17561,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           throw new Error("You already sent a request to this person — it's still pending.");
         }
 
+        // ★ [FIX 2026-09] habit_id/partner_habit_id 這兩欄之前一直沒有被寫入過
+        //   （match-partner v13 之前，候選人物件裡根本沒有 habitId 可以用）。
+        //   現在 match-partner 已經會把候選人配對到的那個習慣真正的 id
+        //   透過 m.habitId 帶回來，這裡一起存進去，讓 pairs 紀錄能真正用 id
+        //   關聯回 habits 表，而不是只能靠 habit_name 這個文字欄位比對。
         var pairRes;
         if (existingPair) {
           // 舊紀錄狀態是 declined / withdrawn / ended → 重新發出邀請時更新既有那一筆，
           // 順便把 created_at 重置，避免 Buddies 頁「配對 X 天」用到舊夥伴關係的起始時間。
           pairRes = await _withTimeout(_supabase.from('pairs').update({
+            habit_id: _currentHabit.id, partner_habit_id: m.habitId || null,
             habit_name: _currentHabit.name, partner_habit_name: m.habitName,
             match_score: m.score, status: 'pending',
             ai_match_data: snapshot,
@@ -17159,6 +17581,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         } else {
           pairRes = await _withTimeout(_supabase.from('pairs').insert({
             user_id: userId, partner_id: m.userId,
+            habit_id: _currentHabit.id, partner_habit_id: m.habitId || null,
             habit_name: _currentHabit.name, partner_habit_name: m.habitName,
             match_score: m.score, status: 'pending',
             ai_match_data: snapshot
@@ -17253,47 +17676,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
   };
 
-  window.sendPartnerRequest = async function() {
-    if (!_currentMatch || !_currentHabit) return;
-    try {
-      var session = await _supabase.auth.getSession();
-      var userId = session.data.session && session.data.session.user && session.data.session.user.id;
-      if (!userId) return;
-
-      // 1. Insert pair record
-      await _supabase.from('pairs').insert({
-        user_id: userId,
-        partner_id: _currentMatch.userId,
-        habit_name: _currentHabit.name,
-        partner_habit_name: _currentMatch.habitName,
-        match_score: _currentMatch.score,
-        status: 'pending'
-      });
-
-      // 2. Send notification to partner so they know a request arrived
-      await _supabase.from('notifications').insert({
-        user_id: _currentMatch.userId,
-        type: 'partner_request',
-        title: 'New Partner Request!',
-        body: 'Someone wants to be your habit partner for "' + _currentMatch.habitName + '".',
-        data: JSON.stringify({
-          from_user_id: userId,
-          habit_name: _currentHabit.name,
-          partner_habit_name: _currentMatch.habitName
-        }),
-        is_read: false,
-        created_at: new Date().toISOString()
-      });
-
-      window.closeMatchingModal();
-
-      // 3. Navigate to Buddies tab so user sees the pending request immediately
-      if (typeof window._navigateTab === 'function') window._navigateTab('buddies');
-      if (typeof showToast === 'function') showToast('Partner request sent! 🎉');
-    } catch(e) {
-      alert('Failed to send request: ' + e.message);
-    }
-  };
+  // ★ 2026-09 清理：舊版 window.sendPartnerRequest 已移除——這是早期留下的
+  //   重複實作，沒有 _mrcInviteCard()（真正被邀請卡片用的送出函式）那套
+  //   「先查有沒有既有 pair、依現況決定 insert 還是 update」的防重複邏輯，
+  //   而且確認過整份程式碼完全沒有任何地方呼叫它（純死碼）。真正在用的
+  //   送出邏輯都在 _mrcInviteCard() 裡。
 
   // ── Notify toggle for "no match yet" scenario ────────────────────────────
   window._toggleMatchNotify = function(el) {
