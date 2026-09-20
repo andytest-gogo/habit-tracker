@@ -6406,7 +6406,10 @@ var VIOLATION_MESSAGES = {
   HATE:       "Your post contains language that may be hurtful to others. Please keep our community respectful and inclusive.",
   SPAM:       "Your post looks like it may be spam or unrelated to your habits. Share your real progress instead!",
   IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!",
-  POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits."
+  POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits.",
+  // ★ [新增 2026-09] 語氣刻意跟其他分類不同：其他分類是「請保持整潔/尊重」，
+  //   這則是關心語氣，不是規則提醒，並附上申訴入口以外的求助資源方向。
+  SELF_HARM:  "We noticed this post touches on some heavy stuff. It's hidden from others for now — if you're going through something difficult, please reach out to someone you trust or a support line. You're welcome to edit and resubmit, or request a review if this was a mistake."
 };
 
 // [FIX 2026-09] Content moderation no longer blocks posting (see the post
@@ -6422,7 +6425,11 @@ var MODERATION_CATEGORY_INFO = {
   POLITICAL:  { label: 'Political content',icon: '🗳', bg: '#e0edff', border: '#a9c6f5', fg: '#2a4d8f' },
   SCAM:       { label: 'Scam / suspicious',icon: '🛑', bg: '#fff2d6', border: '#f2cf8a', fg: '#8a5a00' },
   SPAM:       { label: 'Spam',             icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' },
-  IRRELEVANT: { label: 'Off-topic',        icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' }
+  IRRELEVANT: { label: 'Off-topic',        icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' },
+  // ★ [新增 2026-09] 跟 interpret-values-text 共用同一套分類命名，新增自傷/
+  //   自殺分類；配色刻意用中性藍綠而非其他分類慣用的警示紅/黑，避免對可能
+  //   正在低潮的使用者呈現太強烈的「你違規了」觀感。
+  SELF_HARM:  { label: 'Self-harm content',icon: '💙', bg: '#e3f2fa', border: '#a9d4e8', fg: '#1f5c7a' }
 };
 
 // [v5 2026-09 REDESIGN] What everyone — including the author now, per Andy's
@@ -16162,15 +16169,20 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     document.getElementById('surveyStepFill').style.width = '100%';
 
     var summaryLines = [];
+    var partnerLines = []; // ★ 新增：希望夥伴是什麼樣子（partner_preference），跟自身價值觀分開顯示
     try {
       var uid = getCurrentUid();
       if (uid) {
-        var vr = await _supabase.from('user_values').select('summary, updated_at').eq('user_id', uid).maybeSingle();
+        var vr = await _supabase.from('user_values').select('summary, partner_preference, updated_at').eq('user_id', uid).maybeSingle();
         var summary = vr && vr.data && vr.data.summary;
+        var partnerPref = vr && vr.data && vr.data.partner_preference;
         if (Array.isArray(summary)) {
           summaryLines = summary.slice(0, 3).map(function(s) { return (s && (s.description || s.text)) || ''; }).filter(Boolean);
         } else if (typeof summary === 'string' && summary.trim()) {
           summaryLines = [summary.trim()];
+        }
+        if (Array.isArray(partnerPref)) {
+          partnerLines = partnerPref.slice(0, 2).map(function(s) { return (s && (s.description || s.text)) || ''; }).filter(Boolean);
         }
       }
     } catch (e) {
@@ -16183,10 +16195,22 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">Unlocking AI matching for &ldquo;' + (habit.name || '').replace(/</g,'&lt;') + '&rdquo;</div>' +
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:14px;font-family:var(--din);letter-spacing:.3px;">Still sound like you?</div>' +
         (summaryLines.length
-          ? '<div style="border-left:2px solid #1a1a1a;padding:10px 14px;margin-bottom:16px;">' +
-              summaryLines.map(function(l){ return '<div style="font-size:11px;color:#ccc;line-height:1.6;margin-bottom:4px;">' + l.replace(/</g,'&lt;') + '</div>'; }).join('') +
+          ? '<div style="margin-bottom:12px;">' +
+              '<div style="font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:6px;">About you</div>' +
+              '<div style="border-left:2px solid #1a1a1a;padding:10px 14px;">' +
+                summaryLines.map(function(l){ return '<div style="font-size:11px;color:#ccc;line-height:1.6;margin-bottom:4px;">' + l.replace(/</g,'&lt;') + '</div>'; }).join('') +
+              '</div>' +
             '</div>'
           : '<div style="font-size:11px;color:#888;line-height:1.6;margin-bottom:16px;">This is your saved values profile from before.</div>'
+        ) +
+        (partnerLines.length
+          ? '<div style="margin-bottom:16px;">' +
+              '<div style="font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:6px;">The partner you\'re looking for</div>' +
+              '<div style="border-left:2px solid #1a1a1a;padding:10px 14px;">' +
+                partnerLines.map(function(l){ return '<div style="font-size:11px;color:#ccc;line-height:1.6;margin-bottom:4px;">' + l.replace(/</g,'&lt;') + '</div>'; }).join('') +
+              '</div>' +
+            '</div>'
+          : ''
         ) +
         '<div style="font-size:10px;color:#888;line-height:1.6;margin-bottom:16px;">We use this — not a fresh questionnaire — to find your next partner too. Confirm it still fits, or update it if things have changed.</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;padding-bottom:20px;">' +
@@ -16277,7 +16301,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     body.innerHTML =
       prevHtml +
       '<div style="padding:16px 20px 0;">' +
-        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">Question ' + (_surveyIdx+1) + ' of ' + total + ' · ' + q.dimension + '</div>' +
+        '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;margin-bottom:8px;">Question ' + (_surveyIdx+1) + ' of ' + total + ' · ' + (q.type === 'partner' ? 'Your ideal partner' : 'About you') + ' · ' + q.dimension + '</div>' +
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:18px;font-family:var(--din);letter-spacing:.3px;">' + q.text + '</div>' +
         '<div>' + optsHtml + '</div>' +
         '<div style="text-align:center;margin-top:4px;">' +
@@ -16361,7 +16385,14 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       var token = session.data.session && session.data.session.access_token;
       if (!token) throw new Error('not authenticated');
 
-      var dims = _surveyQuestions.map(function(q){ return q.dimension; });
+      // ★ [FIX 2026-09] 現在的 5 個維度分成 self / partner 兩組（見
+      //   generate-value-questions v5），這裡改成連 type 一起送，讓
+      //   interpret-values-text 知道哪些維度該歸進 summary、哪些歸進
+      //   partner_preference，不用自己用字面猜。_surveyQuestions 理論上
+      //   一定有值（openMatchingModal 進來時就先抓好了），萬一是空的
+      //   （例如 generate-value-questions 那次呼叫失敗），後端會退回
+      //   內建的預設維度清單，一樣能運作。
+      var dims = _surveyQuestions.map(function(q){ return { dimension: q.dimension, type: q.type === 'partner' ? 'partner' : 'self' }; });
       var res = await fetch(EDGE_INTERPRET_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -16428,31 +16459,42 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   //   回傳的 summary 完全一樣（[{dimension, description}, ...]），這樣不管
   //   使用者是選選項還是自己打字，match-partner / pair-insight 讀到的資料
   //   長得一模一樣，不用分兩套邏輯處理。
+  // ★ [FIX 2026-09] 問卷改成前 3 題問自身價值觀、後 2 題問理想夥伴（每題
+  //   generate-value-questions 現在都會帶一個 type:'self'|'partner' 欄位），
+  //   這裡改成依 type 分成兩組陣列，分別對應 user_values 的 summary 跟
+  //   partner_preference 兩個欄位，不再只回傳單一陣列。
   function _buildValuesSummaryFromAnswers() {
-    return _surveyQuestions.map(function(q) {
+    var summary = [], partnerPreference = [];
+    _surveyQuestions.forEach(function(q) {
       var ans = _surveyAnswers[q.id];
       var opt = q.options.find(function(o) { return o.value === ans; });
-      return { dimension: q.dimension, description: opt ? opt.label : null };
-    }).filter(function(x) { return !!x.description; });
+      if (!opt) return;
+      var entry = { dimension: q.dimension, description: opt.label };
+      (q.type === 'partner' ? partnerPreference : summary).push(entry);
+    });
+    return { summary: summary, partnerPreference: partnerPreference };
   }
 
   function _saveSurveyAndProceed() {
     _showSurveySavedState();
 
     // ★ 改存 user_values（一人一列，不再是 habit_values 的一習慣一列），
-    //   summary 在存檔當下就換算成人看得懂的文字，之後不用再對照代碼。
+    //   summary/partner_preference 在存檔當下就換算成人看得懂的文字，
+    //   之後不用再對照代碼。
     (async function() {
       try {
         if (_supabase && _currentHabit) {
           var session = await _supabase.auth.getSession();
           var uid = session.data.session && session.data.session.user && session.data.session.user.id;
           if (uid) {
+            var _built = _buildValuesSummaryFromAnswers();
             await _supabase.from('user_values').upsert({
-              user_id:         uid,
-              source_habit_id: _currentHabit.id,
-              raw_answers:     _surveyAnswers,
-              summary:         _buildValuesSummaryFromAnswers(),
-              updated_at:      new Date().toISOString()
+              user_id:            uid,
+              source_habit_id:    _currentHabit.id,
+              raw_answers:        _surveyAnswers,
+              summary:            _built.summary,
+              partner_preference: _built.partnerPreference,
+              updated_at:         new Date().toISOString()
             }, { onConflict: 'user_id' });
           }
         }

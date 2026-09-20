@@ -1205,6 +1205,7 @@ await supabase.from('claude_api_calls').insert({
               <option value="SCAM">Scam / suspicious</option>
               <option value="SPAM">Spam</option>
               <option value="IRRELEVANT">Off-topic</option>
+              <option value="SELF_HARM">Self-harm content</option>
             </select>
             <button class="refresh" onclick="loadFlaggedContent()">Refresh</button>
           </div>
@@ -5124,9 +5125,10 @@ var _flaggedItems = []; // 合併 posts + comments 兩張表撈回來的結果
 var _chatFeedbackItems = []; // moderation_feedback 表撈回來的結果（聊天室「回報誤判」）
 var MODERATION_CATEGORY_LABELS = {
   ADULT: 'Sexual content', VIOLENCE: 'Violent content', HATE: 'Hateful language',
-  POLITICAL: 'Political content', SCAM: 'Scam / suspicious', SPAM: 'Spam', IRRELEVANT: 'Off-topic'
+  POLITICAL: 'Political content', SCAM: 'Scam / suspicious', SPAM: 'Spam', IRRELEVANT: 'Off-topic',
+  SELF_HARM: 'Self-harm content' // ★ [新增 2026-09] 跟 interpret-values-text 共用同一套分類命名
 };
-var _HARMFUL_CATEGORIES = ['ADULT', 'VIOLENCE', 'HATE'];
+var _HARMFUL_CATEGORIES = ['ADULT', 'VIOLENCE', 'HATE', 'SELF_HARM'];
 
 async function loadFlaggedContent() {
   var tbody = document.getElementById('flaggedTbody');
