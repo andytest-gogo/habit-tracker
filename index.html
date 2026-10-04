@@ -624,10 +624,15 @@
             display:flex; justify-content:space-around; padding:10px 0 12px;
             z-index:200;
         }
-        .tab-item { flex:1; text-align:center; padding:4px; cursor:pointer; border:none; background:none; color:var(--gray-400); transition:color .15s; }
+        .tab-item { position:relative; flex:1; text-align:center; padding:4px; cursor:pointer; border:none; background:none; color:var(--gray-400); transition:color .15s; }
         .tab-item.active { color:var(--black); }
         .tab-item svg { width:20px; height:20px; display:block; margin:0 auto 3px; }
         .tab-item span { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; display:block; }
+        /* ── 2026-10 新增：底部 Buddies tab 未讀通知小紅點（跟 Buddies 頁鈴鐺同一份資料）── */
+        .tab-notif-dot {
+            position:absolute; top:2px; right:calc(50% - 16px); width:7px; height:7px;
+            border-radius:50%; background:#e63946; display:block;
+        }
 
         /* ── HOME ADD BUTTON ── */
         .home-top {
@@ -1088,6 +1093,52 @@
             font-size:9px; font-weight:700; letter-spacing:1.5px;
             text-transform:uppercase; color:var(--gray-400); margin-top:2px;
         }
+        /* ── 2026-10 新增：真正的 in-app 通知鈴鐺（收到邀請／被接受／被拒絕）── */
+        .notif-bell-wrap { position:relative; flex-shrink:0; }
+        .notif-bell-btn {
+            position:relative; width:34px; height:34px; border-radius:50%;
+            background:var(--gray-100); border:none; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            font-size:15px; line-height:1;
+        }
+        .notif-bell-badge {
+            position:absolute; top:-2px; right:-2px; min-width:16px; height:16px;
+            padding:0 3px; border-radius:8px; background:#e63946; color:#fff;
+            font-size:9px; font-weight:800; display:flex; align-items:center;
+            justify-content:center; font-family:var(--din); line-height:1;
+        }
+        .notif-panel {
+            position:absolute; top:42px; right:0; width:300px; max-height:360px;
+            overflow-y:auto; background:var(--white); border:1px solid var(--gray-200);
+            border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:50;
+        }
+        .notif-panel-hd {
+            display:flex; justify-content:space-between; align-items:center;
+            padding:10px 14px; border-bottom:1px solid var(--gray-100);
+            font-size:10px; font-weight:800; letter-spacing:.8px; text-transform:uppercase;
+        }
+        .notif-mark-all-btn {
+            background:none; border:none; color:var(--gray-400); font-size:9px;
+            font-weight:700; letter-spacing:.3px; text-transform:none; cursor:pointer;
+            text-decoration:underline;
+        }
+        .notif-panel-empty {
+            padding:28px 16px; text-align:center; font-size:11px; color:var(--gray-400);
+        }
+        .notif-row {
+            display:flex; gap:8px; padding:11px 14px; border-bottom:1px solid var(--gray-100);
+            cursor:pointer; align-items:flex-start;
+        }
+        .notif-row:last-child { border-bottom:none; }
+        .notif-row.unread { background:#f7faff; }
+        .notif-dot {
+            width:7px; height:7px; border-radius:50%; background:#185FA5;
+            margin-top:5px; flex-shrink:0;
+        }
+        .notif-row-body { flex:1; min-width:0; }
+        .notif-row-title { font-size:11.5px; font-weight:700; line-height:1.4; }
+        .notif-row-text { font-size:11px; color:var(--gray-500); line-height:1.5; margin-top:2px; }
+        .notif-row-time { font-size:9px; color:var(--gray-300); margin-top:4px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
         .buddies-empty {
             padding:48px 24px; text-align:center;
         }
@@ -7949,6 +8000,22 @@ function countCheckedDays(habit) {
 //   算數——我拒絕別人這件事，對我自己這個習慣不需要特別顯示。
 //   目前用 habit_name 比對（habit_id/partner_habit_id 這兩欄是這次才
 //   補上，資料庫遷移、舊資料回填之前，用名稱比對比較保險）。
+// ★ 2026-10 新增：'seeking' / 'declined' / 'ended' 這三種狀態都有「Find
+//   Partner」／「Find New Partner」按鈕，現在還要疊一層「背景配對目前
+//   狀態」——由 window._myMatchNotify（match_notifications 表）跟
+//   window._myPendingMatches（pending_match_suggestions 表）決定：
+//   有預存結果 → 'found'（按鈕不反灰，點下去直接看報告，不重新掃描）；
+//   沒有結果但 enabled=true → 'waiting'（還在背景找，按鈕反灰避免使用者
+//   自己又手動搜一次跟排程重複）；兩者都沒有 → 'none'（原本的樣子）。
+//   這裡統一判斷好塞進回傳物件，renderHabitPartnerStatus 不用重複判斷。
+function _withMatchStatus(base, habit) {
+  var notifyRow = (window._myMatchNotify && window._myMatchNotify[habit.id]) || null;
+  var pendingData = (window._myPendingMatches && window._myPendingMatches[habit.id]) || null;
+  base.matchStatus = pendingData ? 'found' : ((notifyRow && notifyRow.enabled) ? 'waiting' : 'none');
+  base.pendingMatchData = pendingData || null;
+  return base;
+}
+
 function getHabitPairState(habit, myUid) {
   var all = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs)) ? window._myPairs : [];
   var mine = all.filter(function(p) {
@@ -7959,7 +8026,7 @@ function getHabitPairState(habit, myUid) {
     if (p.status === 'declined' && !iAmUser) return false;
     return true;
   });
-  if (mine.length === 0) return { kind: 'seeking' };
+  if (mine.length === 0) return _withMatchStatus({ kind: 'seeking' }, habit);
 
   var PRECEDENCE = { active: 0, pending: 1, declined: 2, ended: 3 };
   mine.sort(function(a, b) {
@@ -7976,9 +8043,9 @@ function getHabitPairState(habit, myUid) {
 
   if (top.status === 'active') return { kind: 'active', pair: top, partnerId: partnerId, partnerHabitName: partnerHabitName };
   if (top.status === 'pending') return { kind: iAmUser ? 'pending_outgoing' : 'pending_incoming', pair: top, partnerId: partnerId, partnerHabitName: partnerHabitName };
-  if (top.status === 'declined') return { kind: 'declined', pair: top };
-  if (top.status === 'ended') return { kind: 'ended', pair: top };
-  return { kind: 'seeking' };
+  if (top.status === 'declined') return _withMatchStatus({ kind: 'declined', pair: top }, habit);
+  if (top.status === 'ended') return _withMatchStatus({ kind: 'ended', pair: top }, habit);
+  return _withMatchStatus({ kind: 'seeking' }, habit);
 }
 
 // ★ created_at 是唯一確定會被寫入、可以拿來算「配對第幾天」的時間欄位
@@ -8013,6 +8080,34 @@ function _notifyPartnershipEndedEmail(pairId) {
   }).catch(function(e) { console.warn('[notifyPartnershipEndedEmail] failed:', e && e.message); });
 }
 
+// ★ 新增（2026-10）：帳號刪除時通知還留在配對裡的另一方——這個情境
+//   （partner_left 範本：對方整個帳號都要消失了）跟上面手動 End Partnership
+//   （partnership_ended 範本：雙方帳號都還在，只是結束這段配對）是兩件事，
+//   後台 email_templates 裡 partner_left 範本本來就存在、變數也定義好了
+//   （userName/leavingUserName/habitName/ctaUrl，跟 partnership_ended 一樣），
+//   但整份 client code 之前完全沒有任何地方真的呼叫它——帳號刪除流程裡
+//   「刪除 pairs」那一步直接把資料列砍光，另一方完全不會知道發生了什麼事。
+//   ★ 2026-10 合併：一開始是另外寫一支 notify-partner-left 函式，後來發現
+//   跟上面 notify-partnership-ended 根本是同一套「認證呼叫者 → 找出收件人 →
+//   呼叫 send-email」骨架，差別只有要處理一筆配對還是呼叫者名下全部 active
+//   配對、寄哪個範本——沒必要多部署一支幾乎長得一樣的函式。改成共用同一個
+//   NOTIFY_PARTNERSHIP_ENDED_FN 網址：不帶 pairId、只帶 templateName:'partner_left'，
+//   伺服器端看到沒有 pairId 就知道是「帳號要刪除了，撈我名下所有 active
+//   配對逐一通知」這個模式（見 Edge Function 原始碼裡的 MODE B）。跟其他
+//   通知信一樣是 fire-and-forget，寄信失敗不該讓「刪除帳號」這個主要動作卡住。
+function _notifyPartnerLeftEmail() {
+  if (!window._supabaseClient) return Promise.resolve();
+  return window._supabaseClient.auth.getSession().then(function(sessionRes) {
+    var token = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token;
+    if (!token) return;
+    return fetch(NOTIFY_PARTNERSHIP_ENDED_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ templateName: 'partner_left' })
+    });
+  }).catch(function(e) { console.warn('[notifyPartnerLeftEmail] failed:', e && e.message); });
+}
+
 function endPartnershipDirect(pair, onDone) {
   if (!pair || !pair.id || !window._supabaseClient) return;
   if (!confirm('End this partnership?')) return;
@@ -8040,7 +8135,58 @@ function cancelPendingRequestDirect(pair, onDone) {
     .catch(function(){});
 }
 
-// ★ opts: { credits, onFindPartner, onEndPartnership, onCancelRequest, onGoToBuddies }
+// ★ 2026-10 新增：'declined'/'ended'/'seeking' 三種狀態現在還會依
+//   state.matchStatus（'none'/'waiting'/'found'，見 getHabitPairState 裡的
+//   _withMatchStatus）顯示不同圖示/文案——三處共用這個小表，不用各寫一次。
+function _matchStatusCopy(matchStatus, fallback) {
+  if (matchStatus === 'found') {
+    return { icon: '🎉', title: 'We found a potential partner!', sub: 'Take a look and decide if you want to connect.' };
+  }
+  if (matchStatus === 'waiting') {
+    return { icon: '🔄', title: "We're searching in the background", sub: "We scan once a day — you'll get an email the moment we find someone." };
+  }
+  return fallback;
+}
+
+// ★ Find Partner／Find New Partner 按鈕本身：matchStatus === 'found' 時不反灰、
+//   點下去直接叫 opts.onViewFoundMatch 看背景排程已經找到的報告（不重新掃描、
+//   不扣點）；'waiting' 時反灰、不能點，避免使用者自己手動搜一次跟背景排程的
+//   每日掃描重複動作；'none' 維持原本樣子，呼叫 opts.onFindPartner。
+function _renderFindPartnerBtn(state, opts, label) {
+  var matchStatus = state.matchStatus || 'none';
+  var stop = function(e) { e.stopPropagation(); };
+  if (matchStatus === 'found') {
+    return React.createElement("button", {
+      className: "seek-find-btn seek-find-btn-found",
+      onClick: function(e){ stop(e); opts.onViewFoundMatch && opts.onViewFoundMatch(state); }
+    }, "🎉 View your match");
+  }
+  if (matchStatus === 'waiting') {
+    return React.createElement("button", {
+      className: "seek-find-btn seek-find-btn-waiting",
+      disabled: true,
+      style: { opacity: 0.45, cursor: 'default', background: 'var(--gray-200)', color: 'var(--gray-500)', borderColor: 'var(--gray-300)' },
+      onClick: stop
+    }, "🔄 Searching…");
+  }
+  return React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, label);
+}
+
+// ★ 'found' 狀態下的「不要了，繼續用背景搜尋」小連結——使用者看過背景排程
+//   找到的這個人、不想邀請，但還想讓系統繼續在背景找下一個時用。見
+//   window._dismissFoundMatchKeepSearching() 的說明（這就是 Andy 要的
+//   「重開 notify 開關」：不用再故意讓一次即時搜尋失敗才能看到那個開關）。
+function _renderKeepSearchingLink(state, opts) {
+  if ((state.matchStatus || 'none') !== 'found') return null;
+  return React.createElement("button", {
+    className: "seek-dismiss-link",
+    style: { background: 'none', border: 'none', color: 'var(--gray-400)', fontSize: 11, textDecoration: 'underline', cursor: 'pointer', padding: '6px 0 0', textAlign: 'left', display: 'block' },
+    onClick: function(e){ e.stopPropagation(); opts.onDismissFoundMatch && opts.onDismissFoundMatch(state); }
+  }, "Not interested — keep searching");
+}
+
+// ★ opts: { credits, onFindPartner, onEndPartnership, onCancelRequest, onGoToBuddies,
+//           onViewFoundMatch, onDismissFoundMatch }
 //   partner 顯示名稱/大頭貼從 window._myPairPartnerInfo 這個對照表查
 //   （另外查 users 表建立的，pairs 資料列裡的 partner_username 欄位
 //   從來沒被寫入過，不能直接用）。
@@ -8105,27 +8251,30 @@ function renderHabitPartnerStatus(state, opts) {
     );
   }
   if (state.kind === 'declined') {
+    var _dCopy = _matchStatusCopy(state.matchStatus, { icon: '🔍', title: "Your last request wasn't accepted", sub: 'Want to try finding someone else?' });
     return React.createElement("div", { className: "seek-block", onClick: stop },
       React.createElement("div", { className: "seek-top" },
-        React.createElement("div", { className: "seek-icon" }, "🔍"),
+        React.createElement("div", { className: "seek-icon" }, _dCopy.icon),
         React.createElement("div", null,
-          React.createElement("div", { className: "seek-title" }, "Your last request wasn't accepted"),
-          React.createElement("div", { className: "seek-sub" }, "Want to try finding someone else?"),
+          React.createElement("div", { className: "seek-title" }, _dCopy.title),
+          React.createElement("div", { className: "seek-sub" }, _dCopy.sub),
           habitNameLine
         )
       ),
       React.createElement("div", { className: "ended-footer" },
-        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, "Find Partner")
-      )
+        _renderFindPartnerBtn(state, opts, "Find Partner")
+      ),
+      _renderKeepSearchingLink(state, opts)
     );
   }
   if (state.kind === 'ended') {
+    var _eCopy = _matchStatusCopy(state.matchStatus, { icon: '👋', title: 'Your previous partnership has ended', sub: 'Ready to find someone new who shares this habit?' });
     return React.createElement("div", { className: "ended-block", onClick: stop },
       React.createElement("div", { className: "ended-top" },
-        React.createElement("div", { className: "ended-icon" }, "👋"),
+        React.createElement("div", { className: "ended-icon" }, _eCopy.icon),
         React.createElement("div", null,
-          React.createElement("div", { className: "ended-title" }, "Your previous partnership has ended"),
-          React.createElement("div", { className: "ended-sub" }, "Ready to find someone new who shares this habit?"),
+          React.createElement("div", { className: "ended-title" }, _eCopy.title),
+          React.createElement("div", { className: "ended-sub" }, _eCopy.sub),
           habitNameLine
         )
       ),
@@ -8134,17 +8283,19 @@ function renderHabitPartnerStatus(state, opts) {
           React.createElement("span", { className: "credit-pill-num" }, opts.credits),
           React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
         ),
-        React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, "Find New Partner")
-      )
+        _renderFindPartnerBtn(state, opts, "Find New Partner")
+      ),
+      _renderKeepSearchingLink(state, opts)
     );
   }
   // seeking（這個習慣完全沒有任何配對紀錄）
+  var _sCopy = _matchStatusCopy(state.matchStatus, { icon: '🔍', title: 'Looking for your accountability partner', sub: 'Log in daily to earn +1 credit and keep searching' });
   return React.createElement("div", { className: "seek-block", onClick: stop },
     React.createElement("div", { className: "seek-top" },
-      React.createElement("div", { className: "seek-icon" }, "🔍"),
+      React.createElement("div", { className: "seek-icon" }, _sCopy.icon),
       React.createElement("div", null,
-        React.createElement("div", { className: "seek-title" }, "Looking for your accountability partner"),
-        React.createElement("div", { className: "seek-sub" }, "Log in daily to earn +1 credit and keep searching"),
+        React.createElement("div", { className: "seek-title" }, _sCopy.title),
+        React.createElement("div", { className: "seek-sub" }, _sCopy.sub),
         habitNameLine
       )
     ),
@@ -8153,8 +8304,9 @@ function renderHabitPartnerStatus(state, opts) {
         React.createElement("span", { className: "credit-pill-num" }, opts.credits),
         React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
       ),
-      React.createElement("button", { className: "seek-find-btn", onClick: function(e){ stop(e); opts.onFindPartner && opts.onFindPartner(); } }, "Find Partner")
-    )
+      _renderFindPartnerBtn(state, opts, "Find Partner")
+    ),
+    _renderKeepSearchingLink(state, opts)
   );
 }
 
@@ -9422,7 +9574,9 @@ function HistoryPage(_ref15) {
       onFindPartner: function() { window.openMatchingModal(h); },
       onEndPartnership: function(pair) { endPartnershipDirect(pair); },
       onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
-      onGoToBuddies: function() { if (onGoToBuddies) onGoToBuddies(); }
+      onGoToBuddies: function() { if (onGoToBuddies) onGoToBuddies(); },
+      onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(h, st.pendingMatchData); },
+      onDismissFoundMatch: function() { if (window._dismissFoundMatchKeepSearching) window._dismissFoundMatchKeepSearching(h.id); }
     })));
   }), hasMore && /*#__PURE__*/React.createElement("div", {
     style: { padding: '16px 0 0', textAlign: 'center' }
@@ -10160,6 +10314,124 @@ function MainApp(_ref16) {
     };
   }, [user]);
 
+  // ══════════════════════════════════════════════════════════════════
+  // ── [新增 2026-10] MainApp 層級抓 match_notifications + pending_match_suggestions ──
+  //   這兩張表之前只有兩個地方會讀：①「找不到配對」錯誤畫面裡那個通知開關
+  //   只會「寫」、從來沒「讀」過目前資料庫裡實際是開是關；② email 深連結
+  //   （?habitId=）讀 pending_match_suggestions，但只在那個特定時機讀一次就丟掉。
+  //   habit 卡片本身完全不知道「這個習慣背景已經在幫你找了」還是「已經找到、
+  //   等你看」，Find Partner 按鈕因此永遠只有一種樣子——這裡跟上面的
+  //   window._myPairs 用同一個做法，在 MainApp 掛載、user 一確定就抓，
+  //   getHabitPairState() 才能據此決定 waiting／found 這兩種新子狀態。
+  // ══════════════════════════════════════════════════════════════════
+  var _useState_matchNotifyTick = React.useState(0);
+  var _bumpMatchNotifyTick = function() { _useState_matchNotifyTick[1](function(n) { return n + 1; }); };
+  useEffect(function() {
+    if (!user || !user.uid || !_supabase) return;
+    var cancelled = false;
+    function fetchMatchNotifyState() {
+      Promise.all([
+        _supabase.from('match_notifications').select('habit_id, enabled, updated_at').eq('user_id', user.uid),
+        _supabase.from('pending_match_suggestions').select('habit_id, match_data').eq('user_id', user.uid)
+      ]).then(function(results) {
+        if (cancelled) return;
+        var notifyMap = {};
+        ((results[0] && results[0].data) || []).forEach(function(row) { notifyMap[row.habit_id] = row; });
+        var pendingMap = {};
+        ((results[1] && results[1].data) || []).forEach(function(row) { pendingMap[row.habit_id] = row.match_data; });
+        window._myMatchNotify = notifyMap;
+        window._myPendingMatches = pendingMap;
+        _bumpMatchNotifyTick();
+      }).catch(function() { if (!cancelled) _bumpMatchNotifyTick(); });
+    }
+    window._refreshMatchNotifyState = fetchMatchNotifyState;
+    fetchMatchNotifyState();
+    return function() {
+      cancelled = true;
+      if (window._refreshMatchNotifyState === fetchMatchNotifyState) window._refreshMatchNotifyState = null;
+    };
+  }, [user]);
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── [新增 2026-10] 真正的 in-app 通知（收到邀請／邀請被接受／被拒絕）──
+  //   追完程式碼才發現：notifications 這張表之前只有「寫」、從來沒有任何
+  //   地方「讀」出來顯示鈴鐺、清單或任何畫面，也沒有 Realtime 訂閱 pairs
+  //   表——不管是收到邀請、邀請被接受、還是被拒絕，原本收到資訊的那一方
+  //   完全不會被動地知道，只有重新打開 App、卡片狀態悄悄變了才會發現。
+  //   這裡在 MainApp 層級把這張表真的讀出來（跟上面 match_notifications
+  //   同一個做法：window.* 存資料 + tick 讓畫面重繪），下面的 Buddies tab
+  //   icon 跟 BuddiesPage 的鈴鐺才有資料可以顯示未讀數字跟清單。
+  //   ★ 現有兩處舊的 insert（partnership_ended 用 message/pair_id，
+  //   partner_request 用 title/body/data/is_read/created_at）欄位組合不一樣，
+  //   不確定資料庫實際上是哪一組都存在、還是其中一邊一直悄悄寫入失敗
+  //   （兩處呼叫都用 .catch(function(){}) 吞掉錯誤，從來沒人注意過）——這裡
+  //   用 select('*') 整列撈回來，畫面渲染時兩種欄位名稱都認得，不綁死其中一種。
+  // ══════════════════════════════════════════════════════════════════
+  var _useState_notifTick = React.useState(0);
+  var _bumpNotifTick = function() { _useState_notifTick[1](function(n) { return n + 1; }); };
+  useEffect(function() {
+    if (!user || !user.uid || !_supabase) return;
+    var cancelled = false;
+    function fetchMyNotifications() {
+      _supabase.from('notifications').select('*').eq('user_id', user.uid).limit(50)
+        .then(function(r) {
+          if (cancelled) return;
+          var list = (r && r.data) || [];
+          // created_at 不保證每一列都有（舊的 partnership_ended insert 沒帶這欄），
+          // 排序時缺值當成最舊，不會讓整個清單排序失敗或把新通知擠到後面。
+          list.sort(function(a, b) {
+            var ta = Date.parse(a.created_at || a.createdAt || 0) || 0;
+            var tb = Date.parse(b.created_at || b.createdAt || 0) || 0;
+            return tb - ta;
+          });
+          window._myNotifications = list;
+          _bumpNotifTick();
+        }).catch(function() { if (!cancelled) _bumpNotifTick(); });
+    }
+    window._refreshMyNotifications = fetchMyNotifications;
+    fetchMyNotifications();
+    return function() {
+      cancelled = true;
+      if (window._refreshMyNotifications === fetchMyNotifications) window._refreshMyNotifications = null;
+    };
+  }, [user]);
+
+  // ★ 寫入 helper：新的兩種通知（partner_accepted／partner_declined）統一走
+  //   這裡，不直接複製現有兩種互相矛盾的欄位組合。先試「完整」欄位組合
+  //   （跟 partner_request 一樣，title/body/data/is_read/created_at），
+  //   如果資料庫其實沒有這些欄位（PostgREST 回 column 不存在的錯誤）就自動
+  //   退回只用 user_id/type/message 這組最小欄位重試一次——不管資料庫實際
+  //   長怎樣，都盡量讓通知真的寫得進去，而且失敗不該讓「接受/拒絕邀請」這個
+  //   主要動作跟著失敗，所以整段是 fire-and-forget。
+  function _insertNotification(row) {
+    if (!window._supabaseClient || !row || !row.user_id) return Promise.resolve();
+    var full = Object.assign({ is_read: false, created_at: new Date().toISOString() }, row);
+    return window._supabaseClient.from('notifications').insert(full).then(function(r) {
+      if (r && r.error) {
+        console.warn('[insertNotification] full insert failed, retrying with minimal columns:', r.error.message);
+        var minimal = { user_id: row.user_id, type: row.type, message: row.body || row.message || '' };
+        return window._supabaseClient.from('notifications').insert(minimal).catch(function(){});
+      }
+      if (window._refreshMyNotifications) window._refreshMyNotifications();
+    }).catch(function(e) { console.warn('[insertNotification] failed:', e && e.message); });
+  }
+  window._insertNotification = _insertNotification;
+
+  // ★ 標記已讀：樂觀更新本地清單 + tick 立刻反映在鈴鐺數字上，資料庫寫入
+  //   失敗也不復原（已讀狀態本身不是什麼高風險的資料，不值得為了這個再跳回
+  //   未讀嚇使用者一次）。ids 省略時＝全部標記已讀。
+  window._markNotificationsRead = function(ids) {
+    var list = window._myNotifications || [];
+    var idSet = ids ? new Set(ids) : null;
+    list.forEach(function(n) { if (!idSet || idSet.has(n.id)) n.is_read = true; });
+    _bumpNotifTick();
+    if (!window._supabaseClient || !user || !user.uid) return;
+    var q = window._supabaseClient.from('notifications').update({ is_read: true }).eq('user_id', user.uid);
+    if (ids && ids.length) q = q.in('id', ids);
+    else q = q.eq('is_read', false);
+    q.then(function(){}).catch(function(){});
+  };
+
   // ── BroadcastChannel: 接收來自其他 PWA 視窗的習慣同步通知 ──
   // 當手機刪除/新增習慣後，電腦的 PWA 視窗會立即收到更新，不需重整
   useEffect(function () {
@@ -10279,9 +10551,11 @@ function MainApp(_ref16) {
   //   （名額現在只看習慣自訂的執行日期到不到期，見 addHabit / handleAddHabitClick
   //   / 桌面版新增按鈕三處的 3 個上限檢查——到期的習慣本來就會離開首頁、
   //   進 Habit History，用不著再靠這個 21 天數字額外判斷一次）。
-  //   CHALLENGE_COMPLETE_DAYS 現在只剩兩個用途：① awardDailyLoginCredit()
-  //   打滿 21 天發一次性 10 點配對點數獎勵、② CheerDetailPanel 決定鼓勵訊息
-  //   要顯示「今天」還是「整段旅程」的文案，跟名額/Habit History 完全無關。
+  //   ★ 2026-10 更新：awardDailyLoginCredit() 已經移除 21 天門檛（配對點數
+  //   現在是每天登入就 +1，跟打卡天數無關，見下方該函式的註解）。
+  //   CHALLENGE_COMPLETE_DAYS 現在只剩一個用途：CheerDetailPanel 決定鼓勵
+  //   訊息要顯示「今天」還是「整段旅程」的文案，跟配對點數/名額/Habit History
+  //   都無關了。
   var CHALLENGE_COMPLETE_DAYS = 21;
 
   // ── fetchHabitsNow: 強制從 Supabase 重新抓習慣（不依賴 Realtime 訂閱）──
@@ -10619,14 +10893,12 @@ function MainApp(_ref16) {
   var awardDailyLoginCredit = React.useCallback(function() {
     if (!isFirebaseConfigured || !user) return;
     var todayKey = toISODay();
-    // For each completed habit that has no active partner, award +1 if not awarded today
+    // ★ 2026-10 更新：移除「打卡滿 21 天才給、第一次滿 21 天直接發 10 點」的
+    //   舊規則——21 天門檛已經在別處全部拔掉了，這裡原本是漏網之魚。
+    //   新規則：只要這個習慣目前沒有 active 夥伴，不管打卡天數多少，
+    //   每天登入就 +1 點配對點數（還是維持同一天只發一次、上限
+    //   MAX_CREDITS_PER_HABIT=10 點的規則，防止閒置帳號無限累積）。
     habits.forEach(function(h) {
-      var _nc = (h.checkedDates||[]).map(function(d){
-        if(/\d{4}-\d{2}-\d{2}/.test(d)) return d;
-        var p = new Date(d); return isNaN(p)?null:toISODay(p);
-      }).filter(Boolean);
-      var isCompleted = new Set(_nc).size >= CHALLENGE_COMPLETE_DAYS;
-      if (!isCompleted) return;
       // Check if already awarded today
       db.collection('matching_credits')
         .where('userId','==',user.uid)
@@ -10642,9 +10914,9 @@ function MainApp(_ref16) {
           if (hasActivePartner) return; // already paired — no more credits needed
 
           if (snap.empty) {
-            // First time: award 10 credits for completing challenge
-            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: MAX_CREDITS_PER_HABIT, lastAwardDate: todayKey });
-            setMatchingCredits(function(prev){ var n={}; n[h.id]=MAX_CREDITS_PER_HABIT; return Object.assign({},prev,n); });
+            // First login for this habit: award +1 (not a lump sum anymore)
+            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: 1, lastAwardDate: todayKey });
+            setMatchingCredits(function(prev){ var n={}; n[h.id]=1; return Object.assign({},prev,n); });
           } else {
             var doc = snap.docs[0];
             var data = doc.data();
@@ -12347,6 +12619,15 @@ function MainApp(_ref16) {
         }, Promise.resolve());
       })
 
+      // ★ 2026-10 新增：Step 2e-4 會把這個帳號名下所有 pairs 紀錄直接刪光——
+      //   一定要在那之前先呼叫 notify-partner-left，讓伺服器端趁資料還在時
+      //   查出所有 active 配對、通知還留在裡面的另一方。順序顛倒的話，
+      //   notify-partner-left 查到的會是空的，誰都通知不到。失敗也不擋後面
+      //   的刪除流程，只記錄。
+      .then(function() {
+        return _notifyPartnerLeftEmail().catch(function() {});
+      })
+
       // Step 2e-4: Delete pairs and match_requests
       .then(function() {
         // 刪除此用戶的所有配對紀錄（user_id 或 partner_id）
@@ -12656,7 +12937,9 @@ function MainApp(_ref16) {
           onFindPartner: function() { window.openMatchingModal(habit); },
           onEndPartnership: function(pair) { endPartnershipDirect(pair); },
           onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
-          onGoToBuddies: function() { setActiveTab('buddies'); }
+          onGoToBuddies: function() { setActiveTab('buddies'); },
+          onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(habit, st.pendingMatchData); },
+          onDismissFoundMatch: function() { if (window._dismissFoundMatchKeepSearching) window._dismissFoundMatchKeepSearching(habit.id); }
         })
       ),
       /* ── card footer ── */
@@ -13770,7 +14053,7 @@ function MainApp(_ref16) {
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap: "round", strokeLinejoin: "round",
     d: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-  })), /*#__PURE__*/React.createElement("span", null, "Buddies")), /*#__PURE__*/React.createElement("button", {
+  })), (window._myNotifications || []).some(function(n){ return !n.is_read; }) && /*#__PURE__*/React.createElement("span", { className: "tab-notif-dot", "aria-hidden": "true" }), /*#__PURE__*/React.createElement("span", null, "Buddies")), /*#__PURE__*/React.createElement("button", {
     className: "tab-item".concat(activeTab === 'profile' ? ' active' : ''),
     role: "tab",
     "aria-selected": activeTab === 'profile',
@@ -14540,6 +14823,22 @@ function PairWallPage(_ref_pw) {
 }
 
 /* ── BUDDIES PAGE ── */
+// ★ 2026-10 新增：通知面板用的相對時間文字——故意跟 fmtLastActive()（在線
+//   狀態用的「active Xm ago」）分開寫，這裡的用途跟文案都不一樣，共用反而
+//   要為了兩種不同語氣互相妥協。ts 缺值或無法解析時回傳空字串，呼叫端已經
+//   用 timeLabel && ... 擋掉，不會顯示出奇怪的空殼。
+function _fmtNotifTime(ts) {
+  if (!ts) return '';
+  var t = Date.parse(ts);
+  if (isNaN(t)) return '';
+  var diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (diffSec < 60) return 'Just now';
+  if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
+  if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
+  if (diffSec < 604800) return Math.floor(diffSec / 86400) + 'd ago';
+  return new Date(t).toLocaleDateString();
+}
+
 function BuddiesPage(_ref_buddies) {
   var user = _ref_buddies.user;
   var habits = _ref_buddies.habits || [];
@@ -14581,6 +14880,10 @@ function BuddiesPage(_ref_buddies) {
   //   不是存 clip 本身，實際的 clip 清單交給 BuddyAlbumModal 自己查。
   var _useState_viewingAlbum = useState(null);
   var viewingAlbumForPair = _useState_viewingAlbum[0], setViewingAlbumForPair = _useState_viewingAlbum[1];
+  // ★ 新增（2026-10）：真正的 in-app 通知面板開關——資料本身在 window._myNotifications
+  //   （MainApp 層級抓的，見那邊的註解），這裡只管「鈴鐺按鈕按下去要不要展開」。
+  var _useState_notifPanel = useState(false);
+  var notifPanelOpen = _useState_notifPanel[0], setNotifPanelOpen = _useState_notifPanel[1];
 
   // ★ 修正：momentum 進度條原本借用配對前 Find Partner 解鎖用的 PARTNER_UNLOCK_DAYS=7，
   //   但雙方既然已經配對成功，這個「距離解鎖還差幾天」的門檻早就跨過去了，繼續用同一個
@@ -14810,7 +15113,64 @@ function BuddiesPage(_ref_buddies) {
       React.createElement("div", null,
         React.createElement("div", { className: "buddies-title" }, "Buddies"),
         React.createElement("div", { className: "buddies-sub" }, buddiesSubLabel)
-      )
+      ),
+      (function() {
+        var myNotifs = window._myNotifications || [];
+        var unreadCount = myNotifs.filter(function(n) { return !n.is_read; }).length;
+        return React.createElement("div", { className: "notif-bell-wrap" },
+          React.createElement("button", {
+            className: "notif-bell-btn",
+            "aria-label": "Notifications" + (unreadCount > 0 ? ' (' + unreadCount + ' unread)' : ''),
+            onClick: function(e) { e.stopPropagation(); setNotifPanelOpen(function(v) { return !v; }); }
+          },
+            React.createElement("span", { "aria-hidden": "true" }, "🔔"),
+            unreadCount > 0 && React.createElement("span", { className: "notif-bell-badge" }, unreadCount > 9 ? '9+' : unreadCount)
+          ),
+          notifPanelOpen && React.createElement(React.Fragment, null,
+            // ★ 透明全螢幕背板，點外面關掉面板——跟其他 modal 的 overlay 關閉慣例一致
+            React.createElement("div", {
+              style: { position:'fixed', inset:0, zIndex:49 },
+              onClick: function() { setNotifPanelOpen(false); }
+            }),
+            React.createElement("div", { className: "notif-panel", onClick: function(e){ e.stopPropagation(); } },
+              React.createElement("div", { className: "notif-panel-hd" },
+                React.createElement("span", null, "Notifications"),
+                unreadCount > 0 && React.createElement("button", {
+                  className: "notif-mark-all-btn",
+                  onClick: function() { if (window._markNotificationsRead) window._markNotificationsRead(); }
+                }, "Mark all read")
+              ),
+              myNotifs.length === 0
+                ? React.createElement("div", { className: "notif-panel-empty" }, "No notifications yet")
+                : React.createElement("div", { className: "notif-panel-list" },
+                    myNotifs.slice(0, 20).map(function(n, idx) {
+                      var title = n.title || (
+                        n.type === 'partner_request' ? 'New Partner Request!' :
+                        n.type === 'partner_accepted' ? 'Partner request accepted! 🎉' :
+                        n.type === 'partner_declined' ? "Your partner request wasn't accepted" :
+                        n.type === 'partnership_ended' ? 'Partnership ended' :
+                        'Notification'
+                      );
+                      var body = n.body || n.message || '';
+                      var timeLabel = _fmtNotifTime(n.created_at || n.createdAt);
+                      return React.createElement("div", {
+                        key: n.id || (title + idx),
+                        className: "notif-row".concat(n.is_read ? '' : ' unread'),
+                        onClick: function() { if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]); }
+                      },
+                        !n.is_read && React.createElement("span", { className: "notif-dot" }),
+                        React.createElement("div", { className: "notif-row-body" },
+                          React.createElement("div", { className: "notif-row-title" }, title),
+                          body && React.createElement("div", { className: "notif-row-text" }, body),
+                          timeLabel && React.createElement("div", { className: "notif-row-time" }, timeLabel)
+                        )
+                      );
+                    })
+                  )
+            )
+          )
+        );
+      })()
     ),
     pairsLoading
       ? React.createElement("div", { style: { padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--gray-400)' } }, "Loading...")
@@ -14851,6 +15211,16 @@ function BuddiesPage(_ref_buddies) {
                   .then(function() {
                     setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
                     if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
+                    // ★ 2026-10 新增：通知原本送出邀請的那一方——這是真正的 in-app 通知，
+                    //   跟 toast 是兩件事：toast 只有我（接受邀請的這個人）自己這台裝置
+                    //   看得到，對方要等自己打開 App、鈴鐺才會顯示未讀。
+                    if (typeof window._insertNotification === 'function') {
+                      window._insertNotification({
+                        user_id: pair.user_id, type: 'partner_accepted',
+                        title: 'Partner request accepted! 🎉',
+                        body: (user.displayName || 'Your buddy') + ' accepted your partner request for "' + (pair.habit_name || 'your habit') + '".'
+                      });
+                    }
                     // ★ [FIX 2026-09] 原本這裡是「這兩人身上其他所有還在 pending 的邀請
                     //   全部撤回」，用 user_id/partner_id 查，沒有限定同一個習慣。使用者
                     //   最多可以有 3 個進行中習慣、每個都能各自找夥伴，這樣寫會導致：
@@ -14892,6 +15262,18 @@ function BuddiesPage(_ref_buddies) {
                   .then(function() {
                     setPairs(function(prev) { return prev.filter(function(p) { return p.id !== pair.id; }); });
                     if (typeof showToast === 'function') showToast('Request declined.');
+                    // ★ 2026-10 新增：通知原本送出邀請的那一方被拒絕了——理由跟上面
+                    //   handleAccept 一樣，單靠卡片狀態悄悄變成 declined，原本的
+                    //   requester 不會主動被告知。文案故意不提是誰拒絕的，跟
+                    //   getHabitPairState 的 declined 卡片本來的語氣一致（只講
+                    //   「上次沒成功」，不強調具體是誰拒絕）。
+                    if (typeof window._insertNotification === 'function') {
+                      window._insertNotification({
+                        user_id: pair.user_id, type: 'partner_declined',
+                        title: "Your partner request wasn't accepted",
+                        body: 'Your partner request for "' + (pair.habit_name || 'your habit') + '" wasn\'t accepted this time. Want to try finding someone else?'
+                      });
+                    }
                   });
               }
 
@@ -16480,6 +16862,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   var EDGE_URL = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/match-partner';
   var _currentHabit = null;
   var _currentMatch = null;
+  // ★ 2026-10 新增：這次秀出來的配對結果是不是背景排程（check-pending-matches）
+  //   預存在 pending_match_suggestions 裡的，不是這次即時掃描才找到的——
+  //   影響「送出邀請」或「不要了，繼續用背景搜尋」之後該不該清掉那筆預存資料。
+  var _currentMatchIsPreloaded = false;
 
   // ── Survey state ──────────────────────────────────────────────────────────
   var _surveyQuestions = [];
@@ -16506,6 +16892,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
     _currentHabit = habit;
     _currentMatch = null;
+    _currentMatchIsPreloaded = false; // ★ 這是即時掃描，不是背景預存結果
     _surveyAnswers = {};
     _surveyIdx = 0;
     _surveyQuestions = [];
@@ -17603,6 +17990,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         _matchSending = false;
         _renderMatchCard();
         if (typeof showToast === 'function') showToast('Invite sent! 🎉');
+        // ★ 這次邀請如果是從背景排程預存的結果送出去的，代表這個習慣的配對
+        //   已經有結論了——清掉 pending_match_suggestions，避免 habit 卡片
+        //   在邀請都送出去之後還一直顯示「🎉 View your match」這個已經過時的按鈕。
+        //   不順便重開 match_notifications（已經有 pending 邀請在跑，不該讓背景
+        //   排程同時又找別人）。
+        if (_currentMatchIsPreloaded && _currentHabit && window._supabaseClient && window._currentUser) {
+          window._supabaseClient.from('pending_match_suggestions')
+            .delete().eq('user_id', window._currentUser.uid).eq('habit_id', _currentHabit.id)
+            .then(function() { if (window._refreshMatchNotifyState) window._refreshMatchNotifyState(); })
+            .catch(function(){});
+        }
         if (_matchCardIdx < _matchCards.length - 1) setTimeout(function(){ _matchCardIdx++; _renderMatchCard(); }, 700);
       } catch(e) {
         _matchSending = false;
@@ -17648,6 +18046,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
     _currentHabit = habit;
     _currentMatch = null;
+    _currentMatchIsPreloaded = true; // ★ 送邀請或「繼續用背景搜尋」時要清掉 pending_match_suggestions，見下面兩處
 
     document.getElementById('matchingOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -17668,12 +18067,35 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     var _preloadedArr = Array.isArray(matchData) ? matchData : [matchData];
     showMatchingResults(_preloadedArr);
 
-    // 顯示過一次就從資料庫刪掉，避免下次深連結或重新整理又跳出同一筆舊資料。
-    if (window._supabaseClient && window._currentUser) {
-      window._supabaseClient.from('pending_match_suggestions')
-        .delete().eq('user_id', window._currentUser.uid).eq('habit_id', habit.id)
-        .then(function(){});
-    }
+    // ★ 2026-10 修正：不再「顯示過一次就刪」。原本這裡顯示完立刻刪掉
+    //   pending_match_suggestions，使用者關掉 modal 之後就再也看不到這筆結果了——
+    //   這正是 Andy 要的「找到配對後的持續性入口」缺的那一塊：habit 卡片上的
+    //   「🎉 View your match」按鈕要能隨時點回來看，不是只能靠信件連結點一次。
+    //   真正該清掉這筆的時機是使用者「做出最終決定」的那一刻：送出邀請
+    //   （見 _mrcInviteCard 成功之後）、或明確選「不要了，繼續用背景搜尋」
+    //   （見 window._dismissFoundMatchKeepSearching）。
+  };
+
+  // ── 2026-10 新增：found 狀態卡片上的「不要了，繼續用背景搜尋」──────────
+  //   使用者看過背景排程找到的這個人、決定不邀請，但還想繼續讓系統在背景
+  //   幫忙找下一個——清掉這筆已經看過的 pending_match_suggestions，同時把
+  //   match_notifications.enabled 重新打開，讓明天的 check-pending-matches
+  //   排程重新把這個習慣納入掃描範圍。這是 Andy 要的「重開 notify 開關」：
+  //   不用像以前一樣故意讓一次即時搜尋失敗，才能看到那個開關。
+  window._dismissFoundMatchKeepSearching = function(habitId) {
+    if (!habitId || !window._supabaseClient || !window._currentUser) return;
+    return window._supabaseClient.from('pending_match_suggestions')
+      .delete().eq('user_id', window._currentUser.uid).eq('habit_id', habitId)
+      .then(function() {
+        return window._supabaseClient.from('match_notifications').upsert({
+          user_id: window._currentUser.uid,
+          habit_id: habitId,
+          enabled: true,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,habit_id' });
+      })
+      .then(function() { if (window._refreshMatchNotifyState) window._refreshMatchNotifyState(); })
+      .catch(function(e) { console.warn('[dismissFoundMatchKeepSearching] failed:', e && e.message); });
   };
 
   // ★ 2026-09 清理：舊版 window.sendPartnerRequest 已移除——這是早期留下的
@@ -17703,7 +18125,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         habit_id: _currentHabit.id,
         enabled: isOn,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,habit_id' }).then(function(){}).catch(function(){});
+      }, { onConflict: 'user_id,habit_id' })
+        // ★ 2026-10 新增：存完馬上重新抓一次 MainApp 層級的 match_notifications 狀態，
+        //   使用者關掉這個 modal 回到 habit 卡片時，Find Partner 按鈕才能立刻反映
+        //   「現在背景正在幫你找」（反灰），不用等下次重新整理頁面。
+        .then(function(){ if (window._refreshMatchNotifyState) window._refreshMatchNotifyState(); })
+        .catch(function(){});
     }
   };
 
