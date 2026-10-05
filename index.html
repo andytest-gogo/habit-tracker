@@ -12402,6 +12402,56 @@ function MainApp(_ref16) {
       return Promise.reject({ __handled: true });
     })
 
+      // ★ 2026-10 修正：delete-user 這支 Edge Function 原本放在最後面
+      //   （刪完 pairs、users 這些資料之後）才呼叫——但 delete-user 內部
+      //   自己會先查 pairs 表去通知還留著的夥伴（把那組配對狀態改成
+      //   ended、幫對方寫一筆站內通知、寄 partner_left 信、重新打開對方
+      //   的 match_notifications 讓背景排程自動幫他找下一個人），等到
+      //   前端已經把 pairs 跟 users 這兩張表都刪光了才呼叫，delete-user
+      //   查到的就是空的，夥伴通知邏輯形同沒在跑。所以搬到這裡——一拿到
+      //   重新驗證後的有效 token 就馬上呼叫，搶在下面任何一步刪 pairs/
+      //   users 之前執行，delete-user 才有完整資料可以查。
+      //   這支函式內部也已經把 Bunny Storage/Stream 的媒體清除做完了
+      //   （deleteBunnyStorage/deleteBunnyStream，直接呼叫 Bunny API）
+      //   ——跟 bunny-admin 的 delete-user-media 做的是同一件事，不用
+      //   前端再額外呼叫一次。失敗也不擋後面的刪除流程，只記錄——
+      //   帳號本身的資料清除比這支 Edge Function 成不成功更優先。
+      .then(async function() {
+        var token = null;
+        try {
+          var sessionRes = await _supabase.auth.getSession();
+          token = sessionRes.data.session && sessionRes.data.session.access_token;
+        } catch (e) {
+          console.warn('[DeleteAccount] getSession failed:', e.message);
+        }
+
+        if (!token) {
+          console.warn('[DeleteAccount] No valid token — skipping delete-user Edge Function call');
+          return;
+        }
+
+        try {
+          var resp = await fetch(
+            'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/delete-user',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              }
+            }
+          );
+          if (!resp.ok) {
+            var errBody = await resp.text();
+            console.warn('[DeleteAccount] delete-user Edge Function returned error:', resp.status, errBody);
+          } else {
+            console.log('[DeleteAccount] delete-user succeeded (auth.users + Bunny media + partner notify)');
+          }
+        } catch (e) {
+          console.warn('[DeleteAccount] delete-user Edge Function failed:', e.message);
+        }
+      })
+
       // Step 2a: Delete habits
       .then(function() {
         return db.collection('habits').where('userId', '==', uid).get()
@@ -12619,15 +12669,12 @@ function MainApp(_ref16) {
         }, Promise.resolve());
       })
 
-      // ★ 2026-10 新增：Step 2e-4 會把這個帳號名下所有 pairs 紀錄直接刪光——
-      //   一定要在那之前先呼叫 notify-partner-left，讓伺服器端趁資料還在時
-      //   查出所有 active 配對、通知還留在裡面的另一方。順序顛倒的話，
-      //   notify-partner-left 查到的會是空的，誰都通知不到。失敗也不擋後面
-      //   的刪除流程，只記錄。
-      .then(function() {
-        return _notifyPartnerLeftEmail().catch(function() {});
-      })
-
+      // ★ 2026-10 修正：這裡原本在刪 pairs 之前，會先呼叫 _notifyPartnerLeftEmail()
+      //   自己發一次 partner_left 通知信——現在不用了。上面已經把 delete-user
+      //   提早到最前面呼叫，它內部的 notifyPartnersBeforeDeletion() 趁 pairs
+      //   表還完整時就已經查過、通知過夥伴了（而且做得更完整：配對狀態改
+      //   ended、站內通知、寄信、重新打開對方的 match_notifications 都有做）。
+      //   這裡再呼叫一次只會讓對方收到兩封重複的信，所以拿掉。
       // Step 2e-4: Delete pairs and match_requests
       .then(function() {
         // 刪除此用戶的所有配對紀錄（user_id 或 partner_id）
@@ -12674,45 +12721,11 @@ function MainApp(_ref16) {
           .forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
       })
 
-      // Step 4: 呼叫 Edge Function 刪除 auth.users 帳號
-      // 關鍵時序：必須在 signOut() 前拿 token，signOut 後 token 就失效了
-      .then(async function() {
-        // 4a. 先拿目前有效的 session token
-        var token = null;
-        try {
-          var sessionRes = await _supabase.auth.getSession();
-          token = sessionRes.data.session && sessionRes.data.session.access_token;
-        } catch(e) {
-          console.warn('[DeleteAccount] getSession failed:', e.message);
-        }
-
-        // 4b. 用有效 token 呼叫 Edge Function 刪除 auth.users
-        if (token) {
-          try {
-            var resp = await fetch(
-              'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/delete-user',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer ' + token
-                }
-              }
-            );
-            if (!resp.ok) {
-              var errBody = await resp.text();
-              console.warn('[DeleteAccount] Edge Function returned error:', resp.status, errBody);
-            } else {
-              console.log('[DeleteAccount] auth.users deleted successfully');
-            }
-          } catch(e) {
-            console.warn('[DeleteAccount] Edge Function delete-user failed:', e.message);
-          }
-        } else {
-          console.warn('[DeleteAccount] No valid token — skipping Edge Function call');
-        }
-
-        // 4c. 最後才 signOut，清除 session
+      // Step 4: signOut，清除 session
+      // ★ 2026-10 修正：原本這裡才呼叫 delete-user Edge Function（拿 token→
+      //   呼叫→signOut），現在那個呼叫已經搬到最前面（reauth 成功後馬上
+      //   執行，理由見上面那段註解），這裡單純剩下 signOut。
+      .then(function() {
         auth._cachedUser = null;
         window._isDeletingAccount = false;
         return _supabase.auth.signOut().then(function(r) {
@@ -14064,6 +14077,47 @@ function MainApp(_ref16) {
   }, /*#__PURE__*/React.createElement(ProfileIcon, null), /*#__PURE__*/React.createElement("span", null, "Profile"))));
 }
 
+/* ── 模組層級：聊天室裡傳訊息（文字/媒體/媒體同意）時，順手幫收訊的那一方
+   寫一筆 in-app 通知 ──
+   ★ 2026-10 新增：pair_messages 原本送出之後完全沒有任何通知——touchPairActivity()
+   只更新 pairs.last_post_at（純粹讓 Buddies 列表排序用），對方要自己打開這個
+   配對的聊天室才會看到新訊息。跟邀請/接受/拒絕那幾個通知一樣的問題，現在補上。
+   ★ 刻意不是「每則訊息都各開一筆通知」——兩人聊天來回很快，那樣鈴鐺數字
+   會被同一段對話洗版，體驗很糟。做法是：先查這個 pair 有沒有「還沒讀」的
+   pair_message 通知，有的話直接更新那一筆（換成最新內容、時間戳記往後推），
+   沒有才新增一筆——對方只要還沒點開通知，不管收到幾則訊息，鈴鐺上永遠只占一個
+   未讀名額,點進去看到的是最新那句話的預覽。*/
+function _notifyNewPairMessage(pairId, recipientId, senderName, preview) {
+  if (!window._supabaseClient || !recipientId || !pairId) return Promise.resolve();
+  var sb = window._supabaseClient;
+  var tag = '"pair_id":"' + pairId + '"'; // data 欄位存的是 JSON.stringify 過的字串，用子字串比對找同一組配對的既有通知
+  return sb.from('notifications')
+    .select('id')
+    .eq('user_id', recipientId)
+    .eq('type', 'pair_message')
+    .eq('is_read', false)
+    .like('data', '%' + tag + '%')
+    .then(function(r) {
+      var existing = r && r.data && r.data[0];
+      var payload = {
+        title: 'New message from ' + (senderName || 'your buddy'),
+        body: preview ? ((senderName || 'Your buddy') + ': "' + preview + '"') : ((senderName || 'Your buddy') + ' sent you a new message.'),
+        data: JSON.stringify({ pair_id: pairId }),
+        created_at: new Date().toISOString()
+      };
+      if (existing && existing.id) {
+        return sb.from('notifications').update(payload).eq('id', existing.id);
+      }
+      payload.user_id = recipientId;
+      payload.type = 'pair_message';
+      payload.is_read = false;
+      return sb.from('notifications').insert(payload);
+    })
+    .then(function() { if (window._refreshMyNotifications) window._refreshMyNotifications(); })
+    .catch(function(e) { console.warn('[notifyNewPairMessage] failed:', e && e.message); });
+}
+window._notifyNewPairMessage = _notifyNewPairMessage;
+
 /* ── PAIR WALL PAGE ── */
 function PairWallPage(_ref_pw) {
   var user = _ref_pw.user;
@@ -14389,7 +14443,10 @@ function PairWallPage(_ref_pw) {
         return;
       }
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
-        .then(function() { setInputText(''); setSending(false); touchPairActivity(); })
+        .then(function() {
+          setInputText(''); setSending(false); touchPairActivity();
+          _notifyNewPairMessage(pair.id, partnerId, user.displayName, text.length > 60 ? text.slice(0, 60) + '…' : text);
+        })
         .catch(function() { setSending(false); });
     });
   }
@@ -14418,6 +14475,19 @@ function PairWallPage(_ref_pw) {
       .then(function() {
         return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media_request' });
       })
+      .then(function() {
+        // ★ 2026-10 新增：這是聊天室內部狀態變化，不是一般訊息，不用走
+        //   _notifyNewPairMessage 那套「同一筆更新」的防洗版邏輯——這種事
+        //   本來就不會連續發生（對方回應之前你沒辦法再送一次請求）。
+        if (typeof window._insertNotification === 'function') {
+          window._insertNotification({
+            user_id: partnerId, type: 'media_consent_requested',
+            title: 'Photo & video sharing requested',
+            body: (user.displayName || 'Your buddy') + ' wants to share photos & videos with you — open the chat to respond.',
+            data: JSON.stringify({ pair_id: pair.id })
+          });
+        }
+      })
       .catch(function() {});
   }
 
@@ -14427,6 +14497,19 @@ function PairWallPage(_ref_pw) {
     _supabase.from('pairs').update({ media_consent: mc }).eq('id', pair.id)
       .then(function() {
         return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: approve ? 'media_consent_granted' : 'media_consent_declined' });
+      })
+      .then(function() {
+        if (typeof window._insertNotification === 'function') {
+          window._insertNotification({
+            user_id: partnerId,
+            type: approve ? 'media_consent_granted' : 'media_consent_declined',
+            title: approve ? 'Photo & video sharing approved! 🎉' : 'Photo & video sharing declined',
+            body: (user.displayName || 'Your buddy') + (approve
+              ? ' approved your request to share photos & videos.'
+              : ' declined your request to share photos & videos.'),
+            data: JSON.stringify({ pair_id: pair.id })
+          });
+        }
       })
       .catch(function() {});
   }
@@ -14486,7 +14569,10 @@ function PairWallPage(_ref_pw) {
     .then(function(r) {
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: '', message_type: 'media', media_url: r.url, media_type: isVid ? 'video' : 'image' });
     })
-    .then(function() { setChatMediaSending(false); setChatMediaProgress(0); touchPairActivity(); })
+    .then(function() {
+      setChatMediaSending(false); setChatMediaProgress(0); touchPairActivity();
+      _notifyNewPairMessage(pair.id, partnerId, user.displayName, isVid ? '📹 Sent a video' : '📷 Sent a photo');
+    })
     .catch(function(err) {
       setChatMediaProgress(0);
       if (err && err.__modBlocked) return;
@@ -14884,6 +14970,13 @@ function BuddiesPage(_ref_buddies) {
   //   （MainApp 層級抓的，見那邊的註解），這裡只管「鈴鐺按鈕按下去要不要展開」。
   var _useState_notifPanel = useState(false);
   var notifPanelOpen = _useState_notifPanel[0], setNotifPanelOpen = _useState_notifPanel[1];
+  // ★ 2026-10 新增：點「New Partner Request!」通知要看的是對方那邊配對時
+  //   產生的完整配對報告（pair.ai_match_data）+ Accept/Decline，不是直接
+  //   開聊天室（還沒接受就能聊天不合理，而且列表卡片本來就只有
+  //   status==='active' 才顯示報告）。這裡存「正在用 modal 看哪一筆
+  //   pending 邀請」，不是存整個聊天室要切換的 selectedPair。
+  var _useState_viewingRequest = useState(null);
+  var viewingRequestPair = _useState_viewingRequest[0], setViewingRequestPair = _useState_viewingRequest[1];
 
   // ★ 修正：momentum 進度條原本借用配對前 Find Partner 解鎖用的 PARTNER_UNLOCK_DAYS=7，
   //   但雙方既然已經配對成功，這個「距離解鎖還差幾天」的門檻早就跨過去了，繼續用同一個
@@ -15108,6 +15201,86 @@ function BuddiesPage(_ref_buddies) {
     return { longestTogether: longestTogether, totalMatched: totalMatched, activePairsCount: activePairsCount };
   })();
 
+  // ── Accept / Decline handlers for incoming pending requests ──────────────
+  // ★ 2026-10 修正：原本這兩個函式各自宣告在 visiblePairs.map() 的每一次
+  //   疊代裡面（每張卡片自己一份，只有卡片上的按鈕會呼叫）。現在「點
+  //   partner_request 通知看配對報告 modal」也需要同一套 Accept/Decline
+  //   邏輯，所以搬成 BuddiesPage 層級的共用函式、改成直接吃 pair 參數——
+  //   卡片跟 modal 呼叫的是同一份，不會日後兩邊各自改、邏輯對不起來。
+  function handleAccept(pair, e) {
+    if (e) e.stopPropagation();
+    _supabase.from('pairs').update({ status: 'active' }).eq('id', pair.id)
+      .then(function() {
+        setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
+        if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
+        // ★ 2026-10 新增：通知原本送出邀請的那一方——這是真正的 in-app 通知，
+        //   跟 toast 是兩件事：toast 只有我（接受邀請的這個人）自己這台裝置
+        //   看得到，對方要等自己打開 App、鈴鐺才會顯示未讀。
+        if (typeof window._insertNotification === 'function') {
+          window._insertNotification({
+            user_id: pair.user_id, type: 'partner_accepted',
+            title: 'Partner request accepted! 🎉',
+            body: (user.displayName || 'Your buddy') + ' accepted your partner request for "' + (pair.habit_name || 'your habit') + '".',
+            data: JSON.stringify({ pair_id: pair.id })
+          });
+        }
+        // ★ [FIX 2026-09] 原本這裡是「這兩人身上其他所有還在 pending 的邀請
+        //   全部撤回」，用 user_id/partner_id 查，沒有限定同一個習慣。使用者
+        //   最多可以有 3 個進行中習慣、每個都能各自找夥伴，這樣寫會導致：
+        //   只要其中一個習慣配對成功，另一個完全無關的習慣還在等的邀請也會被
+        //   無聲撤回。改成只撤回「同一個習慣」還在 pending 的其他邀請——
+        //   habit_id/partner_habit_id 這兩欄目前從送出邀請那邊看起來沒有被
+        //   實際寫入過（只有 habit_name/partner_habit_name 這兩個文字欄位
+        //   確定每次都會存），所以改用 habit_name 比對；先把候選列抓下來、
+        //   在 JS 裡比對名稱是否相符再決定要撤回哪幾筆，不用 PostgREST 的
+        //   .or()/.and() 字串語法直接塞習慣名稱——習慣名稱是使用者自由輸入的
+        //   文字，可能包含逗號、括號這類會弄壞 filter 字串語法的字元。
+        var acceptedUserId = pair.user_id;
+        var acceptedPartnerId = pair.partner_id;
+        var acceptedUserHabitName = pair.habit_name;
+        var acceptedPartnerHabitName = pair.partner_habit_name;
+        _supabase.from('pairs')
+          .select('id, user_id, partner_id, habit_name, partner_habit_name')
+          .eq('status', 'pending')
+          .neq('id', pair.id)
+          .or('user_id.eq.' + acceptedUserId + ',partner_id.eq.' + acceptedUserId + ',user_id.eq.' + acceptedPartnerId + ',partner_id.eq.' + acceptedPartnerId)
+          .then(function(r) {
+            var candidates = (r && r.data) || [];
+            var toWithdrawIds = candidates.filter(function(p) {
+              var mineMatches = (p.user_id === acceptedUserId && p.habit_name === acceptedUserHabitName) ||
+                                (p.partner_id === acceptedUserId && p.partner_habit_name === acceptedUserHabitName);
+              var theirsMatches = (p.user_id === acceptedPartnerId && p.habit_name === acceptedPartnerHabitName) ||
+                                  (p.partner_id === acceptedPartnerId && p.partner_habit_name === acceptedPartnerHabitName);
+              return mineMatches || theirsMatches;
+            }).map(function(p) { return p.id; });
+            if (toWithdrawIds.length === 0) return;
+            return _supabase.from('pairs').update({ status: 'withdrawn' }).in('id', toWithdrawIds);
+          })
+          .then(function(){}).catch(function(){});
+      });
+  }
+  function handleDecline(pair, e) {
+    if (e) e.stopPropagation();
+    _supabase.from('pairs').update({ status: 'declined' }).eq('id', pair.id)
+      .then(function() {
+        setPairs(function(prev) { return prev.filter(function(p) { return p.id !== pair.id; }); });
+        if (typeof showToast === 'function') showToast('Request declined.');
+        // ★ 2026-10 新增：通知原本送出邀請的那一方被拒絕了——理由跟上面
+        //   handleAccept 一樣，單靠卡片狀態悄悄變成 declined，原本的
+        //   requester 不會主動被告知。文案故意不提是誰拒絕的，跟
+        //   getHabitPairState 的 declined 卡片本來的語氣一致（只講
+        //   「上次沒成功」，不強調具體是誰拒絕）。
+        if (typeof window._insertNotification === 'function') {
+          window._insertNotification({
+            user_id: pair.user_id, type: 'partner_declined',
+            title: "Your partner request wasn't accepted",
+            body: 'Your partner request for "' + (pair.habit_name || 'your habit') + '" wasn\'t accepted this time. Want to try finding someone else?',
+            data: JSON.stringify({ pair_id: pair.id })
+          });
+        }
+      });
+  }
+
   var mainContent = React.createElement("div", { className: isDesktop ? undefined : "app-container" },
     React.createElement("div", { className: "buddies-header" },
       React.createElement("div", null,
@@ -15149,14 +15322,93 @@ function BuddiesPage(_ref_buddies) {
                         n.type === 'partner_accepted' ? 'Partner request accepted! 🎉' :
                         n.type === 'partner_declined' ? "Your partner request wasn't accepted" :
                         n.type === 'partnership_ended' ? 'Partnership ended' :
+                        n.type === 'partner_left' ? 'Your partner has left' :
+                        n.type === 'pair_message' ? 'New message' :
+                        n.type === 'match_found_alert' ? 'New partner may be available! 🎉' :
+                        n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
+                        n.type === 'media_consent_granted' ? 'Photo & video sharing approved! 🎉' :
+                        n.type === 'media_consent_declined' ? 'Photo & video sharing declined' :
                         'Notification'
                       );
                       var body = n.body || n.message || '';
                       var timeLabel = _fmtNotifTime(n.created_at || n.createdAt);
+                      // ★ 2026-10 修正：點通知的行為不是「全部都跳聊天室」這一種了——
+                      //   partner_request 要看的是對方那邊配對時產生的完整配對報告
+                      //   （pair.ai_match_data）+ Accept/Decline，還沒接受就先進聊天室
+                      //   不合理（見下面 viewingRequestPair modal，跟卡片本身共用同一套
+                      //   handleAccept/handleDecline）；match_found_alert 指的是背景排程
+                      //   找到的「候選人」，還不是已存在的 pair，要開的是跟 Find Partner
+                      //   同一套 window._showPreloadedMatch 候選人配對報告 modal（最多 5
+                      //   位），不是聊天室；partner_declined 這個配對在 App 其他地方都看
+                      //   不到（連 Past buddies 都排除 declined），沒有畫面可以跳，點了
+                      //   只標已讀。其餘類型（pair_message/partner_accepted/
+                      //   media_consent_*/partner_left/partnership_ended）維持原本直接
+                      //   開聊天室的行為——pair_id 可能是真正的欄位（partnership_ended
+                      //   那組舊格式），也可能包在 data 這個 JSON 字串裡（新加的幾種都
+                      //   這樣存），兩邊都要認。
+                      var _navPairId = n.pair_id || (function() {
+                        if (!n.data) return null;
+                        try { var d = typeof n.data === 'string' ? JSON.parse(n.data) : n.data; return (d && d.pair_id) || null; }
+                        catch (e) { return null; }
+                      })();
+                      var _navPair = _navPairId ? pairs.find(function(p) { return p.id === _navPairId; }) : null;
                       return React.createElement("div", {
                         key: n.id || (title + idx),
                         className: "notif-row".concat(n.is_read ? '' : ' unread'),
-                        onClick: function() { if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]); }
+                        onClick: function() {
+                          if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]);
+
+                          // ── partner_request：看完整配對報告 + Accept/Decline，不進聊天室 ──
+                          if (n.type === 'partner_request') {
+                            if (_navPair) {
+                              setNotifPanelOpen(false);
+                              setViewingRequestPair(_navPair);
+                            } else if (typeof showToast === 'function') {
+                              showToast("This request isn't available anymore.");
+                            }
+                            return;
+                          }
+
+                          // ── partner_declined：沒有畫面可以看，點了只標已讀 ──
+                          if (n.type === 'partner_declined') {
+                            return;
+                          }
+
+                          // ── match_found_alert：開「候選人配對報告」modal（最多 5 位
+                          //   候選人），跟信件/habit 卡片上「🎉 View your match」按鈕走
+                          //   同一套 window._showPreloadedMatch，不是聊天室 ──
+                          if (n.type === 'match_found_alert') {
+                            var _mfaHabitId = null;
+                            try {
+                              var _mfaD = typeof n.data === 'string' ? JSON.parse(n.data) : n.data;
+                              _mfaHabitId = _mfaD && _mfaD.habit_id;
+                            } catch (e) {}
+                            var _mfaHabit = _mfaHabitId ? habits.find(function(h) { return String(h.id) === String(_mfaHabitId); }) : null;
+                            if (!_mfaHabit) {
+                              if (typeof showToast === 'function') showToast("This match suggestion isn't available anymore.");
+                              return;
+                            }
+                            setNotifPanelOpen(false);
+                            _supabase.from('pending_match_suggestions').select('match_data')
+                              .eq('user_id', user.uid).eq('habit_id', _mfaHabitId).maybeSingle()
+                              .then(function(r) {
+                                if (r.data && r.data.match_data && window._showPreloadedMatch) {
+                                  window._showPreloadedMatch(_mfaHabit, r.data.match_data);
+                                } else if (typeof showToast === 'function') {
+                                  showToast("This match suggestion isn't available anymore.");
+                                }
+                              }).catch(function() {});
+                            return;
+                          }
+
+                          // ── 其餘類型：直接開聊天室（原本的行為）──
+                          if (_navPair) {
+                            setNotifPanelOpen(false);
+                            setSelectedPair(_navPair);
+                          } else if (_navPairId && typeof showToast === 'function') {
+                            showToast("That conversation isn't available anymore.");
+                          }
+                        }
                       },
                         !n.is_read && React.createElement("span", { className: "notif-dot" }),
                         React.createElement("div", { className: "notif-row-body" },
@@ -15204,79 +15456,6 @@ function BuddiesPage(_ref_buddies) {
                 partnerIsOnline = partnerActiveDiffMs < 5 * 60 * 1000;
               }
 
-              // Accept / Decline handlers for incoming pending requests
-              function handleAccept(e) {
-                e.stopPropagation();
-                _supabase.from('pairs').update({ status: 'active' }).eq('id', pair.id)
-                  .then(function() {
-                    setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
-                    if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
-                    // ★ 2026-10 新增：通知原本送出邀請的那一方——這是真正的 in-app 通知，
-                    //   跟 toast 是兩件事：toast 只有我（接受邀請的這個人）自己這台裝置
-                    //   看得到，對方要等自己打開 App、鈴鐺才會顯示未讀。
-                    if (typeof window._insertNotification === 'function') {
-                      window._insertNotification({
-                        user_id: pair.user_id, type: 'partner_accepted',
-                        title: 'Partner request accepted! 🎉',
-                        body: (user.displayName || 'Your buddy') + ' accepted your partner request for "' + (pair.habit_name || 'your habit') + '".'
-                      });
-                    }
-                    // ★ [FIX 2026-09] 原本這裡是「這兩人身上其他所有還在 pending 的邀請
-                    //   全部撤回」，用 user_id/partner_id 查，沒有限定同一個習慣。使用者
-                    //   最多可以有 3 個進行中習慣、每個都能各自找夥伴，這樣寫會導致：
-                    //   只要其中一個習慣配對成功，另一個完全無關的習慣還在等的邀請也會被
-                    //   無聲撤回。改成只撤回「同一個習慣」還在 pending 的其他邀請——
-                    //   habit_id/partner_habit_id 這兩欄目前從送出邀請那邊看起來沒有被
-                    //   實際寫入過（只有 habit_name/partner_habit_name 這兩個文字欄位
-                    //   確定每次都會存），所以改用 habit_name 比對；先把候選列抓下來、
-                    //   在 JS 裡比對名稱是否相符再決定要撤回哪幾筆，不用 PostgREST 的
-                    //   .or()/.and() 字串語法直接塞習慣名稱——習慣名稱是使用者自由輸入的
-                    //   文字，可能包含逗號、括號這類會弄壞 filter 字串語法的字元。
-                    var acceptedUserId = pair.user_id;
-                    var acceptedPartnerId = pair.partner_id;
-                    var acceptedUserHabitName = pair.habit_name;
-                    var acceptedPartnerHabitName = pair.partner_habit_name;
-                    _supabase.from('pairs')
-                      .select('id, user_id, partner_id, habit_name, partner_habit_name')
-                      .eq('status', 'pending')
-                      .neq('id', pair.id)
-                      .or('user_id.eq.' + acceptedUserId + ',partner_id.eq.' + acceptedUserId + ',user_id.eq.' + acceptedPartnerId + ',partner_id.eq.' + acceptedPartnerId)
-                      .then(function(r) {
-                        var candidates = (r && r.data) || [];
-                        var toWithdrawIds = candidates.filter(function(p) {
-                          var mineMatches = (p.user_id === acceptedUserId && p.habit_name === acceptedUserHabitName) ||
-                                            (p.partner_id === acceptedUserId && p.partner_habit_name === acceptedUserHabitName);
-                          var theirsMatches = (p.user_id === acceptedPartnerId && p.habit_name === acceptedPartnerHabitName) ||
-                                              (p.partner_id === acceptedPartnerId && p.partner_habit_name === acceptedPartnerHabitName);
-                          return mineMatches || theirsMatches;
-                        }).map(function(p) { return p.id; });
-                        if (toWithdrawIds.length === 0) return;
-                        return _supabase.from('pairs').update({ status: 'withdrawn' }).in('id', toWithdrawIds);
-                      })
-                      .then(function(){}).catch(function(){});
-                  });
-              }
-              function handleDecline(e) {
-                e.stopPropagation();
-                _supabase.from('pairs').update({ status: 'declined' }).eq('id', pair.id)
-                  .then(function() {
-                    setPairs(function(prev) { return prev.filter(function(p) { return p.id !== pair.id; }); });
-                    if (typeof showToast === 'function') showToast('Request declined.');
-                    // ★ 2026-10 新增：通知原本送出邀請的那一方被拒絕了——理由跟上面
-                    //   handleAccept 一樣，單靠卡片狀態悄悄變成 declined，原本的
-                    //   requester 不會主動被告知。文案故意不提是誰拒絕的，跟
-                    //   getHabitPairState 的 declined 卡片本來的語氣一致（只講
-                    //   「上次沒成功」，不強調具體是誰拒絕）。
-                    if (typeof window._insertNotification === 'function') {
-                      window._insertNotification({
-                        user_id: pair.user_id, type: 'partner_declined',
-                        title: "Your partner request wasn't accepted",
-                        body: 'Your partner request for "' + (pair.habit_name || 'your habit') + '" wasn\'t accepted this time. Want to try finding someone else?'
-                      });
-                    }
-                  });
-              }
-
               var partnerHabitId = isUser ? pair.partner_habit_id : pair.habit_id;
               var clip = partnerClipMap[partnerHabitId] || null;
               // ★ 新增：streak 對照、一起打卡天數、聊天預覽要用的資料
@@ -15308,8 +15487,10 @@ function BuddiesPage(_ref_buddies) {
               return React.createElement("div", {
                 key: pair.id,
                 className: "pair-card",
-                style: isIncoming ? { cursor:'default' } : undefined,
-                onClick: function(){ if (!isIncoming) setSelectedPair(pair); }
+                // ★ 2026-10 修正：isIncoming 卡片原本 cursor:default、整張不能點
+                //   （只有 Accept/Decline 兩顆按鈕能按），現在點卡片本身也能看到
+                //   跟通知一樣的配對報告 modal，不用特別記住只能點兩顆小按鈕。
+                onClick: function(){ isIncoming ? setViewingRequestPair(pair) : setSelectedPair(pair); }
               },
                 React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:16 } },
                   React.createElement("div", { className: "pair-avs" },
@@ -15337,11 +15518,11 @@ function BuddiesPage(_ref_buddies) {
                     ? React.createElement("div", { style:{ display:'flex', gap:6, flexShrink:0 } },
                         React.createElement("button", {
                           style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'#16a34a', color:'#fff', border:'none', borderRadius:6, cursor:'pointer' },
-                          onClick: handleAccept
+                          onClick: function(e){ handleAccept(pair, e); }
                         }, "Accept"),
                         React.createElement("button", {
                           style:{ fontSize:11, fontWeight:700, padding:'5px 10px', background:'var(--gray-200)', color:'var(--gray-600)', border:'none', borderRadius:6, cursor:'pointer' },
-                          onClick: handleDecline
+                          onClick: function(e){ handleDecline(pair, e); }
                         }, "Decline")
                       )
                     : React.createElement(React.Fragment, null,
@@ -15568,6 +15749,74 @@ function BuddiesPage(_ref_buddies) {
         habitLabel: vIsUser ? vp.habit_name : vp.partner_habit_name,
         onClose: function() { setViewingAlbumForPair(null); }
       });
+    })(),
+    // ★ 2026-10 新增：點「New Partner Request!」通知（或直接點 isIncoming
+    //   卡片本身）要看的「對方那邊配對時產生的完整配對報告」+ Accept/
+    //   Decline——跟下面列表卡片 active 狀態時看到的是同一個 pair.ai_match_data
+    //   欄位，同一套 Accept/Decline（handleAccept/handleDecline，已經搬成
+    //   BuddiesPage 層級共用函式，不是另外寫一份）。
+    viewingRequestPair && (function() {
+      var rp = viewingRequestPair;
+      var rpIsUser = rp.user_id === user.uid;
+      var rpPartnerId = rpIsUser ? rp.partner_id : rp.user_id;
+      var rpInfo = partnerInfoMap[rpPartnerId];
+      var rpName = (rpInfo && rpInfo.display_name) || null;
+      var rpInit = rpName ? rpName.slice(0,2).toUpperCase() : rpPartnerId.toString().slice(0,2).toUpperCase();
+      var rpPhoto = (rpInfo && rpInfo.photo_url) || null;
+      var rpHabitName = rpIsUser ? rp.habit_name : rp.partner_habit_name;
+      var md = rp.ai_match_data;
+      return React.createElement("div", {
+        style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 },
+        onClick: function(){ setViewingRequestPair(null); }
+      },
+        React.createElement("div", {
+          style:{ background:'var(--white)', borderRadius:12, maxWidth:420, width:'100%', maxHeight:'85vh', overflowY:'auto', padding:20 },
+          onClick: function(e){ e.stopPropagation(); }
+        },
+          React.createElement("div", { style:{ fontSize:9, fontWeight:700, letterSpacing:'1.2px', textTransform:'uppercase', color:'var(--gray-400)', marginBottom:12 } }, 'Partner Request'),
+          React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:16 } },
+            React.createElement("div", { style:{ width:48, height:48, borderRadius:'50%', background:'var(--gray-100)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, position:'relative', flexShrink:0, overflow:'hidden' } },
+              rpInit,
+              rpPhoto && React.createElement("img", { src: rpPhoto, alt:"", style:{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }, onError:function(e){ e.target.remove(); } })
+            ),
+            React.createElement("div", null,
+              React.createElement("div", { style:{ fontSize:15, fontWeight:700 } }, rpName || rpPartnerId.toString().slice(0,8)),
+              React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)', fontWeight:700, textTransform:'uppercase', marginTop:2 } }, rpHabitName || rp.habit_name)
+            )
+          ),
+          md
+            ? React.createElement(React.Fragment, null,
+                React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:6, marginBottom:8 } },
+                  React.createElement("span", { style:{ fontSize:28, fontWeight:800, fontFamily:'var(--din)', color:'var(--black)' } }, (md.score != null ? md.score : rp.match_score) || '—'),
+                  React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px' } }, '% values match')
+                ),
+                md.reason && React.createElement("div", { style:{ fontSize:12, color:'var(--gray-600)', lineHeight:1.7, marginBottom:14 } }, md.reason),
+                md.breakdown && Object.keys(md.breakdown).length > 0 && React.createElement("div", { style:{ marginBottom:4 } },
+                  Object.entries(md.breakdown).filter(function(e){ return e[1] != null; }).map(function(e) {
+                    var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                    return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:6 } },
+                      React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
+                      React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
+                        React.createElement("div", { style:{ height:'100%', width: e[1] + '%', background:'var(--black)', borderRadius:2 } })
+                      ),
+                      React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:28, textAlign:'right', flexShrink:0 } }, e[1] + '%')
+                    );
+                  })
+                )
+              )
+            : React.createElement("div", { style:{ fontSize:11, color:'var(--gray-400)', marginBottom:14 } }, 'No AI match report for this pair yet.'),
+          React.createElement("div", { style:{ display:'flex', gap:8, marginTop:18 } },
+            React.createElement("button", {
+              style:{ flex:1, fontSize:11, fontWeight:700, padding:'11px', background:'#16a34a', color:'#fff', border:'none', borderRadius:8, cursor:'pointer' },
+              onClick: function(){ handleAccept(rp); setViewingRequestPair(null); }
+            }, "Accept"),
+            React.createElement("button", {
+              style:{ flex:1, fontSize:11, fontWeight:700, padding:'11px', background:'var(--gray-200)', color:'var(--gray-600)', border:'none', borderRadius:8, cursor:'pointer' },
+              onClick: function(){ handleDecline(rp); setViewingRequestPair(null); }
+            }, "Decline")
+          )
+        )
+      );
     })()
   );
 
@@ -17832,6 +18081,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       // breakdown
       '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
         '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;">Match breakdown</div>' +
+
         // ★ FIX：這四行原本標籤跟數值對不起來(複製時錯位) — 例如「Avg Duration」
         // 這個標籤底下顯示的其實是 activityFit 的分數，不是真正的平均時長；
         // 「Rhythm Score」底下顯示的其實是 durationFit，durationFit 本身反而
@@ -17845,6 +18095,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         _progRow('Duration Fit', bd.durationFit,   av.fg) +
         valuesFitHtml +
       '</div>' +
+
+      // ★ v14 新增：挑戰影片（Main A 方案）——瀏覽數最高的 3 部，match-partner
+      //   回傳的 m.clips 是空陣列就整個區塊不渲染（這個人這個習慣沒有符合
+      //   公開可見度的影片，或 Bunny API 當下查不到瀏覽數）。
+      _renderClipsSection(m, av) +
 
       // AI reason
       '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
@@ -17879,6 +18134,68 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       '<div style="font-size:9px;font-weight:700;color:#aaa;width:30px;text-align:right;">' + v + '%</div>' +
     '</div>';
   }
+
+  // ★ v14 新增：配對報告「挑戰影片」區塊——瀏覽數最高的 3 部（Main A 方案）。
+  //   m.clips 是 match-partner 回傳的陣列（可能是空的），每個元素形如
+  //   { postId, thumbnailUrl, mediaUrl, createdAt, views }。沒有縮圖網址時
+  //   退回純色漸層色塊（跟排版 mockup 一致），不會因為缺圖就整個不顯示。
+  function _renderClipsSection(m, av) {
+    var clips = (m && Array.isArray(m.clips)) ? m.clips : [];
+    if (clips.length === 0) return '';
+    return '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
+      '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;display:flex;align-items:baseline;justify-content:space-between;">' +
+        '<span>Challenge clips</span>' +
+        '<span style="color:#444;letter-spacing:.5px;text-transform:none;font-weight:600;">Top ' + clips.length + ' by views</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(' + clips.length + ',1fr);gap:8px;">' +
+        clips.map(function(c) { return _renderClipTile(c, av); }).join('') +
+      '</div>' +
+    '</div>';
+  }
+
+  function _renderClipTile(c, av) {
+    var bg = c.thumbnailUrl
+      ? ('background-image:url(\'' + String(c.thumbnailUrl).replace(/'/g, "\\'") + '\');background-size:cover;background-position:center;')
+      : 'background:linear-gradient(145deg,#232323,#141414);';
+    var safeUrl = String(c.mediaUrl || '').replace(/'/g, "\\'");
+    return '<div onclick="window._mrcPlayClip(\'' + safeUrl + '\')" style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;cursor:pointer;' + bg + '">' +
+      '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;">▶</div>' +
+      '<div style="position:absolute;bottom:5px;left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);border-radius:4px;padding:3px 5px;font-family:var(--din);">👁 ' + _fmtViews(c.views) + '</div>' +
+    '</div>';
+  }
+
+  function _fmtViews(n) {
+    if (n == null) return '—';
+    if (n >= 1000000) return (Math.round(n / 100000) / 10) + 'M';
+    if (n >= 1000) return (Math.round(n / 100) / 10) + 'K';
+    return String(n);
+  }
+
+  // 點挑戰影片縮圖——用跟貼文/聊天室同一套 Bunny Stream iframe 播放器，疊一層
+  // 輕量 lightbox（這個配對小卡整個是 vanilla DOM／innerHTML 寫的，不是
+  // React tree 的一部分，所以不能直接塞 ClipViewerModal 那個 React 元件進來，
+  // 用同樣手法另外搭一個最小可用的播放覆蓋層）。
+  window._mrcPlayClip = function(mediaUrl) {
+    if (!mediaUrl) return;
+    var vid = _extractBunnyVideoId(mediaUrl);
+    if (!vid) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'mrcClipLightbox';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.onclick = function(e) { if (e.target === overlay) window._mrcClosePlayClip(); };
+    overlay.innerHTML =
+      '<div style="position:relative;width:100%;max-width:360px;aspect-ratio:9/16;background:#000;">' +
+        '<iframe src="https://iframe.mediadelivery.net/embed/' + BUNNY_STREAM_LIBRARY + '/' + vid + '?autoplay=true&preload=true" ' +
+          'style="border:none;position:absolute;inset:0;width:100%;height:100%;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen;" allowfullscreen loading="lazy"></iframe>' +
+        '<button onclick="window._mrcClosePlayClip()" aria-label="Close" style="position:absolute;top:-38px;right:0;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;">✕</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+  };
+
+  window._mrcClosePlayClip = function() {
+    var el = document.getElementById('mrcClipLightbox');
+    if (el) el.remove();
+  };
 
   window._mrcPrev = function() {
     if (_matchCardIdx <= 0) return;
@@ -17925,7 +18242,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           requesterHabitName: _currentHabit.name,
           partnerHabitName: m.habitName,
           avgDuration: m.avgDuration || null,
-          habitLifespan: m.habitLifespan || null
+          habitLifespan: m.habitLifespan || null,
+          // ★ v14 新增：挑戰影片快照也一起存，之後如果「AI report」展開頁要
+          //   一併顯示，資料已經在這裡了，不用再另外補查。
+          clips: m.clips || []
         };
 
         // ★ 修正 duplicate key bug：pairs 表對 (user_id, partner_id) 有唯一約束（pairs_user_id_partner_id_key）。
@@ -17966,21 +18286,25 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             created_at: new Date().toISOString()
           }).eq('id', existingPair.id), 8000, 'Send request');
         } else {
+          // ★ .select('id') 一起帶回新建那筆的 id——下面寫通知時要塞進 data.pair_id，
+          //   讓對方點通知能直接跳轉到這組配對的聊天室（沒有 id 就只能停在標記已讀）。
           pairRes = await _withTimeout(_supabase.from('pairs').insert({
             user_id: userId, partner_id: m.userId,
             habit_id: _currentHabit.id, partner_habit_id: m.habitId || null,
             habit_name: _currentHabit.name, partner_habit_name: m.habitName,
             match_score: m.score, status: 'pending',
             ai_match_data: snapshot
-          }), 8000, 'Send request');
+          }).select('id').maybeSingle(), 8000, 'Send request');
         }
         if (pairRes && pairRes.error) throw new Error(pairRes.error.message || 'Could not create pair request');
+
+        var _newPairId = (existingPair && existingPair.id) || (pairRes && pairRes.data && pairRes.data.id) || null;
 
         var notifRes = await _withTimeout(_supabase.from('notifications').insert({
           user_id: m.userId, type: 'partner_request',
           title: 'New Partner Request!',
           body: 'Someone wants to be your habit partner for "' + m.habitName + '".',
-          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name }),
+          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name, pair_id: _newPairId }),
           is_read: false, created_at: new Date().toISOString()
         }), 8000, 'Send notification');
         // 通知失敗不影響配對請求本身是否成功，只記錄，不擋流程
