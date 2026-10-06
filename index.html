@@ -728,10 +728,6 @@
         .seek-title { font-size:12px; font-weight:600; color:var(--black); margin-bottom:2px; }
         .seek-sub { font-size:10px; color:var(--gray-500); line-height:1.4; }
         .seek-footer { padding:7px 13px; background:var(--gray-50,#fafafa); border-top:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; gap:8px; }
-        /* credit pill */
-        .credit-pill { display:inline-flex; align-items:center; gap:6px; background:var(--black); color:var(--white); border-radius:20px; padding:4px 11px; }
-        .credit-pill-num { font-size:15px; font-weight:700; line-height:1; }
-        .credit-pill-txt { font-size:8px; font-weight:500; letter-spacing:.5px; text-transform:uppercase; opacity:.65; line-height:1.3; }
         .seek-find-btn { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; background:var(--black); color:var(--white); border:none; padding:6px 12px; border-radius:4px; cursor:pointer; white-space:nowrap; }
         /* ended block */
         .ended-block { border:1px solid var(--gray-200); border-radius:8px; overflow:hidden; margin-bottom:10px; }
@@ -8185,7 +8181,7 @@ function _renderKeepSearchingLink(state, opts) {
   }, "Not interested — keep searching");
 }
 
-// ★ opts: { credits, onFindPartner, onEndPartnership, onCancelRequest, onGoToBuddies,
+// ★ opts: { onFindPartner, onEndPartnership, onCancelRequest, onGoToBuddies,
 //           onViewFoundMatch, onDismissFoundMatch }
 //   partner 顯示名稱/大頭貼從 window._myPairPartnerInfo 這個對照表查
 //   （另外查 users 表建立的，pairs 資料列裡的 partner_username 欄位
@@ -8278,18 +8274,16 @@ function renderHabitPartnerStatus(state, opts) {
           habitNameLine
         )
       ),
+      // ★ 2026-10：拿掉第 2 套「每個習慣自己的配對點數」credit pill，
+      //   全站只剩每日 AI 搜尋次數（habit_ai_usage）一套
       React.createElement("div", { className: "ended-footer" },
-        opts.credits != null && React.createElement("div", { className: "credit-pill" },
-          React.createElement("span", { className: "credit-pill-num" }, opts.credits),
-          React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
-        ),
         _renderFindPartnerBtn(state, opts, "Find New Partner")
       ),
       _renderKeepSearchingLink(state, opts)
     );
   }
   // seeking（這個習慣完全沒有任何配對紀錄）
-  var _sCopy = _matchStatusCopy(state.matchStatus, { icon: '🔍', title: 'Looking for your accountability partner', sub: 'Log in daily to earn +1 credit and keep searching' });
+  var _sCopy = _matchStatusCopy(state.matchStatus, { icon: '🔍', title: 'Looking for your accountability partner', sub: 'Each search uses 1 AI credit \u00b7 log in daily for +1' });
   return React.createElement("div", { className: "seek-block", onClick: stop },
     React.createElement("div", { className: "seek-top" },
       React.createElement("div", { className: "seek-icon" }, _sCopy.icon),
@@ -8299,11 +8293,9 @@ function renderHabitPartnerStatus(state, opts) {
         habitNameLine
       )
     ),
-    opts.credits != null && React.createElement("div", { className: "seek-footer" },
-      React.createElement("div", { className: "credit-pill" },
-        React.createElement("span", { className: "credit-pill-num" }, opts.credits),
-        React.createElement("span", { className: "credit-pill-txt" }, "Credits Left")
-      ),
+    // ★ 2026-10：原本整個 footer 掛在 opts.credits != null 底下，credit pill 拿掉後
+    //   改成無條件顯示，Find Partner 按鈕才不會跟著消失
+    React.createElement("div", { className: "seek-footer" },
       _renderFindPartnerBtn(state, opts, "Find Partner")
     ),
     _renderKeepSearchingLink(state, opts)
@@ -9288,9 +9280,8 @@ function HistoryPage(_ref15) {
     archivedHabits = _ref15.archivedHabits,
     percentile = _ref15.percentile,
     user = _ref15.user,
-    matchingCredits = _ref15.matchingCredits || {},
-    matchCallsUsedToday = _ref15.matchCallsUsedToday,
-    matchDailyLimit = _ref15.matchDailyLimit || 10,
+    aiCredits = _ref15.aiCredits,
+    aiCreditMax = _ref15.aiCreditMax || 10,
     onGoToBuddies = _ref15.onGoToBuddies,
     onBack = _ref15.onBack;
   var _useStateHP = useState(10),
@@ -9390,9 +9381,9 @@ function HistoryPage(_ref15) {
     className: "history-chart-section"
   }, /*#__PURE__*/React.createElement("div", {
     className: "history-chart-title"
-  }, "AI Search Credits"), /*#__PURE__*/React.createElement("div", {
+  }, "AI Credits"), /*#__PURE__*/React.createElement("div", {
     className: "active-now-card"
-  }, matchCallsUsedToday !== null ? [
+  }, aiCredits != null ? [
     /*#__PURE__*/React.createElement("div", {
       key:"aicalls-donut", style:{ position:'relative', flexShrink:0, width:64, height:64 }
     }, /*#__PURE__*/React.createElement("svg", {
@@ -9401,29 +9392,29 @@ function HistoryPage(_ref15) {
       cx:32, cy:32, r:26, fill:"none", stroke:"rgba(96,165,250,0.18)", strokeWidth:7
     }), /*#__PURE__*/React.createElement("circle", {
       cx:32, cy:32, r:26, fill:"none", stroke:"#60a5fa", strokeWidth:7,
-      strokeDasharray: (Math.max(0, matchDailyLimit - matchCallsUsedToday)/matchDailyLimit * 2*Math.PI*26) + " " + (2*Math.PI*26),
+      strokeDasharray: (Math.min(aiCredits, aiCreditMax)/aiCreditMax * 2*Math.PI*26) + " " + (2*Math.PI*26),
       strokeLinecap:"butt", style:{ transition:'stroke-dasharray .8s cubic-bezier(.4,0,.2,1)' }
     })), /*#__PURE__*/React.createElement("div", {
       style:{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
         textAlign:'center', width:'100%', lineHeight:1 }
     }, /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:15, fontWeight:700, fontFamily:'var(--din)', color:'#60a5fa', lineHeight:1 }
-    }, Math.max(0, matchDailyLimit - matchCallsUsedToday)), /*#__PURE__*/React.createElement("div", {
+    }, aiCredits), /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:7, opacity:.7, textTransform:'uppercase', letterSpacing:.8, marginTop:2, color:'#60a5fa' }
     }, "LEFT"))),
     /*#__PURE__*/React.createElement("div", {
       key:"aicalls-info", className:"active-now-info"
-    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "Today's AI Searches"),
+    }, /*#__PURE__*/React.createElement("div", { className:"active-now-label" }, "AI Credits"),
     /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:14, fontWeight:700, fontFamily:'var(--din)', lineHeight:1.3, color:'#60a5fa', marginBottom:4 }
-    }, matchCallsUsedToday, " of ", matchDailyLimit, " used today"),
+    }, aiCredits, " of ", aiCreditMax, " credits"),
     /*#__PURE__*/React.createElement("div", {
       style:{ fontSize:11, opacity:.55, marginTop:2 }
-    }, matchCallsUsedToday >= matchDailyLimit ? 'All used — resets tomorrow \u23f0' : 'Resets daily \u00b7 log in for more credits'),
+    }, aiCredits <= 0 ? 'Out of credits \u2014 log in tomorrow for +1' : (aiCredits >= aiCreditMax ? 'Maxed out \u00b7 1 search uses 1 credit' : '+1 every day you log in \u00b7 max ' + aiCreditMax)),
     /*#__PURE__*/React.createElement("div", {
       style:{ marginTop:7, height:2, background:'rgba(96,165,250,.18)', width:'100%', overflow:'hidden' }
     }, /*#__PURE__*/React.createElement("div", {
-      style:{ height:'100%', background:'#60a5fa', width:Math.min(100, Math.round(matchCallsUsedToday/matchDailyLimit*100))+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
+      style:{ height:'100%', background:'#60a5fa', width:Math.min(100, Math.round(aiCredits/aiCreditMax*100))+'%', transition:'width 1s cubic-bezier(.4,0,.2,1)' }
     })))
   ] : null)), /*#__PURE__*/React.createElement("div", {
     className: "archive-list-section"
@@ -9570,7 +9561,6 @@ function HistoryPage(_ref15) {
       onClick: function(e) { e.stopPropagation(); }
     }, renderHabitPartnerStatus(getHabitPairState(h, user.uid), {
       habitName: h.name,
-      credits: matchingCredits[h.id] || 0,
       onFindPartner: function() { window.openMatchingModal(h); },
       onEndPartnership: function(pair) { endPartnershipDirect(pair); },
       onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
@@ -9675,8 +9665,8 @@ function DesktopTopbar(props) {
 function DesktopHomeSidebar(props) {
   var habits = props.habits || [];
   var archivedHabits = props.archivedHabits || [];
-  var matchCallsUsedToday = props.matchCallsUsedToday;
-  var matchDailyLimit = props.matchDailyLimit || 10;
+  var aiCredits = props.aiCredits;
+  var aiCreditMax = props.aiCreditMax || 10;
   // ★ getCatColours() 是 MainApp 內部的私有函式，這個元件在 MainApp 外層拿不到，
   //   所以這裡用同一份對照表自帶一份，不去動原本的程式碼
   var _catColourMap = {
@@ -9700,24 +9690,24 @@ function DesktopHomeSidebar(props) {
     byCategory[c] = (byCategory[c] || 0) + 1;
   });
   var catList = Object.keys(byCategory).map(function(c) { return { name: c, count: byCategory[c], color: catColour(c) }; });
-  var showAiCredits = matchCallsUsedToday !== null && matchCallsUsedToday !== undefined;
+  var showAiCredits = aiCredits !== null && aiCredits !== undefined;
   if (!showAiCredits && bestStreak === 0 && catList.length === 0) return null;
   return React.createElement("div", { className: "desktop-sidebar" },
-    // ── AI Search Credits（淺色版）──
+    // ── AI Credits（淺色版）：顯示目前餘額，每天登入 +1、最多 aiCreditMax ──
     showAiCredits && React.createElement(React.Fragment, null,
       React.createElement("div", { style: { display: 'flex', alignItems: 'flex-end', gap: 10 } },
         React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 26, lineHeight: 1 } },
-          Math.max(0, matchDailyLimit - matchCallsUsedToday)
+          aiCredits
         ),
         React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', lineHeight: 1.3, paddingBottom: 2 } },
-          "of " + matchDailyLimit + " AI searches", React.createElement("br", null), "left today"
+          "of " + aiCreditMax + " AI credits", React.createElement("br", null), "available"
         )
       ),
       React.createElement("div", { style: { marginTop: 14, height: 3, background: 'var(--gray-100)', width: '100%', overflow: 'hidden' } },
-        React.createElement("div", { style: { height: '100%', background: 'var(--black)', width: Math.min(100, Math.round(matchCallsUsedToday / matchDailyLimit * 100)) + '%', transition: 'width 1s cubic-bezier(.4,0,.2,1)' } })
+        React.createElement("div", { style: { height: '100%', background: 'var(--black)', width: Math.min(100, Math.round(aiCredits / aiCreditMax * 100)) + '%', transition: 'width 1s cubic-bezier(.4,0,.2,1)' } })
       ),
       React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 8, marginBottom: 24 } },
-        matchCallsUsedToday >= matchDailyLimit ? 'All used — resets tomorrow' : 'Resets daily · log in for more credits'
+        aiCredits <= 0 ? 'Out of credits — log in tomorrow for +1' : (aiCredits >= aiCreditMax ? 'Maxed out · 1 search uses 1 credit' : '+1 every day you log in · max ' + aiCreditMax)
       ),
       (bestStreak > 0 || catList.length > 0) && React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 22 } })
     ),
@@ -10465,24 +10455,57 @@ function MainApp(_ref16) {
   var [habitCheers, setHabitCheers] = React.useState({});
   var [habitCheerers, setHabitCheerers] = React.useState({}); // habitId -> [{senderId, date, createdAt}]（最新在前），CheerDetailPanel 顯示真人卡片用
   var [cheererInfoMap, setCheererInfoMap] = React.useState({}); // senderId -> {id, display_name, photo_url}
-  var [matchingCredits, setMatchingCredits] = React.useState({}); // { habitId: number }
-  // ★ 新增：今天真正打過 match-partner（呼叫 Claude）的次數，讀 habit_ai_usage 表。
-  //   跟上面 matchingCredits 不是同一件事——matchingCredits 只是每個習慣自己的
-  //   「錢包」數字，目前並沒有真的擋住 _proceedToMatching() 呼叫 match-partner
-  //   （credits 用完了案子照樣送出去，只是不再 -1 而已）；真正會擋下請求、
-  //   回 429 的是 match-partner Edge Function 裡的 DAILY_LIMIT（見那支程式碼），
-  //   這裡讀的就是同一張表、同樣的每日 10 次上限，數字才會跟後端行為一致。
-  var MATCH_DAILY_LIMIT = 10; // ⚠️ 要跟 match-partner/index.ts 的 DAILY_LIMIT 保持一致
-  var [matchCallsUsedToday, setMatchCallsUsedToday] = React.useState(null); // null = 還沒讀到
-  var loadMatchCallsToday = React.useCallback(function() {
+  // ★ 2026-10 改成「餘額制」AI Credit（取代原本「每天午夜回滿 10 次」）：
+  //   - 新帳號從 0 點開始，每天第一次登入（打開 App）+1 點，最多 AI_CREDIT_MAX 點
+  //   - 每次 Find Partner 真的拿到配對結果才扣 1 點（沒找到人、出錯都會退回）
+  //   - 餘額存在 user_ai_credits 表；+1 跟扣點都由後端做（claim_daily_ai_credit
+  //     RPC、match-partner Edge Function），前端只負責顯示，不自己算日期、不自己扣點
+  //   - 「一天」用使用者裝置的時區判斷（把 IANA 時區名稱傳給 RPC），台灣就是
+  //     台灣午夜換日、美國就是美國午夜換日，不會再有前端本地日期 vs 後端 UTC
+  //     日期對不上的問題
+  var AI_CREDIT_MAX = 10; // ⚠️ 要跟 SQL 的 user_ai_credits 上限（claim_daily_ai_credit 裡的 10）一致
+  var [aiCredits, setAiCredits] = React.useState(null); // null = 還沒讀到
+  // 給 Find Partner 那段（不在 React 元件裡的程式碼）讀/寫餘額用
+  React.useEffect(function() {
+    window._aiCredits = aiCredits;
+    window._setAiCredits = function(n) { if (typeof n === 'number') setAiCredits(n); };
+  }, [aiCredits]);
+  function _userTimeZone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; }
+  }
+  // 每天登入 +1：同一天呼叫幾次都只會發一次（後端用 last_award_date 擋），
+  //   所以 App 打開、切回前景都可以放心呼叫，跨過午夜切回來也能拿到當天那 1 點
+  var claimDailyAiCredit = React.useCallback(function() {
     if (!user || !user.uid || !window._supabaseClient) return;
-    var todayKey = toISODay();
-    window._supabaseClient.from('habit_ai_usage')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.uid).eq('feature', 'match').eq('usage_date', todayKey)
-      .then(function(r) { setMatchCallsUsedToday(r.count || 0); })
-      .catch(function() { setMatchCallsUsedToday(null); }); // 讀不到（例如 RLS 還沒開 SELECT）就不顯示，不要顯示錯的數字
+    window._supabaseClient.rpc('claim_daily_ai_credit', { p_tz: _userTimeZone() })
+      .then(function(r) {
+        if (r.error || !r.data) { console.warn('[AiCredit] claim failed:', r.error && r.error.message); return; }
+        var d = Array.isArray(r.data) ? r.data[0] : r.data;
+        if (!d) return;
+        setAiCredits(d.balance);
+        if (d.awarded) {
+          var msg = '+1 AI Credit for logging in today \u00b7 ' + d.balance + '/' + AI_CREDIT_MAX;
+          // showToast() 在另一個 <script> IIFE 裡，這裡拿不到，用同一支 script 的 _showAppToast
+          if (typeof _showAppToast === 'function') _showAppToast('\ud83c\udf81 ' + msg);
+          if (typeof window._insertNotification === 'function') {
+            window._insertNotification({
+              user_id: user.uid, type: 'ai_credit_awarded',
+              title: '+1 AI Credit \ud83c\udf81',
+              body: 'You earned 1 AI credit for logging in today. You now have ' + d.balance + '/' + AI_CREDIT_MAX + ' \u2014 each Find Partner search uses 1.',
+              data: JSON.stringify({ balance: d.balance })
+            });
+          }
+        }
+      })
+      .catch(function(e) { console.warn('[AiCredit] claim threw:', e && e.message); });
   }, [user]);
+  React.useEffect(function() {
+    if (!user || !user.uid) return;
+    claimDailyAiCredit();
+    function _onVisAi() { if (document.visibilityState === 'visible') claimDailyAiCredit(); }
+    document.addEventListener('visibilitychange', _onVisAi);
+    return function() { document.removeEventListener('visibilitychange', _onVisAi); };
+  }, [user, claimDailyAiCredit]);
   // ★ 新增（2026-09）：是否收到「找到夥伴」通知信——對應 users.email_match_notifications，
   //   預設 true（舊帳號沒這欄位、或還沒讀到之前，一律視為開啟）。這個開關只影響
   //   check-pending-matches 寄的 match_found email 那一步，in-app 通知不受影響。
@@ -10551,8 +10574,8 @@ function MainApp(_ref16) {
   //   （名額現在只看習慣自訂的執行日期到不到期，見 addHabit / handleAddHabitClick
   //   / 桌面版新增按鈕三處的 3 個上限檢查——到期的習慣本來就會離開首頁、
   //   進 Habit History，用不著再靠這個 21 天數字額外判斷一次）。
-  //   ★ 2026-10 更新：awardDailyLoginCredit() 已經移除 21 天門檛（配對點數
-  //   現在是每天登入就 +1，跟打卡天數無關，見下方該函式的註解）。
+  //   ★ 2026-10 更新：配對點數（matching_credits / awardDailyLoginCredit）已經整套拿掉，
+  //   AI Credit 只剩每日 AI 搜尋次數一套。
   //   CHALLENGE_COMPLETE_DAYS 現在只剩一個用途：CheerDetailPanel 決定鼓勵
   //   訊息要顯示「今天」還是「整段旅程」的文案，跟配對點數/名額/Habit History
   //   都無關了。
@@ -10880,71 +10903,14 @@ function MainApp(_ref16) {
     }).catch(function(){});
   }, [user, isFirebaseConfigured]);
 
-  // ── Load + daily-login credit logic ─────────────────────────────────────
-  var loadMatchingCredits = React.useCallback(function() {
-    if (!isFirebaseConfigured || !user) return;
-    db.collection('matching_credits').where('userId', '==', user.uid).get().then(function(snap) {
-      var credits = {};
-      snap.docs.forEach(function(d) { credits[d.data().habitId] = d.data().credits || 0; });
-      setMatchingCredits(credits);
-    }).catch(function(){});
-  }, [user, isFirebaseConfigured]);
-
-  var awardDailyLoginCredit = React.useCallback(function() {
-    if (!isFirebaseConfigured || !user) return;
-    var todayKey = toISODay();
-    // ★ 2026-10 更新：移除「打卡滿 21 天才給、第一次滿 21 天直接發 10 點」的
-    //   舊規則——21 天門檛已經在別處全部拔掉了，這裡原本是漏網之魚。
-    //   新規則：只要這個習慣目前沒有 active 夥伴，不管打卡天數多少，
-    //   每天登入就 +1 點配對點數（還是維持同一天只發一次、上限
-    //   MAX_CREDITS_PER_HABIT=10 點的規則，防止閒置帳號無限累積）。
-    habits.forEach(function(h) {
-      // Check if already awarded today
-      db.collection('matching_credits')
-        .where('userId','==',user.uid)
-        .where('habitId','==',h.id)
-        .limit(1).get().then(function(snap) {
-          var MAX_CREDITS_PER_HABIT = 10;
-          // Check if this habit already has an active partner — if so, skip awarding
-          var hasActivePartner = (typeof window._myPairs !== 'undefined' && Array.isArray(window._myPairs))
-            ? window._myPairs.some(function(p) {
-                return (p.habit_id === h.id || p.partner_habit_id === h.id) && p.status === 'active';
-              })
-            : false;
-          if (hasActivePartner) return; // already paired — no more credits needed
-
-          if (snap.empty) {
-            // First login for this habit: award +1 (not a lump sum anymore)
-            db.collection('matching_credits').add({ userId: user.uid, habitId: h.id, credits: 1, lastAwardDate: todayKey });
-            setMatchingCredits(function(prev){ var n={}; n[h.id]=1; return Object.assign({},prev,n); });
-          } else {
-            var doc = snap.docs[0];
-            var data = doc.data();
-            if (data.lastAwardDate !== todayKey) {
-              var currentCredits = data.credits || 0;
-              // Cap at MAX_CREDITS_PER_HABIT — prevent unlimited accumulation from idle users
-              if (currentCredits >= MAX_CREDITS_PER_HABIT) return;
-              var newCredits = currentCredits + 1;
-              doc.ref.update({ credits: newCredits, lastAwardDate: todayKey });
-              setMatchingCredits(function(prev){ var n={}; n[h.id]=newCredits; return Object.assign({},prev,n); });
-            }
-          }
-        }).catch(function(){});
-    });
-  }, [user, isFirebaseConfigured, habits]);
-
   useEffect(function() {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
       loadChallengers(); loadMyHabitCheers(); loadMySentCheers();
     }
     if (activeTab === 'home') {
       loadMyHabitCheers();
-      loadMatchingCredits();
-      awardDailyLoginCredit();
-      // ★ 新增：AI Search Credits widget 從 Habit History 搬到 Home 頁後，
-      //   原本只有點「Habit History」按鈕才會呼叫的 loadMatchCallsToday()
-      //   要在 Home 頁本身載入時就叫一次，widget 才有數字可以顯示。
-      loadMatchCallsToday();
+      // ★ 2026-10：AI Credit 餘額改由 claimDailyAiCredit()（登入 / 切回前景時）
+      //   取得，這裡不用再另外讀
     }
     // Load cheer stats when profile tab is opened
     if (activeTab === 'profile') {
@@ -12753,9 +12719,8 @@ function MainApp(_ref16) {
     archivedHabits: archivedHabits,
     percentile: percentile,
     user: user,
-    matchingCredits: matchingCredits,
-    matchCallsUsedToday: matchCallsUsedToday,
-    matchDailyLimit: MATCH_DAILY_LIMIT,
+    aiCredits: aiCredits,
+    aiCreditMax: AI_CREDIT_MAX,
     onGoToBuddies: function() { setShowHistory(false); setActiveTab('buddies'); },
     onBack: function onBack() {
       return setShowHistory(false);
@@ -12803,7 +12768,7 @@ function MainApp(_ref16) {
     return /*#__PURE__*/React.createElement("div", null,
       // ★ 修正（2026-09）：手機版 Home 頁最上方的黑卡「AI Search Credits」拿掉——
       //   跟下面的習慣清單風格反差太大、一打開 App 就先看到一個跟打卡無關的區塊。
-      //   這個 widget 原本的資料（matchCallsUsedToday / MATCH_DAILY_LIMIT）現在改顯示
+      //   這個 widget 原本的資料（現在是 aiCredits / AI_CREDIT_MAX）現在改顯示
       //   在 Profile 頁三格統計的中間格（取代原本幾乎都是 0、資訊量最低的 Posts），
       //   見下面 renderProfile()。桌面版 DesktopHomeSidebar 那份 widget維持不變。
       habits.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -12874,7 +12839,6 @@ function MainApp(_ref16) {
         ? Math.round((dateFromISO(_habitTr.end) - dateFromISO(_habitTr.start)) / 86400000) + 1
         : 999;
       var habitTooShort = _habitDuration < PARTNER_UNLOCK_DAYS;
-      var credits = matchingCredits[habit.id] || 0;
       var pairState = isQualified ? getHabitPairState(habit, user.uid) : null;
       var habitCheerData = habitCheers[habit.id] || null;
       var _catCol = getCatColours(habit.category);
@@ -12946,7 +12910,6 @@ function MainApp(_ref16) {
       isQualified && React.createElement("div", { style:{ padding:'10px 16px 0' } },
         renderHabitPartnerStatus(pairState, {
           habitName: habit.name,
-          credits: credits,
           onFindPartner: function() { window.openMatchingModal(habit); },
           onEndPartnership: function(pair) { endPartnershipDirect(pair); },
           onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
@@ -13479,9 +13442,10 @@ function MainApp(_ref16) {
       //   DesktopHomeSidebar 看得到），但 Andy 要求 Profile 頁也統一顯示 AI credit，
       //   所以桌面/手機都改成同一份資料，不再區分 isDesktop。
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-value", style: { color: '#3b82c4' } },
-        matchCallsUsedToday != null ? (matchCallsUsedToday + "/" + MATCH_DAILY_LIMIT) : "—"
+        // ★ 2026-10：顯示目前 AI Credit 餘額/上限，跟 Home 側欄、Habit History 一致
+        aiCredits != null ? (aiCredits + "/" + AI_CREDIT_MAX) : "—"
       ),
-      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "AI Searches Today")
+      /*#__PURE__*/React.createElement("div", { className: "profile-stat-label" }, "AI Credits")
     ),
     /*#__PURE__*/React.createElement("div", { className: "profile-stat" },
       /*#__PURE__*/React.createElement("div", { className: "profile-stat-value" }, rate, "%"),
@@ -13895,7 +13859,7 @@ function MainApp(_ref16) {
   }, activeTab === 'home' && (isDesktop && !selectedHabit
     ? /*#__PURE__*/React.createElement("div", { className: "desktop-home-grid" }, renderHome(), /*#__PURE__*/React.createElement(DesktopHomeSidebar, {
         habits: habits, archivedHabits: archivedHabits,
-        matchCallsUsedToday: matchCallsUsedToday, matchDailyLimit: MATCH_DAILY_LIMIT
+        aiCredits: aiCredits, aiCreditMax: AI_CREDIT_MAX
       }))
     : renderHome()
   ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits, isDesktop: isDesktop }),
@@ -15325,6 +15289,7 @@ function BuddiesPage(_ref_buddies) {
                         n.type === 'partner_left' ? 'Your partner has left' :
                         n.type === 'pair_message' ? 'New message' :
                         n.type === 'match_found_alert' ? 'New partner may be available! 🎉' :
+                        n.type === 'ai_credit_awarded' ? '+1 AI Credit 🎁' :
                         n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
                         n.type === 'media_consent_granted' ? 'Photo & video sharing approved! 🎉' :
                         n.type === 'media_consent_declined' ? 'Photo & video sharing declined' :
@@ -17042,7 +17007,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           <div class="match-cell"><div class="match-cell-lbl">Avg Duration</div><div class="match-cell-val" id="mAvgDur">—</div><div class="match-cell-sub">min / session</div></div>
           <div class="match-cell"><div class="match-cell-lbl">Habit Lifespan</div><div class="match-cell-val" id="mLifespan">—</div><div class="match-cell-sub">days avg</div></div>
           <div class="match-cell"><div class="match-cell-lbl">Mind-Body</div><div class="match-cell-val" id="mMindBody" style="font-size:13px;">—</div><div class="match-cell-sub">balance</div></div>
-          <div class="match-cell"><div class="match-cell-lbl">Remaining</div><div class="match-cell-val" id="mRemaining">3</div><div class="match-cell-sub">matches today</div></div>
+          <div class="match-cell"><div class="match-cell-lbl">Remaining</div><div class="match-cell-val" id="mRemaining">—</div><div class="match-cell-sub">AI credits left</div></div>
         </div>
         <div id="matchingProgRows">
           <div class="prog-row"><div class="prog-lbl">Avg Duration</div><div class="prog-track"><div class="prog-fill" id="prog1" style="width:0%"></div></div><div class="prog-val" id="progVal1">—</div></div>
@@ -17065,7 +17030,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       <div style="height:1px;background:#1a1a1a;"></div>
       <div style="padding:10px 16px 4px;display:flex;align-items:center;justify-content:space-between;">
         <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;" id="matchResultsLabel">Your best match</div>
-        <div style="font-size:9px;color:#3d3d3d;" id="mRemainingLabel"><span id="mRemaining">—</span> credits left today</div>
+        <div style="font-size:9px;color:#3d3d3d;" id="mRemainingLabel"><span id="mRemaining">—</span> AI credits left</div>
       </div>
       <div id="matchResultsList" style="padding:0 10px 10px;"></div>
       <!-- ★ 這裡原本還有一個靜態的 Notify toggle（id="matchNotifyRow"），
@@ -17565,36 +17530,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   function _proceedToMatching(habit) {
     if (!habit) return;
 
-    // ★ 修正：credit 不再「按下 Find Partner 就先扣」，改成只有在真的
-    //   秀出配對結果（showMatchingResults）當下才扣。
-    //   原因：舊邏輯在這裡就無條件扣 1 點，但這時候根本還沒呼叫
-    //   match-partner，也不知道結果是找到人、noMatch、還是整個 API 出錯——
-    //   等於使用者「找不到對象」也照樣被扣一次，錢包數字跟實際使用感受對不上。
-    //   實際防濫用的門檻本來就是後端 habit_ai_usage（DAILY_LIMIT=10，這個才是
-    //   真的擋 Claude 呼叫次數的地方），這裡的 matching_credits 只是給使用者看
-    //   的「錢包」數字，所以改成有找到才扣，對後端額度沒有任何影響。
-    //   實際扣點呼叫見下面新增的 _deductMatchingCredit()，呼叫點在
-    //   callMatchPartner() 裡「真的要顯示配對結果」的兩個地方（AI 配對成功 /
-    //   fallback 演算法配對成功），noMatch、429、403、AI 完全找不到人都不會扣。
+    // ★ 2026-10：AI Credit 扣點由後端 match-partner 處理（有配對結果才扣），
+    //   前端這裡不扣任何點。
 
     _openScanningModal(habit);
     callMatchPartner(habit); // ★ 真正發送配對請求的唯一入口
-  }
-
-  // ── 扣 1 點 matching credit：只在「確定要把配對結果卡片秀給使用者看」的
-  //   那一刻呼叫，而不是一按 Find Partner 就扣。──────────────────────────
-  function _deductMatchingCredit(habit) {
-    if (!habit || !window._supabaseClient || !window._currentUser) return;
-    var _uid = window._currentUser.uid;
-    window._supabaseClient.from('matching_credits')
-      .select('*').eq('userId', _uid).eq('habitId', habit.id).limit(1).single()
-      .then(function(r) {
-        if (r.data && r.data.credits > 0) {
-          window._supabaseClient.from('matching_credits')
-            .update({ credits: r.data.credits - 1 })
-            .eq('id', r.data.id).then(function(){});
-        }
-      }).catch(function(){});
   }
 
   // ── Helper: get already-paired user IDs (to exclude from results) ────────
@@ -17902,6 +17842,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   async function callMatchPartner(habit) {
     var AI_TIMEOUT_MS = 15000; // 🧪was 8000 — 8 秒在冷啟動時仍常常不夠，拉長到 15 秒減少掉到備援演算法的機率
 
+    // ★ 2026-10：餘額 0 就直接告知，不用等後端（後端也會再擋一次，這裡只是 UX）
+    if (window._aiCredits === 0) {
+      showMatchingError('Out of AI credits', 'You get +1 AI credit each day you log in (up to 10). Come back tomorrow!');
+      return;
+    }
+
     try {
       document.getElementById('matchingStatusText').textContent = 'Claude is analysing...';
 
@@ -17944,8 +17890,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.log('[MatchDebug] match-partner status=', res.status, 'body=', data); // 🧪TEST MODE 診斷log，確認完可刪除
 
       if (!res.ok) {
-        if (res.status === 429) {
-          showMatchingError('Daily limit reached', data.message || 'You have used all 10 matches for today. Try again tomorrow.');
+        if (res.status === 429 || data.error === 'no_credits') {
+          if (window._setAiCredits) window._setAiCredits(0);
+          showMatchingError('Out of AI credits', data.message || 'You get +1 AI credit each day you log in (up to 10). Come back tomorrow!');
         } else if (res.status === 403 && data.error === 'not_qualified') {
           // 伺服器端 7 天門檻擋下 → 顯示原因，絕不降級走程式碼配對（否則門檻會被繞過）
           showMatchingError('Not unlocked yet 🔒', data.message || 'This habit needs more check-in days before partner matching unlocks.');
@@ -17963,8 +17910,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           data.reason || 'No suitable partner found right now. Try again later.',
           true // ★ 真的沒有候選人 → 顯示「有新對象再通知我」選項
         );
-        document.getElementById('mRemaining').textContent =
-          data.remaining !== undefined ? data.remaining : '—';
+        // ★ 頁面上有兩個 id="mRemaining"（結果卡、底部小字），getElementById 只會改到第一個，
+        //   改用 querySelectorAll 兩個一起更新
+        document.querySelectorAll('#mRemaining').forEach(function(el) { el.textContent = data.remaining !== undefined ? data.remaining : '—'; });
+        if (window._setAiCredits) window._setAiCredits(data.remaining); // 沒找到人 → 後端已退回點數
         return;
       }
 
@@ -17977,8 +17926,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
       if (matches.length === 0) throw new Error('AI returned no valid candidates');
 
-      document.getElementById('mRemaining').textContent = data.remaining !== undefined ? data.remaining : '—';
-      _deductMatchingCredit(habit); // ★ 確定有結果要秀出來了，這裡才扣 1 點
+      document.querySelectorAll('#mRemaining').forEach(function(el) { el.textContent = data.remaining !== undefined ? data.remaining : '—'; });
+      if (window._setAiCredits) window._setAiCredits(data.remaining); // 找到人 → 扣 1 點後的新餘額
       showMatchingResults(matches);
 
     } catch(err) {
@@ -17991,7 +17940,6 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         document.getElementById('matchingStatusText').textContent = 'Switching to algorithm match...';
         try {
           var fbMatches = await runFallbackMatch(habit);
-          _deductMatchingCredit(habit); // ★ fallback 演算法配對也是「有結果」，同樣算一次
           showMatchingResults(fbMatches);
         } catch(fbErr) {
           console.log('[MatchDebug] runFallbackMatch failed:', fbErr.message); // 🧪TEST MODE 診斷log
