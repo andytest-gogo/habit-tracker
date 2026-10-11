@@ -4126,12 +4126,28 @@ function _mediaFileToModerationBase64(file, type) {
 }
 
 // 依 checkedDates 換算某支 clip 是打卡的第幾天（統計「小於等於該日」的打卡次數）
-function _clipDayNumber(checkedDates, clipCreatedAt) {
-  if (!checkedDates || !checkedDates.length || !clipCreatedAt) return null;
-  var day = new Date(clipCreatedAt).toISOString().slice(0, 10);
-  var count = 0;
-  for (var i = 0; i < checkedDates.length; i++) { if (checkedDates[i] <= day) count++; }
-  return count > 0 ? count : null;
+// ★ 2026-10 改寫：Day N = 「這支 clip 那天，是這個習慣的第 N 個打卡日」。
+//   - clip 當天一律算 1 天（貼 clip 本身就代表今天有在做，就算還沒按完打卡）
+//   - 之前的天數 = checkedDates ∪ todayCounts(≥1) 裡早於 clip 那天的日期數
+//   - 日期用使用者本地時間（toISODay），原本用 toISOString() 是 UTC，
+//     台灣早上 8 點前貼的 clip 會被算成前一天
+//   上傳 modal 右上角、Challengers / 自己的 clip 牆縮圖，三個地方共用這一支，數字才會一致。
+function _clipDayNumber(checkedDates, clipCreatedAt, todayCounts) {
+  if (!clipCreatedAt) return null;
+  var d = new Date(clipCreatedAt);
+  if (isNaN(d.getTime())) return null;
+  var day = (typeof toISODay === 'function') ? toISODay(d) : d.toISOString().slice(0, 10);
+  var seen = {};
+  (checkedDates || []).forEach(function(x) {
+    var k = x ? String(x).slice(0, 10) : '';
+    if (k && k < day) seen[k] = true;
+  });
+  if (todayCounts && typeof todayCounts === 'object') {
+    Object.keys(todayCounts).forEach(function(k) {
+      if ((todayCounts[k] || 0) >= 1 && k < day) seen[k] = true;
+    });
+  }
+  return Object.keys(seen).length + 1;
 }
 
 // 習慣打卡 clip 的審查（沿用 moderate-content edge function，跟社群貼文/留言同一套）。
@@ -6734,7 +6750,12 @@ function ClipShareModal(props) {
   var _previewState = React.useState(null); var previewUrl = _previewState[0], setPreviewUrl = _previewState[1];
   var _replacingState = React.useState(false); var replacing = _replacingState[0], setReplacing = _replacingState[1]; // 點了「Replace video」才會打開選檔畫面
   var _capState = React.useState(editingPost ? (editingPost.text || '') : ''); var caption = _capState[0], setCaption = _capState[1];
-  var _audState = React.useState(editingPost ? (editingPost.clip_visibility || 'everyone') : 'everyone'); var audience = _audState[0], setAudience = _audState[1];
+  // ★ 2026-10：拿掉「Who can see this」選項，習慣 clip 一律公開（Everyone），
+  //   會出現在 Challengers 頁給所有人看。編輯以前設成 Buddies only 的 clip 時，
+  //   存檔也會一起改成公開（畫面上已經明確告知）。
+  var audience = 'everyone';
+  // 這支 clip 是這個習慣的第幾天（新 clip = 今天；編輯 = 當初貼的那天）
+  var clipDayNum = _clipDayNumber(habit.checkedDates, editingPost ? editingPost.created_at : new Date().toISOString(), habit.todayCounts);
   // ★ 修正：hideHabitName 這個 boolean 本身沒有獨立欄位，是用存進去的 habit 顯示文字
   //   反推——如果當初存的不是完整習慣名稱，代表當初有勾選隱藏，編輯時要沿用，
   //   不然一存檔就會把原本藏起來的習慣名稱意外洩漏出去。
@@ -6875,6 +6896,10 @@ function ClipShareModal(props) {
     style: { background: 'var(--white)', maxWidth: 380, width: '100%', borderRadius: 12, padding: 18, maxHeight: '90vh', overflowY: 'auto' }
   },
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 10 } }, (editingPost ? "Edit today's clip \u2014 " : "Share a clip \u2014 ") + habit.name),
+    /*#__PURE__*/React.createElement("div", { style: { position: 'relative' } },
+    clipDayNum && /*#__PURE__*/React.createElement("span", {
+      style: { position: 'absolute', top: 8, right: 8, zIndex: 2, pointerEvents: 'none', fontSize: 11, fontWeight: 800, background: 'var(--black)', color: '#fff', borderRadius: 6, padding: '3px 8px', letterSpacing: '.4px', boxShadow: '0 1px 4px rgba(0,0,0,.25)' }
+    }, 'Day ' + clipDayNum),
     showExistingVideo
       ? /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
           renderPostVideo(editingPost.media_url, { style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } }),
@@ -6890,7 +6915,8 @@ function ClipShareModal(props) {
             /*#__PURE__*/React.createElement("input", { type: 'file', accept: 'video/*', onChange: handleFileChange, style: { display: 'none' } }))
         : /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
             renderPostVideo(previewUrl, { videoProps: { preload: 'metadata' }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } })
-          ),
+          )
+    ), // ← Day 徽章外層 wrapper 結束
     /*#__PURE__*/React.createElement("textarea", {
       value: caption,
       onChange: function(e) { setCaption(e.target.value.slice(0, 300)); },
@@ -6898,31 +6924,17 @@ function ClipShareModal(props) {
       maxLength: 300,
       style: { width: '100%', minHeight: 50, fontSize: 12, fontFamily: 'var(--font)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 8, margin: '10px 0', resize: 'vertical', boxSizing: 'border-box' }
     }),
-    // \u2605 \u4fee\u6b63\uff082026-09\uff09\uff1a\u4e0a\u9762 6394 \u884c\u7684\u820a\u8a3b\u89e3\u8aaa\u9019\u88e1\u300c\u5c0d\u8c61\u53ea\u6709 Everyone / Buddies
-    //   only \u5169\u7a2e\u300d\uff0c\u4f46\u5be6\u969b\u4e0a audience/setAudience \u9019\u500b state \u5f9e\u982d\u5230\u5c3e\u6c92\u6709\u88ab\u4efb\u4f55
-    //   UI \u5143\u7d20\u7528\u5230\u904e\u2014\u2014handleSubmit \u9001\u51fa\u7684 clipVisibility \u6c38\u9060\u662f\u521d\u59cb\u503c
-    //   'everyone'\uff0c\u7b49\u65bc\u4f7f\u7528\u8005\u5f9e\u4f86\u6c92\u6709\u6a5f\u6703\u9078\u904e Buddies only\uff0c\u9019\u652f toggle \u672c\u8eab
-    //   \u907a\u5931\u4e86\u3002\u9019\u88e1\u88dc\u56de\u4f86\uff0c\u9078\u9805\u53ea\u6709\u9019\u5169\u500b\uff08\u6c92\u6709 just me\uff09\uff0c\u8ddf\u539f\u672c\u8a2d\u8a08\u610f\u5716\u4e00\u81f4\u3002
-    /*#__PURE__*/React.createElement("div", { style: { marginBottom: 12 } },
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6 } }, "Who can see this"),
-      /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 6 } },
-        [
-          { key: 'everyone', label: '\ud83c\udf0d Everyone' },
-          { key: 'buddies', label: '\ud83e\udd1d Buddies only' }
-        ].map(function(opt) {
-          var active = audience === opt.key;
-          return /*#__PURE__*/React.createElement("button", {
-            key: opt.key,
-            type: 'button',
-            onClick: function() { setAudience(opt.key); },
-            style: {
-              flex: 1, fontSize: 11, fontWeight: 700, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-              border: active ? 'none' : '1px solid var(--gray-200)',
-              background: active ? 'var(--black)' : 'var(--white)',
-              color: active ? 'var(--white)' : 'var(--gray-600)'
-            }
-          }, opt.label);
-        })
+    // ★ 2026-10：原本的「Who can see this（Everyone / Buddies only）」拿掉，改成醒目的公開提示
+    /*#__PURE__*/React.createElement("div", {
+      role: 'note',
+      style: { display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fff7e6', border: '1.5px solid #f59e0b', borderRadius: 10, padding: '12px 12px', marginBottom: 12 }
+    },
+      /*#__PURE__*/React.createElement("span", { "aria-hidden": "true", style: { fontSize: 20, lineHeight: 1 } }, "\ud83c\udf0d"),
+      /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: '#92400e', marginBottom: 3 } }, "This clip is public"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: '#78350f', lineHeight: 1.5 } },
+          "It will appear on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, where ", /*#__PURE__*/React.createElement("strong", null, "anyone on FamStreak"), " can watch it. It may also be shown to people you get matched with."
+        )
       )
     ),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, background: 'var(--gray-50)', borderRadius: 8, padding: 10, marginBottom: 12 } },
@@ -7031,7 +7043,7 @@ function ClipGridModal(props) {
       ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, 'No clips yet.')
       : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 } },
           clips.map(function(p, idx) {
-            var dayNum = _clipDayNumber(challenger.checkedDates, p.created_at) || (idx + 1);
+            var dayNum = _clipDayNumber(challenger.checkedDates, p.created_at, challenger.todayCounts) || (idx + 1);
             return /*#__PURE__*/React.createElement("div", {
               key: p.id || idx,
               onClick: function() {
@@ -7060,7 +7072,7 @@ function ClipGridModal(props) {
             },
               /*#__PURE__*/React.createElement(_ClipThumb, { url: p.thumbnail_url }),
               /*#__PURE__*/React.createElement("span", {
-                style: { position: 'absolute', bottom: 5, left: 5, fontSize: 10, fontWeight: 700, background: '#fff', borderRadius: 4, padding: '2px 5px' }
+                style: { position: 'absolute', top: 5, right: 5, fontSize: 10, fontWeight: 800, background: 'var(--black)', color: '#fff', borderRadius: 4, padding: '2px 6px', letterSpacing: '.3px' }
               }, 'Day ' + dayNum)
             );
           })
@@ -9665,8 +9677,10 @@ function DesktopTopbar(props) {
 function DesktopHomeSidebar(props) {
   var habits = props.habits || [];
   var archivedHabits = props.archivedHabits || [];
-  var aiCredits = props.aiCredits;
-  var aiCreditMax = props.aiCreditMax || 10;
+  // ★ 2026-10：AI Credit、Best streak 拿掉，換成通知區塊（原本在 Buddies 頁的鈴鐺）。
+  //   AI Credit 在 Profile 跟 Habit History 還看得到。
+  var notifs = props.notifs || [];
+  var unreadCount = notifs.filter(function(n) { return !n.is_read; }).length;
   // ★ getCatColours() 是 MainApp 內部的私有函式，這個元件在 MainApp 外層拿不到，
   //   所以這裡用同一份對照表自帶一份，不去動原本的程式碼
   var _catColourMap = {
@@ -9690,35 +9704,20 @@ function DesktopHomeSidebar(props) {
     byCategory[c] = (byCategory[c] || 0) + 1;
   });
   var catList = Object.keys(byCategory).map(function(c) { return { name: c, count: byCategory[c], color: catColour(c) }; });
-  var showAiCredits = aiCredits !== null && aiCredits !== undefined;
-  if (!showAiCredits && bestStreak === 0 && catList.length === 0) return null;
   return React.createElement("div", { className: "desktop-sidebar" },
-    // ── AI Credits（淺色版）：顯示目前餘額，每天登入 +1、最多 aiCreditMax ──
-    showAiCredits && React.createElement(React.Fragment, null,
-      React.createElement("div", { style: { display: 'flex', alignItems: 'flex-end', gap: 10 } },
-        React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 26, lineHeight: 1 } },
-          aiCredits
-        ),
-        React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', lineHeight: 1.3, paddingBottom: 2 } },
-          "of " + aiCreditMax + " AI credits", React.createElement("br", null), "available"
-        )
+    // ── 通知（原本 Buddies 頁鈴鐺的內容）──
+    React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
+      React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+        React.createElement("span", { "aria-hidden": "true", style: { fontSize: 16 } }, "🔔"),
+        React.createElement("span", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.5px' } }, "Notifications"),
+        unreadCount > 0 && React.createElement("span", { className: "notif-bell-badge", style: { position: 'static' } }, unreadCount > 9 ? '9+' : unreadCount)
       ),
-      React.createElement("div", { style: { marginTop: 14, height: 3, background: 'var(--gray-100)', width: '100%', overflow: 'hidden' } },
-        React.createElement("div", { style: { height: '100%', background: 'var(--black)', width: Math.min(100, Math.round(aiCredits / aiCreditMax * 100)) + '%', transition: 'width 1s cubic-bezier(.4,0,.2,1)' } })
-      ),
-      React.createElement("div", { style: { fontSize: 10, color: 'var(--gray-400)', marginTop: 8, marginBottom: 24 } },
-        aiCredits <= 0 ? 'Out of credits — log in tomorrow for +1' : (aiCredits >= aiCreditMax ? 'Maxed out · 1 search uses 1 credit' : '+1 every day you log in · max ' + aiCreditMax)
-      ),
-      (bestStreak > 0 || catList.length > 0) && React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 22 } })
+      unreadCount > 0 && React.createElement("button", { className: "notif-mark-all-btn", onClick: props.onMarkAllNotifs }, "Mark all read")
     ),
-    // ── Best streak ──
-    bestStreak > 0 && React.createElement(React.Fragment, null,
-      React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 26 } }, bestStreak),
-      React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 2, marginBottom: 24 } },
-        "day best streak" + (bestHabit ? " · " + bestHabit.name : "")
-      ),
-      catList.length > 0 && React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 22 } })
+    React.createElement("div", { style: { border: '1px solid var(--gray-100)', borderRadius: 10, maxHeight: 380, overflowY: 'auto', marginBottom: 36 } },
+      React.createElement(NotificationList, { notifs: notifs, limit: 20, onItemClick: props.onNotifClick })
     ),
+    catList.length > 0 && React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 28 } }),
     // ── By category（歷史累計，含手動刪除）──
     catList.length > 0 && React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--gray-400)', marginBottom: 14 } }, "By category"),
     catList.map(function(c, i) {
@@ -10363,7 +10362,14 @@ function MainApp(_ref16) {
     if (!user || !user.uid || !_supabase) return;
     var cancelled = false;
     function fetchMyNotifications() {
-      _supabase.from('notifications').select('*').eq('user_id', user.uid).limit(50)
+      // ★ 2026-10：原本沒有 order 就 limit(50)，通知一多，最新的那幾則可能根本沒被撈到；
+      //   先依 created_at 新到舊排序再取 50 筆，排序失敗（欄位不存在）才退回不排序。
+      _supabase.from('notifications').select('*').eq('user_id', user.uid)
+        .order('created_at', { ascending: false }).limit(50)
+        .then(function(r) {
+          if (r && r.error) return _supabase.from('notifications').select('*').eq('user_id', user.uid).limit(100);
+          return r;
+        })
         .then(function(r) {
           if (cancelled) return;
           var list = (r && r.data) || [];
@@ -10380,11 +10386,37 @@ function MainApp(_ref16) {
     }
     window._refreshMyNotifications = fetchMyNotifications;
     fetchMyNotifications();
+    // ★ 2026-10：原本只在打開 App 時讀一次，對方傳訊息、送邀請，要重新整理才看得到。
+    //   改成 Realtime 訂閱 notifications 表（要先把這張表加進 supabase_realtime publication，
+    //   見 notifications_fix.sql），再加上切回前景重抓 + 每 60 秒輪詢當保險。
+    var _notifCh = null;
+    try {
+      _notifCh = _supabase.channel('notif_' + user.uid)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + user.uid },
+          function() { fetchMyNotifications(); })
+        .subscribe();
+    } catch (e) { console.warn('[Notif] realtime subscribe failed:', e && e.message); }
+    function _onVisNotif() { if (document.visibilityState === 'visible') fetchMyNotifications(); }
+    document.addEventListener('visibilitychange', _onVisNotif);
+    var _notifPoll = setInterval(function() { if (document.visibilityState === 'visible') fetchMyNotifications(); }, 60000);
     return function() {
       cancelled = true;
+      if (_notifCh) { try { _supabase.removeChannel(_notifCh); } catch (e) {} }
+      document.removeEventListener('visibilitychange', _onVisNotif);
+      clearInterval(_notifPoll);
       if (window._refreshMyNotifications === fetchMyNotifications) window._refreshMyNotifications = null;
     };
   }, [user]);
+
+  // ★ 2026-10：Home 右側欄（桌面版）點通知——不需要跳頁的類型（+1 AI Credit、被拒絕）
+  //   只標已讀；其他類型（訊息、邀請、配對建議…）交給 Buddies 頁處理，因為開聊天室、
+  //   看邀請報告這些畫面跟狀態都在 BuddiesPage 裡。
+  function handleHomeNotifClick(n) {
+    if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]);
+    if (n.type === 'ai_credit_awarded' || n.type === 'partner_declined') return;
+    window._pendingNotifClick = n;
+    setActiveTab('buddies');
+  }
 
   // ★ 寫入 helper：新的兩種通知（partner_accepted／partner_declined）統一走
   //   這裡，不直接複製現有兩種互相矛盾的欄位組合。先試「完整」欄位組合
@@ -11230,7 +11262,28 @@ function MainApp(_ref16) {
         console.warn('[deleteHabit] archive failed:', e.message);
       });
     }
-    db.collection('habits').doc(habitId).delete().catch(function(err) {
+    // ★ 2026-10：一起刪掉這個習慣底下的 clip（posts 表 is_habit_clip=true）跟 Bunny 上的影片。
+    //   原本只刪 habits 那一列，clip 跟影片會變成孤兒：畫面上再也點不到、使用者自己
+    //   也刪不掉，但 Bunny 跟資料庫還一直佔著空間。先撈清單、刪習慣成功之後才刪 clip，
+    //   習慣刪除失敗（會在下面復原）的話 clip 不會被誤刪。
+    var _clipsToDelete = window._supabaseClient
+      ? window._supabaseClient.from('posts')
+          .select('id, has_video, has_image, media_url, media_public_id')
+          .eq('habit_id', habitId).eq('is_habit_clip', true).eq('user_id', user.uid)
+          .then(function(r) { return (r && r.data) || []; })
+          .catch(function() { return []; })
+      : Promise.resolve([]);
+    db.collection('habits').doc(habitId).delete().then(function() {
+      return _clipsToDelete.then(function(clips) {
+        if (!clips.length) return;
+        var ids = clips.map(function(c) { return c.id; });
+        return window._supabaseClient.from('posts').delete().in('id', ids).then(function(dr) {
+          if (dr && dr.error) { console.warn('[deleteHabit] clip delete failed:', dr.error.message); return; }
+          clips.forEach(function(c) { _deletePostBunnyMedia(c, user); });
+          console.log('[deleteHabit] 已一併刪除 ' + clips.length + ' 支 clip');
+        });
+      });
+    }).catch(function(err) {
       console.error('[deleteHabit] failed:', err.message);
       // ★ 修正：這裡原本只印 console，但上面第一步已經把習慣從畫面上「樂觀移除」了——
       //   如果這個刪除實際上被資料庫擋下來（例如 RLS 權限），使用者完全看不到任何提示，
@@ -13859,7 +13912,9 @@ function MainApp(_ref16) {
   }, activeTab === 'home' && (isDesktop && !selectedHabit
     ? /*#__PURE__*/React.createElement("div", { className: "desktop-home-grid" }, renderHome(), /*#__PURE__*/React.createElement(DesktopHomeSidebar, {
         habits: habits, archivedHabits: archivedHabits,
-        aiCredits: aiCredits, aiCreditMax: AI_CREDIT_MAX
+        notifs: window._myNotifications || [],
+        onNotifClick: handleHomeNotifClick,
+        onMarkAllNotifs: function() { if (window._markNotificationsRead) window._markNotificationsRead(); }
       }))
     : renderHome()
   ), activeTab === 'feed' && renderFeed(), activeTab === 'profile' && renderProfile(), activeTab === 'buddies' && /*#__PURE__*/React.createElement(BuddiesPage, { user: user, habits: habits, isDesktop: isDesktop }),
@@ -13878,6 +13933,7 @@ function MainApp(_ref16) {
         name: viewingMyClipsForHabit.name,
         streak: viewingMyClipsForHabit.streak,
         checkedDates: viewingMyClipsForHabit.checkedDates,
+        todayCounts: viewingMyClipsForHabit.todayCounts,
         clips: (myClipStatusByHabit[viewingMyClipsForHabit.id] && myClipStatusByHabit[viewingMyClipsForHabit.id].allPosts) || []
       },
       currentUser: user,
@@ -13950,6 +14006,9 @@ function MainApp(_ref16) {
       /*#__PURE__*/React.createElement("br", null),
       /*#__PURE__*/React.createElement("br", null),
       "Your progress and streak for this habit will be moved to Habit History. ",
+      /*#__PURE__*/React.createElement("br", null),
+      /*#__PURE__*/React.createElement("br", null),
+      "\ud83c\udfac All clips (videos) you shared for this habit will also be deleted. ",
       /*#__PURE__*/React.createElement("strong", null, "This cannot be undone.")
     ),
     /*#__PURE__*/React.createElement("button", {
@@ -14286,7 +14345,9 @@ function PairWallPage(_ref_pw) {
     var ch = _supabase.channel('pw_msgs_' + pair.id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pair_messages', filter: 'pair_id=eq.' + pair.id },
         function(payload) {
-          setMessages(function(prev) { return prev.concat([payload.new]); });
+          // ★ 2026-10：自己送的訊息畫面上已經先放了一則暫存訊息（樂觀更新），
+          //   realtime 回來時要「取代」那則暫存的，不能再 concat 一次變成兩則
+          setMessages(function(prev) { return _mergeServerMsg(prev, payload.new, null); });
           // Media consent 相關訊息 → 重新同步 pairs.media_consent
           if (payload.new.message_type && payload.new.message_type !== 'text' && payload.new.message_type !== 'media') {
             refreshConsent();
@@ -14380,11 +14441,52 @@ function PairWallPage(_ref_pw) {
     });
   }
 
-  function sendMessage() {
-    var text = inputText.trim();
-    if (!text || sending) return;
-    setSending(true);
+  /* ★ 2026-10：聊天訊息改成「樂觀更新」，按下送出就立刻出現在聊天室（像 LINE）。
+     原本的流程是：getSession → 呼叫 moderate-content Edge Function（冷啟動常常
+     1~3 秒）→ insert pair_messages → 等 realtime 推 INSERT 事件回來，訊息才第一次
+     出現在畫面上，等於使用者自己的訊息要等三段網路來回，體感延遲 3 秒以上。
+     現在改成：
+       1) 按下送出 → 立刻塞一則暫存訊息（_pending）進 messages、清空輸入框，顯示「Sending…」
+       2) 背景照舊跑 moderate-content 審查 + insert（審查規則不變，還是後端說了算）
+       3) insert 成功 → 用資料庫回傳的真正那一列取代暫存訊息，狀態變成「✓ Sent」
+          （realtime 比 insert 先回來也沒關係，_mergeServerMsg 兩邊都會去重）
+       4) 被擋 → 把暫存訊息拿掉、文字放回輸入框，跳原本的警示列
+       5) 網路失敗 → 暫存訊息標成 _failed，顯示「Failed · Retry」可以點重送
+     sending 狀態不再鎖住送出鍵，可以連續快速送好幾則。 */
+
+  // 把資料庫的真正訊息列併進 messages：
+  //   - tempId 有給（insert 回來）→ 取代那則暫存訊息
+  //   - tempId 沒給（realtime 回來）→ 取代第一則「同一個人、同樣內容」的暫存訊息
+  //   - 已經有同 id 的真正訊息 → 不重複加
+  function _mergeServerMsg(prev, row, tempId) {
+    if (!row) return prev;
+    var hasReal = prev.some(function(m) { return m.id === row.id; });
+    var replaced = false;
+    var out = [];
+    prev.forEach(function(m) {
+      var isTarget = !replaced && (tempId
+        ? m.id === tempId
+        : (m._pending && m.sender_id === row.sender_id && (m.content || '') === (row.content || '') && (m.message_type || 'text') === (row.message_type || 'text')));
+      if (isTarget) {
+        replaced = true;
+        if (!hasReal) { out.push(row); hasReal = true; }
+        return; // 暫存訊息丟掉（真正的那則已經在 out 或 prev 裡）
+      }
+      out.push(m);
+    });
+    if (!replaced && !hasReal) out.push(row);
+    return out;
+  }
+
+  function _sendText(text) {
+    var tempId = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    var optimistic = {
+      id: tempId, pair_id: pair.id, sender_id: user.uid, content: text,
+      message_type: 'text', created_at: new Date().toISOString(), _pending: true
+    };
+    setMessages(function(prev) { return prev.concat([optimistic]); });
     setChatBlockedMsg(null);
+
     _supabase.auth.getSession().then(function(s) {
       var token = s.data.session && s.data.session.access_token;
       if (!token) return { approved: true };
@@ -14397,22 +14499,48 @@ function PairWallPage(_ref_pw) {
     }).catch(function() { return { approved: true }; })
     .then(function(mod) {
       if (mod && mod.approved === false) {
-        setSending(false);
+        // 被擋：拿掉暫存訊息，文字放回輸入框（輸入框已經有新打的字就不蓋掉）
+        setMessages(function(prev) { return prev.filter(function(m) { return m.id !== tempId; }); });
+        setInputText(function(cur) { return cur ? cur : text; });
         var msg = CHAT_VIOLATION_MESSAGES[mod.violation] || 'Please review our community guidelines.';
         if (mod.violation === 'CONTACT_INFO') {
           var daysLeft = Math.max(1, 7 - _pairDaysTogether);
-          msg = 'New matches get to know each other here first \u2014 you\u2019ll be able to share contact info once you\u2019ve been paired for 7 days. ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to go!';
+          msg = 'New matches get to know each other here first — you’ll be able to share contact info once you’ve been paired for 7 days. ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to go!';
         }
         _showChatBlocked({ text: msg, contentType: 'chat_text', category: mod.violation, snippet: text });
         return;
       }
+      // .select().single()：直接拿回資料庫那一列（真正的 id / created_at），不用等 realtime
       return _supabase.from('pair_messages').insert({ pair_id: pair.id, sender_id: user.uid, content: text })
-        .then(function() {
-          setInputText(''); setSending(false); touchPairActivity();
-          _notifyNewPairMessage(pair.id, partnerId, user.displayName, text.length > 60 ? text.slice(0, 60) + '…' : text);
-        })
-        .catch(function() { setSending(false); });
+        .select().single()
+        .then(function(r) {
+          if (r && r.error) throw r.error;
+          if (r && r.data) {
+            setMessages(function(prev) { return _mergeServerMsg(prev, r.data, tempId); });
+          } else {
+            // 拿不到回傳列（例如 RLS 不允許 select 剛插入的列）→ 先把暫存訊息標成已送出，realtime 回來會再取代
+            setMessages(function(prev) { return prev.map(function(m) { return m.id === tempId ? Object.assign({}, m, { _pending: false }) : m; }); });
+          }
+          touchPairActivity();
+          // ★ 2026-10：「新訊息」通知改由資料庫 trigger（notify_pair_message）產生，前端不再自己寫
+        });
+    })
+    .catch(function(err) {
+      console.warn('[Chat] send failed:', err && err.message);
+      setMessages(function(prev) { return prev.map(function(m) { return m.id === tempId ? Object.assign({}, m, { _pending: false, _failed: true }) : m; }); });
     });
+  }
+
+  function sendMessage() {
+    var text = inputText.trim();
+    if (!text) return;
+    setInputText(''); // 立刻清空，下一則可以馬上打
+    _sendText(text);
+  }
+
+  function retryMessage(m) {
+    setMessages(function(prev) { return prev.filter(function(x) { return x.id !== m.id; }); });
+    _sendText(m.content);
   }
 
   /* ── Chat media（聊天室傳照片/影片，首次需對方同意）─────────────────── */
@@ -14535,7 +14663,7 @@ function PairWallPage(_ref_pw) {
     })
     .then(function() {
       setChatMediaSending(false); setChatMediaProgress(0); touchPairActivity();
-      _notifyNewPairMessage(pair.id, partnerId, user.displayName, isVid ? '📹 Sent a video' : '📷 Sent a photo');
+      // ★ 2026-10：「新訊息」通知改由資料庫 trigger（notify_pair_message）產生，前端不再自己寫
     })
     .catch(function(err) {
       setChatMediaProgress(0);
@@ -14790,13 +14918,22 @@ function PairWallPage(_ref_pw) {
               }
 
               /* ── 一般文字訊息 ── */
+              // ★ 2026-10：_pending = 還在送（半透明 + Sending…）；_failed = 送失敗（可點重送）。
+              //   這兩種狀態不管是不是最後一則都要顯示，使用者才知道哪一則沒送出去。
               return React.createElement('div', { key: m.id, className: 'pw-msg' + (isMe ? ' me' : '') },
                 React.createElement('div', { className: 'pw-mav' + (isMe ? '' : ' dk') }, isMe ? 'YOU' : partnerInitials),
                 React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start' } },
-                  React.createElement('div', { className: 'pw-mbub' }, m.content),
+                  React.createElement('div', { className: 'pw-mbub', style: m._pending ? { opacity: .6 } : (m._failed ? { opacity: .6, outline: '1px solid #dc2626' } : undefined) }, m.content),
                   React.createElement('div', { style: { display:'flex', alignItems:'center', gap:4, marginTop:2 } },
                     React.createElement('div', { className: 'pw-mt' }, fmtTime(m.created_at)),
-                    isMe && isLast && React.createElement('div', {
+                    isMe && m._pending && React.createElement('div', {
+                      style: { fontSize:9, color: 'var(--gray-300)', fontWeight:700 }
+                    }, 'Sending…'),
+                    isMe && m._failed && React.createElement('button', {
+                      onClick: function() { retryMessage(m); },
+                      style: { fontSize:9, color: '#dc2626', fontWeight:700, background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:'var(--font)' }
+                    }, 'Failed · Retry'),
+                    isMe && isLast && !m._pending && !m._failed && React.createElement('div', {
                       style: { fontSize:9, color: isRead ? '#4ade80' : 'var(--gray-300)', fontWeight:700 }
                     }, isRead ? '✓✓ Read' : '✓ Sent')
                   )
@@ -14867,7 +15004,7 @@ function PairWallPage(_ref_pw) {
         onChange: function(e){ setInputText(e.target.value); },
         onKeyDown: function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
       }),
-      React.createElement('button', { className: 'pw-send', disabled: !inputText.trim() || sending, onClick: sendMessage }, '↑')
+      React.createElement('button', { className: 'pw-send', disabled: !inputText.trim(), onClick: sendMessage }, '↑')
     )
   );
 }
@@ -14887,6 +15024,49 @@ function _fmtNotifTime(ts) {
   if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
   if (diffSec < 604800) return Math.floor(diffSec / 86400) + 'd ago';
   return new Date(t).toLocaleDateString();
+}
+
+// ★ 2026-10：通知標題 + 清單抽成共用元件——Home 右側欄（桌面版）跟 Buddies 頁的
+//   鈴鐺下拉（手機版）都用這一份，點下去要做什麼由呼叫端的 onItemClick 決定。
+function _notifTitle(n) {
+  return n.title || (
+    n.type === 'partner_request' ? 'New Partner Request!' :
+    n.type === 'partner_accepted' ? 'Partner request accepted! 🎉' :
+    n.type === 'partner_declined' ? "Your partner request wasn't accepted" :
+    n.type === 'partnership_ended' ? 'Partnership ended' :
+    n.type === 'partner_left' ? 'Your partner has left' :
+    n.type === 'pair_message' ? 'New message' :
+    n.type === 'match_found_alert' ? 'New partner may be available! 🎉' :
+    n.type === 'ai_credit_awarded' ? '+1 AI Credit 🎁' :
+    n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
+    n.type === 'media_consent_granted' ? 'Photo & video sharing approved! 🎉' :
+    n.type === 'media_consent_declined' ? 'Photo & video sharing declined' :
+    'Notification'
+  );
+}
+function NotificationList(props) {
+  var notifs = props.notifs || [];
+  var limit = props.limit || 20;
+  if (notifs.length === 0) return React.createElement("div", { className: "notif-panel-empty" }, "No notifications yet");
+  return React.createElement("div", { className: "notif-panel-list" },
+    notifs.slice(0, limit).map(function(n, idx) {
+      var title = _notifTitle(n);
+      var body = n.body || n.message || '';
+      var timeLabel = _fmtNotifTime(n.created_at || n.createdAt);
+      return React.createElement("div", {
+        key: n.id || (title + idx),
+        className: "notif-row".concat(n.is_read ? '' : ' unread'),
+        onClick: function() { if (props.onItemClick) props.onItemClick(n); }
+      },
+        !n.is_read && React.createElement("span", { className: "notif-dot" }),
+        React.createElement("div", { className: "notif-row-body" },
+          React.createElement("div", { className: "notif-row-title" }, title),
+          body && React.createElement("div", { className: "notif-row-text" }, body),
+          timeLabel && React.createElement("div", { className: "notif-row-time" }, timeLabel)
+        )
+      );
+    })
+  );
 }
 
 function BuddiesPage(_ref_buddies) {
@@ -14941,6 +15121,77 @@ function BuddiesPage(_ref_buddies) {
   //   pending 邀請」，不是存整個聊天室要切換的 selectedPair。
   var _useState_viewingRequest = useState(null);
   var viewingRequestPair = _useState_viewingRequest[0], setViewingRequestPair = _useState_viewingRequest[1];
+
+  // ★ 2026-10：通知點擊邏輯抽成一支函式——手機版鈴鐺下拉、跟從 Home 右側欄點過來的
+  //   通知（window._pendingNotifClick，切到 Buddies 頁之後在這裡接手）共用。
+  function _handleNotifClick(n) {
+    var _navPairId = n.pair_id || (function() {
+      if (!n.data) return null;
+      try { var d = typeof n.data === 'string' ? JSON.parse(n.data) : n.data; return (d && d.pair_id) || null; }
+      catch (e) { return null; }
+    })();
+    var _navPair = _navPairId ? pairs.find(function(p) { return p.id === _navPairId; }) : null;
+    if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]);
+
+    // ── partner_request：看完整配對報告 + Accept/Decline，不進聊天室 ──
+    if (n.type === 'partner_request') {
+      if (_navPair) {
+        setNotifPanelOpen(false);
+        setViewingRequestPair(_navPair);
+      } else if (typeof _showAppToast === 'function') {
+        _showAppToast("This request isn't available anymore.");
+      }
+      return;
+    }
+
+    // ── partner_declined：沒有畫面可以看，點了只標已讀 ──
+    if (n.type === 'partner_declined') {
+      return;
+    }
+
+    // ── match_found_alert：開「候選人配對報告」modal（最多 5 位
+    //   候選人），跟信件/habit 卡片上「🎉 View your match」按鈕走
+    //   同一套 window._showPreloadedMatch，不是聊天室 ──
+    if (n.type === 'match_found_alert') {
+      var _mfaHabitId = null;
+      try {
+        var _mfaD = typeof n.data === 'string' ? JSON.parse(n.data) : n.data;
+        _mfaHabitId = _mfaD && _mfaD.habit_id;
+      } catch (e) {}
+      var _mfaHabit = _mfaHabitId ? habits.find(function(h) { return String(h.id) === String(_mfaHabitId); }) : null;
+      if (!_mfaHabit) {
+        if (typeof _showAppToast === 'function') _showAppToast("This match suggestion isn't available anymore.");
+        return;
+      }
+      setNotifPanelOpen(false);
+      _supabase.from('pending_match_suggestions').select('match_data')
+        .eq('user_id', user.uid).eq('habit_id', _mfaHabitId).maybeSingle()
+        .then(function(r) {
+          if (r.data && r.data.match_data && window._showPreloadedMatch) {
+            window._showPreloadedMatch(_mfaHabit, r.data.match_data);
+          } else if (typeof _showAppToast === 'function') {
+            _showAppToast("This match suggestion isn't available anymore.");
+          }
+        }).catch(function() {});
+      return;
+    }
+
+    // ── 其餘類型：直接開聊天室（原本的行為）──
+    if (_navPair) {
+      setNotifPanelOpen(false);
+      setSelectedPair(_navPair);
+    } else if (_navPairId && typeof _showAppToast === 'function') {
+      _showAppToast("That conversation isn't available anymore.");
+    }
+  
+  }
+  React.useEffect(function() {
+    if (pairsLoading) return;
+    var pending = window._pendingNotifClick;
+    if (!pending) return;
+    window._pendingNotifClick = null;
+    _handleNotifClick(pending);
+  }, [pairsLoading]);
 
   // ★ 修正：momentum 進度條原本借用配對前 Find Partner 解鎖用的 PARTNER_UNLOCK_DAYS=7，
   //   但雙方既然已經配對成功，這個「距離解鎖還差幾天」的門檻早就跨過去了，繼續用同一個
@@ -15176,7 +15427,7 @@ function BuddiesPage(_ref_buddies) {
     _supabase.from('pairs').update({ status: 'active' }).eq('id', pair.id)
       .then(function() {
         setPairs(function(prev) { return prev.map(function(p) { return p.id === pair.id ? Object.assign({}, p, { status: 'active' }) : p; }); });
-        if (typeof showToast === 'function') showToast('Partner accepted! 🎉');
+        if (typeof _showAppToast === 'function') _showAppToast('Partner accepted! 🎉');
         // ★ 2026-10 新增：通知原本送出邀請的那一方——這是真正的 in-app 通知，
         //   跟 toast 是兩件事：toast 只有我（接受邀請的這個人）自己這台裝置
         //   看得到，對方要等自己打開 App、鈴鐺才會顯示未讀。
@@ -15228,7 +15479,7 @@ function BuddiesPage(_ref_buddies) {
     _supabase.from('pairs').update({ status: 'declined' }).eq('id', pair.id)
       .then(function() {
         setPairs(function(prev) { return prev.filter(function(p) { return p.id !== pair.id; }); });
-        if (typeof showToast === 'function') showToast('Request declined.');
+        if (typeof _showAppToast === 'function') _showAppToast('Request declined.');
         // ★ 2026-10 新增：通知原本送出邀請的那一方被拒絕了——理由跟上面
         //   handleAccept 一樣，單靠卡片狀態悄悄變成 declined，原本的
         //   requester 不會主動被告知。文案故意不提是誰拒絕的，跟
@@ -15251,7 +15502,8 @@ function BuddiesPage(_ref_buddies) {
         React.createElement("div", { className: "buddies-title" }, "Buddies"),
         React.createElement("div", { className: "buddies-sub" }, buddiesSubLabel)
       ),
-      (function() {
+      // ★ 2026-10：桌面版的通知已經搬到 Home 頁右側欄，這裡的鈴鐺只留給手機版
+      !isDesktop && (function() {
         var myNotifs = window._myNotifications || [];
         var unreadCount = myNotifs.filter(function(n) { return !n.is_read; }).length;
         return React.createElement("div", { className: "notif-bell-wrap" },
@@ -15264,7 +15516,6 @@ function BuddiesPage(_ref_buddies) {
             unreadCount > 0 && React.createElement("span", { className: "notif-bell-badge" }, unreadCount > 9 ? '9+' : unreadCount)
           ),
           notifPanelOpen && React.createElement(React.Fragment, null,
-            // ★ 透明全螢幕背板，點外面關掉面板——跟其他 modal 的 overlay 關閉慣例一致
             React.createElement("div", {
               style: { position:'fixed', inset:0, zIndex:49 },
               onClick: function() { setNotifPanelOpen(false); }
@@ -15277,113 +15528,7 @@ function BuddiesPage(_ref_buddies) {
                   onClick: function() { if (window._markNotificationsRead) window._markNotificationsRead(); }
                 }, "Mark all read")
               ),
-              myNotifs.length === 0
-                ? React.createElement("div", { className: "notif-panel-empty" }, "No notifications yet")
-                : React.createElement("div", { className: "notif-panel-list" },
-                    myNotifs.slice(0, 20).map(function(n, idx) {
-                      var title = n.title || (
-                        n.type === 'partner_request' ? 'New Partner Request!' :
-                        n.type === 'partner_accepted' ? 'Partner request accepted! 🎉' :
-                        n.type === 'partner_declined' ? "Your partner request wasn't accepted" :
-                        n.type === 'partnership_ended' ? 'Partnership ended' :
-                        n.type === 'partner_left' ? 'Your partner has left' :
-                        n.type === 'pair_message' ? 'New message' :
-                        n.type === 'match_found_alert' ? 'New partner may be available! 🎉' :
-                        n.type === 'ai_credit_awarded' ? '+1 AI Credit 🎁' :
-                        n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
-                        n.type === 'media_consent_granted' ? 'Photo & video sharing approved! 🎉' :
-                        n.type === 'media_consent_declined' ? 'Photo & video sharing declined' :
-                        'Notification'
-                      );
-                      var body = n.body || n.message || '';
-                      var timeLabel = _fmtNotifTime(n.created_at || n.createdAt);
-                      // ★ 2026-10 修正：點通知的行為不是「全部都跳聊天室」這一種了——
-                      //   partner_request 要看的是對方那邊配對時產生的完整配對報告
-                      //   （pair.ai_match_data）+ Accept/Decline，還沒接受就先進聊天室
-                      //   不合理（見下面 viewingRequestPair modal，跟卡片本身共用同一套
-                      //   handleAccept/handleDecline）；match_found_alert 指的是背景排程
-                      //   找到的「候選人」，還不是已存在的 pair，要開的是跟 Find Partner
-                      //   同一套 window._showPreloadedMatch 候選人配對報告 modal（最多 5
-                      //   位），不是聊天室；partner_declined 這個配對在 App 其他地方都看
-                      //   不到（連 Past buddies 都排除 declined），沒有畫面可以跳，點了
-                      //   只標已讀。其餘類型（pair_message/partner_accepted/
-                      //   media_consent_*/partner_left/partnership_ended）維持原本直接
-                      //   開聊天室的行為——pair_id 可能是真正的欄位（partnership_ended
-                      //   那組舊格式），也可能包在 data 這個 JSON 字串裡（新加的幾種都
-                      //   這樣存），兩邊都要認。
-                      var _navPairId = n.pair_id || (function() {
-                        if (!n.data) return null;
-                        try { var d = typeof n.data === 'string' ? JSON.parse(n.data) : n.data; return (d && d.pair_id) || null; }
-                        catch (e) { return null; }
-                      })();
-                      var _navPair = _navPairId ? pairs.find(function(p) { return p.id === _navPairId; }) : null;
-                      return React.createElement("div", {
-                        key: n.id || (title + idx),
-                        className: "notif-row".concat(n.is_read ? '' : ' unread'),
-                        onClick: function() {
-                          if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]);
-
-                          // ── partner_request：看完整配對報告 + Accept/Decline，不進聊天室 ──
-                          if (n.type === 'partner_request') {
-                            if (_navPair) {
-                              setNotifPanelOpen(false);
-                              setViewingRequestPair(_navPair);
-                            } else if (typeof showToast === 'function') {
-                              showToast("This request isn't available anymore.");
-                            }
-                            return;
-                          }
-
-                          // ── partner_declined：沒有畫面可以看，點了只標已讀 ──
-                          if (n.type === 'partner_declined') {
-                            return;
-                          }
-
-                          // ── match_found_alert：開「候選人配對報告」modal（最多 5 位
-                          //   候選人），跟信件/habit 卡片上「🎉 View your match」按鈕走
-                          //   同一套 window._showPreloadedMatch，不是聊天室 ──
-                          if (n.type === 'match_found_alert') {
-                            var _mfaHabitId = null;
-                            try {
-                              var _mfaD = typeof n.data === 'string' ? JSON.parse(n.data) : n.data;
-                              _mfaHabitId = _mfaD && _mfaD.habit_id;
-                            } catch (e) {}
-                            var _mfaHabit = _mfaHabitId ? habits.find(function(h) { return String(h.id) === String(_mfaHabitId); }) : null;
-                            if (!_mfaHabit) {
-                              if (typeof showToast === 'function') showToast("This match suggestion isn't available anymore.");
-                              return;
-                            }
-                            setNotifPanelOpen(false);
-                            _supabase.from('pending_match_suggestions').select('match_data')
-                              .eq('user_id', user.uid).eq('habit_id', _mfaHabitId).maybeSingle()
-                              .then(function(r) {
-                                if (r.data && r.data.match_data && window._showPreloadedMatch) {
-                                  window._showPreloadedMatch(_mfaHabit, r.data.match_data);
-                                } else if (typeof showToast === 'function') {
-                                  showToast("This match suggestion isn't available anymore.");
-                                }
-                              }).catch(function() {});
-                            return;
-                          }
-
-                          // ── 其餘類型：直接開聊天室（原本的行為）──
-                          if (_navPair) {
-                            setNotifPanelOpen(false);
-                            setSelectedPair(_navPair);
-                          } else if (_navPairId && typeof showToast === 'function') {
-                            showToast("That conversation isn't available anymore.");
-                          }
-                        }
-                      },
-                        !n.is_read && React.createElement("span", { className: "notif-dot" }),
-                        React.createElement("div", { className: "notif-row-body" },
-                          React.createElement("div", { className: "notif-row-title" }, title),
-                          body && React.createElement("div", { className: "notif-row-text" }, body),
-                          timeLabel && React.createElement("div", { className: "notif-row-time" }, timeLabel)
-                        )
-                      );
-                    })
-                  )
+              React.createElement(NotificationList, { notifs: myNotifs, onItemClick: _handleNotifClick })
             )
           )
         );
@@ -18261,7 +18406,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         _matchInvited[idx] = true;
         _matchSending = false;
         _renderMatchCard();
-        if (typeof showToast === 'function') showToast('Invite sent! 🎉');
+        if (typeof _showAppToast === 'function') _showAppToast('Invite sent! 🎉');
         // ★ 這次邀請如果是從背景排程預存的結果送出去的，代表這個習慣的配對
         //   已經有結論了——清掉 pending_match_suggestions，避免 habit 卡片
         //   在邀請都送出去之後還一直顯示「🎉 View your match」這個已經過時的按鈕。

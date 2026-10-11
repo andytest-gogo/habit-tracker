@@ -283,6 +283,7 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Media Cleanup
         <span id="cloudinaryBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+        <span id="orphanClipBadge" title="Orphan clips" style="display:none;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
       </button>
 
       <div style="height:1px;background:var(--g200);margin:10px 0"></div>
@@ -936,6 +937,24 @@ CREATE POLICY "moderation_feedback_admin_update" ON moderation_feedback FOR UPDA
         <table>
           <thead><tr><th>User ID</th><th>Files (public_id)</th><th>Reason</th><th>Queued At</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="cdTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- ★ 2026-10：孤兒 clip——習慣已經被刪掉，但 posts 表的 clip 跟 Bunny 上的影片還在 -->
+      <div class="tbl-card" style="margin-bottom:20px">
+        <div class="tbl-hd">
+          <div>
+            <div class="tbl-ttl">Orphan Clips <span id="ocCount" style="font-size:11px;color:var(--g400);font-weight:600"></span></div>
+            <div style="font-size:11px;color:var(--g400);margin-top:2px">Habit clips whose habit no longer exists (deleted before clips were auto-removed). Delete removes the post <em>and</em> its Bunny video.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="refresh" onclick="loadOrphanClips()">Scan</button>
+            <button id="ocDeleteAllBtn" class="del" onclick="deleteAllOrphanClips()" style="display:none">Delete all</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>User</th><th>Clip</th><th>Caption</th><th>Deleted habit ID</th><th>Posted</th><th>Action</th></tr></thead>
+          <tbody id="ocTbody"><tr class="loading-row"><td colspan="6">Click Scan to find orphan clips</td></tr></tbody>
         </table>
       </div>
 
@@ -1997,7 +2016,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (_tokensLiveInterval) { clearInterval(_tokensLiveInterval); _tokensLiveInterval = null; }
     // Auto-load cleanup page when navigated to
     if (btn.dataset.page === 'cleanup') loadCleanup();
-    if (btn.dataset.page === 'cloudinary') loadCloudinaryQueue();
+    if (btn.dataset.page === 'cloudinary') { loadCloudinaryQueue(); loadOrphanClips(); }
     if (btn.dataset.page === 'matching') loadMatchingStats();
     if (btn.dataset.page === 'pairs') loadPairs();
     if (btn.dataset.page === 'chatlogs') loadChatLogs();
@@ -2540,6 +2559,20 @@ async function viewUserMedia(uid, name) {
       return;
     }
     var data = await resp.json();
+    // ★ 2026-10：一併撈這個人「有在用」的媒體網址，渲染時標出沒被引用的孤兒檔案
+    try {
+      var refs = await Promise.all([
+        _supabase.from('posts').select('media_url, media_public_id, thumbnail_url').eq('user_id', uid).limit(5000),
+        _supabase.from('pair_messages').select('media_url').eq('sender_id', uid).not('media_url', 'is', null).limit(5000),
+        _supabase.from('users').select('photo_url').eq('id', uid).maybeSingle()
+      ]);
+      var refStr = [];
+      (refs[0].data || []).forEach(function(p){ refStr.push(p.media_url || '', p.media_public_id || '', p.thumbnail_url || ''); });
+      (refs[1].data || []).forEach(function(m){ refStr.push(m.media_url || ''); });
+      if (refs[2].data && refs[2].data.photo_url) refStr.push(refs[2].data.photo_url);
+      data._refBlob = refStr.join('\n');
+      data._refsOk = !refs[0].error && !refs[1].error;
+    } catch (e) { data._refsOk = false; }
     _renderMediaModal(uid, name, data);
   } catch(e) {
     body.innerHTML = '<div style="color:#dc2626;padding:20px">Error: ' + e.message + '</div>';
@@ -2549,7 +2582,14 @@ async function viewUserMedia(uid, name) {
 function _renderMediaModal(uid, name, data) {
   var body = document.getElementById('mmBody');
   var imgs = data.images || [], vids = data.videos || [];
-  document.getElementById('mmSub').textContent = 'UID: ' + uid + ' · ' + imgs.length + ' images · ' + vids.length + ' videos';
+  // ★ 2026-10：判斷檔案有沒有被引用——比對 posts / pair_messages / 大頭貼 的網址裡有沒有
+  //   出現這個檔案的 path（圖片）或 videoId（影片）。撈不到引用資料時不標，避免誤判。
+  var refBlob = data._refsOk ? (data._refBlob || '') : null;
+  function _isOrphan(key) { return refBlob !== null && key && refBlob.indexOf(key) === -1; }
+  var _orphanBadge = '<div style="font-size:9px;font-weight:800;color:#b45309;background:#fef3c7;padding:1px 5px;display:inline-block;margin-bottom:3px">⚠ UNREFERENCED</div>';
+  var orphanCount = imgs.filter(function(f){ return _isOrphan(f.path); }).length + vids.filter(function(v){ return _isOrphan(v.videoId); }).length;
+  document.getElementById('mmSub').textContent = 'UID: ' + uid + ' · ' + imgs.length + ' images · ' + vids.length + ' videos'
+    + (refBlob !== null ? ' · ' + orphanCount + ' unreferenced' : '');
 
   if (imgs.length === 0 && vids.length === 0) {
     body.innerHTML = '<div style="text-align:center;padding:40px;color:#999">No media found for this user on Bunny.</div>';
@@ -2563,7 +2603,7 @@ function _renderMediaModal(uid, name, data) {
     imgs.forEach(function(f){
       html += '<div style="border:1px solid var(--g200);border-radius:4px;overflow:hidden">' +
         '<img src="' + f.url + '" style="width:100%;height:110px;object-fit:cover;display:block" onerror="this.style.opacity=.3">' +
-        '<div style="padding:6px 8px"><div style="font-size:9px;color:#999">' + _fmtBytes(f.size) + '</div>' +
+        '<div style="padding:6px 8px">' + (_isOrphan(f.path) ? _orphanBadge : '') + '<div style="font-size:9px;color:#999">' + _fmtBytes(f.size) + '</div>' +
         '<button class="del" style="width:100%;margin-top:4px;font-size:10px" onclick="adminDeleteMedia(\'' + uid + '\',\'' + name.replace(/'/g,"&#39;") + '\',{path:\'' + f.path + '\'},this)">Delete</button></div>' +
       '</div>';
     });
@@ -2575,7 +2615,7 @@ function _renderMediaModal(uid, name, data) {
     vids.forEach(function(v){
       html += '<div style="border:1px solid var(--g200);border-radius:4px;overflow:hidden">' +
         '<img src="' + v.thumbnail + '" style="width:100%;height:100px;object-fit:cover;display:block;background:#000" onerror="this.style.opacity=.2">' +
-        '<div style="padding:6px 8px"><div style="font-size:9px;color:#999">' + _fmtBytes(v.size) + ' · ' + (v.status||'') + '</div>' +
+        '<div style="padding:6px 8px">' + (_isOrphan(v.videoId) ? _orphanBadge : '') + '<div style="font-size:9px;color:#999">' + _fmtBytes(v.size) + ' · ' + (v.status||'') + '</div>' +
         '<button class="del" style="width:100%;margin-top:4px;font-size:10px" onclick="adminDeleteMedia(\'' + uid + '\',\'' + name.replace(/'/g,"&#39;") + '\',{videoId:\'' + v.videoId + '\'},this)">Delete</button></div>' +
       '</div>';
     });
@@ -2819,7 +2859,13 @@ function renderPosts(f){
 
 function delPost(id){
   if(!confirm('Are you sure you want to delete this post?')) return;
+  var _dp = allPosts.find(function(p){ return p.id === id; });
   db.collection('posts').doc(id).delete().then(function(){
+    // ★ 2026-10：一起刪 Bunny 上的圖片/影片，不然檔案會變孤兒
+    if (_dp && (_dp.hasImage || _dp.hasVideo)) {
+      var _vid = _dp.hasVideo ? (_bunnyVideoIdFromUrl(_dp.mediaUrl) || _dp.mediaPublicId) : _dp.mediaPublicId;
+      _adminCleanupBunnyMedia(_dp.userId, !!_dp.hasImage, !!_dp.hasVideo, _vid);
+    }
     allPosts=allPosts.filter(function(p){return p.id!==id;});
     buildUsers(); // ✅ Recalculate post counts per user
     renderStats();
@@ -4210,6 +4256,95 @@ function loadCloudinaryQueue() {
     .catch(function(e) {
       if (tbody) tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Error: ' + htmlEsc(e.message) + '</td></tr>';
     });
+}
+
+/* ══ ★ 2026-10：Orphan Clips ══════════════════════════════════════════
+   孤兒 clip = posts 表裡 is_habit_clip=true，但 habit_id 對應的習慣已經不在 habits 表
+   （使用者在 Home 刪除習慣時，舊版程式只刪習慣、沒刪 clip）。新版 index.html 刪習慣時
+   已經會一起刪 clip 跟 Bunny 影片，這裡用來清掉之前累積下來的。 */
+var _orphanClips = [];
+function _bunnyVideoIdFromUrl(url) {
+  if (!url) return null;
+  var m = String(url).match(/\/([0-9a-fA-F-]{36})\/(?:playlist\.m3u8|play)/);
+  return m ? m[1] : null;
+}
+async function loadOrphanClips() {
+  var tb = document.getElementById('ocTbody');
+  if (!tb) return;
+  tb.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning…</td></tr>';
+  try {
+    var res = await Promise.all([
+      _supabase.from('posts').select('id, user_id, habit_id, text, thumbnail_url, media_url, media_public_id, has_video, has_image, created_at')
+        .eq('is_habit_clip', true).order('created_at', { ascending: false }).limit(5000),
+      _supabase.from('habits').select('id').limit(20000)
+    ]);
+    if (res[0].error) throw res[0].error;
+    if (res[1].error) throw res[1].error;
+    var habitIds = new Set((res[1].data || []).map(function(h){ return String(h.id); }));
+    _orphanClips = (res[0].data || []).filter(function(p){ return !p.habit_id || !habitIds.has(String(p.habit_id)); });
+    renderOrphanClips();
+  } catch (e) {
+    tb.innerHTML = '<tr class="loading-row"><td colspan="6">Scan failed: ' + htmlEsc(e.message || String(e)) + '</td></tr>';
+  }
+}
+function renderOrphanClips() {
+  var tb = document.getElementById('ocTbody');
+  var cnt = document.getElementById('ocCount');
+  var badge = document.getElementById('orphanClipBadge');
+  var allBtn = document.getElementById('ocDeleteAllBtn');
+  if (cnt) cnt.textContent = '(' + _orphanClips.length + ')';
+  if (badge) { badge.textContent = _orphanClips.length; badge.style.display = _orphanClips.length ? 'inline-block' : 'none'; }
+  if (allBtn) allBtn.style.display = _orphanClips.length ? 'inline-block' : 'none';
+  if (!_orphanClips.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="6">No orphan clips 🎉</td></tr>'; return; }
+  var nm = {}; (allUsers || []).forEach(function(u){ nm[u.uid] = u.name; });
+  tb.innerHTML = _orphanClips.map(function(p) {
+    var ts = p.created_at ? new Date(p.created_at).toLocaleString('en-US', { month:'numeric', day:'numeric', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+    var thumb = p.thumbnail_url
+      ? '<img src="' + htmlEsc(p.thumbnail_url) + '" style="width:48px;height:64px;object-fit:cover;border-radius:3px;background:#000" onerror="this.style.opacity=.2">'
+      : '<span style="font-size:18px">🎬</span>';
+    return '<tr id="oc-' + p.id + '">'
+      + '<td><div class="uc">' + avatarHtml(p.user_id, nm[p.user_id]) + '<span>' + htmlEsc(nm[p.user_id] || (p.user_id || '').slice(0, 8) + '…') + '</span></div></td>'
+      + '<td>' + thumb + '</td>'
+      + '<td><div class="ptxt">' + htmlEsc(p.text || '(no caption)') + '</div></td>'
+      + '<td><code style="font-size:10px">' + htmlEsc(p.habit_id || '—') + '</code></td>'
+      + '<td style="font-size:11px;white-space:nowrap">' + ts + '</td>'
+      + '<td><button class="del" onclick="deleteOrphanClip(\'' + p.id + '\', this)">Delete</button></td>'
+      + '</tr>';
+  }).join('');
+}
+async function _deleteOrphanClipRow(p) {
+  var r = await _supabase.from('posts').delete().eq('id', p.id);
+  if (r.error) throw r.error;
+  var vid = p.has_video ? (_bunnyVideoIdFromUrl(p.media_url) || p.media_public_id) : p.media_public_id;
+  await _adminCleanupBunnyMedia(p.user_id, !!p.has_image, !!p.has_video, vid);
+}
+async function deleteOrphanClip(id, btn) {
+  var p = _orphanClips.find(function(x){ return x.id === id; });
+  if (!p) return;
+  if (!confirm('Delete this orphan clip and its Bunny video?\n\nThis cannot be undone.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  try {
+    await _deleteOrphanClipRow(p);
+    _orphanClips = _orphanClips.filter(function(x){ return x.id !== id; });
+    renderOrphanClips();
+  } catch (e) {
+    alert('Delete failed: ' + (e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+  }
+}
+async function deleteAllOrphanClips() {
+  if (!_orphanClips.length) return;
+  if (!confirm('Delete ALL ' + _orphanClips.length + ' orphan clips and their Bunny videos?\n\nThis cannot be undone.')) return;
+  var btn = document.getElementById('ocDeleteAllBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  var failed = 0;
+  for (var i = 0; i < _orphanClips.length; i++) {
+    try { await _deleteOrphanClipRow(_orphanClips[i]); _orphanClips[i]._done = true; } catch (e) { failed++; }
+  }
+  _orphanClips = _orphanClips.filter(function(x){ return !x._done; });
+  if (btn) { btn.disabled = false; btn.textContent = 'Delete all'; }
+  renderOrphanClips();
+  if (failed) alert(failed + ' clip(s) failed to delete. Check the console.');
 }
 
 function markCloudinaryDone(docId) {
