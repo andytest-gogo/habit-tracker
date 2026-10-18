@@ -310,13 +310,10 @@ tr:hover td{background:var(--g50)}
         Engagement
       </button>
 
-      <div style="height:1px;background:var(--g200);margin:10px 0"></div>
-      <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--g400);padding:0 12px;margin-bottom:4px">Communications</div>
-
-      <button class="nav-btn" data-page="emailtemplates">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-        Email Templates
-      </button>
+      <!-- ★ 2026-10（連同上面的「Communications」分類標題一起拿掉）：「Email Templates」頁已移除——找到夥伴、結束配對、夥伴離開、申訴結果
+           這些通知全部改成 App 內小鈴鐺，不再寄信；唯一還會寄的「註冊驗證信」是
+           Supabase Auth 內建的（Supabase Dashboard → Authentication → Emails），不在這裡管理。
+           頁面的 HTML 跟程式碼先保留不刪（沒有入口就不會被打開），之後確定不需要再整段清掉。 -->
 
       <div style="height:1px;background:var(--g200);margin:10px 0"></div>
       <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--g400);padding:0 12px;margin-bottom:4px">Investor View</div>
@@ -5476,28 +5473,42 @@ function _mkAppealItem(raw, kind) {
 //                      動作本身就會一併清掉，網址隨時可能失效）
 // 只在「這次動作真的是在回覆一個待審核的申訴」時才會寄——單純手動整理內容、
 // 沒人申訴過的項目，不算「回覆申訴」，不寄信。
+// ★ 2026-10：申訴結果改用 App 內小鈴鐺通知，不再寄信（原本呼叫 notify-moderation-appeal-resolved）。
+//   直接用管理員身分寫進 notifications 表（match_topup.sql 加了 is_admin() 可以寫入的 policy）。
+//   通知寫失敗不影響「解除隱藏 / 維持隱藏 / 刪除」這些主要動作，只記錄。
 function _notifyAppealResolved(item, outcome) {
   if (!item || !item.userId || item.appealStatus !== 'pending') return Promise.resolve();
-  var includeMedia = outcome === 'denied_kept' && (item.hasImage || item.hasVideo) && !!item.mediaUrl;
-  var payload = {
-    userId: item.userId,
-    outcome: outcome,
-    surfaceLabel: _appealSurfaceLabel(item.kind),
-    categoryLabel: MODERATION_CATEGORY_LABELS[item.category] || item.category || null,
-    textSnippet: item.text ? String(item.text).slice(0, 300) : null,
-    mediaUrl: includeMedia ? item.mediaUrl : null,
-    mediaType: includeMedia ? (item.hasVideo ? 'video' : 'image') : null,
-    thumbnailUrl: includeMedia ? (item.thumbnailUrl || null) : null
-  };
-  return _adminToken().then(function(token) {
-    if (!token) { console.warn('[NotifyAppeal] 沒有登入 token，略過寄信'); return; }
-    return fetch(NOTIFY_APPEAL_FN, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify(payload)
-    }).then(function(resp) {
-      if (!resp.ok) console.warn('[NotifyAppeal] 寄信失敗:', resp.status);
-    });
+  var surface = _appealSurfaceLabel(item.kind); // your Community post / your comment / your habit check-in video
+  var catLabel = MODERATION_CATEGORY_LABELS[item.category] || item.category || 'our community guidelines';
+  var snippet = item.text ? String(item.text).slice(0, 80) + (String(item.text).length > 80 ? '\u2026' : '') : '';
+  var copy = {
+    approved: {
+      type: 'moderation_appeal_approved',
+      title: 'Your review was approved \u2713',
+      body: 'We took another look at ' + surface + ' and it\u2019s visible to everyone again. Sorry about the mix-up!'
+    },
+    denied_kept: {
+      type: 'moderation_appeal_denied_kept',
+      title: 'Review complete \u2014 still hidden',
+      body: 'We reviewed ' + surface + ' and it stays hidden (' + catLabel + '). You can edit it in the app and we\u2019ll take another look.'
+    },
+    denied_deleted: {
+      type: 'moderation_appeal_denied_deleted',
+      title: 'Review complete \u2014 content removed',
+      body: 'We reviewed ' + surface + ' and removed it because it didn\u2019t meet our community guidelines (' + catLabel + ').'
+    }
+  }[outcome];
+  if (!copy) return Promise.resolve();
+  return _supabase.from('notifications').insert({
+    user_id: item.userId,
+    type: copy.type,
+    title: copy.title,
+    body: copy.body + (snippet ? ' \u201c' + snippet + '\u201d' : ''),
+    data: JSON.stringify({ outcome: outcome, kind: item.kind || null }),
+    is_read: false,
+    created_at: new Date().toISOString()
+  }).then(function(r) {
+    if (r && r.error) console.warn('[NotifyAppeal] 寫入通知失敗:', r.error.message);
   }).catch(function(e) { console.warn('[NotifyAppeal] 錯誤:', e && e.message); });
 }
 
