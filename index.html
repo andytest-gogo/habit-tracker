@@ -2880,7 +2880,8 @@ if (isFirebaseConfigured) {
       return _supabase.auth.resetPasswordForEmail(email, opts)
         .then(function(r) { if (r.error) throw r.error; });
     },
-    signOut: function() { return _supabase.auth.signOut(); },
+    // 登出時一併清掉 window._currentUser，避免殘留上一個帳號
+    signOut: function() { window._currentUser = null; return _supabase.auth.signOut(); },
     getIdToken: function() {
       return _supabase.auth.getSession().then(function(r) {
         return r.data.session ? r.data.session.access_token : null;
@@ -9882,6 +9883,10 @@ function DesktopBuddiesSidebar(props) {
 function MainApp(_ref16) {
   var user = _ref16.user,
     onLogout = _ref16.onLogout;
+  // ★ 2026-10 修正：endPartnershipDirect、配對建議、通知開關等全域函式都讀 window._currentUser，
+  //   但之前從來沒被設定過（永遠是 undefined），導致「結束配對」通知被寄給自己而不是對方。
+  //   每次 render 都同步一次，確保換帳號後也是最新的使用者。
+  window._currentUser = user;
   var _useStateTAB = useState(function(){
     try{return localStorage.getItem('_ht_tab')||'home';}catch(e){return 'home';}
   }),
