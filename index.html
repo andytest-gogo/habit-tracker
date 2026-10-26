@@ -8188,20 +8188,11 @@ function endPartnershipDirect(pair, onDone) {
   if (!confirm('End this partnership?')) return;
   window._supabaseClient.from('pairs').update({ status: 'ended', ended_reason: 'user_request', ended_at: new Date().toISOString() })
     .eq('id', pair.id)
-    .then(function() {
-      // ★ 2026-10：通知全部改用小鈴鐺，不再寄信（_notifyPartnershipEndedEmail 不再呼叫）。
-      //   只通知「對方」——結束配對的人自己知道，不用再收一則通知。
-      var me = window._currentUser && window._currentUser.uid;
-      var otherId = pair.user_id === me ? pair.partner_id : pair.user_id;
-      var habitLabel = (pair.user_id === me ? pair.partner_habit_name : pair.habit_name) || 'your habit';
-      var myName = (window._currentUser && window._currentUser.displayName) || 'Your buddy';
-      if (!otherId || typeof window._insertNotification !== 'function') return;
-      return window._insertNotification({
-        user_id: otherId, type: 'partnership_ended',
-        title: 'Partnership ended',
-        body: myName + ' ended your partnership for "' + habitLabel + '". You can find a new partner anytime from your habit card.',
-        data: JSON.stringify({ pair_id: pair.id })
-      });
+    .then(function(r) {
+      // ★ 2026-10-26：「結束配對」的小鈴鐺通知改由資料庫 trigger（notify_partnership_ended）產生，
+      //   前端不再自己寫——之前前端替對方 insert 會被 notifications 的 RLS 擋下，
+      //   錯誤又被吞掉，結果雙方鈴鐺都收不到。見 partnership_ended_trigger.sql。
+      if (r && r.error) console.warn('[endPartnershipDirect] update failed:', r.error.message);
     })
     .then(function() {
       if (window._refreshMyPairs) window._refreshMyPairs();
@@ -14583,18 +14574,10 @@ function PairWallPage(_ref_pw) {
     setEnding(true);
     _supabase.from('pairs').update({ status: 'ended', ended_reason: 'user_request', ended_at: new Date().toISOString() })
       .eq('id', pair.id)
-      .then(function() {
-        // ★ 2026-10：通知全部改用小鈴鐺、不再寄信（跟 endPartnershipDirect 一致）。
-        //   只通知「對方」，結束配對的人自己知道；文案也跟其他入口統一。
-        var myHabit = (isUser ? pair.habit_name : pair.partner_habit_name) || 'your habit';
-        var myName = (user && (user.displayName || user.display_name)) || (window._currentUser && window._currentUser.displayName) || 'Your buddy';
-        if (!partnerId || typeof window._insertNotification !== 'function') return;
-        return window._insertNotification({
-          user_id: partnerId, type: 'partnership_ended',
-          title: 'Partnership ended',
-          body: myName + ' ended your partnership for "' + myHabit + '". You can find a new partner anytime from your habit card.',
-          data: JSON.stringify({ pair_id: pair.id })
-        });
+      .then(function(r) {
+        // ★ 2026-10-26：通知改由資料庫 trigger（notify_partnership_ended）產生，跟 endPartnershipDirect 一致，
+        //   前端不再自己寫（避免 RLS 擋下、也避免 trigger 裝好後重複通知）。
+        if (r && r.error) console.warn('[endPartnership] update failed:', r.error.message);
       })
       .then(function() {
         setEnding(false);
@@ -14610,16 +14593,8 @@ function PairWallPage(_ref_pw) {
     setBlocking(true);
     return _supabase.rpc('block_user', { p_blocked: partnerId, p_pair_id: String(pair.id) }).then(function(r) {
       if (r && r.error) throw new Error(r.error.message);
-      var ended = (r && r.data) || [];
-      ended.forEach(function(row) {
-        if (typeof window._insertNotification !== 'function') return;
-        window._insertNotification({
-          user_id: partnerId, type: 'partnership_ended',
-          title: 'Partnership ended',
-          body: 'Your partnership for "' + (row.other_habit_name || 'your habit') + '" has ended. You can find a new partner anytime from your habit card.',
-          data: JSON.stringify({ pair_id: row.ended_pair_id })
-        });
-      });
+      // ★ 2026-10-26：block_user 把配對改成 ended 時，資料庫 trigger（notify_partnership_ended）
+      //   會自動通知對方（不帶封鎖者名字，對方不會知道是被封鎖），前端不再自己寫通知。
       _refreshBlockRelations();
       if (window._refreshMyPairs) window._refreshMyPairs();
       setBlocking(false);
