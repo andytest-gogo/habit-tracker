@@ -288,8 +288,7 @@ tr:hover td{background:var(--g50)}
       <button class="nav-btn" data-page="cloudinary" id="navCloudinary">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Media Cleanup
-        <span id="cloudinaryBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
-        <span id="orphanClipBadge" title="Orphan clips" style="display:none;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+        <span id="gcBadge" title="Automatic cleanup needs a look" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">!</span>
       </button>
 
       <div style="height:1px;background:var(--g200);margin:10px 0"></div>
@@ -911,66 +910,43 @@ CREATE POLICY "moderation_feedback_admin_update" ON moderation_feedback FOR UPDA
       </div>
     </div>
 
-    <!-- ══ CLOUDINARY MEDIA CLEANUP PAGE ══ -->
+    <!-- ══ MEDIA CLEANUP（2026-10-26 改成全自動，這頁只看狀態、不用動手）══ -->
     <div class="pg" id="pg-cloudinary">
       <div class="pg-title">Media Cleanup</div>
-      <div class="pg-sub">Supabase Storage files pending deletion — queued when users deleted their accounts</div>
+      <div class="pg-sub">Runs automatically every hour (bunny-gc). Files on Bunny that nothing uses anymore are removed after 24 hours; files of deleted accounts are removed right away. Nothing to do here by hand.</div>
 
-      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
-        <div class="stat dark"><div class="stat-lbl">Pending</div><div class="stat-val" id="cdPending">—</div><div class="stat-note">Files to delete</div></div>
-        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Deleted</div><div class="stat-val" id="cdDeleted" style="color:#059669">—</div><div class="stat-note">Already cleaned</div></div>
-        <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Total Records</div><div class="stat-val" id="cdTotal">—</div><div class="stat-note">All requests</div></div>
+      <div id="gcModeBox" style="display:none;padding:12px 16px;font-size:12px;margin-bottom:16px;border:1px solid;line-height:1.7"></div>
+
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Last run</div><div class="stat-val" id="gcLastRun" style="font-size:18px">—</div><div class="stat-note" id="gcLastRunNote">—</div></div>
+        <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Waiting to delete</div><div class="stat-val" id="gcCandidates">—</div><div class="stat-note">Unused files found last run</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Deleted · 30 days</div><div class="stat-val" id="gcDeleted30" style="color:#059669">—</div><div class="stat-note" id="gcFreed">—</div></div>
+        <div class="stat" style="border-left:3px solid var(--g300)"><div class="stat-lbl">Files on Bunny</div><div class="stat-val" id="gcLive">—</div><div class="stat-note" id="gcLiveNote">Tracked in the ledger</div></div>
       </div>
 
-      <div class="quota-warn show" id="cdApiWarn" style="background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;">
-        ⚠️ <strong>Manual step required:</strong> Supabase Storage deletion must be done via the Dashboard or CLI (cannot auto-delete from frontend).
-        Copy the <code style="background:#f5e97a;padding:1px 5px;font-size:11px">storage path</code> values below and delete them directly in
-        <a href="https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/storage/buckets" target="_blank" style="color:#7a6000;font-weight:700">Supabase Dashboard → Storage ↗</a>,
-        or use the Supabase CLI.
-      </div>
-
-      <div class="tbl-card" style="margin-bottom:20px">
-        <div class="tbl-hd">
-          <div class="tbl-ttl">Pending Deletion Queue</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="refresh" onclick="loadCloudinaryQueue()">Refresh</button>
-            <button id="cdMarkAllBtn" class="btn-console" onclick="markAllCloudinaryDone()" style="display:none">✓ Mark All as Deleted</button>
-          </div>
-        </div>
-        <table>
-          <thead><tr><th>User ID</th><th>Files (public_id)</th><th>Reason</th><th>Queued At</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody id="cdTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
-        </table>
-      </div>
-
-      <!-- ★ 2026-10：孤兒 clip——習慣已經被刪掉，但 posts 表的 clip 跟 Bunny 上的影片還在 -->
-      <div class="tbl-card" style="margin-bottom:20px">
+      <div class="tbl-card" style="margin-bottom:20px" id="gcSampleCard">
         <div class="tbl-hd">
           <div>
-            <div class="tbl-ttl">Orphan Clips <span id="ocCount" style="font-size:11px;color:var(--g400);font-weight:600"></span></div>
-            <div style="font-size:11px;color:var(--g400);margin-top:2px">Habit clips whose habit no longer exists (deleted before clips were auto-removed). Delete removes the post <em>and</em> its Bunny video.</div>
+            <div class="tbl-ttl">Preview: files the next live run would delete <span id="gcSampleCount" style="font-size:11px;color:var(--g400);font-weight:600"></span></div>
+            <div style="font-size:11px;color:var(--g400);margin-top:2px">Only shown in preview mode. Open a few to make sure none of them are still in use, then set GC_MODE to live.</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="refresh" onclick="loadOrphanClips()">Scan</button>
-            <button id="ocDeleteAllBtn" class="del" onclick="deleteAllOrphanClips()" style="display:none">Delete all</button>
-          </div>
+          <button class="refresh" onclick="loadMediaGc()">Refresh</button>
         </div>
         <table>
-          <thead><tr><th>User</th><th>Clip</th><th>Caption</th><th>Deleted habit ID</th><th>Posted</th><th>Action</th></tr></thead>
-          <tbody id="ocTbody"><tr class="loading-row"><td colspan="6">Click Scan to find orphan clips</td></tr></tbody>
+          <thead><tr><th>User</th><th>Type</th><th>File</th><th>Uploaded</th><th>Why</th></tr></thead>
+          <tbody id="gcSampleTbody"><tr class="loading-row"><td colspan="5">Loading...</td></tr></tbody>
         </table>
       </div>
 
-      <div class="tbl-card" style="padding:16px 18px;background:var(--g100)">
-        <div class="chart-ttl" style="margin-bottom:8px">📋 How to delete files in Supabase Storage</div>
-        <p style="font-size:12px;color:var(--g500);line-height:1.8">
-          <strong>Option A — Supabase Dashboard (easiest):</strong><br>
-          Go to <a href="https://supabase.com/dashboard/project/nvyyneoiocyjxbtcyxyi/storage/buckets" target="_blank" style="color:var(--ink);font-weight:700">Supabase Storage ↗</a>,
-          open the bucket, find the file by path, and delete it.<br><br>
-          <strong>Option B — Supabase CLI (recommended for bulk):</strong><br>
-          <code style="background:#1e293b;color:#94a3b8;padding:4px 10px;display:inline-block;margin-top:4px">supabase storage rm &lt;bucket/path&gt;</code><br><br>
-          After deleting in Supabase Storage, click <strong>"Mark as Deleted"</strong> below to update this queue.
-        </p>
+      <div class="tbl-card">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Recent runs</div>
+          <button class="refresh" onclick="loadMediaGc()">Refresh</button>
+        </div>
+        <table>
+          <thead><tr><th>Started</th><th>Mode</th><th>Old files added</th><th>Clip posts of deleted habits</th><th>Unused files</th><th>Deleted</th><th>Errors / note</th></tr></thead>
+          <tbody id="gcRunsTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
+        </table>
       </div>
     </div>
 
@@ -2061,7 +2037,7 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (_tokensLiveInterval) { clearInterval(_tokensLiveInterval); _tokensLiveInterval = null; }
     // Auto-load cleanup page when navigated to
     if (btn.dataset.page === 'cleanup') loadCleanup();
-    if (btn.dataset.page === 'cloudinary') { loadCloudinaryQueue(); loadOrphanClips(); }
+    if (btn.dataset.page === 'cloudinary') { loadMediaGc(); }
     if (btn.dataset.page === 'matching') loadMatchingStats();
     if (btn.dataset.page === 'pairs') loadPairs();
     if (btn.dataset.page === 'chatlogs') loadChatLogs();
@@ -2099,6 +2075,7 @@ function loadAll(){
 function _doLoadAll(){
   document.getElementById('lastUpdated').textContent='Loading...';
   refreshSafetyBadge(); // ★ 2026-10-26：側邊欄 Safety 的待處理檢舉數
+  loadMediaGc().catch(function(){}); // ★ 2026-10-26：自動清理停了或出錯時，側邊欄 Media Cleanup 亮紅點
   _loadAllDone = false; // block realtime updates until load is complete
   // Load habits and posts first, THEN load users (which triggers render)
   // This prevents onSnapshot from rendering with empty habits/posts data
@@ -2711,7 +2688,7 @@ function deleteUserData(uid, name){
     '\u2022 Upload quota record\n' +
     '\u2022 User profile doc\n' +
     '\u2022 Username reservation\n' +
-    '\u2022 Supabase Storage media queued for deletion (pending_storage_deletes)\n\n' +
+    '\u2022 Their photos & videos on Bunny (removed automatically within about a day)\n\n' +
     'Note: Auth account must be removed separately in Supabase Dashboard.\n\nThis cannot be undone!'
   )) return;
 
@@ -2779,16 +2756,7 @@ function deleteUserData(uid, name){
           allPostPublicIds.push({ id: userDoc.avatarPublicId, type: 'image' });
         }
 
-        // Queue all Supabase Storage assets (posts + avatar) in a single record
-        if (allPostPublicIds.length > 0) {
-          db.collection('pending_storage_deletes').add({
-            userId:    delUid,
-            publicIds: allPostPublicIds,
-            reason:    'admin_user_delete',
-            createdAt: FieldValue.serverTimestamp(),
-            status:    'pending'
-          }).catch(function(){});
-        }
+        // 2026-10-26：不再寫 pending_storage_deletes——資料刪掉後，Bunny 上的檔案沒人用了，bunny-gc 會自動清掉
 
         return Promise.all(snap.docs.map(function(postDoc){
           var postId = postDoc.id;
@@ -2878,9 +2846,8 @@ function deleteUserData(uid, name){
       'Done! All DB data for "'+name+'" has been deleted.\n\n' +
       'Checklist:\n' +
       '\u2713 Habits, posts, comments, reports deleted\n' +
-      '\u2713 Supabase Storage media queued in pending_storage_deletes\n' +
-      '\u26a0 Auth account: delete manually in Supabase Dashboard \u2192 Auth \u2192 Users\n' +
-      '\u26a0 Storage media: run Media Cleanup tab in this admin panel'
+      '\u2713 Photos & videos on Bunny: removed automatically within about a day\n' +
+      '\u26a0 Auth account: delete manually in Supabase Dashboard \u2192 Auth \u2192 Users'
     );
   }).catch(function(e){
     alert('Error during deletion: '+e.message);
@@ -4218,234 +4185,92 @@ function deleteCommentFromModal(postId, commentId) {
 }
 
 /* ═══════════════════════════════════════════════
-   CLOUDINARY MEDIA CLEANUP PAGE
+   MEDIA CLEANUP（2026-10-26：全自動 bunny-gc，這裡只讀狀態）
+   原本的「Pending Deletion Queue」（要手動到後台刪檔再按 Mark as Deleted）跟
+   「Orphan Clips」（手動掃描、手動刪）都拿掉了——bunny-gc 每小時自動做完。
 ═══════════════════════════════════════════════ */
-var allCdRecords = [];
-
-function updateCloudinaryBadge() {
-  var pending = allCdRecords.filter(function(r){ return r.status === 'pending'; }).length;
-  var badge = document.getElementById('cloudinaryBadge');
-  if (!badge) return;
-  if (pending > 0) {
-    badge.textContent = pending;
-    badge.style.display = 'inline-block';
-  } else {
-    badge.style.display = 'none';
-  }
+function _gcAgo(iso) {
+  if (!iso) return '—';
+  var m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + ' min ago';
+  if (m < 48 * 60) return Math.round(m / 60) + ' h ago';
+  return Math.round(m / 1440) + ' days ago';
 }
-
-function loadCloudinaryQueue() {
-  var tbody = document.getElementById('cdTbody');
-  if (!tbody) return;
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Loading...</td></tr>';
-
-  db.collection('pending_storage_deletes')
-    .orderBy('createdAt', 'desc')
-    .limit(200)
-    .get()
-    .then(function(snap) {
-      allCdRecords = snap.docs.map(function(d) {
-        return Object.assign({ id: d.id }, d.data());
-      });
-
-      // Update stat counters
-      var pending  = allCdRecords.filter(function(r){ return r.status === 'pending'; }).length;
-      var deleted  = allCdRecords.filter(function(r){ return r.status === 'deleted'; }).length;
-      var elP = document.getElementById('cdPending');
-      var elD = document.getElementById('cdDeleted');
-      var elT = document.getElementById('cdTotal');
-      if (elP) elP.textContent = pending;
-      if (elD) elD.textContent = deleted;
-      if (elT) elT.textContent = allCdRecords.length;
-
-      var markAllBtn = document.getElementById('cdMarkAllBtn');
-      if (markAllBtn) markAllBtn.style.display = pending > 0 ? 'inline-block' : 'none';
-
-      updateCloudinaryBadge();
-
-      if (!allCdRecords.length) {
-        tbody.innerHTML = '<tr class="loading-row"><td colspan="5">No pending deletions 🎉</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = allCdRecords.map(function(r) {
-        var ts = r.createdAt && r.createdAt.toDate
-          ? r.createdAt.toDate().toLocaleString('en-US', { month:'numeric', day:'numeric', year:'2-digit', hour:'2-digit', minute:'2-digit' })
-          : '—';
-        var ids = (r.publicIds || []);
-        var idList = ids.map(function(item) {
-          var pid = typeof item === 'string' ? item : item.id;
-          var type = typeof item === 'object' && item.type ? item.type : 'image';
-          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
-            + '<span style="font-size:9px;padding:1px 5px;background:' + (type==='video'?'#dbeafe':'#dcfce7') + ';color:' + (type==='video'?'#1d4ed8':'#166534') + ';font-weight:700;text-transform:uppercase">' + type + '</span>'
-            + '<code style="font-size:10px;color:var(--ink);cursor:pointer;user-select:all" title="Click to copy" onclick="copyText(\'' + pid + '\')">' + pid + '</code>'
-            + '</div>';
-        }).join('');
-
-        var isPending = r.status === 'pending';
-        var statusBadge = isPending
-          ? '<span class="badge" style="background:#fef9c3;color:#92400e">⏳ Pending</span>'
-          : '<span class="badge" style="background:#d1fae5;color:#065f46">✅ Deleted</span>';
-        var actionBtn = isPending
-          ? '<button class="btn-console" onclick="markCloudinaryDone(\'' + r.id + '\')" >Mark Deleted</button>'
-          : '<span style="font-size:10px;color:var(--g400)">—</span>';
-
-        return '<tr id="cdr-' + r.id + '">'
-          + '<td><span class="uid-small" title="' + (r.userId||'') + '">' + (r.userId||'—') + '</span></td>'
-          + '<td>' + (idList || '<span style="color:var(--g400);font-size:11px">none</span>') + '</td>'
-          + '<td>' + (function(reason){ var m={'admin_user_delete':['#fce7f3','#9d174d','Account Del'],'composer_cancelled':['#e0e7ff','#3730a3','Cancelled Upload'],'user_self_delete':['#fef3c7','#92400e','Self Delete']}; var r=m[reason]||['#f3f4f6','#6b7280',reason||'—']; return '<span style="font-size:9px;padding:1px 6px;background:'+r[0]+';color:'+r[1]+';font-weight:700;text-transform:uppercase">'+r[2]+'</span>'; })(r.reason) + '</td>'
-          + '<td style="font-size:11px;white-space:nowrap">' + ts + '</td>'
-          + '<td>' + statusBadge + '</td>'
-          + '<td>' + actionBtn + '</td>'
-          + '</tr>';
-      }).join('');
-    })
-    .catch(function(e) {
-      if (tbody) tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Error: ' + htmlEsc(e.message) + '</td></tr>';
-    });
+function _gcBytes(n) {
+  n = Number(n) || 0;
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  return Math.round(n / 1024) + ' KB';
 }
-
-/* ══ ★ 2026-10：Orphan Clips ══════════════════════════════════════════
-   孤兒 clip = posts 表裡 is_habit_clip=true，但 habit_id 對應的習慣已經不在 habits 表
-   （使用者在 Home 刪除習慣時，舊版程式只刪習慣、沒刪 clip）。新版 index.html 刪習慣時
-   已經會一起刪 clip 跟 Bunny 影片，這裡用來清掉之前累積下來的。 */
-var _orphanClips = [];
-function _bunnyVideoIdFromUrl(url) {
-  if (!url) return null;
-  var m = String(url).match(/\/([0-9a-fA-F-]{36})\/(?:playlist\.m3u8|play)/);
-  return m ? m[1] : null;
-}
-async function loadOrphanClips() {
-  var tb = document.getElementById('ocTbody');
-  if (!tb) return;
-  tb.innerHTML = '<tr class="loading-row"><td colspan="6">Scanning…</td></tr>';
+async function loadMediaGc() {
+  var runsT = document.getElementById('gcRunsTbody'), sampleT = document.getElementById('gcSampleTbody');
+  if (!runsT) return;
   try {
+    var since30 = new Date(Date.now() - 30 * 86400000).toISOString();
     var res = await Promise.all([
-      _supabase.from('posts').select('id, user_id, habit_id, text, thumbnail_url, media_url, media_public_id, has_video, has_image, created_at')
-        .eq('is_habit_clip', true).order('created_at', { ascending: false }).limit(5000),
-      _supabase.from('habits').select('id').limit(20000)
+      _supabase.from('media_gc_runs').select('*').order('started_at', { ascending: false }).limit(48),
+      _supabase.from('media_uploads').select('id', { count: 'exact', head: true }).is('removed_at', null),
+      _supabase.from('media_uploads').select('bytes').gte('removed_at', since30).in('removed_reason', ['unreferenced', 'account_deleted']).limit(10000),
+      _supabase.from('deleted_accounts').select('user_id', { count: 'exact', head: true })
     ]);
     if (res[0].error) throw res[0].error;
-    if (res[1].error) throw res[1].error;
-    var habitIds = new Set((res[1].data || []).map(function(h){ return String(h.id); }));
-    _orphanClips = (res[0].data || []).filter(function(p){ return !p.habit_id || !habitIds.has(String(p.habit_id)); });
-    renderOrphanClips();
+    var runs = res[0].data || [];
+    var last = runs[0];
+    var finished = runs.find(function(r){ return r.finished_at; });
+    var freed = (res[2].data || []).reduce(function(a, r){ return a + (Number(r.bytes) || 0); }, 0);
+
+    document.getElementById('gcLastRun').textContent = last ? _gcAgo(last.started_at) : 'never';
+    document.getElementById('gcLastRunNote').textContent = last ? (last.mode === 'live' ? 'Live — deleting' : 'Preview — not deleting yet') : 'Set up the hourly schedule';
+    document.getElementById('gcCandidates').textContent = finished ? finished.candidates : '—';
+    document.getElementById('gcDeleted30').textContent = (res[2].data || []).length;
+    document.getElementById('gcFreed').textContent = _gcBytes(freed) + ' freed';
+    document.getElementById('gcLive').textContent = res[1].count == null ? '—' : res[1].count;
+    document.getElementById('gcLiveNote').textContent = 'Deleted accounts on record: ' + (res[3].count || 0);
+
+    // 狀態提示：從沒跑過 / 超過 3 小時沒跑 / 上一輪出錯 / 還在預覽模式
+    var box = document.getElementById('gcModeBox'), warn = null, tone = 'warn';
+    if (!last) warn = '<strong>Not running yet.</strong> Deploy <code>bunny-gc</code> and add the hourly schedule (Supabase → Integrations → Cron). After the first run, results show up here.';
+    else if (Date.now() - Date.parse(last.started_at) > 3 * 3600000) warn = '<strong>No run in the last 3 hours.</strong> Check that the hourly schedule for <code>bunny-gc</code> is still on, and look at its Logs.';
+    else if (finished && finished.errors > 0) warn = '<strong>The last run stopped early:</strong> ' + htmlEsc(finished.note || 'see bunny-gc Logs') + '<br>Nothing was deleted by mistake — when something looks wrong the run deletes nothing.';
+    else if (last.mode !== 'live') { tone = 'info'; warn = '<strong>Preview mode.</strong> Nothing is being deleted yet. Check the list below once; if it looks right, change the Edge Function secret <code>GC_MODE</code> to <code>live</code>.'; }
+    if (warn) {
+      box.style.display = 'block';
+      box.style.background = tone === 'info' ? '#eff6ff' : '#fffbe6';
+      box.style.borderColor = tone === 'info' ? '#93c5fd' : '#e0c060';
+      box.style.color = tone === 'info' ? '#1e3a8a' : '#7a6000';
+      box.innerHTML = warn;
+    } else box.style.display = 'none';
+    var badge = document.getElementById('gcBadge');
+    if (badge) badge.style.display = (warn && tone !== 'info') ? 'inline-block' : 'none';
+
+    runsT.innerHTML = runs.length ? runs.map(function(r){
+      return '<tr><td>' + htmlEsc(new Date(r.started_at).toLocaleString()) + '</td>' +
+        '<td>' + (r.mode === 'live' ? 'Live' : 'Preview') + '</td>' +
+        '<td>' + (r.inventoried || 0) + (r.inventoried_at ? ' ✓' : '') + '</td>' +
+        '<td>' + (r.orphan_clip_posts || 0) + '</td>' +
+        '<td>' + (r.candidates || 0) + '</td>' +
+        '<td>' + (r.deleted || 0) + '</td>' +
+        '<td style="font-size:11px;color:' + (r.errors ? '#dc2626' : 'var(--g400)') + '">' + (r.finished_at ? (r.errors ? r.errors + ' · ' : '') + htmlEsc(r.note || '') : 'running…') + '</td></tr>';
+    }).join('') : '<tr class="loading-row"><td colspan="7">No runs yet</td></tr>';
+
+    var sampleRun = runs.find(function(r){ return r.finished_at && r.mode !== 'live'; });
+    var card = document.getElementById('gcSampleCard');
+    if (!last || last.mode === 'live' || !sampleRun) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    var sample = sampleRun.sample || [];
+    document.getElementById('gcSampleCount').textContent = '(' + sampleRun.candidates + (sampleRun.candidates > sample.length ? ', showing ' + sample.length : '') + ')';
+    sampleT.innerHTML = sample.length ? sample.map(function(r){
+      var link = '<span style="font-family:monospace;font-size:11px">' + htmlEsc(r.bunny_id) + '</span>';
+      return '<tr><td>' + htmlEsc(resolveUserName(r.user_id) || r.user_id || '—') + '</td>' +
+        '<td>' + (r.kind === 'video' ? 'Video' : 'Image') + '</td>' +
+        '<td>' + link + '</td>' +
+        '<td>' + htmlEsc(r.created_at ? new Date(r.created_at).toLocaleDateString() : '—') + '</td>' +
+        '<td>' + (r.why === 'account_deleted' ? 'Account deleted' : 'Not used anywhere') + '</td></tr>';
+    }).join('') : '<tr class="loading-row"><td colspan="5">✅ Nothing to delete</td></tr>';
   } catch (e) {
-    tb.innerHTML = '<tr class="loading-row"><td colspan="6">Scan failed: ' + htmlEsc(e.message || String(e)) + '</td></tr>';
+    runsT.innerHTML = '<tr class="loading-row"><td colspan="7">Could not load: ' + htmlEsc(e.message || String(e)) + ' — did you run upload_limits.sql?</td></tr>';
   }
-}
-function renderOrphanClips() {
-  var tb = document.getElementById('ocTbody');
-  var cnt = document.getElementById('ocCount');
-  var badge = document.getElementById('orphanClipBadge');
-  var allBtn = document.getElementById('ocDeleteAllBtn');
-  if (cnt) cnt.textContent = '(' + _orphanClips.length + ')';
-  if (badge) { badge.textContent = _orphanClips.length; badge.style.display = _orphanClips.length ? 'inline-block' : 'none'; }
-  if (allBtn) allBtn.style.display = _orphanClips.length ? 'inline-block' : 'none';
-  if (!_orphanClips.length) { tb.innerHTML = '<tr class="loading-row"><td colspan="6">No orphan clips 🎉</td></tr>'; return; }
-  var nm = {}; (allUsers || []).forEach(function(u){ nm[u.uid] = u.name; });
-  tb.innerHTML = _orphanClips.map(function(p) {
-    var ts = p.created_at ? new Date(p.created_at).toLocaleString('en-US', { month:'numeric', day:'numeric', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
-    var thumb = p.thumbnail_url
-      ? '<img src="' + htmlEsc(p.thumbnail_url) + '" style="width:48px;height:64px;object-fit:cover;border-radius:3px;background:#000" onerror="this.style.opacity=.2">'
-      : '<span style="font-size:18px">🎬</span>';
-    return '<tr id="oc-' + p.id + '">'
-      + '<td><div class="uc">' + avatarHtml(p.user_id, nm[p.user_id]) + '<span>' + htmlEsc(nm[p.user_id] || (p.user_id || '').slice(0, 8) + '…') + '</span></div></td>'
-      + '<td>' + thumb + '</td>'
-      + '<td><div class="ptxt">' + htmlEsc(p.text || '(no caption)') + '</div></td>'
-      + '<td><code style="font-size:10px">' + htmlEsc(p.habit_id || '—') + '</code></td>'
-      + '<td style="font-size:11px;white-space:nowrap">' + ts + '</td>'
-      + '<td><button class="del" onclick="deleteOrphanClip(\'' + p.id + '\', this)">Delete</button></td>'
-      + '</tr>';
-  }).join('');
-}
-async function _deleteOrphanClipRow(p) {
-  var r = await _supabase.from('posts').delete().eq('id', p.id);
-  if (r.error) throw r.error;
-  var vid = p.has_video ? (_bunnyVideoIdFromUrl(p.media_url) || p.media_public_id) : p.media_public_id;
-  await _adminCleanupBunnyMedia(p.user_id, !!p.has_image, !!p.has_video, vid);
-}
-async function deleteOrphanClip(id, btn) {
-  var p = _orphanClips.find(function(x){ return x.id === id; });
-  if (!p) return;
-  if (!confirm('Delete this orphan clip and its Bunny video?\n\nThis cannot be undone.')) return;
-  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
-  try {
-    await _deleteOrphanClipRow(p);
-    _orphanClips = _orphanClips.filter(function(x){ return x.id !== id; });
-    renderOrphanClips();
-  } catch (e) {
-    alert('Delete failed: ' + (e.message || e));
-    if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
-  }
-}
-async function deleteAllOrphanClips() {
-  if (!_orphanClips.length) return;
-  if (!confirm('Delete ALL ' + _orphanClips.length + ' orphan clips and their Bunny videos?\n\nThis cannot be undone.')) return;
-  var btn = document.getElementById('ocDeleteAllBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
-  var failed = 0;
-  for (var i = 0; i < _orphanClips.length; i++) {
-    try { await _deleteOrphanClipRow(_orphanClips[i]); _orphanClips[i]._done = true; } catch (e) { failed++; }
-  }
-  _orphanClips = _orphanClips.filter(function(x){ return !x._done; });
-  if (btn) { btn.disabled = false; btn.textContent = 'Delete all'; }
-  renderOrphanClips();
-  if (failed) alert(failed + ' clip(s) failed to delete. Check the console.');
-}
-
-function markCloudinaryDone(docId) {
-  db.collection('pending_storage_deletes').doc(docId).update({
-    status: 'deleted',
-    deletedAt: FieldValue.serverTimestamp(),
-    deletedBy: auth.currentUser ? auth.currentUser.email : 'admin'
-  }).then(function() {
-    var r = allCdRecords.find(function(x){ return x.id === docId; });
-    if (r) r.status = 'deleted';
-
-    var row = document.getElementById('cdr-' + docId);
-    if (row) {
-      var cells = row.querySelectorAll('td');
-      if (cells[3]) cells[3].innerHTML = '<span class="badge" style="background:#d1fae5;color:#065f46">✅ Deleted</span>';
-      if (cells[4]) cells[4].innerHTML = '<span style="font-size:10px;color:var(--g400)">—</span>';
-    }
-
-    // Update counters
-    var pending = allCdRecords.filter(function(x){ return x.status === 'pending'; }).length;
-    var deleted = allCdRecords.filter(function(x){ return x.status === 'deleted'; }).length;
-    var elP = document.getElementById('cdPending');
-    var elD = document.getElementById('cdDeleted');
-    if (elP) elP.textContent = pending;
-    if (elD) elD.textContent = deleted;
-    var markAllBtn = document.getElementById('cdMarkAllBtn');
-    if (markAllBtn) markAllBtn.style.display = pending > 0 ? 'inline-block' : 'none';
-    updateCloudinaryBadge();
-  }).catch(function(e) {
-    alert('Update failed: ' + e.message);
-  });
-}
-
-function markAllCloudinaryDone() {
-  var pending = allCdRecords.filter(function(r){ return r.status === 'pending'; });
-  if (!pending.length) return;
-  if (!confirm('Mark all ' + pending.length + ' pending records as deleted?')) return;
-
-  var batch = db.batch();
-  pending.forEach(function(r) {
-    var ref = db.collection('pending_storage_deletes').doc(r.id);
-    batch.update(ref, {
-      status: 'deleted',
-      deletedAt: FieldValue.serverTimestamp(),
-      deletedBy: auth.currentUser ? auth.currentUser.email : 'admin'
-    });
-    r.status = 'deleted';
-  });
-
-  batch.commit().then(function() {
-    loadCloudinaryQueue();
-  }).catch(function(e) {
-    alert('Batch update failed: ' + e.message);
-  });
 }
 
 function copyText(text) {
