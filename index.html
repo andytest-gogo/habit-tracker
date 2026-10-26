@@ -1180,7 +1180,7 @@
         .pw-end-icon { width:18px; height:18px; border-radius:50%; background:#fde2e2; color:#b91c1c; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0; }
         .pw-end-label { font-size:10.5px; font-weight:700; color:#b91c1c; letter-spacing:.3px; }
         .pw-end-chev { margin-left:auto; color:#e39a9a; font-size:13px; }
-        .pw-safety-btn { background:none; border:1px solid #f5c2c2; border-radius:6px; color:#9b2c2c; font-size:10px; font-weight:700; letter-spacing:.3px; padding:4px 9px; cursor:pointer; font-family:var(--font); flex-shrink:0; }
+        .pw-safety-btn { background:none; border:1px solid #f5c2c2; border-radius:6px; color:#9b2c2c; font-size:10px; font-weight:700; letter-spacing:.3px; padding:0 9px; height:24px; min-height:0; min-width:0; line-height:1; display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font); flex-shrink:0; }
         .pw-safety-btn:hover { background:#fdeaea; }
         /* chat */
         .pw-chat { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; background:var(--gray-50); flex:1; }
@@ -3663,17 +3663,28 @@ var ShareIcon = function ShareIcon() {
 /* ══════════════════════════════════════════════════
    ★ Upload Quota Settings — adjust limits here ★
    ══════════════════════════════════════════════════ */
+// ★ 2026-10-26 上傳規則（Andy 確定）：
+//   - 習慣打卡影片（clip）：不佔下面的每日額度；每個習慣每天最多上傳 3 次（含換片、刪掉重傳），每月合計 3 GB
+//   - Community ＋ 聊天室 ＋ 大頭貼：照片每天 5 張、影片每天 2 支，每月合計 500 MB
+//   - 影片單檔 250 MB、最長 2 分鐘，不限解析度
+//   ⚠️ 真正把關的是後端 bunny-upload v2（LIMITS）；這裡只是讓使用者在上傳前就看到提示，數字要跟後端一致。
 var UPLOAD_LIMITS = {
   IMAGE_MAX_MB: 10,
   // Max image size per upload AFTER compression (MB)
-  VIDEO_MAX_MB: 100,
+  VIDEO_MAX_MB: 250,
   // Max video size per upload (MB)
+  VIDEO_MAX_SEC: 120,
+  // Max video length (seconds)
   DAILY_IMAGE_COUNT: 5,
-  // Max images per day
+  // Max images per day (Community + chat, not habit clips)
   DAILY_VIDEO_COUNT: 2,
-  // Max videos per day
+  // Max videos per day (Community + chat, not habit clips)
   MONTHLY_TOTAL_MB: 500,
-  // Monthly bandwidth cap (MB)
+  // Monthly cap for Community + chat uploads (MB)
+  CLIP_DAILY_PER_HABIT: 3,
+  // Habit clips: uploads per habit per day, replacements included
+  CLIP_MONTHLY_MB: 3072,
+  // Habit clips: monthly cap (MB)
   IMAGE_COMPRESS_MAX_PX: 1920,
   // Max image dimension after compression (px)
   IMAGE_COMPRESS_QUALITY: 0.82 // JPEG quality after compression
@@ -4310,7 +4321,7 @@ async function _uploadToBunnyStorage(file, uid, onProgress) {
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: JSON.stringify({ action: 'image', base64: base64, ext: ext, contentType: file.type || 'application/octet-stream' })
   });
-  if (!res.ok) throw new Error('Bunny image upload failed: ' + res.status);
+  if (!res.ok) throw await _bunnyErrorFrom(res, 'Bunny image upload failed: ');
   var data = await res.json();
   if (data.error) throw new Error(data.error);
 
@@ -4318,18 +4329,47 @@ async function _uploadToBunnyStorage(file, uid, onProgress) {
   return { url: data.url, publicId: data.publicId };
 }
 
+// ★ 2026-10-26：讀影片長度（秒），讀不到（少數瀏覽器／格式）回 0，交給後端上傳後再檢查
+function _getVideoDurationSec(file) {
+  return new Promise(function(resolve) {
+    var url; try { url = URL.createObjectURL(file); } catch (e) { resolve(0); return; }
+    var v = document.createElement('video');
+    var done = false;
+    function finish(sec) { if (done) return; done = true; clearTimeout(t); try { URL.revokeObjectURL(url); } catch (e) {} resolve(sec); }
+    var t = setTimeout(function() { finish(0); }, 6000);
+    v.preload = 'metadata'; v.muted = true;
+    v.onloadedmetadata = function() { finish(isFinite(v.duration) ? v.duration : 0); };
+    v.onerror = function() { finish(0); };
+    v.src = url;
+  });
+}
+// 後端（bunny-upload v2）擋下時回 { code, error }，error 是給使用者看的句子
+async function _bunnyErrorFrom(res, fallback) {
+  var data = null;
+  try { data = await res.json(); } catch (e) {}
+  return new Error((data && data.error) ? data.error : fallback + res.status);
+}
+
 /* ── Upload video to Bunny Stream（Edge Function 產生 presigned 簽章，前端用 TUS 直傳，不碰金鑰）── */
-async function _uploadToBunnyStream(file, uid, onProgress) {
+async function _uploadToBunnyStream(file, uid, onProgress, opts) {
+  opts = opts || {};
   var token = await _getAccessToken();
   if (!token) throw new Error('Not authenticated');
 
   // Step 1: 跟 Edge Function 要 presigned 簽章
+  //   ★ 2026-10-26：帶上用途（clip／general）、習慣 id、檔案大小、長度，後端依規則決定給不給簽章
   var createRes = await fetch(BUNNY_UPLOAD_FN, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ action: 'create-video' })
+    body: JSON.stringify({
+      action: 'create-video',
+      purpose: opts.purpose === 'clip' ? 'clip' : 'general',
+      habitId: opts.habitId || null,
+      sizeBytes: file.size,
+      durationSec: opts.durationSec || 0
+    })
   });
-  if (!createRes.ok) throw new Error('Bunny Stream create failed: ' + createRes.status);
+  if (!createRes.ok) throw await _bunnyErrorFrom(createRes, 'Bunny Stream create failed: ');
   var info = await createRes.json();
   if (info.error) throw new Error(info.error);
 
@@ -4357,6 +4397,19 @@ async function _uploadToBunnyStream(file, uid, onProgress) {
     upload.start();
   });
 
+  // ★ 2026-10-26：傳完請後端向 Bunny 確認實際長度（超過 2 分鐘會被刪掉並回錯誤）
+  try {
+    var vRes = await fetch(BUNNY_UPLOAD_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'verify-video', videoId: info.videoId })
+    });
+    if (vRes.status === 413) throw await _bunnyErrorFrom(vRes, 'Video check failed: ');
+  } catch (e) {
+    if (e && e.message && /2 minutes/.test(e.message)) throw e;
+    console.warn('[Upload] verify-video skipped:', e && e.message);
+  }
+
   if (onProgress) onProgress(95);
   return {
     url: info.playUrl,
@@ -4366,14 +4419,17 @@ async function _uploadToBunnyStream(file, uid, onProgress) {
   };
 }
 
-function uploadToBunny(file, resourceType, onProgress) {
-  return _uploadToBunny(file, resourceType, onProgress);
+// opts（2026-10-26 新增）：{ purpose: 'clip', habitId } ＝ 習慣打卡影片，額度分開算；不給就是一般上傳
+function uploadToBunny(file, resourceType, onProgress, opts) {
+  return _uploadToBunny(file, resourceType, onProgress, opts);
 }
 // 舊名稱別名（向後相容，避免漏改的呼叫點壞掉）
 function uploadToCloudinary(file, resourceType, onProgress) {
   return _uploadToBunny(file, resourceType, onProgress);
 }
-async function _uploadToBunny(file, resourceType, onProgress) {
+async function _uploadToBunny(file, resourceType, onProgress, opts) {
+  opts = opts || {};
+  var isClip = opts.purpose === 'clip';
   resourceType = resourceType || 'auto';
   onProgress = onProgress || null;
 
@@ -4393,22 +4449,39 @@ async function _uploadToBunny(file, resourceType, onProgress) {
   }
 
   // ② Check quota
+  //   ★ 2026-10-26：習慣打卡影片不佔每日／每月的一般額度（後端另外算 clip 的額度），這裡只檢查單檔大小
   var finalMB = +(uploadFile.size / 1024 / 1024).toFixed(3);
-  await checkQuotaFS(uid, uploadFile, isVideo);
+  if (isClip) {
+    if (uploadFile.size > UPLOAD_LIMITS.VIDEO_MAX_MB * 1024 * 1024) {
+      throw new Error('Videos can be up to ' + UPLOAD_LIMITS.VIDEO_MAX_MB + ' MB.');
+    }
+  } else {
+    await checkQuotaFS(uid, uploadFile, isVideo);
+  }
+  //   影片長度：最長 2 分鐘（讀不到長度就交給後端上傳後檢查）
+  var durationSec = 0;
+  if (isVideo) {
+    durationSec = await _getVideoDurationSec(uploadFile);
+    if (durationSec > UPLOAD_LIMITS.VIDEO_MAX_SEC + 3) {
+      throw new Error('Videos can be up to 2 minutes long. This one is ' + Math.floor(durationSec / 60) + ':' + String(Math.round(durationSec % 60)).padStart(2, '0') + '.');
+    }
+  }
 
   // ③ Upload to Bunny
   if (onProgress) onProgress(5);
   var result;
   if (isVideo) {
-    result = await _uploadToBunnyStream(uploadFile, uid, onProgress);
+    result = await _uploadToBunnyStream(uploadFile, uid, onProgress, { purpose: isClip ? 'clip' : 'general', habitId: opts.habitId, durationSec: durationSec });
   } else {
     result = await _uploadToBunnyStorage(uploadFile, uid, onProgress);
   }
 
-  // ④ Record quota in DB
-  await recordUploadFS(uid, finalMB, isVideo,
-    (currentUser && currentUser.displayName) || (currentUser && currentUser.email) || '',
-    (currentUser && currentUser.email) || '');
+  // ④ Record quota in DB（只記一般上傳；打卡影片的用量由後端 media_uploads 記）
+  if (!isClip) {
+    await recordUploadFS(uid, finalMB, isVideo,
+      (currentUser && currentUser.displayName) || (currentUser && currentUser.email) || '',
+      (currentUser && currentUser.email) || '');
+  }
 
   if (onProgress) onProgress(100);
 
@@ -6860,9 +6933,18 @@ function ClipShareModal(props) {
       e.target.value = '';
       return;
     }
-    setErrorMsg('');
-    setFile(f);
-    setPreviewUrl(URL.createObjectURL(f));
+    // ★ 2026-10-26：選片當下就檢查長度（最長 2 分鐘），不用等上傳才發現
+    var _input = e.target;
+    _getVideoDurationSec(f).then(function(sec) {
+      if (sec > UPLOAD_LIMITS.VIDEO_MAX_SEC + 3) {
+        setErrorMsg('Clips can be up to 2 minutes long — this one is ' + Math.floor(sec / 60) + ':' + String(Math.round(sec % 60)).padStart(2, '0') + '. Try trimming it first.');
+        try { _input.value = ''; } catch (err) {}
+        return;
+      }
+      setErrorMsg('');
+      setFile(f);
+      setPreviewUrl(URL.createObjectURL(f));
+    });
   }
 
   function handleClose() {
@@ -6890,7 +6972,8 @@ function ClipShareModal(props) {
       // same hidden+watermark treatment as regular posts/comments.
       var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
       // 編輯模式沒換新影片的話，這裡就不用再上傳一次
-      var doUpload = file ? uploadToBunny(file, 'video', function(pct) { setProgress(pct); }) : Promise.resolve(null);
+      // ★ 2026-10-26：標成習慣打卡影片（purpose:'clip'），不佔 Community／聊天室的每日額度
+      var doUpload = file ? uploadToBunny(file, 'video', function(pct) { setProgress(pct); }, { purpose: 'clip', habitId: habit.id }) : Promise.resolve(null);
       doUpload.then(function(result) {
         var updates = {
           text: caption.trim(),
@@ -10499,7 +10582,9 @@ function MainApp(_ref16) {
     // ★ 2026-10-26：檢舉處理結果、社群規範警告——內容本身就是完整說明，點了只標已讀
     report_actioned: true, report_reviewed: true, account_warning: true,
     // 私下關心通知（Community 貼文裡透露自己想不開時，只有本人收到）
-    support_checkin: true
+    support_checkin: true,
+    // bunny-webhook 刪掉超過 2 分鐘／250 MB 的影片時通知上傳的人
+    video_removed: true
   };
   function _habitIdFromNotif(n) {
     var d = null;
@@ -15487,6 +15572,7 @@ function _notifTitle(n) {
     n.type === 'report_reviewed' ? 'Update on your report' :
     n.type === 'account_warning' ? 'Community guidelines warning' :
     n.type === 'support_checkin' ? 'Checking in on you' :
+    n.type === 'video_removed' ? 'A video was removed' :
     n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
     n.type === 'media_consent_granted' ? 'Photo & video sharing approved! 🎉' :
     n.type === 'media_consent_declined' ? 'Photo & video sharing declined' :
