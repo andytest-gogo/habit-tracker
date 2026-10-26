@@ -18080,6 +18080,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           _renderFreeTextSurvey("It sounds like things might be really hard right now. You're not alone \u2014 " + _hl + " When you're ready, you can try again and tell us what keeps you going with your habit.", 'support');
           return;
         }
+        // 鼓勵／教人自傷而被擋（SELF_HARM）：後端訊息寫死美國 988，這裡換成當地專線
+        if (data.error === 'inappropriate_content' && data.category === 'SELF_HARM') {
+          var _hl2 = (typeof _helplineSentence === 'function') ? _helplineSentence() : 'you can find a free, confidential helpline near you at findahelpline.com.';
+          _renderFreeTextSurvey("We can't use this as written. If you're going through something difficult, " + _hl2 + " Feel free to try again focusing on what drives your habit.", 'support');
+          return;
+        }
         _renderFreeTextSurvey(data.message || 'Something went wrong — please try again.');
         return;
       }
