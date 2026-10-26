@@ -1180,6 +1180,8 @@
         .pw-end-icon { width:18px; height:18px; border-radius:50%; background:#fde2e2; color:#b91c1c; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0; }
         .pw-end-label { font-size:10.5px; font-weight:700; color:#b91c1c; letter-spacing:.3px; }
         .pw-end-chev { margin-left:auto; color:#e39a9a; font-size:13px; }
+        .pw-safety-btn { background:none; border:1px solid #f5c2c2; border-radius:6px; color:#9b2c2c; font-size:10px; font-weight:700; letter-spacing:.3px; padding:4px 9px; cursor:pointer; font-family:var(--font); flex-shrink:0; }
+        .pw-safety-btn:hover { background:#fdeaea; }
         /* chat */
         .pw-chat { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; background:var(--gray-50); flex:1; }
         /* ── AI insight card（共同點提醒，閃爍點沿用配對動畫 matchBlink）──
@@ -6181,7 +6183,7 @@ function FeedCard(_ref5) {
     className: "comments-section"
   }, loadingComments && /*#__PURE__*/React.createElement("div", {
     style: { fontSize: 11, color: 'var(--gray-400)', padding: '4px 0' }
-  }, "Loading comments..."), comments.map(function (c) {
+  }, "Loading comments..."), comments.filter(function (c) { return !_isBlockedUser(c.userId || c.user_id); }).map(function (c) {
     var _c$createdAt;
     var cLikedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
     var cLiked = currentUser ? cLikedBy.includes(currentUser.uid) : false;
@@ -6478,6 +6480,13 @@ var VIOLATION_MESSAGES = {
   SPAM:       "Your post looks like it may be spam or unrelated to your habits. Share your real progress instead!",
   IRRELEVANT: "Your post doesn't seem to be related to your habit challenge. Tell us how your habit is going today!",
   POLITICAL:  "Your post reads as political campaigning or attacking others over political views. Please keep it focused on your habits.",
+  // ★ 2026-10-26：FamStreak Content Policy v1（對照 OpenAI Moderation 分類）的新分類。
+  //   ADULT/POLITICAL/IRRELEVANT 已經不會再出現（moderate-content v7 拿掉了），留著只是讓舊資料還顯示得出來。
+  HARASSMENT:    "Your post looks like it's attacking or insulting someone. Please keep our community respectful.",
+  THREAT:        "Your post contains a threat of harm. Threats are never allowed on FamStreak.",
+  SEXUAL:        "Your post contains sexual content, which isn't allowed in our community.",
+  SEXUAL_MINORS: "Sexual content involving anyone under 18 is never allowed.",
+  ILLICIT:       "Buying or selling drugs or weapons, or how-tos for crimes, aren't allowed on FamStreak.",
   // ★ [新增 2026-09] 語氣刻意跟其他分類不同：其他分類是「請保持整潔/尊重」，
   //   這則是關心語氣，不是規則提醒，並附上申訴入口以外的求助資源方向。
   SELF_HARM:  "We noticed this post touches on some heavy stuff. It's hidden from others for now — if you're going through something difficult, please reach out to someone you trust or a support line. You're welcome to edit and resubmit, or request a review if this was a mistake."
@@ -6497,6 +6506,12 @@ var MODERATION_CATEGORY_INFO = {
   SCAM:       { label: 'Scam / suspicious',icon: '🛑', bg: '#fff2d6', border: '#f2cf8a', fg: '#8a5a00' },
   SPAM:       { label: 'Spam',             icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' },
   IRRELEVANT: { label: 'Off-topic',        icon: '🚧', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' },
+  // ★ 2026-10-26：FamStreak Content Policy v1 新分類（ADULT/POLITICAL/IRRELEVANT 只留給舊資料）
+  HARASSMENT:    { label: 'Harassment',        icon: '🚫', bg: '#efe3fb', border: '#cdb0ef', fg: '#6b3fa0' },
+  THREAT:        { label: 'Threat of harm',    icon: '⚠️', bg: '#fde2e1', border: '#f3a8a5', fg: '#a13328' },
+  SEXUAL:        { label: 'Sexual content',    icon: '🔞', bg: '#ffe4ec', border: '#f3b6cd', fg: '#99315f' },
+  SEXUAL_MINORS: { label: 'Sexual content',    icon: '🔞', bg: '#ffe4ec', border: '#f3b6cd', fg: '#99315f' },
+  ILLICIT:       { label: 'Drugs / weapons',   icon: '🛑', bg: '#fff2d6', border: '#f2cf8a', fg: '#8a5a00' },
   // ★ [新增 2026-09] 跟 interpret-values-text 共用同一套分類命名，新增自傷/
   //   自殺分類；配色刻意用中性藍綠而非其他分類慣用的警示紅/黑，避免對可能
   //   正在低潮的使用者呈現太強烈的「你違規了」觀感。
@@ -6728,12 +6743,59 @@ function renderModerationEditPanel(opts) {
     )
   );
 }
-// ★ 聊天室專用（不是 Claude 判斷的分類，是 moderate-content 的 chat_text 快速
-//   通道用 regex 判斷出來的）。CONTACT_INFO 的文字語氣刻意寫得比較像「說明」
-//   不是「禁止」——sendMessage() 裡還會動態補上「還要等幾天解鎖」，這裡的
-//   版本是找不到天數時的預設文字。
+// ★ 2026-10-26：依使用者所在地區顯示當地的求助專線（自傷／心理危機相關的提示都用這裡）。
+//   不用在註冊時填地區：直接看裝置的時區（例如 Europe/London），看不出來再看語言設定（例如 en-GB）。
+//   只在這台裝置上判斷、不存、不上傳。
+//   號碼只收錄查證過的國家；其他地區一律導到 findahelpline.com（它會依所在地列出當地免費專線）。
+//   號碼來源：各國官方專線（US/CA 988、UK/IE Samaritans 116 123、FR 3114、ES 024、NL 113、
+//   AU Lifeline 13 11 14、NZ 1737、TW 安心專線 1925），之後要新增國家就加在 LINES。
+function _localHelpline() {
+  var LINES = {
+    US: { line: 'call or text 988' },
+    CA: { line: 'call or text 988' },
+    GB: { line: 'call Samaritans free on 116 123' },
+    IE: { line: 'call Samaritans free on 116 123' },
+    FR: { line: 'call 3114 (free, 24/7)' },
+    ES: { line: 'call 024 (free, 24/7)' },
+    NL: { line: 'call 113 or 0800-0113 (free)' },
+    AU: { line: 'call Lifeline on 13 11 14' },
+    NZ: { line: 'call or text 1737' },
+    TW: { line: 'call 1925 (24/7)' }
+  };
+  var TZ = {
+    'Europe/London': 'GB', 'Europe/Belfast': 'GB', 'Europe/Dublin': 'IE', 'Europe/Paris': 'FR',
+    'Europe/Madrid': 'ES', 'Atlantic/Canary': 'ES', 'Africa/Ceuta': 'ES', 'Europe/Amsterdam': 'NL',
+    'Pacific/Auckland': 'NZ', 'Asia/Taipei': 'TW', 'Pacific/Honolulu': 'US',
+    'America/Toronto': 'CA', 'America/Vancouver': 'CA', 'America/Edmonton': 'CA', 'America/Winnipeg': 'CA',
+    'America/Halifax': 'CA', 'America/St_Johns': 'CA', 'America/Regina': 'CA', 'America/Moncton': 'CA'
+  };
+  var US_TZ = /^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit|Boise|Juneau|Sitka|Nome|Adak|Menominee|Indiana\/.+|Kentucky\/.+|North_Dakota\/.+)$/;
+  var cc = null;
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (TZ[tz]) cc = TZ[tz];
+    else if (US_TZ.test(tz)) cc = 'US';
+    else if (/^Australia\//.test(tz)) cc = 'AU';
+  } catch (e) {}
+  if (!cc) {
+    try {
+      var m = String(navigator.language || '').match(/[-_]([A-Za-z]{2})$/);
+      if (m && LINES[m[1].toUpperCase()]) cc = m[1].toUpperCase();
+    } catch (e) {}
+  }
+  return cc && LINES[cc] ? { country: cc, line: LINES[cc].line } : null;
+}
+// 一句話版本：「in the UK you can call Samaritans free on 116 123, or find …」；地區不明就只給 findahelpline.com
+function _helplineSentence() {
+  var h = _localHelpline();
+  return h
+    ? 'you can ' + h.line + ', or find more free helplines at findahelpline.com.'
+    : 'you can find a free, confidential helpline near you at findahelpline.com.';
+}
+
+// ★ 聊天室文字訊息被 moderate-chat 擋下時顯示的原因（regex 硬規則 + 拿不準的才送 Claude）。
+//   2026-10-26：CONTACT_INFO（配對未滿 7 天不能交換聯絡方式）已移除。
 var CHAT_VIOLATION_MESSAGES = {
-  CONTACT_INFO: "New matches get to know each other here first, before sharing contact info.",
   // ★ 2026-10：聊天室改用 moderate-chat（regex + 可疑訊息才送 Claude），新增以下分類
   HARASSMENT: "That message came across as hurtful, so it wasn't sent. Keep it kind \u2014 you're on the same team.",
   HATE: "That message includes language that targets a group of people, so it wasn't sent.",
@@ -6741,8 +6803,17 @@ var CHAT_VIOLATION_MESSAGES = {
   THREAT: "That message wasn't sent. If you or someone you know is struggling, please reach out to someone you trust or a local support line.",
   REPHRASE: "We couldn't check that message right now. Try rephrasing it without strong language.",
   RATE_LIMIT: "You're sending messages a little too fast. Take a breath and try again in a minute.",
-  SCAM: "That message looks like it may be a scam attempt and wasn't sent. Please keep chat genuine."
+  SCAM: "That message looks like it may be a scam attempt and wasn't sent. Please keep chat genuine.",
+  // ★ 2026-10-26：FamStreak Content Policy v1（對照 OpenAI Moderation 分類）新增的分類
+  SEXUAL_MINORS: "That message wasn't sent. Sexual content involving anyone under 18 is never allowed.",
+  VIOLENCE: "That message wasn't sent because it contains graphic violence.",
+  SELF_HARM: "That message wasn't sent. If you or someone you know is struggling, " + _helplineSentence(),
+  ILLICIT: "That message wasn't sent. Buying or selling drugs or weapons isn't allowed on FamStreak.",
+  BLOCKED: "You can't message this person anymore.",
+  SUSPENDED: "Your account is suspended, so you can't send messages."
 };
+// 有人在聊天裡說自己很低落、想不開時（moderate-chat 回 support:true），訊息照常送出，只對他自己顯示這段
+var CHAT_SUPPORT_MESSAGE = "It sounds like things might be hard right now. You're not alone \u2014 " + _helplineSentence();
 
 // ★ 新增：影片/圖片上傳的檔案大小上限，習慣打卡影片（ClipShareModal）跟
 //   夥伴聊天室傳媒體（PairWallPage）共用同一組數字，兩個地方選到超過上限的
@@ -7100,121 +7171,7 @@ function ClipGridModal(props) {
   ));
 }
 
-// ── Buddy Album：一對配對成功的夥伴，把「雙方」在各自對應的習慣底下貼過的
-//   所有 clip 收進同一個 grid wall，跟 ClipGridModal（單人、只看自己全部
-//   clip 用）是不同情境——這裡永遠鎖定這一組配對的兩個人，不會混進其他
-//   使用者的內容，每張縮圖左上角用小徽章標明是誰貼的（You / 對方名字），
-//   一眼就能分清楚。查詢條件跟 BuddiesPage 卡片上「夥伴最新一支 clip」
-//   用的是同一組規則（is_habit_clip=true 且 clip_visibility 為
-//   everyone 或 buddies）——buddies-only 的 clip 本來就只有配對到的這個人
-//   看得到，這裡沿用同一個門檻，不會多洩漏或少顯示。
-// ★ 只抓一次、不分頁：兩人一個習慣單位時間內能貼的 clip 本來就有限（一天
-//   最多一支/人），不會像社群 Feed 那樣量大到需要分頁載入。
-function BuddyAlbumModal(props) {
-  var user = props.user, myHabitId = props.myHabitId, partnerHabitId = props.partnerHabitId,
-    partnerName = props.partnerName, partnerAvatarUrl = props.partnerAvatarUrl,
-    habitLabel = props.habitLabel, onClose = props.onClose;
-  var _lp = React.useState(true); var loading = _lp[0], setLoading = _lp[1];
-  var _cl = React.useState([]); var clips = _cl[0], setClips = _cl[1];
-  var _vp = React.useState(null); var viewingPost = _vp[0], setViewingPost = _vp[1];
-
-  React.useEffect(function() {
-    var habitIds = [myHabitId, partnerHabitId].filter(Boolean);
-    if (habitIds.length === 0) { setLoading(false); return; }
-    _supabase.from('posts')
-      .select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
-      .in('habit_id', habitIds)
-      .eq('is_habit_clip', true)
-      .in('clip_visibility', ['everyone', 'buddies'])
-      .order('created_at', { ascending: false })
-      .then(function(r) { setClips((r && r.data) || []); setLoading(false); })
-      .catch(function() { setLoading(false); });
-  }, [myHabitId, partnerHabitId]);
-
-  function isMine(p) { return p.user_id === user.uid; }
-  function labelFor(p) { return isMine(p) ? 'You' : (partnerName || 'Buddy'); }
-
-  return /*#__PURE__*/React.createElement("div", {
-    style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
-    onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: { background: 'var(--white)', maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 12, padding: 16 }
-  },
-    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 } },
-      /*#__PURE__*/React.createElement("button", {
-        onClick: onClose, "aria-label": "Back",
-        style: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }
-      }, /*#__PURE__*/React.createElement(BackIcon, null)),
-      /*#__PURE__*/React.createElement("div", { className: "pair-avs" },
-        /*#__PURE__*/React.createElement("div", { className: "pair-av" }, "YOU"),
-        /*#__PURE__*/React.createElement("div", { className: "pair-av", style: { position: 'relative' } },
-          ((partnerName || '?')[0] || '?').toUpperCase(),
-          partnerAvatarUrl && /*#__PURE__*/React.createElement("img", {
-            src: partnerAvatarUrl, alt: "",
-            style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
-            onError: function(e) { e.target.remove(); }
-          })
-        )
-      ),
-      /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700 } }, "Shared Album"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, habitLabel || 'Habit clips')
-      )
-    ),
-    loading
-      ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, "Loading…")
-      : clips.length === 0
-        ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, "No clips shared yet — post one from Home to start your album.")
-        : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 } },
-            clips.map(function(p) {
-              var mine = isMine(p);
-              return /*#__PURE__*/React.createElement("div", {
-                key: p.id,
-                onClick: function() {
-                  // ★ 同 ClipGridModal 修過的欄位映射：snake_case 查詢結果要手動補
-                  //   camelCase 別名，FeedCard 才讀得到（hasVideo/mediaUrl 決定要不要
-                  //   渲染播放器、commentCount 是留言數 badge、moderation* 是隱藏判斷）。
-                  setViewingPost(Object.assign({}, p, {
-                    userId: p.user_id, user: labelFor(p), avatarUrl: mine ? null : partnerAvatarUrl,
-                    habit: habitLabel, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
-                    commentCount: p.comment_count || 0,
-                    moderationStatus: p.moderation_status, moderationCategory: p.moderation_category,
-                    moderationAppealStatus: p.moderation_appeal_status, moderationAppealAt: p.moderation_appeal_at
-                  }));
-                },
-                style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
-              },
-                /*#__PURE__*/React.createElement(_ClipThumb, { url: p.thumbnail_url }),
-                /*#__PURE__*/React.createElement("span", {
-                  style: {
-                    position: 'absolute', top: 5, left: 5, display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 9, fontWeight: 700, color: '#fff', maxWidth: 'calc(100% - 10px)',
-                    background: mine ? 'rgba(0,0,0,0.65)' : 'rgba(61,94,106,0.85)',
-                    borderRadius: 20, padding: '3px 7px 3px 3px'
-                  }
-                },
-                  /*#__PURE__*/React.createElement("span", {
-                    style: { width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, flexShrink: 0, overflow: 'hidden' }
-                  }, (!mine && partnerAvatarUrl)
-                    ? /*#__PURE__*/React.createElement("img", { src: partnerAvatarUrl, alt: "", style: { width: '100%', height: '100%', objectFit: 'cover' } })
-                    : (mine ? ((user.displayName || user.email || 'U')[0] || 'U').toUpperCase() : ((partnerName || '?')[0] || '?').toUpperCase())
-                  ),
-                  /*#__PURE__*/React.createElement("span", { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, labelFor(p))
-                ),
-                p.clip_visibility === 'buddies' && /*#__PURE__*/React.createElement("span", {
-                  title: "Buddies only",
-                  style: { position: 'absolute', bottom: 5, right: 5, fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: 4, padding: '2px 5px' }
-                }, "🤝")
-              );
-            })
-          ),
-    viewingPost && /*#__PURE__*/React.createElement(ClipViewerModal, {
-      post: viewingPost,
-      currentUser: user,
-      onClose: function() { setViewingPost(null); }
-    })
-  ));
-}
+// ★ 2026-10：Buddy Album（BuddyAlbumModal，雙方 clip 合併相簿）依 Andy 決定整個移除。
 
 /* ── Global formatTime (used by UserPostsPage outside App scope) ── */
 function _globalFormatTime(date) {
@@ -10440,6 +10397,18 @@ function MainApp(_ref16) {
   //   （兩處呼叫都用 .catch(function(){}) 吞掉錯誤，從來沒人注意過）——這裡
   //   用 select('*') 整列撈回來，畫面渲染時兩種欄位名稱都認得，不綁死其中一種。
   // ══════════════════════════════════════════════════════════════════
+  // ★ 2026-10-26：封鎖關係載入後重繪（Community 要把封鎖的人的貼文／留言藏起來）＋ 自己是否被停權
+  var _useState_blockTick = React.useState(0);
+  window._bumpBlockTick = function() { _useState_blockTick[1](function(n) { return n + 1; }); };
+  var _useState_suspended = React.useState(null);
+  var mySuspension = _useState_suspended[0], setMySuspension = _useState_suspended[1];
+  useEffect(function() {
+    if (!user || !user.uid || !_supabase) return;
+    _refreshBlockRelations();
+    _supabase.from('users').select('suspended_at, suspension_reason').eq('id', user.uid).maybeSingle()
+      .then(function(r) { if (r && !r.error && r.data && r.data.suspended_at) setMySuspension(r.data); })
+      .catch(function() {});
+  }, [user]);
   var _useState_notifTick = React.useState(0);
   var _bumpNotifTick = function() { _useState_notifTick[1](function(n) { return n + 1; }); };
   useEffect(function() {
@@ -10526,7 +10495,11 @@ function MainApp(_ref16) {
   //   申訴結果的通知內容本身就是完整說明，點了只標已讀、留在 Home。
   var _HOME_NOTIF_TYPES = {
     partner_request_closed: true, partnership_ended: true, partner_left: true,
-    moderation_appeal_approved: true, moderation_appeal_denied_kept: true, moderation_appeal_denied_deleted: true
+    moderation_appeal_approved: true, moderation_appeal_denied_kept: true, moderation_appeal_denied_deleted: true,
+    // ★ 2026-10-26：檢舉處理結果、社群規範警告——內容本身就是完整說明，點了只標已讀
+    report_actioned: true, report_reviewed: true, account_warning: true,
+    // 私下關心通知（Community 貼文裡透露自己想不開時，只有本人收到）
+    support_checkin: true
   };
   function _habitIdFromNotif(n) {
     var d = null;
@@ -13463,7 +13436,7 @@ function MainApp(_ref16) {
           React.createElement("h3", null, "No posts yet"),
           React.createElement("p", null, "Go to your Profile to publish your first post!")
         ),
-        feedPosts.map(function(post) {
+        feedPosts.filter(function(post) { return !_isBlockedUser(post.userId || post.user_id); }).map(function(post) {
           var likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
           var liked = isFirebaseConfigured ? likedBy.includes(user.uid) : post.liked || false;
           return React.createElement(FeedCard, {
@@ -14005,10 +13978,11 @@ function MainApp(_ref16) {
         borderTop: '1px solid var(--gray-100)',
         paddingTop: 20
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, React.createElement(BlockedAccountsSection, { user: user, nested: true }), /*#__PURE__*/React.createElement("div", {
       className: "section-title",
       style: {
-        marginBottom: 12
+        marginBottom: 12,
+        marginTop: 20
       }
     }, "Account"), /*#__PURE__*/React.createElement("button", {
       className: "delete-account-btn",
@@ -14156,7 +14130,12 @@ function MainApp(_ref16) {
   );
   return /*#__PURE__*/React.createElement("div", {
     className: isDesktop ? "desktop-shell" : "app-container"
-  }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, { activeTab: activeTab, setActiveTab: setActiveTab, setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout }), /*#__PURE__*/React.createElement("div", { className: isDesktop ? "desktop-main-col" : undefined }, !isDesktop && /*#__PURE__*/React.createElement("div", {
+  }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, { activeTab: activeTab, setActiveTab: setActiveTab, setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout }),
+  // ★ 2026-10-26：帳號被停權時固定顯示在最上面（發文、留言、聊天、配對都會被資料庫擋下）
+  mySuspension && React.createElement("div", {
+    role: "alert",
+    style: { position: 'sticky', top: 0, zIndex: 3000, background: '#7f1d1d', color: '#fff', padding: '10px 16px', fontSize: 12, lineHeight: 1.5, textAlign: 'center' }
+  }, "Your account is suspended for breaking our community guidelines. You can still view your habits, but you can't post, comment, chat or match. Contact support if you think this is a mistake."), /*#__PURE__*/React.createElement("div", { className: isDesktop ? "desktop-main-col" : undefined }, !isDesktop && /*#__PURE__*/React.createElement("div", {
     className: "header"
   }, /*#__PURE__*/React.createElement("div", {
     className: "header-title"
@@ -14410,28 +14389,30 @@ function PairWallPage(_ref_pw) {
   var _si = useState(''); var inputText = _si[0]; var setInputText = _si[1];
   var _ss = useState(false); var sending = _ss[0]; var setSending = _ss[1];
   var _scb = useState(null); var chatBlockedMsg = _scb[0]; var setChatBlockedMsg = _scb[1];
-  // ★ 新增（2026-09）：「回報誤判」——聊天室被擋的訊息/照片/影片本來就不會存
-  //   進 pair_messages（擋下來就直接不送出、不留任何紀錄），使用者如果覺得
-  //   AI 判斷錯了，完全沒地方講。這裡把 chatBlockedMsg 從單純一個字串
-  //   改成帶 { text, contentType, category, snippet, reportable } 的物件，
-  //   讓警示列可以多長出一個「Report as wrong」按鈕，點下去寫進新的
-  //   moderation_feedback 表（見 index.html 外的 SQL migration）。
-  //   chatFeedbackStatus：'idle'（可以點）/ 'sending' / 'sent'（已回報，換成感謝文字）。
-  var _scf = useState('idle'); var chatFeedbackStatus = _scf[0]; var setChatFeedbackStatus = _scf[1];
+  // ★ 2026-10：聊天室的「Report as wrong（回報誤判）」整個移除——被擋就是被擋，照
+  //   審查規則走，不開申訴管道（被擋的內容本來就沒存，改個說法重傳就好）。
+  //   chatBlockedMsg 仍是 { text, contentType, category } 物件，只是不再有回報按鈕。
   // 警示列自動消失的計時器 id——存進 ref 是因為使用者點了「回報」之後，要能
   // 取消原本那個倒數、換成「顯示完『已回報』文字再消失」的較短倒數，不然
   // 感謝文字可能還沒看到警示列就被原本的計時器關掉了。
   var _chatBlockedTimerRef = useRef(null);
-  // ★ 配對天數，用來決定聯絡方式分享要不要解鎖（滿 7 天解鎖），跟 Buddies
-  //   卡片上 "Day X" 那個數字算法一致，都是用 pair.created_at 換算。
-  var _pairDaysTogether = pair.created_at
-    ? Math.max(1, Math.floor((Date.now() - new Date(pair.created_at).getTime()) / 86400000) + 1)
-    : 1;
-  var _contactUnlocked = _pairDaysTogether >= 7;
+  // ★ 2026-10-26：「配對滿 7 天才能交換聯絡方式」整個移除（moderate-chat v3 也拿掉了），
+  //   原本算配對天數的 _pairDaysTogether / _contactUnlocked 跟頂端的 🔒 提示一起刪掉。
+  // 輸入框目前的內容——訊息被擋時要判斷「輸入框是不是空的」，決定直接放回去還是留在聊天串裡
+  var _inputTextRef = useRef('');
+  _inputTextRef.current = inputText; // 每次 render 同步，非同步的審查結果回來時讀得到最新值
   var msgsEndRef = React.useRef(null);
   var _sla = useState(null); var partnerLastActive = _sla[0]; var setPartnerLastActive = _sla[1];
   var _sep = useState(false); var showEndConfirm = _sep[0]; var setShowEndConfirm = _sep[1];
   var _send = useState(false); var ending = _send[0]; var setEnding = _send[1];
+  // ★ 2026-10-26：檢舉（Report）／封鎖（Block）
+  var _srp = useState(false); var showReport = _srp[0]; var setShowReport = _srp[1];
+  var _srr = useState(''); var reportReason = _srr[0]; var setReportReason = _srr[1];
+  var _srd = useState(''); var reportDetails = _srd[0]; var setReportDetails = _srd[1];
+  var _srb = useState(true); var reportAlsoBlock = _srb[0]; var setReportAlsoBlock = _srb[1];
+  var _srs = useState(false); var reportSending = _srs[0]; var setReportSending = _srs[1];
+  var _sbc = useState(false); var showBlockConfirm = _sbc[0]; var setShowBlockConfirm = _sbc[1];
+  var _sbk = useState(false); var blocking = _sbk[0]; var setBlocking = _sbk[1];
   /* AI insight（共同點提醒）*/
   // ★ FIX (「AI · What you two share」內容空泛)：原本這裡會另外呼叫 pair-insight
   // 這支 Edge Function 讓 Claude 重新生成一次文字，但它能看到的資料只有 habitName
@@ -14443,8 +14424,14 @@ function PairWallPage(_ref_pw) {
   // 不用再多打一次 Claude、也不用等網路，資料本來就已經在 pair 這個 prop 裡了。
   // pair.ai_insight 保留當作手動覆寫用的後門：之後想幫特定配對客製化這句話，
   // 直接寫這個欄位的值就會蓋過用 ai_match_data.reason 自動算出來的版本。
-  var _aiInsightInitial = pair.ai_insight || (pair.ai_match_data && pair.ai_match_data.reason) || null;
+  // ★ 2026-10（B 方案）：改讀「目前這個人自己視角」的那一份理由，見 _pairReasonFor()
+  var _aiInsightInitial = pair.ai_insight || _pairReasonFor(pair, user.uid) || null;
   var _sai = useState(_aiInsightInitial); var aiInsight = _sai[0]; var setAiInsight = _sai[1];
+  // 收到邀請的人自己的版本可能是進聊天室之後才生成好的（Buddies 頁在背景補），回來時同步更新
+  useEffect(function() {
+    var next = pair.ai_insight || _pairReasonFor(pair, user.uid) || null;
+    if (next) setAiInsight(next);
+  }, [pair.ai_match_data]);
   /* Media consent（首次上傳照片/影片需對方同意）*/
   var _smc = useState(pair.media_consent || {}); var mediaConsent = _smc[0]; var setMediaConsent = _smc[1];
   var _smcm = useState(false); var showMediaConsentModal = _smcm[0]; var setShowMediaConsentModal = _smcm[1];
@@ -14524,6 +14511,55 @@ function PairWallPage(_ref_pw) {
         onBack();
       })
       .catch(function() { setEnding(false); });
+  }
+
+  /* ★ 2026-10-26：封鎖對方——寫封鎖名單 ＋ 資料庫端結束兩人之間的配對（block_user RPC）。
+     對方只會收到一般的「配對已結束」通知，不會知道是被封鎖。 */
+  function blockPartner(afterReport) {
+    if (blocking || !partnerId) return Promise.resolve();
+    setBlocking(true);
+    return _supabase.rpc('block_user', { p_blocked: partnerId, p_pair_id: String(pair.id) }).then(function(r) {
+      if (r && r.error) throw new Error(r.error.message);
+      var ended = (r && r.data) || [];
+      ended.forEach(function(row) {
+        if (typeof window._insertNotification !== 'function') return;
+        window._insertNotification({
+          user_id: partnerId, type: 'partnership_ended',
+          title: 'Partnership ended',
+          body: 'Your partnership for "' + (row.other_habit_name || 'your habit') + '" has ended. You can find a new partner anytime from your habit card.',
+          data: JSON.stringify({ pair_id: row.ended_pair_id })
+        });
+      });
+      _refreshBlockRelations();
+      if (window._refreshMyPairs) window._refreshMyPairs();
+      setBlocking(false);
+      setShowBlockConfirm(false);
+      if (typeof _showAppToast === 'function') _showAppToast(afterReport ? 'Reported and blocked. Thanks for keeping FamStreak safe.' : 'Blocked. They can no longer message or match with you.');
+      onBack();
+    }).catch(function(e) {
+      setBlocking(false);
+      alert('Could not block right now. Please try again.\n' + (e && e.message ? e.message : ''));
+    });
+  }
+
+  /* ★ 2026-10-26：檢舉對方——證據（最近 30 則聊天）由資料庫自己抓（report_user RPC），前端改不了 */
+  function submitReport() {
+    if (reportSending || !reportReason || !partnerId) return;
+    setReportSending(true);
+    _supabase.rpc('report_user', {
+      p_reported: partnerId, p_reason: reportReason, p_details: reportDetails.trim() || null,
+      p_pair_id: String(pair.id), p_context: 'chat'
+    }).then(function(r) {
+      if (r && r.error) throw new Error(/rate_limited/.test(r.error.message) ? "You've sent a lot of reports today. Please try again tomorrow." : r.error.message);
+      setReportSending(false);
+      setShowReport(false);
+      setReportReason(''); setReportDetails('');
+      if (reportAlsoBlock) return blockPartner(true);
+      if (typeof _showAppToast === 'function') _showAppToast("Thanks for reporting. Our team will review it — you'll hear back in your 🔔 notifications.");
+    }).catch(function(e) {
+      setReportSending(false);
+      alert('Could not send your report. ' + (e && e.message ? e.message : ''));
+    });
   }
 
   /* Mark messages as read */
@@ -14632,57 +14668,25 @@ function PairWallPage(_ref_pw) {
     _supabase.from('pairs').update({ last_post_at: new Date().toISOString() }).eq('id', pair.id).then(function(){}).catch(function(){});
   }
 
-  /* send message — text 先過輕量 regex 快速通道（不呼叫 Claude，聊天不卡頓）。
-     擋下來的話不寫進 pair_messages，在輸入框上方顯示原因（CONTACT_INFO 會顯示
-     還要等幾天解鎖，語氣用「說明」不用「禁止」），3 秒後自動收起。daysTogether
-     一起傳給後端，配對滿 7 天後 CONTACT_INFO 規則就不再擋（SCAM 規則不受
-     影響，一律照擋）。 */
+  /* send message — 文字交給 moderate-chat 審查＋寫入（見 _sendText）。
+     擋下來的話不寫進 pair_messages，在輸入框上方顯示原因，8 秒後自動收起。 */
   // ★ 新增：跳出「訊息/媒體被擋」警示列的共用入口——文字被 regex 擋、圖片/
   //   影片被 Claude 判定違規，兩邊現在共用同一個警示列 + 回報按鈕，不要各寫
   //   一份（media 那邊原本是用 alert()，見 handleChatMediaSelect 的修正）。
   function _showChatBlocked(opts) {
     if (_chatBlockedTimerRef.current) { clearTimeout(_chatBlockedTimerRef.current); _chatBlockedTimerRef.current = null; }
-    setChatFeedbackStatus('idle');
-    // CONTACT_INFO 是「配對未滿 7 天」的固定規則，不是 AI 判斷對錯的問題，
-    // 訊息裡已經有倒數天數說明了，這裡就不提供「回報誤判」，避免使用者
-    // 誤以為回報了就能提早解鎖。
-    var reportable = !(opts.contentType === 'chat_text' && opts.category === 'CONTACT_INFO') && opts.category !== 'RATE_LIMIT' && opts.category !== 'REPHRASE';
     setChatBlockedMsg({
       text: opts.text,
       contentType: opts.contentType,
       category: opts.category || null,
       snippet: opts.snippet || null,
-      reportable: reportable
+      tone: opts.tone || 'warn' // 'support'：求助資源，用藍色、停留久一點
     });
     _chatBlockedTimerRef.current = setTimeout(function(){
       setChatBlockedMsg(null); _chatBlockedTimerRef.current = null;
-    }, 8000);
+    }, opts.tone === 'support' ? 20000 : 8000);
   }
 
-  // 使用者點「Report as wrong」——寫進 moderation_feedback，讓後台 Flagged
-  // Content 頁的「Chat "Reported as Wrong"」表格看得到（見 admin.html）。
-  // 這張表只負責收「使用者說 AI 判斷錯了」這個訊號，不會自動做任何事
-  // （不會自動解除擋下、不會通知對方）——純粹讓 Andy 之後人工檢視，判斷
-  // 是不是 moderate-content 的 prompt 需要調整。
-  function _reportChatModerationFeedback() {
-    if (!chatBlockedMsg || !chatBlockedMsg.reportable || chatFeedbackStatus !== 'idle') return;
-    setChatFeedbackStatus('sending');
-    _supabase.from('moderation_feedback').insert({
-      user_id: user.uid,
-      pair_id: pair.id,
-      content_type: chatBlockedMsg.contentType,
-      violation_category: chatBlockedMsg.category,
-      text_snippet: chatBlockedMsg.snippet
-    }).then(function() {
-      setChatFeedbackStatus('sent');
-      if (_chatBlockedTimerRef.current) clearTimeout(_chatBlockedTimerRef.current);
-      _chatBlockedTimerRef.current = setTimeout(function(){
-        setChatBlockedMsg(null); _chatBlockedTimerRef.current = null;
-      }, 3000);
-    }).catch(function() {
-      setChatFeedbackStatus('idle'); // 寫入失敗就讓按鈕恢復可以再按一次
-    });
-  }
 
   /* ★ 2026-10：聊天訊息改成「樂觀更新」，按下送出就立刻出現在聊天室（像 LINE）。
      原本的流程是：getSession → 呼叫 moderate-content Edge Function（冷啟動常常
@@ -14754,17 +14758,23 @@ function PairWallPage(_ref_pw) {
       var mod = r.data;
       if (mod.approved === true && mod.message) {
         setMessages(function(prev) { return _mergeServerMsg(prev, mod.message, tempId); });
+        // ★ 2026-10-26：訊息裡有自傷念頭 → 不擋，只對自己顯示求助資源（業界做法）
+        if (mod.support) _showChatBlocked({ text: CHAT_SUPPORT_MESSAGE, contentType: 'chat_text', category: 'SUPPORT', tone: 'support' });
         return;
       }
       if (mod.approved === false && mod.violation && mod.violation !== 'SEND_FAILED' && mod.violation !== 'NOT_ALLOWED') {
-        // 被擋：拿掉暫存訊息，文字放回輸入框（輸入框已經有新打的字就不蓋掉）
-        setMessages(function(prev) { return prev.filter(function(m) { return m.id !== tempId; }); });
-        setInputText(function(cur) { return cur ? cur : text; });
-        var msg = CHAT_VIOLATION_MESSAGES[mod.violation] || 'Please review our community guidelines.';
-        if (mod.violation === 'CONTACT_INFO') {
-          var daysLeft = Math.max(1, 7 - (mod.daysTogether || _pairDaysTogether));
-          msg = 'New matches get to know each other here first \u2014 you\u2019ll be able to share contact info once you\u2019ve been paired for 7 days. ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to go!';
+        // ★ 2026-10-26 被擋的文字不會不見：
+        //   - 輸入框是空的 → 拿掉暫存泡泡、文字直接放回輸入框（原本的做法，最常見的情況）
+        //   - 使用者已經在打下一則 → 不蓋掉他正在打的字；被擋的那則留在聊天串裡，
+        //     標成「Not sent · Edit」（只有自己看得到，沒有寫進資料庫），點 Edit 再拿回輸入框
+        //   這樣不用在審查完成前鎖住輸入框，聊天照樣順暢。
+        if (!(_inputTextRef.current || '').trim()) {
+          setMessages(function(prev) { return prev.filter(function(m) { return m.id !== tempId; }); });
+          setInputText(text);
+        } else {
+          setMessages(function(prev) { return prev.map(function(m) { return m.id === tempId ? Object.assign({}, m, { _pending: false, _blocked: true }) : m; }); });
         }
+        var msg = CHAT_VIOLATION_MESSAGES[mod.violation] || 'Please review our community guidelines.';
         _showChatBlocked({ text: msg, contentType: 'chat_text', category: mod.violation, snippet: text });
         return;
       }
@@ -14779,7 +14789,7 @@ function PairWallPage(_ref_pw) {
     });
   }
 
-  /* ★ 2026-10：防洗版。訊息送出後每一則都會跑一次審查（regex + OpenAI Moderation），
+  /* ★ 2026-10：防洗版。訊息送出後每一則都會跑一次審查（moderate-chat：regex 硬規則，拿不準的才送 Claude Haiku；沒有用 OpenAI），
      使用者狂按 Enter 的話會一次塞爆審查跟資料庫。前端先擋一層（體驗用，可被繞過），
      真正的硬限制在資料庫 trigger（chat_rate_limit.sql，每分鐘 20 則、每天 500 則）。
        - 10 秒內最多 5 則
@@ -14806,6 +14816,12 @@ function PairWallPage(_ref_pw) {
     _sendTimesRef.current = recent;
     setInputText(''); // 立刻清空，下一則可以馬上打
     _sendText(text);
+  }
+
+  // 「Not sent · Edit」：把被擋的那則拿回輸入框改（輸入框裡已經有字的話，接在被擋那則後面，不會蓋掉）
+  function editBlockedMessage(m) {
+    setMessages(function(prev) { return prev.filter(function(x) { return x.id !== m.id; }); });
+    setInputText(function(cur) { return cur && cur.trim() ? (m.content + ' ' + cur) : m.content; });
   }
 
   function retryMessage(m) {
@@ -14906,7 +14922,7 @@ function PairWallPage(_ref_pw) {
         // ★ 修正（2026-09）：原本這裡用原生 alert() 擋下——alert 沒辦法附按鈕，
         //   使用者只能按確定關掉,看不到「這判斷錯了幫我回報」的入口,體驗也
         //   跟文字訊息被擋（頁面內的警示列）不一致。現在跟文字訊息共用同一個
-        //   chatBlockedMsg 警示列 + Report as wrong 按鈕。
+        //   chatBlockedMsg 警示列（2026-10 起不再有回報按鈕）。
         _showChatBlocked({
           text: 'Media not sent — ' + (VIOLATION_MESSAGES[v] || 'Please review our community guidelines.'),
           contentType: isVid ? 'chat_video' : 'chat_image',
@@ -15045,6 +15061,62 @@ function PairWallPage(_ref_pw) {
       )
     ),
 
+    /* ★ 2026-10-26 REPORT MODAL */
+    showReport && React.createElement('div', {
+      style: { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px' },
+      onClick: function(e) { if (e.target === e.currentTarget && !reportSending) setShowReport(false); }
+    },
+      React.createElement('div', { style: { background:'var(--white)', borderRadius:8, padding:'20px 18px', width:'100%', maxWidth:360, maxHeight:'88vh', overflowY:'auto' } },
+        React.createElement('div', { style: { fontSize:14, fontWeight:700, color:'var(--black)', marginBottom:4 } }, 'Report ' + (partnerName || 'your buddy')),
+        React.createElement('div', { style: { fontSize:11.5, color:'var(--gray-500)', lineHeight:1.55, marginBottom:12 } },
+          "Your report is private — " + (partnerName || 'they') + " won't know you reported them. Our team will review your recent messages together."),
+        REPORT_REASONS.map(function(r) {
+          var on = reportReason === r.code;
+          return React.createElement('button', {
+            key: r.code, onClick: function() { setReportReason(r.code); },
+            style: { display:'block', width:'100%', textAlign:'left', padding:'9px 11px', marginBottom:6, fontSize:12, fontWeight: on ? 700 : 500, fontFamily:'var(--font)', cursor:'pointer',
+                     background: on ? 'var(--black)' : 'var(--white)', color: on ? '#fff' : 'var(--black)', border:'1px solid ' + (on ? 'var(--black)' : 'var(--gray-200)'), borderRadius:6 }
+          }, r.label);
+        }),
+        reportReason === 'SELF_HARM' && React.createElement('div', { style: { fontSize:11, color:'#1e3a8a', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 10px', margin:'4px 0 8px', lineHeight:1.55 } },
+          "If someone is in immediate danger, contact local emergency services. To talk to someone, " + _helplineSentence()),
+        React.createElement('textarea', {
+          value: reportDetails, maxLength: 500, placeholder: 'Anything else we should know? (optional)',
+          onChange: function(e) { setReportDetails(e.target.value); },
+          style: { width:'100%', boxSizing:'border-box', minHeight:64, marginTop:4, padding:'8px 10px', fontSize:12, fontFamily:'var(--font)', border:'1px solid var(--gray-200)', borderRadius:6, resize:'vertical' }
+        }),
+        React.createElement('label', { style: { display:'flex', alignItems:'center', gap:8, fontSize:12, margin:'10px 0 14px', cursor:'pointer' } },
+          React.createElement('input', { type:'checkbox', checked: reportAlsoBlock, onChange: function(e) { setReportAlsoBlock(e.target.checked); } }),
+          'Also block ' + (partnerName || 'them') + ' (ends this partnership)'),
+        React.createElement('div', { style: { display:'flex', gap:8 } },
+          React.createElement('button', { style: { flex:1, padding:'10px', background:'var(--white)', border:'1px solid var(--gray-200)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' }, disabled: reportSending, onClick: function(){ setShowReport(false); } }, 'Cancel'),
+          React.createElement('button', {
+            style: { flex:1, padding:'10px', background: reportReason ? '#dc2626' : 'var(--gray-200)', color:'#fff', border:'none', fontSize:12, fontWeight:700, cursor: reportReason ? 'pointer' : 'default', fontFamily:'var(--font)' },
+            disabled: !reportReason || reportSending || blocking,
+            onClick: submitReport
+          }, reportSending || blocking ? 'Sending…' : 'Send report')
+        )
+      )
+    ),
+
+    /* ★ 2026-10-26 BLOCK CONFIRM MODAL */
+    showBlockConfirm && React.createElement('div', {
+      style: { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }
+    },
+      React.createElement('div', { style: { background:'var(--white)', borderRadius:8, padding:'24px 20px', width:'100%', maxWidth:320 } },
+        React.createElement('div', { style: { fontSize:14, fontWeight:700, color:'var(--black)', marginBottom:8 } }, 'Block ' + (partnerName || 'your buddy') + '?'),
+        React.createElement('div', { style: { fontSize:12, color:'var(--gray-500)', lineHeight:1.6, marginBottom:20 } },
+          "This ends your partnership. You won't be matched again, and you won't see each other's Community posts or comments. They won't be told you blocked them. You can unblock anytime in Profile."),
+        React.createElement('div', { style: { display:'flex', gap:8 } },
+          React.createElement('button', { style: { flex:1, padding:'10px', background:'var(--white)', border:'1px solid var(--gray-200)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' }, onClick: function(){ setShowBlockConfirm(false); } }, 'Cancel'),
+          React.createElement('button', {
+            style: { flex:1, padding:'10px', background:'#111', color:'#fff', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font)' },
+            disabled: blocking, onClick: function(){ blockPartner(false); }
+          }, blocking ? 'Blocking…' : 'Block')
+        )
+      )
+    ),
+
     /* HEADER */
     React.createElement('div', { className: 'pw-hdr' },
       React.createElement('div', { className: 'pw-identity' },
@@ -15078,13 +15150,14 @@ function PairWallPage(_ref_pw) {
 
     /* END PARTNERSHIP — ★ 改版：從標題列右上角的 9px 小字拉出來，獨立成一整條，
        固定在標題正下方、位置好找，但用淡色調而不是強烈警示色，避免份量過重。 */
-    React.createElement('div', {
-      className: 'pw-end-bar',
-      onClick: function(){ setShowEndConfirm(true); }
-    },
-      React.createElement('div', { className: 'pw-end-icon' }, '✕'),
-      React.createElement('div', { className: 'pw-end-label' }, 'End partnership'),
-      React.createElement('div', { className: 'pw-end-chev' }, '›')
+    // ★ 2026-10-26：同一條加上「Report」「Block」（Apple 規範 1.2），End partnership 維持原本的位置跟樣子
+    React.createElement('div', { className: 'pw-end-bar', style: { cursor:'default' } },
+      React.createElement('div', { style: { display:'flex', alignItems:'center', gap:8, cursor:'pointer', flex:1, minWidth:0 }, onClick: function(){ setShowEndConfirm(true); } },
+        React.createElement('div', { className: 'pw-end-icon' }, '✕'),
+        React.createElement('div', { className: 'pw-end-label' }, 'End partnership')
+      ),
+      React.createElement('button', { className: 'pw-safety-btn', onClick: function(){ setReportReason(''); setReportDetails(''); setReportAlsoBlock(true); setShowReport(true); } }, '⚑ Report'),
+      React.createElement('button', { className: 'pw-safety-btn', onClick: function(){ setShowBlockConfirm(true); } }, '⊘ Block')
     ),
 
     /* AI INSIGHT — 一兩句話提醒雙方的共同點，直接讀配對當下算好的 ai_match_data.reason
@@ -15092,7 +15165,7 @@ function PairWallPage(_ref_pw) {
     aiInsight && React.createElement('div', { className: 'pw-ai-card' },
       React.createElement('div', { className: 'pw-ai-dot' }),
       React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-        React.createElement('div', { className: 'pw-ai-lbl' }, 'AI · What you two share'),
+        React.createElement('div', { className: 'pw-ai-lbl' }, 'AI · Why this match'),
         React.createElement('div', { className: 'pw-ai-txt' }, aiInsight)
       )
     ),
@@ -15193,7 +15266,7 @@ function PairWallPage(_ref_pw) {
               return React.createElement('div', { key: m.id, className: 'pw-msg' + (isMe ? ' me' : '') },
                 React.createElement('div', { className: 'pw-mav' + (isMe ? '' : ' dk') }, isMe ? 'YOU' : partnerInitials),
                 React.createElement('div', { style: { display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start' } },
-                  React.createElement('div', { className: 'pw-mbub', style: m._pending ? { opacity: .6 } : (m._failed ? { opacity: .6, outline: '1px solid #dc2626' } : undefined) }, m.content),
+                  React.createElement('div', { className: 'pw-mbub', style: m._pending ? { opacity: .6 } : ((m._failed || m._blocked) ? { opacity: .6, outline: '1px ' + (m._blocked ? 'dashed #d97706' : 'solid #dc2626') } : undefined) }, m.content),
                   React.createElement('div', { style: { display:'flex', alignItems:'center', gap:4, marginTop:2 } },
                     React.createElement('div', { className: 'pw-mt' }, fmtTime(m.created_at)),
                     isMe && m._pending && React.createElement('div', {
@@ -15203,7 +15276,12 @@ function PairWallPage(_ref_pw) {
                       onClick: function() { retryMessage(m); },
                       style: { fontSize:9, color: '#dc2626', fontWeight:700, background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:'var(--font)' }
                     }, 'Failed · Retry'),
-                    isMe && isLast && !m._pending && !m._failed && React.createElement('div', {
+                    // ★ 2026-10-26：被審查擋下、使用者當時已經在打下一則 → 留在這裡，點 Edit 拿回輸入框
+                    isMe && m._blocked && React.createElement('button', {
+                      onClick: function() { editBlockedMessage(m); },
+                      style: { fontSize:9, color: '#b45309', fontWeight:700, background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:'var(--font)' }
+                    }, 'Not sent · Edit'),
+                    isMe && isLast && !m._pending && !m._failed && !m._blocked && React.createElement('div', {
                       style: { fontSize:9, color: isRead ? '#4ade80' : 'var(--gray-300)', fontWeight:700 }
                     }, isRead ? '✓✓ Read' : '✓ Sent')
                   )
@@ -15227,32 +15305,15 @@ function PairWallPage(_ref_pw) {
       )
     ),
 
-    /* CONTACT-INFO LOCK NOTICE — 主動告知規則，配對滿 7 天前一直顯示，
-       解鎖後這塊就不再渲染。放在被擋訊息的警示框「上面」，一個是持續提醒，
-       一個是真的踩到規則時才跳出來，兩個訊息用途不一樣，不合併。 */
-    !_contactUnlocked && React.createElement('div', { style:{ maxWidth:640, width:'100%', margin:'0 auto', padding:'6px 14px 0', boxSizing:'border-box' } },
-      React.createElement('div', { style:{ fontSize:10.5, color:'var(--gray-500)', background:'var(--gray-50,#fafafa)', border:'1px solid var(--gray-150,#e8e8e8)', padding:'6px 11px', display:'flex', alignItems:'center', gap:6 } },
-        React.createElement('span', null, '🔒'),
-        React.createElement('span', null, 'Contact info sharing unlocks after 7 days paired \u00b7 Day ' + _pairDaysTogether + ' of 7')
-      )
-    ),
 
-    /* CHAT BLOCKED WARNING — 文字被 regex 擋下 / 照片影片被 Claude 判定違規時
-       顯示，8 秒自動消失。★ 新增：多了「Report as wrong」——擋下的內容從來
-       不會存進 pair_messages，使用者除了這個按鈕沒有其他管道說「這判斷錯了」。 */
+    /* CHAT BLOCKED WARNING — 文字或照片影片被審查擋下時顯示，8 秒自動消失。
+       ★ 2026-10：「Report as wrong」已移除，只說明原因、文字放回輸入框讓使用者改說法。 */
     chatBlockedMsg && React.createElement('div', { style:{ maxWidth:640, width:'100%', margin:'0 auto', padding:'6px 14px 0', boxSizing:'border-box' } },
-      React.createElement('div', { style:{ fontSize:11, color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', padding:'8px 11px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
-        React.createElement('span', null, '⚠️'),
-        React.createElement('span', { style:{ flex:1, minWidth:120 } }, chatBlockedMsg.text),
-        chatBlockedMsg.reportable && (
-          chatFeedbackStatus === 'sent'
-            ? React.createElement('span', { style:{ fontWeight:700, color:'#16a34a', whiteSpace:'nowrap', fontSize:11 } }, '✓ Reported — thanks')
-            : React.createElement('button', {
-                onClick: _reportChatModerationFeedback,
-                disabled: chatFeedbackStatus === 'sending',
-                style:{ fontSize:11, fontWeight:700, color:'#b45309', background:'none', border:'1px solid #d97706', borderRadius:6, padding:'3px 9px', cursor: chatFeedbackStatus === 'sending' ? 'default' : 'pointer', whiteSpace:'nowrap', flexShrink:0 }
-              }, chatFeedbackStatus === 'sending' ? 'Reporting…' : 'Report as wrong')
-        )
+      React.createElement('div', { style: chatBlockedMsg.tone === 'support'
+          ? { fontSize:11, color:'#1e3a8a', background:'#eff6ff', border:'1px solid #bfdbfe', padding:'8px 11px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', lineHeight:1.5 }
+          : { fontSize:11, color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', padding:'8px 11px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
+        React.createElement('span', null, chatBlockedMsg.tone === 'support' ? '💙' : '⚠️'),
+        React.createElement('span', { style:{ flex:1, minWidth:120 } }, chatBlockedMsg.text)
       )
     ),
 
@@ -15297,6 +15358,115 @@ function _fmtNotifTime(ts) {
   return new Date(t).toLocaleDateString();
 }
 
+// ★ 2026-10-26：檢舉／封鎖（Apple 規範 1.2：有使用者互傳內容的 App 必須能檢舉、封鎖對方）
+//   window._blockedUserIds：跟我有封鎖關係的所有人（不分誰封鎖誰，my_block_relations RPC），
+//   Community 貼文／留言用來雙向隱藏。被封鎖的人看不出是誰封鎖了他。
+window._blockedUserIds = window._blockedUserIds || {};
+function _isBlockedUser(uid) {
+  return !!(uid && window._blockedUserIds && window._blockedUserIds[String(uid)]);
+}
+function _refreshBlockRelations() {
+  if (!window._supabaseClient) return Promise.resolve();
+  return window._supabaseClient.rpc('my_block_relations').then(function(r) {
+    if (!r || r.error) return; // SQL 還沒跑 → 當作沒有封鎖關係，不影響其他功能
+    var m = {};
+    (r.data || []).forEach(function(row) {
+      var id = typeof row === 'string' ? row : (row && (row.my_block_relations || Object.values(row)[0]));
+      if (id) m[String(id)] = true;
+    });
+    window._blockedUserIds = m;
+    if (window._bumpBlockTick) window._bumpBlockTick();
+  }).catch(function() {});
+}
+window._refreshBlockRelations = _refreshBlockRelations;
+
+// 檢舉原因：分類跟審查標準（FamStreak Content Policy v1，對照 OpenAI Moderation 分類）一致，
+//   管理員頁看到的檢舉原因跟 AI 自動標記用的是同一套代碼
+var REPORT_REASONS = [
+  { code: 'HARASSMENT',    label: 'Harassment or bullying' },
+  { code: 'SEXUAL',        label: 'Sexual messages or advances' },
+  { code: 'HATE',          label: 'Hate speech or slurs' },
+  { code: 'THREAT',        label: 'Threats or violence' },
+  { code: 'SCAM',          label: 'Scam, asking for money' },
+  { code: 'SELF_HARM',     label: "I'm worried about their safety" },
+  { code: 'UNDERAGE',      label: 'They may be under 13' },
+  { code: 'OTHER',         label: 'Something else' }
+];
+
+// ★ Profile → Blocked accounts：看自己封鎖了誰、可以解除封鎖
+function BlockedAccountsSection(props) {
+  var _s = React.useState(null); var list = _s[0]; var setList = _s[1];
+  var _b = React.useState(null); var busyId = _b[0]; var setBusyId = _b[1];
+  function load() {
+    if (!window._supabaseClient) return;
+    window._supabaseClient.rpc('my_blocked_list').then(function(r) {
+      setList(r && !r.error ? (r.data || []) : []);
+    }).catch(function() { setList([]); });
+  }
+  React.useEffect(load, []);
+  function unblock(row) {
+    if (!window.confirm('Unblock ' + (row.display_name || 'this person') + '? They could be matched with you again and see your Community posts.')) return;
+    setBusyId(row.user_id);
+    window._supabaseClient.rpc('unblock_user', { p_blocked: row.user_id }).then(function() {
+      setBusyId(null); load(); _refreshBlockRelations();
+    }).catch(function() { setBusyId(null); });
+  }
+  // nested：放在 Profile「Account」那個區塊裡面時，不用再自己畫一條分隔線
+  return React.createElement("div", { style: props.nested ? { margin: '0 0 8px' } : { margin: '24px 0 8px', borderTop: '1px solid var(--gray-100)', paddingTop: 20 } },
+    React.createElement("div", { className: "section-title", style: { marginBottom: 12 } }, "Blocked accounts"),
+    list === null
+      ? React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)' } }, "Loading…")
+      : list.length === 0
+        ? React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', lineHeight: 1.6 } }, "You haven't blocked anyone. You can block someone from your buddy chat.")
+        : list.map(function(row) {
+            return React.createElement("div", { key: row.user_id, style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--gray-100)' } },
+              React.createElement("div", { style: { width: 28, height: 28, borderRadius: '50%', background: 'var(--gray-100)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--gray-500)' } },
+                row.photo_url ? React.createElement("img", { src: row.photo_url, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover' } }) : String(row.display_name || '?').slice(0, 2).toUpperCase()),
+              React.createElement("div", { style: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 } }, row.display_name || 'Unknown user'),
+              React.createElement("button", {
+                onClick: function() { unblock(row); }, disabled: busyId === row.user_id,
+                style: { fontSize: 11, fontWeight: 700, padding: '6px 12px', border: '1px solid var(--gray-200)', background: '#fff', borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font)' }
+              }, busyId === row.user_id ? '…' : 'Unblock')
+            );
+          })
+  );
+}
+
+// ★ 2026-10（B 方案：配對報告每個人看自己的視角）
+//   pairs.ai_match_data.reason 是送邀請那方（pairs.user_id）按 Find Partner 時 match-partner 寫的：
+//   用 "you" 稱呼送邀請的人、用第三人稱介紹對方。收到邀請的人（pairs.partner_id）如果也讀這段，
+//   等於在讀一段介紹他自己的文字。pair-report-perspective 會用同一份分數/細項，把理由反過來寫
+//   一份給收到邀請的人，存在 ai_match_data.reasonForPartner。
+//   這裡統一決定「目前這個讀者該看哪一份」：收到邀請的人還沒有自己的版本時回傳空字串
+//   （畫面會先顯示載入中，等 Edge Function 寫好），不會退回去顯示那段在介紹他自己的文字。
+function _pairReasonFor(pair, uid) {
+  var md = pair && pair.ai_match_data;
+  if (!md) return '';
+  if (uid && String(pair.partner_id) === String(uid)) return md.reasonForPartner || '';
+  return md.reason || '';
+}
+// 收到邀請的人看得到報告、但自己視角的版本還沒生成好
+function _pairReasonPending(pair, uid) {
+  var md = pair && pair.ai_match_data;
+  return !!(md && uid && String(pair.partner_id) === String(uid) && !md.reasonForPartner);
+}
+// 請 pair-report-perspective 幫收到邀請的人寫一份自己視角的理由；已經有就直接回傳快取，不會重複花錢
+function _requestPairPerspective(pairId) {
+  if (!pairId || !window._supabaseClient) return Promise.resolve(null);
+  return window._supabaseClient.auth.getSession().then(function(sr) {
+    var token = sr && sr.data && sr.data.session && sr.data.session.access_token;
+    if (!token) return null;
+    return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/pair-report-perspective', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ pair_id: pairId })
+    }).then(function(res) {
+      return res.json().catch(function() { return {}; }).then(function(j) { return res.ok ? (j && j.reasonForPartner) || null : null; });
+    });
+  }).catch(function(e) { console.warn('[pair-report-perspective]', e && e.message); return null; });
+}
+window._requestPairPerspective = _requestPairPerspective;
+
 // ★ 2026-10：通知標題 + 清單抽成共用元件——Home 右側欄（桌面版）跟 Buddies 頁的
 //   鈴鐺下拉（手機版）都用這一份，點下去要做什麼由呼叫端的 onItemClick 決定。
 function _notifTitle(n) {
@@ -15313,6 +15483,10 @@ function _notifTitle(n) {
     n.type === 'moderation_appeal_approved' ? 'Your review was approved ✓' :
     n.type === 'moderation_appeal_denied_kept' ? 'Review complete — still hidden' :
     n.type === 'moderation_appeal_denied_deleted' ? 'Review complete — content removed' :
+    n.type === 'report_actioned' ? 'Update on your report' :
+    n.type === 'report_reviewed' ? 'Update on your report' :
+    n.type === 'account_warning' ? 'Community guidelines warning' :
+    n.type === 'support_checkin' ? 'Checking in on you' :
     n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
     n.type === 'media_consent_granted' ? 'Photo & video sharing approved! 🎉' :
     n.type === 'media_consent_declined' ? 'Photo & video sharing declined' :
@@ -15327,6 +15501,8 @@ function NotificationList(props) {
     notifs.slice(0, limit).map(function(n, idx) {
       var title = _notifTitle(n);
       var body = n.body || n.message || '';
+      // ★ 2026-10-26：關心通知的專線換成這台裝置所在地區的號碼（後端寫的是不分地區的預設文字）
+      if (n.type === 'support_checkin') body = "Your post sounded like things might be heavy right now. You're not alone \u2014 " + _helplineSentence();
       var timeLabel = _fmtNotifTime(n.created_at || n.createdAt);
       return React.createElement("div", {
         key: n.id || (title + idx),
@@ -15375,13 +15551,6 @@ function BuddiesPage(_ref_buddies) {
   //   這裡比照 Challengers 頁面既有的批次查詢慣例，一次撈出所有夥伴的 display_name/photo_url。
   var _useState_partnerInfo = useState({});
   var partnerInfoMap = _useState_partnerInfo[0], setPartnerInfoMap = _useState_partnerInfo[1];
-  // ★ 2026-10：user_id -> user_values.summary（[{dimension, description}]）。
-  //   pairs.ai_match_data 是配對當下存的 AI 報告，比較早建立的配對（或測試帳號
-  //   直接建的配對）沒有這份資料，卡片原本只顯示「No AI match report for this pair yet.」。
-  //   這裡改成退一步顯示雙方問卷填的價值觀，讓卡片一樣是在講「你們重視什麼」。
-  //   讀別人的 user_values 需要 buddy_values_rls.sql 那條 policy（只放行有配對關係的人）。
-  var _useState_valuesMap = useState({});
-  var valuesMap = _useState_valuesMap[0], setValuesMap = _useState_valuesMap[1];
   // ★ 夥伴打卡 clip：key 是「夥伴那邊」的 habit_id，value 是 posts 資料列
   var _useState_partnerClip = useState({});
   var partnerClipMap = _useState_partnerClip[0], setPartnerClipMap = _useState_partnerClip[1];
@@ -15396,10 +15565,6 @@ function BuddiesPage(_ref_buddies) {
   var reactedMap = _useState_reacted[0], setReactedMap = _useState_reacted[1];
   var _useState_viewingClip = useState(null);
   var viewingBuddyClip = _useState_viewingClip[0], setViewingBuddyClip = _useState_viewingClip[1];
-  // ★ 新增：兩人專屬相簿(BuddyAlbumModal)——存正在看哪一組配對的相簿，
-  //   不是存 clip 本身，實際的 clip 清單交給 BuddyAlbumModal 自己查。
-  var _useState_viewingAlbum = useState(null);
-  var viewingAlbumForPair = _useState_viewingAlbum[0], setViewingAlbumForPair = _useState_viewingAlbum[1];
   // ★ 新增（2026-10）：真正的 in-app 通知面板開關——資料本身在 window._myNotifications
   //   （MainApp 層級抓的，見那邊的註解），這裡只管「鈴鐺按鈕按下去要不要展開」。
   var _useState_notifPanel = useState(false);
@@ -15409,6 +15574,10 @@ function BuddiesPage(_ref_buddies) {
   //   開聊天室（還沒接受就能聊天不合理，而且列表卡片本來就只有
   //   status==='active' 才顯示報告）。這裡存「正在用 modal 看哪一筆
   //   pending 邀請」，不是存整個聊天室要切換的 selectedPair。
+  // ★ B 方案：pairId -> true，自己視角的理由生成失敗（顯示時就不再一直轉圈）
+  var _useState_perspFailed = useState({});
+  var perspectiveFailed = _useState_perspFailed[0], setPerspectiveFailed = _useState_perspFailed[1];
+  var _perspRequestedRef = React.useRef({}); // 同一組配對這次進頁面只請求一次
   var _useState_viewingRequest = useState(null);
   var viewingRequestPair = _useState_viewingRequest[0], setViewingRequestPair = _useState_viewingRequest[1];
 
@@ -15557,6 +15726,29 @@ function BuddiesPage(_ref_buddies) {
     }
   }
 
+  /* ★ 2026-10（B 方案）：我是收到邀請的那一方（partner_id）、報告存在、但還沒有我自己視角的理由
+     → 呼叫 pair-report-perspective 補生成，寫好後直接併回 pairs，卡片／邀請報告／聊天室都會跟著更新。
+     正常情況送邀請的那一刻就已經在背景生成了，這裡是給舊配對或當時生成失敗的補救。 */
+  useEffect(function() {
+    if (!user || !pairs || !pairs.length) return;
+    pairs.forEach(function(p) {
+      if (p.status !== 'active' && p.status !== 'pending') return;
+      if (!_pairReasonPending(p, user.uid) || _perspRequestedRef.current[p.id]) return;
+      _perspRequestedRef.current[p.id] = true;
+      _requestPairPerspective(p.id).then(function(text) {
+        if (!text) {
+          setPerspectiveFailed(function(prev) { var n = Object.assign({}, prev); n[p.id] = true; return n; });
+          return;
+        }
+        setPairs(function(prev) {
+          return prev.map(function(x) {
+            return x.id === p.id ? Object.assign({}, x, { ai_match_data: Object.assign({}, x.ai_match_data, { reasonForPartner: text }) }) : x;
+          });
+        });
+      });
+    });
+  }, [user, pairs]);
+
   /* ★ 在線狀態：跟 PairWallPage 用同一套 last_active 心跳機制，
      不另外接 Realtime presence channel —— 進到 Buddies 頁就順手更新一次
      自己的 last_active，夥伴那邊用同樣 5 分鐘門檻判斷在不在線（跟
@@ -15590,14 +15782,6 @@ function BuddiesPage(_ref_buddies) {
             var map = {};
             (ur.data || []).forEach(function(u) { map[u.id] = u; });
             setPartnerInfoMap(map);
-          }).catch(function(){});
-        _supabase.from('user_values').select('user_id, summary')
-          .in('user_id', partnerIds.concat([user.uid]).map(String))
-          .then(function(vr) {
-            if (!vr || vr.error) return;
-            var vm = {};
-            (vr.data || []).forEach(function(v) { if (Array.isArray(v.summary) && v.summary.length) vm[String(v.user_id)] = v.summary; });
-            setValuesMap(vm);
           }).catch(function(){});
       }
 
@@ -15972,9 +16156,14 @@ function BuddiesPage(_ref_buddies) {
                             React.createElement("span", { style:{ fontSize:19, fontWeight:800, fontFamily:'var(--din)', color:'var(--black)' } },
                               (pair.ai_match_data.score != null ? pair.ai_match_data.score : pair.match_score) || '—'
                             ),
-                            React.createElement("span", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px' } }, '% values match')
+                            React.createElement("span", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px' } }, '% match')
                           ),
-                          pair.ai_match_data.reason && React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.6, marginBottom:8 } }, pair.ai_match_data.reason),
+                          // ★ B 方案：每個人看自己視角的理由；收到邀請那方的版本還在生成時先顯示骨架
+                          _pairReasonFor(pair, user.uid)
+                            ? React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.6, marginBottom:8 } }, _pairReasonFor(pair, user.uid))
+                            : (_pairReasonPending(pair, user.uid) && !perspectiveFailed[pair.id] ? React.createElement("div", { style:{ display:'flex', flexDirection:'column', gap:5, margin:'2px 0 8px' } },
+                              React.createElement("div", { style:{ height:8, width:'94%', borderRadius:4, background:'var(--gray-100)' } }),
+                              React.createElement("div", { style:{ height:8, width:'72%', borderRadius:4, background:'var(--gray-100)' } })) : null),
                           pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 &&
                             React.createElement("div", { style:{ display:'flex', gap:6, flexWrap:'wrap' } },
                               Object.entries(pair.ai_match_data.breakdown)
@@ -15994,31 +16183,11 @@ function BuddiesPage(_ref_buddies) {
                             onClick: function(e){ e.stopPropagation(); setExpandedReportId(function(prev){ return prev === pair.id ? null : pair.id; }); }
                           }, expandedReportId === pair.id ? 'Hide full breakdown ▴' : 'Full breakdown ▾')
                         )
-                      : (function() {
-                          var _mine = valuesMap[String(user.uid)] || [];
-                          var _theirs = valuesMap[String(partnerId)] || [];
-                          if (!_mine.length && !_theirs.length) {
-                            return React.createElement("div", { style:{ fontSize:11, color:'var(--gray-400)', lineHeight:1.6 } },
-                              "Your values match will show here once you've both filled in the values survey.");
-                          }
-                          function _col(label, list) {
-                            return React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                              React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 } }, label),
-                              list.length
-                                ? list.slice(0, 2).map(function(v, i) {
-                                    return React.createElement("div", { key:i, style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.55, marginBottom:4 } }, '• ' + (v.description || v.dimension || ''));
-                                  })
-                                : React.createElement("div", { style:{ fontSize:11, color:'var(--gray-300)' } }, 'Not filled in yet')
-                            );
-                          }
-                          return React.createElement(React.Fragment, null,
-                            React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'#3d5e6a', textTransform:'uppercase', letterSpacing:'.4px', marginBottom:10 } }, 'What you two value'),
-                            React.createElement("div", { style:{ display:'flex', gap:16 } },
-                              _col('You', _mine),
-                              _col(partnerName || 'Your buddy', _theirs)
-                            )
-                          );
-                        })()
+                      // ★ 2026-10：卡片只顯示「送邀請當下存下的 AI 配對報告」（pairs.ai_match_data）。
+                      //   原本沒有報告時會退回把雙方問卷分成 You／Buddy 兩欄列出來——依 Andy 決定拿掉。
+                      //   沒有報告的只會是這次改版前建立的舊配對（或測試帳號直接建的），報告當初沒存，無法補回。
+                      : React.createElement("div", { style:{ fontSize:11, color:'var(--gray-400)', lineHeight:1.6 } },
+                          "No AI match report was saved for this pair \u2014 reports are saved for every new partner request.")
                   ),
                   // ★ 2026-10：原本這裡會顯示「Your goal period ended — start a new one to keep this
                   //   streak alive」、「Check in together to start your streak」這類提示，會讓配對雙方
@@ -16083,19 +16252,7 @@ function BuddiesPage(_ref_buddies) {
                     React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:'#555' } }, clipReacted ? 'You cheered this on' : 'Cheer on')
                   )
                 ),
-                // ★ 新增：兩人專屬相簿入口——上面那個區塊只顯示「夥伴最新一支 clip」，
-                //   自己貼過的、雙方過去貼過的都看不到。這裡不管有沒有 clip 都顯示
-                //   （哪怕雙方都還沒貼過，也可以先點進去看到空狀態的引導文案），
-                //   點進去交給 BuddyAlbumModal 把雙方全部 clip 收在同一個 grid 裡。
-                !isIncoming && pair.status === 'active' && React.createElement("div", {
-                  style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' },
-                  onClick: function(e){ e.stopPropagation(); }
-                },
-                  React.createElement("button", {
-                    onClick: function(){ setViewingAlbumForPair(pair); },
-                    style:{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, fontSize:11, fontWeight:700, color:'var(--gray-600)', background:'var(--gray-50)', border:'none', borderRadius:8, padding:'8px 10px', cursor:'pointer' }
-                  }, '🖼️ Shared album')
-                ),
+                // ★ 2026-10：「🖼️ Shared album」入口已移除（雙方 clip 合併相簿功能整個拿掉）。
                 // ★ FIX (夥伴卡片重新設計)：score 跟 reason 現在已經在上面新的
                 // 「values match」區塊一直顯示了，這裡展開時不用再重複一次，只補上完整
                 // 五個面向的細項（上面平常只挑最高的兩個當 chip）。用的還是同一個
@@ -16143,7 +16300,11 @@ function BuddiesPage(_ref_buddies) {
                                 );
                               })
                           ),
-                        pair.ai_match_data.reason && React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.7 } }, pair.ai_match_data.reason)
+                        _pairReasonFor(pair, user.uid)
+                          ? React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.7 } }, _pairReasonFor(pair, user.uid))
+                          : (_pairReasonPending(pair, user.uid) && !perspectiveFailed[pair.id] ? React.createElement("div", { style:{ display:'flex', flexDirection:'column', gap:5, margin:'2px 0 8px' } },
+                              React.createElement("div", { style:{ height:8, width:'94%', borderRadius:4, background:'var(--gray-100)' } }),
+                              React.createElement("div", { style:{ height:8, width:'72%', borderRadius:4, background:'var(--gray-100)' } })) : null)
                       )
                     : React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } }, 'No AI match report available for this invite.')
                 )
@@ -16178,28 +16339,14 @@ function BuddiesPage(_ref_buddies) {
       onCheer: function() { toggleClipReaction(viewingBuddyClip.id, viewingBuddyClip.userId); },
       onClose: function() { setViewingBuddyClip(null); }
     }),
-    viewingAlbumForPair && (function() {
-      var vp = viewingAlbumForPair;
-      var vIsUser = vp.user_id === user.uid;
-      var vPartnerId = vIsUser ? vp.partner_id : vp.user_id;
-      var vPartnerInfo = partnerInfoMap[vPartnerId];
-      return React.createElement(BuddyAlbumModal, {
-        user: user,
-        myHabitId: vIsUser ? vp.habit_id : vp.partner_habit_id,
-        partnerHabitId: vIsUser ? vp.partner_habit_id : vp.habit_id,
-        partnerName: (vPartnerInfo && vPartnerInfo.display_name) || null,
-        partnerAvatarUrl: (vPartnerInfo && vPartnerInfo.photo_url) || null,
-        habitLabel: vIsUser ? vp.habit_name : vp.partner_habit_name,
-        onClose: function() { setViewingAlbumForPair(null); }
-      });
-    })(),
     // ★ 2026-10 新增：點「New Partner Request!」通知（或直接點 isIncoming
     //   卡片本身）要看的「對方那邊配對時產生的完整配對報告」+ Accept/
     //   Decline——跟下面列表卡片 active 狀態時看到的是同一個 pair.ai_match_data
     //   欄位，同一套 Accept/Decline（handleAccept/handleDecline，已經搬成
     //   BuddiesPage 層級共用函式，不是另外寫一份）。
     viewingRequestPair && (function() {
-      var rp = viewingRequestPair;
+      // 用 pairs 裡最新的那一筆（收到邀請的人自己視角的理由可能是 modal 打開後才寫好的）
+      var rp = pairs.find(function(p) { return p.id === viewingRequestPair.id; }) || viewingRequestPair;
       var rpIsUser = rp.user_id === user.uid;
       var rpPartnerId = rpIsUser ? rp.partner_id : rp.user_id;
       var rpInfo = partnerInfoMap[rpPartnerId];
@@ -16240,7 +16387,7 @@ function BuddiesPage(_ref_buddies) {
                 habitName: rpIsUser ? (rp.partner_habit_name || md.partnerHabitName) : (rp.habit_name || md.requesterHabitName),
                 score: md.score != null ? md.score : rp.match_score,
                 breakdown: md.breakdown || {},
-                reason: md.reason || '',
+                reason: _pairReasonFor(rp, user.uid) || (_pairReasonPending(rp, user.uid) && !perspectiveFailed[rp.id] ? 'Writing up why you two match\u2026' : ''),
                 clips: Array.isArray(md.clips) ? md.clips : []
               }, { label: 'Wants to be your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report for this pair yet.'),
@@ -17821,7 +17968,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   }
 
   // ── 自由輸入路徑：現在是問卷「預設」的第一畫面，不再是選擇題的逃生門 ──────
-  function _renderFreeTextSurvey(errorMsg) {
+  // tone === 'support'：求助資源（淡藍色框），不是紅字錯誤
+  function _renderFreeTextSurvey(errorMsg, tone) {
     // ★ 這裡原本是 90%（原本的用途是「選擇題都填完了，這是最後一步」的視覺
     // 提示），現在自由輸入是一進來就看到的第一畫面，不是最後一步，改成低一點
     // 的進度、只是讓使用者知道流程開始了。
@@ -17833,7 +17981,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         '<div style="font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:12px;font-family:var(--din);letter-spacing:.3px;">What drives you to stick with a habit, and what kind of partner brings out your best?</div>' +
         '<div style="font-size:10px;color:#888;line-height:1.6;margin-bottom:12px;">A couple of sentences is plenty — this is what we\'ll actually match you and describe your fit with a partner on.</div>' +
         '<textarea id="surveyFreeText" rows="6" maxlength="1500" placeholder="e.g. I stick with things when I have a clear goal to chase, not just a routine. I do best with a partner who checks in but doesn\'t guilt-trip me when I miss a day..." style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#fff;padding:12px;font-size:12px;line-height:1.6;font-family:inherit;resize:vertical;"></textarea>' +
-        (errorMsg ? '<div style="color:#f87171;font-size:10px;margin-top:8px;">' + errorMsg + '</div>' : '') +
+        (errorMsg
+          ? (tone === 'support'
+              ? '<div style="background:#0C447C;color:#E6F1FB;font-size:11px;line-height:1.6;margin-top:8px;padding:9px 11px;border-radius:6px;">' + errorMsg + '</div>'
+              : '<div style="color:#f87171;font-size:10px;margin-top:8px;">' + errorMsg + '</div>')
+          : '') +
         (_surveyQuestions && _surveyQuestions.length
           ? '<div style="text-align:center;margin-top:10px;">' +
               '<button onclick="window._backToQuestions()" style="background:none;border:none;color:#777;font-size:9px;text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px 0;">Prefer a quick multiple-choice instead?</button>' +
@@ -17922,6 +18074,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       _surveySubmittingFreeText = false;
 
       if (!res.ok || data.error) {
+        // ★ 2026-10-26：寫到自己想不開（needs_support）→ 換成當地專線的版本
+        if (data.error === 'needs_support') {
+          var _hl = (typeof _helplineSentence === 'function') ? _helplineSentence() : 'you can find a free, confidential helpline near you at findahelpline.com.';
+          _renderFreeTextSurvey("It sounds like things might be really hard right now. You're not alone \u2014 " + _hl + " When you're ready, you can try again and tell us what keeps you going with your habit.", 'support');
+          return;
+        }
         _renderFreeTextSurvey(data.message || 'Something went wrong — please try again.');
         return;
       }
@@ -18958,9 +19116,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             ai_match_data: snapshot
           }).select('id').maybeSingle(), 8000, 'Send request');
         }
-        if (pairRes && pairRes.error) throw new Error(pairRes.error.message || 'Could not create pair request');
+        if (pairRes && pairRes.error) {
+          // ★ 2026-10-26：safety_report_block.sql 的 trigger——封鎖關係／停權，換成看得懂的訊息
+          var _pem = pairRes.error.message || '';
+          if (/\bblocked\b/.test(_pem)) throw new Error("This person isn't available to match with.");
+          if (/suspended/.test(_pem)) throw new Error("This account can't send partner requests right now.");
+          throw new Error(_pem || 'Could not create pair request');
+        }
 
         var _newPairId = (existingPair && existingPair.id) || (pairRes && pairRes.data && pairRes.data.id) || null;
+        // ★ B 方案：邀請一送出就在背景請 pair-report-perspective 寫好「給對方看的版本」，
+        //   對方打開邀請時看到的就是以他為讀者的理由。不等結果、失敗也不影響邀請本身
+        //   （對方打開 Buddies 時會再補一次）。
+        if (_newPairId && window._requestPairPerspective) window._requestPairPerspective(_newPairId);
 
         var notifRes = await _withTimeout(_supabase.from('notifications').insert({
           user_id: m.userId, type: 'partner_request',
