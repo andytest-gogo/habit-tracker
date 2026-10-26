@@ -10680,7 +10680,12 @@ function MainApp(_ref16) {
       if (r && r.error) {
         console.warn('[insertNotification] full insert failed, retrying with minimal columns:', r.error.message);
         var minimal = { user_id: row.user_id, type: row.type, message: row.body || row.message || '' };
-        return window._supabaseClient.from('notifications').insert(minimal).catch(function(){});
+        // ★ 2026-10-26 修正：Supabase 的查詢物件只有 .then、沒有 .catch，原本這裡呼叫 .catch
+        //   會直接丟 TypeError，退路的 insert 根本沒送出去。改用 .then(成功, 失敗)。
+        return window._supabaseClient.from('notifications').insert(minimal).then(function(r2) {
+          if (r2 && r2.error) console.warn('[insertNotification] minimal insert failed:', r2.error.message);
+          else if (window._refreshMyNotifications) window._refreshMyNotifications();
+        }, function() {});
       }
       if (window._refreshMyNotifications) window._refreshMyNotifications();
     }).catch(function(e) { console.warn('[insertNotification] failed:', e && e.message); });
