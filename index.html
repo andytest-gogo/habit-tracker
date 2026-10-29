@@ -8201,6 +8201,71 @@ function endPartnershipDirect(pair, onDone) {
     .catch(function(){});
 }
 
+// ★ 2026-10-28：找出「跟某個習慣有關」、還在進行中的配對（active 或 pending）。
+//   pairs 有 habit_id / partner_habit_id 就用 id 比對；舊資料沒有 id 的，退回用習慣名稱比對
+//   （跟 match-partner 的 loadTakenHabits 同一套規則）。
+function _pairsForHabit(habit, uid) {
+  if (!habit || !uid) return [];
+  var hid = String(habit.id);
+  return (window._myPairs || []).filter(function(p) {
+    if (p.status !== 'active' && p.status !== 'pending') return false;
+    if (String(p.user_id) === String(uid)) return p.habit_id ? String(p.habit_id) === hid : p.habit_name === habit.name;
+    if (String(p.partner_id) === String(uid)) return p.partner_habit_id ? String(p.partner_habit_id) === hid : p.partner_habit_name === habit.name;
+    return false;
+  });
+}
+
+// ★ 2026-10-28：習慣被刪掉時，把跟它有關的配對一起收掉，不然會留下「習慣不存在、配對還是 active」的孤兒：
+//   - active  → ended（ended_reason 'habit_deleted'）；資料庫 trigger notify_partnership_ended 會通知對方
+//   - pending 我送出的 → withdrawn（撤回邀請）
+//   - pending 別人送給我的 → declined（等於婉拒）
+//   每一筆各自處理，某一筆失敗不影響其他筆。
+function _closePairsForDeletedHabit(pairs, uid) {
+  if (!pairs || !pairs.length || !window._supabaseClient) return Promise.resolve();
+  var c = window._supabaseClient;
+  return Promise.all(pairs.map(function(p) {
+    var patch = p.status === 'active'
+      ? { status: 'ended', ended_reason: 'habit_deleted', ended_at: new Date().toISOString() }
+      : (String(p.user_id) === String(uid) ? { status: 'withdrawn' } : { status: 'declined' });
+    return c.from('pairs').update(patch).eq('id', p.id).then(function(r) {
+      if (r && r.error) console.warn('[deleteHabit] close pair failed:', p.id, r.error.message);
+    }, function(e) { console.warn('[deleteHabit] close pair threw:', e && e.message); });
+  }));
+}
+
+// ★ 2026-10-28：把刪掉的習慣存進 archived_habits（Habit History 讀這張表）。
+//   原本直接把整個習慣物件丟進去，習慣物件裡有很多 archived_habits 沒有的欄位
+//   （例如 today_cheer_count、display_name），只要有一欄對不上整筆就寫入失敗，
+//   錯誤又只印在 console——所以刪掉的習慣重新整理後就不見了，History 裡也沒有。
+//   改成：遇到「找不到某欄位」的錯誤，就把那一欄拿掉再試，直到寫進去為止（最多 20 次）。
+function _toSnakeKey(k) { return String(k).replace(/[A-Z]/g, function(m) { return '_' + m.toLowerCase(); }); }
+// ★ 只送 Habit History 用得到的欄位（白名單）；archived_habits 實際沒有的欄位再由下面的重試拿掉
+var _ARCHIVE_FIELDS = ['userId', 'name', 'category', 'freqLabel', 'dailyTarget', 'intervalDays', 'timeRange',
+  'streak', 'todayCounts', 'archivedAt', 'createdAt', 'finalRate', 'checkedDates', 'checkTimestamps',
+  'durLabel', 'activityType', 'mindBody'];
+function _archiveHabitRobust(data) {
+  var obj = {};
+  _ARCHIVE_FIELDS.forEach(function(k) {
+    var v = data && data[k];
+    if (v === undefined || typeof v === 'function') return;
+    obj[k] = v;
+  });
+  function attempt(n) {
+    return db.collection('archived_habits').add(obj).catch(function(e) {
+      var msg = (e && e.message) || '';
+      var m = msg.match(/find the '([^']+)' column/i) || msg.match(/column "([^"]+)"[^"]*does not exist/i);
+      if (!m || n >= 20) { console.warn('[deleteHabit] archive failed:', msg); return null; }
+      var col = m[1], removed = false;
+      // 比對時忽略大小寫跟底線（photoURL → photo_url 這種特殊對照也對得上）
+      var _norm = function(x) { return String(x).toLowerCase().replace(/_/g, ''); };
+      Object.keys(obj).forEach(function(k) { if (k === col || _toSnakeKey(k) === col || _norm(k) === _norm(col)) { delete obj[k]; removed = true; } });
+      if (!removed) { console.warn('[deleteHabit] archive failed:', msg); return null; }
+      return attempt(n + 1);
+    });
+  }
+  return attempt(0);
+}
+
 function cancelPendingRequestDirect(pair, onDone) {
   if (!pair || !pair.id || !window._supabaseClient) return;
   window._supabaseClient.from('pairs').update({ status: 'withdrawn' }).eq('id', pair.id)
@@ -11503,18 +11568,16 @@ function MainApp(_ref16) {
     // temp- ID 表示尚未存進資料庫（insert 還在 pending），不需要刪除
     if (!habitId || habitId.toString().startsWith('temp-')) return;
     // 先存入 archived_habits，再刪除原習慣
-    if (habitToArchive) {
-      var _archiveData = Object.assign({}, habitToArchive, {
-        archivedAt: toISODay(),
-        finalRate: calcCompletionRate(habitToArchive),
-        userId: habitToArchive.userId || (user && user.uid)
-      });
-      // Remove the id field (will be auto-generated)
-      delete _archiveData.id;
-      db.collection('archived_habits').add(_archiveData).catch(function(e) {
-        console.warn('[deleteHabit] archive failed:', e.message);
-      });
-    }
+    // ★ 2026-10-28：改用 _archiveHabitRobust（欄位對不上會自動拿掉再試），而且等它跑完才刪原習慣
+    var _archiveDone = habitToArchive
+      ? _archiveHabitRobust(Object.assign({}, habitToArchive, {
+          archivedAt: toISODay(),
+          finalRate: calcCompletionRate(habitToArchive),
+          userId: habitToArchive.userId || (user && user.uid)
+        }))
+      : Promise.resolve();
+    // ★ 2026-10-28：這個習慣還有配對（active 或 pending）的話，刪除成功後一起收掉
+    var _relatedPairs = _pairsForHabit(habitToArchive, user && user.uid);
     // ★ 2026-10：一起刪掉這個習慣底下的 clip（posts 表 is_habit_clip=true）跟 Bunny 上的影片。
     //   原本只刪 habits 那一列，clip 跟影片會變成孤兒：畫面上再也點不到、使用者自己
     //   也刪不掉，但 Bunny 跟資料庫還一直佔著空間。先撈清單、刪習慣成功之後才刪 clip，
@@ -11526,7 +11589,16 @@ function MainApp(_ref16) {
           .then(function(r) { return (r && r.data) || []; })
           .catch(function() { return []; })
       : Promise.resolve([]);
-    db.collection('habits').doc(habitId).delete().then(function() {
+    _archiveDone.then(function() { return db.collection('habits').doc(habitId).delete(); }).then(function() {
+      // ★ 2026-10-28：習慣刪掉之後：收掉相關配對、停掉這個習慣的背景搜尋、清掉存著的候選人名單
+      var _c = window._supabaseClient;
+      _closePairsForDeletedHabit(_relatedPairs, user.uid).then(function() {
+        if (window._refreshMyPairs) window._refreshMyPairs();
+      });
+      if (_c) {
+        _c.from('pending_match_suggestions').delete().eq('user_id', user.uid).eq('habit_id', String(habitId)).then(function(){}, function(){});
+        _c.from('match_notifications').update({ enabled: false }).eq('user_id', user.uid).eq('habit_id', String(habitId)).then(function(){}, function(){});
+      }
       return _clipsToDelete.then(function(clips) {
         if (!clips.length) return;
         var ids = clips.map(function(c) { return c.id; });
@@ -14313,7 +14385,30 @@ function MainApp(_ref16) {
       /*#__PURE__*/React.createElement("br", null),
       /*#__PURE__*/React.createElement("br", null),
       "Your progress and streak for this habit will be moved to Habit History. ",
-      /*#__PURE__*/React.createElement("br", null),
+      // \u2605 2026-10-28\uff1a\u9019\u500b\u7fd2\u6163\u6709\u5925\u4f34\uff0f\u6709\u9080\u8acb\u5728\u7b49 \u2192 \u5148\u8b1b\u6e05\u695a\u522a\u9664\u6703\u4e00\u8d77\u7d50\u675f
+      (function() {
+        var _dh = habits.find(function(x){ return x.id === deleteConfirmId; });
+        var _dp = _pairsForHabit(_dh, user && user.uid);
+        if (!_dp.length) return React.createElement("br", null);
+        var _act = _dp.filter(function(p){ return p.status === 'active'; });
+        var _info = window._myPairPartnerInfo || {};
+        var _names = _act.map(function(p) {
+          var pid = String(p.user_id) === String(user.uid) ? p.partner_id : p.user_id;
+          return (_info[pid] && _info[pid].display_name) || 'your buddy';
+        });
+        return React.createElement("div", {
+          style: { margin: '14px 0 2px', padding: '12px 14px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, color: '#7c2d12', fontSize: 13, lineHeight: 1.55, textAlign: 'left' }
+        },
+          _act.length
+            ? React.createElement(React.Fragment, null,
+                "\ud83e\udd1d You're partnered with ",
+                React.createElement("strong", null, _names.join(', ')),
+                " on this habit. Deleting it will ",
+                React.createElement("strong", null, "end your partnership"),
+                " \u2014 they'll get a notification.")
+            : "\u23f3 Your pending partner request for this habit will be cancelled."
+        );
+      })(),
       /*#__PURE__*/React.createElement("br", null),
       "\ud83c\udfac All clips (videos) you shared for this habit will also be deleted. ",
       /*#__PURE__*/React.createElement("strong", null, "This cannot be undone.")
@@ -14321,7 +14416,11 @@ function MainApp(_ref16) {
     /*#__PURE__*/React.createElement("button", {
       className: "danger-confirm-btn",
       onClick: function() { var _id = deleteConfirmId; setDeleteConfirmId(null); deleteHabit(_id); }
-    }, "Delete Habit"),
+    }, (function() {
+      var _dh = habits.find(function(x){ return x.id === deleteConfirmId; });
+      var _hasActive = _pairsForHabit(_dh, user && user.uid).some(function(p){ return p.status === 'active'; });
+      return _hasActive ? "Delete Habit & End Partnership" : "Delete Habit";
+    })()),
     /*#__PURE__*/React.createElement("button", {
       className: "danger-cancel-btn",
       onClick: function() { setDeleteConfirmId(null); }
@@ -15651,6 +15750,9 @@ function BuddiesPage(_ref_buddies) {
   var _perspRequestedRef = React.useRef({}); // 同一組配對這次進頁面只請求一次
   var _useState_viewingRequest = useState(null);
   var viewingRequestPair = _useState_viewingRequest[0], setViewingRequestPair = _useState_viewingRequest[1];
+  // ★ 2026-10-28：Buddies 卡片上「Match report」打開的配對報告（已經是夥伴的那組，唯讀）
+  var _useState_viewingReport = useState(null);
+  var viewingReportPair = _useState_viewingReport[0], setViewingReportPair = _useState_viewingReport[1];
 
   // ★ 2026-10：通知點擊邏輯抽成一支函式——手機版鈴鐺下拉、跟從 Home 右側欄點過來的
   //   通知（window._pendingNotifClick，切到 Buddies 頁之後在這裡接手）共用。
@@ -16222,37 +16324,36 @@ function BuddiesPage(_ref_buddies) {
                     style:{ marginTop:14, paddingTop:14, borderTop:'1px solid var(--gray-100)' }
                   },
                     pair.ai_match_data
-                      ? React.createElement(React.Fragment, null,
-                          React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:6, marginBottom:6 } },
+                      // ★ 2026-10-28：卡片只留摘要（分數 + 最高的兩項 + 「Match report」按鈕），
+                      //   長段 AI 理由跟五項細分數改成點按鈕打開黑色配對報告看（viewingReportPair）。
+                      ? React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' } },
+                          React.createElement("div", { style:{ display:'flex', alignItems:'baseline', gap:5, flexShrink:0 } },
                             React.createElement("span", { style:{ fontSize:19, fontWeight:800, fontFamily:'var(--din)', color:'var(--black)' } },
                               (pair.ai_match_data.score != null ? pair.ai_match_data.score : pair.match_score) || '—'
                             ),
                             React.createElement("span", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', textTransform:'uppercase', letterSpacing:'.4px' } }, '% match')
                           ),
-                          // ★ B 方案：每個人看自己視角的理由；收到邀請那方的版本還在生成時先顯示骨架
-                          _pairReasonFor(pair, user.uid)
-                            ? React.createElement("div", { style:{ fontSize:11, color:'var(--gray-600)', lineHeight:1.6, marginBottom:8 } }, _pairReasonFor(pair, user.uid))
-                            : (_pairReasonPending(pair, user.uid) && !perspectiveFailed[pair.id] ? React.createElement("div", { style:{ display:'flex', flexDirection:'column', gap:5, margin:'2px 0 8px' } },
-                              React.createElement("div", { style:{ height:8, width:'94%', borderRadius:4, background:'var(--gray-100)' } }),
-                              React.createElement("div", { style:{ height:8, width:'72%', borderRadius:4, background:'var(--gray-100)' } })) : null),
-                          pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 &&
-                            React.createElement("div", { style:{ display:'flex', gap:6, flexWrap:'wrap' } },
-                              Object.entries(pair.ai_match_data.breakdown)
-                                .filter(function(e){ return e[1] != null; })
-                                .sort(function(a,b){ return b[1] - a[1]; })
-                                .slice(0, 2)
-                                .map(function(e) {
-                                  var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
-                                  return React.createElement("span", {
-                                    key: e[0],
-                                    style:{ fontSize:9, fontWeight:700, color:'#3d5e6a', background:'#e2ebec', borderRadius:5, padding:'4px 8px' }
-                                  }, lbl + ' · ' + e[1] + '%');
-                                })
-                            ),
+                          React.createElement("div", { style:{ flex:1, minWidth:0, display:'flex', gap:6, flexWrap:'wrap' } },
+                            pair.ai_match_data.breakdown && Object.entries(pair.ai_match_data.breakdown)
+                              .filter(function(e){ return e[1] != null; })
+                              .sort(function(a,b){ return b[1] - a[1]; })
+                              .slice(0, 2)
+                              .map(function(e) {
+                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                                return React.createElement("span", {
+                                  key: e[0],
+                                  style:{ fontSize:9, fontWeight:700, color:'#3d5e6a', background:'#e2ebec', borderRadius:5, padding:'4px 8px', whiteSpace:'nowrap' }
+                                }, lbl + ' · ' + e[1] + '%');
+                              })
+                          ),
                           React.createElement("button", {
-                            style:{ fontSize:9, fontWeight:700, color:'var(--gray-400)', background:'none', border:'none', cursor:'pointer', padding:'8px 0 0', textTransform:'uppercase', letterSpacing:'.4px' },
-                            onClick: function(e){ e.stopPropagation(); setExpandedReportId(function(prev){ return prev === pair.id ? null : pair.id; }); }
-                          }, expandedReportId === pair.id ? 'Hide full breakdown ▴' : 'Full breakdown ▾')
+                            style:{ display:'inline-flex', alignItems:'center', gap:6, fontSize:10, fontWeight:700, letterSpacing:'.6px', textTransform:'uppercase', border:'1px solid var(--black)', borderRadius:6, padding:'8px 12px', background:'var(--white)', color:'var(--black)', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, fontFamily:'inherit' },
+                            onClick: function(e){ e.stopPropagation(); setViewingReportPair(pair); }
+                          },
+                            React.createElement("svg", { width:13, height:13, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:2 },
+                              React.createElement("path", { d:"M9 17v-6M13 17V7M17 17v-3M4 21h16" })),
+                            'Match report \u203a'
+                          )
                         )
                       // ★ 2026-10：卡片只顯示「送邀請當下存下的 AI 配對報告」（pairs.ai_match_data）。
                       //   原本沒有報告時會退回把雙方問卷分成 You／Buddy 兩欄列出來——依 Andy 決定拿掉。
@@ -16331,7 +16432,9 @@ function BuddiesPage(_ref_buddies) {
                 // 不是各自重新算一份——整個 pairs 資料表對這組配對本來就只存了「送邀請
                 // 那一方當初搜尋時」產生的這一份，接受邀請的人看到的、日後回來這裡
                 // 展開看到的，都是讀同一個欄位。
-                pair.status === 'active' && expandedReportId === pair.id && pair.ai_match_data && pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 && React.createElement("div", { style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' } },
+                // ★ 2026-10-28：卡片上的「Full breakdown」拿掉了，五項細分數改在 Match report 裡看；
+                //   這個區塊保留但不會再被打開（expandedReportId 已經沒有按鈕會設定它）。
+                false && pair.status === 'active' && expandedReportId === pair.id && pair.ai_match_data && pair.ai_match_data.breakdown && Object.keys(pair.ai_match_data.breakdown).length > 0 && React.createElement("div", { style:{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--gray-100)' } },
                   Object.entries(pair.ai_match_data.breakdown)
                     .filter(function(e){ return e[1] != null; })
                     .map(function(e) {
@@ -16459,7 +16562,9 @@ function BuddiesPage(_ref_buddies) {
                 score: md.score != null ? md.score : rp.match_score,
                 breakdown: md.breakdown || {},
                 reason: _pairReasonFor(rp, user.uid) || (_pairReasonPending(rp, user.uid) && !perspectiveFailed[rp.id] ? 'Writing up why you two match\u2026' : ''),
-                clips: Array.isArray(md.clips) ? md.clips : []
+                // ★ 2026-10-28：ai_match_data.clips 存的是「候選人」（也就是收到邀請的這個人自己）的影片，
+                //   只有送邀請那方（pairs.user_id）看才是「對方的影片」；收到邀請的人看就不顯示，免得看到自己的影片。
+                clips: (rpIsUser && Array.isArray(md.clips)) ? md.clips : []
               }, { label: 'Wants to be your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report for this pair yet.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -16471,6 +16576,65 @@ function BuddiesPage(_ref_buddies) {
               style:{ flex:1, fontSize:9, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', padding:'12px', background:'#111', color:'#aaa', border:'1px solid #2a2a2a', cursor:'pointer', fontFamily:'inherit' },
               onClick: function(){ handleDecline(rp); setViewingRequestPair(null); _closeFromNotif(); }
             }, "Decline")
+          )
+        )
+      );
+    })(),
+
+    // ★ 2026-10-28：已經是夥伴的那組，點卡片上「Match report」打開的配對報告。
+    //   跟上面收到邀請的報告同一套黑色版型（_matchReportBodyHtml），差別是唯讀：
+    //   底下按鈕換成 Open chat／Close。每個人看自己視角：主角是「對方」、理由是寫給自己看的那份
+    //   （_pairReasonFor），影片只有送邀請那方看得到（快照裡存的是候選人＝對方的影片）。
+    viewingReportPair && (function() {
+      var vp = pairs.find(function(p) { return p.id === viewingReportPair.id; }) || viewingReportPair;
+      var vpIsUser = vp.user_id === user.uid;
+      var vpPartnerId = vpIsUser ? vp.partner_id : vp.user_id;
+      var vpInfo = partnerInfoMap[vpPartnerId];
+      var vpName = (vpInfo && vpInfo.display_name) || vpPartnerId.toString().slice(0, 8);
+      var vpPhoto = (vpInfo && vpInfo.photo_url) || null;
+      var vmd = vp.ai_match_data;
+      var myHabitName = vpIsUser ? vp.habit_name : vp.partner_habit_name;
+      var closeReport = function() { setViewingReportPair(null); };
+      return React.createElement("div", {
+        style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.85)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:20 },
+        onClick: closeReport
+      },
+        React.createElement("div", {
+          style:{ background:'#0a0a0a', border:'1px solid #1f1f1f', borderRadius:10, maxWidth:420, width:'100%', maxHeight:'88vh', overflowY:'auto', position:'relative', color:'#fff' },
+          onClick: function(e){ e.stopPropagation(); }
+        },
+          React.createElement("div", { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px 12px', borderBottom:'1px solid #1a1a1a' } },
+            React.createElement("div", { style:{ minWidth:0 } },
+              React.createElement("div", { style:{ fontSize:8, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color:'#555', marginBottom:4 } }, 'Match report' + (myHabitName ? ' \u00b7 ' + myHabitName : '')),
+              React.createElement("div", { style:{ fontSize:16, fontWeight:700, letterSpacing:'.5px', textTransform:'uppercase', fontFamily:'var(--din)', color:'#fff' } }, 'You \u00d7 ' + vpName)
+            ),
+            React.createElement("button", {
+              "aria-label": "Close",
+              style:{ background:'none', border:'none', color:'#555', fontSize:20, cursor:'pointer', padding:'4px 8px', lineHeight:1 },
+              onClick: closeReport
+            }, '\u2715')
+          ),
+          vmd
+            ? React.createElement("div", { dangerouslySetInnerHTML: { __html: (window._matchReportBodyHtml ? window._matchReportBodyHtml({
+                displayName: vpName,
+                avatarUrl: vpPhoto,
+                // 對方用來配對的那個習慣
+                habitName: vpIsUser ? (vp.partner_habit_name || vmd.partnerHabitName) : (vp.habit_name || vmd.requesterHabitName),
+                score: vmd.score != null ? vmd.score : vp.match_score,
+                breakdown: vmd.breakdown || {},
+                reason: _pairReasonFor(vp, user.uid) || (_pairReasonPending(vp, user.uid) && !perspectiveFailed[vp.id] ? 'Writing up why you two match\u2026' : ''),
+                clips: (vpIsUser && Array.isArray(vmd.clips)) ? vmd.clips : []
+              }, { label: 'Your partner', avIdx: 0 }) : '') } })
+            : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report was saved for this pair.'),
+          React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
+            React.createElement("button", {
+              style:{ flex:1, fontSize:9, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', padding:'12px', background:'#fff', color:'#0a0a0a', border:'none', cursor:'pointer', fontFamily:'inherit' },
+              onClick: function(){ closeReport(); setSelectedPair(vp); }
+            }, "Open chat"),
+            React.createElement("button", {
+              style:{ flex:1, fontSize:9, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', padding:'12px', background:'#111', color:'#aaa', border:'1px solid #2a2a2a', cursor:'pointer', fontFamily:'inherit' },
+              onClick: closeReport
+            }, "Close")
           )
         )
       );
