@@ -647,19 +647,59 @@
             display:flex; justify-content:center;
             margin-bottom:24px; padding-top:8px;
         }
+        /* ★ 2026-10-29：圓形「+」改成帶文字的膠囊按鈕（New habit），比較顯眼 */
         .center-add-btn-standalone {
-            width:56px; height:56px;
-            background:var(--black); border:3px solid var(--white);
-            border-radius:50%;
-            cursor:pointer; display:flex;
+            height:52px; padding:0 22px 0 12px;
+            background:var(--black); color:var(--white); border:none;
+            border-radius:999px;
+            cursor:pointer; display:flex; gap:10px;
             align-items:center; justify-content:center;
-            transition:all .2s;
-            box-shadow: 0 0 0 1.5px var(--gray-200);
+            transition:all .2s; font-family:var(--font);
+            font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+            box-shadow:0 8px 24px rgba(0,0,0,.28);
         }
-        .center-add-btn-standalone:hover { background:var(--gray-800); transform:scale(1.07); }
-        .center-add-btn-standalone svg { width:22px; height:22px; }
-        body[data-theme="dark"] .center-add-btn-standalone { background:var(--white); border-color:var(--bg); box-shadow:0 0 0 1.5px #1e1e1e; }
-        body[data-theme="dark"] .center-add-btn-standalone svg { stroke: #000; }
+        .center-add-btn-standalone:hover { background:var(--gray-800); transform:scale(1.04); }
+        .add-btn-plus {
+            width:28px; height:28px; border-radius:50%; background:#f5a623; color:#0a0a0a;
+            display:flex; align-items:center; justify-content:center; flex-shrink:0;
+        }
+        .add-btn-plus svg { width:16px; height:16px; stroke:#0a0a0a; stroke-width:3; }
+        body[data-theme="dark"] .center-add-btn-standalone { background:var(--white); color:#0a0a0a; box-shadow:0 8px 24px rgba(0,0,0,.6); }
+        /* 桌面版：左側選單裡的 New habit（跟 X 的 Post 按鈕同一個做法，每一頁都看得到） */
+        .desktop-nav-new {
+            margin:18px 0 0; height:50px; width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+            background:var(--black); color:var(--white); border:none; border-radius:999px; cursor:pointer;
+            font-family:var(--font); font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+            box-shadow:0 6px 18px rgba(0,0,0,.2); transition:all .15s;
+        }
+        .desktop-nav-new:hover { background:var(--gray-800); transform:translateY(-1px); }
+        body[data-theme="dark"] .desktop-nav-new { background:var(--white); color:#0a0a0a; }
+        /* ── ★ 2026-10-29：Home 最上方的贊助挑戰（主廣告位，電腦＋手機都有）── */
+        .sp-hero { position:relative; display:flex; border-radius:14px; overflow:hidden; margin-bottom:22px; min-height:250px; color:#fff; }
+        .sp-hero-img { width:44%; flex-shrink:0; background-size:cover; background-position:center; position:relative; }
+        .sp-hero-body { flex:1; min-width:0; padding:22px 26px; display:flex; flex-direction:column; }
+        .sp-eyebrow { display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:.8; }
+        .sp-tag { border:1px solid rgba(255,255,255,.4); border-radius:4px; padding:2px 6px; opacity:1; }
+        .sp-brand { display:flex; align-items:center; gap:8px; margin-top:12px; font-family:var(--din); font-size:15px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+        .sp-logo { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; overflow:hidden; flex-shrink:0; }
+        .sp-logo img { width:100%; height:100%; object-fit:cover; }
+        .sp-headline { font-family:var(--din); font-size:30px; line-height:1.02; font-weight:800; letter-spacing:.5px; margin:10px 0 8px; text-transform:uppercase; }
+        .sp-text { font-size:13px; line-height:1.5; opacity:.82; margin:0 0 16px; }
+        .sp-row { margin-top:auto; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+        .sp-cta { border:none; cursor:pointer; font-family:var(--font); font-weight:800; font-size:12px; letter-spacing:1px; text-transform:uppercase; padding:12px 20px; border-radius:999px; white-space:nowrap; }
+        .sp-more { background:none; border:none; color:inherit; cursor:pointer; font-family:var(--font); font-size:12px; font-weight:700; text-decoration:underline; opacity:.8; padding:0; white-space:nowrap; }
+        .sp-joined { margin-left:auto; font-size:11.5px; opacity:.75; white-space:nowrap; }
+        .sp-close { position:absolute; top:8px; right:10px; background:rgba(0,0,0,.3); border:none; color:#fff; width:26px; height:26px; min-width:0; min-height:0; padding:0; border-radius:50%; cursor:pointer; font-size:12px; line-height:1; z-index:2; display:flex; align-items:center; justify-content:center; }
+        /* 手機：上圖下文 */
+        .sp-hero.compact { flex-direction:column; min-height:0; }
+        .sp-hero.compact .sp-hero-img { width:100%; height:150px; }
+        .sp-hero.compact .sp-hero-body { padding:14px 16px 16px; }
+        .sp-hero.compact .sp-headline { font-size:24px; margin:8px 0 6px; }
+        .sp-hero.compact .sp-brand { display:none; }
+        .sp-hero.compact .sp-text { font-size:12.5px; margin-bottom:12px; }
+        .sp-hero.compact .sp-row { flex-direction:column; align-items:stretch; gap:8px; }
+        .sp-hero.compact .sp-cta { width:100%; }
+        .sp-hero.compact .sp-joined, .sp-hero.compact .sp-more { margin:0; text-align:center; }
         /* Ghost slot in tab-bar for Home FAB */
         .tab-item.ghost-slot { pointer-events:none; opacity:0; }
 
@@ -1129,20 +1169,52 @@
         .notif-panel-empty {
             padding:28px 16px; text-align:center; font-size:11px; color:var(--gray-400);
         }
+        /* ★ 2026-10-29：通知列改版——未讀要一眼看得出來 */
         .notif-row {
-            display:flex; gap:8px; padding:11px 14px; border-bottom:1px solid var(--gray-100);
-            cursor:pointer; align-items:flex-start;
+            position:relative; display:flex; gap:10px; padding:12px 14px; border-bottom:1px solid var(--gray-100);
+            cursor:pointer; align-items:flex-start; color:var(--black);
         }
-        .notif-row:last-child { border-bottom:none; }
-        .notif-row.unread { background:#f7faff; }
-        .notif-dot {
-            width:7px; height:7px; border-radius:50%; background:#185FA5;
-            margin-top:5px; flex-shrink:0;
+        .notif-row:hover { background:var(--gray-50); }
+        .notif-row.unread { background:#f2f7fd; }
+        .notif-row.unread::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:#185FA5; }
+        .notif-ico {
+            width:32px; height:32px; border-radius:50%; background:var(--gray-100); flex-shrink:0;
+            display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1;
         }
+        .notif-row.unread .notif-ico { background:#fff; }
         .notif-row-body { flex:1; min-width:0; }
-        .notif-row-title { font-size:11.5px; font-weight:700; line-height:1.4; }
-        .notif-row-text { font-size:11px; color:var(--gray-500); line-height:1.5; margin-top:2px; }
-        .notif-row-time { font-size:9px; color:var(--gray-300); margin-top:4px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
+        .notif-row-title { font-size:12.5px; font-weight:600; line-height:1.35; color:#333; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .notif-row.unread .notif-row-title { font-weight:800; color:var(--black); }
+        .notif-new { font-size:8.5px; font-weight:800; letter-spacing:.8px; color:#fff; background:#185FA5; border-radius:4px; padding:2px 5px; }
+        .notif-row-text { font-size:11.5px; color:var(--gray-400); line-height:1.45; margin-top:2px; }
+        .notif-row.unread .notif-row-text { color:var(--gray-600); }
+        .notif-row-time { font-size:10.5px; color:var(--gray-400); margin-top:5px; font-weight:600; }
+        .notif-row.unread .notif-row-time { color:#185FA5; }
+        .notif-more-btn {
+            display:block; width:100%; padding:11px; border:none; border-top:1px solid var(--gray-100);
+            background:#fafafa; font-family:var(--font); font-size:12px; font-weight:700; color:var(--black); cursor:pointer;
+        }
+        .notif-more-btn span { color:var(--gray-400); font-weight:600; }
+        .notif-more-btn:hover { background:var(--gray-100); }
+        .notif-group { font-size:10px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--gray-400); padding:14px 16px 6px; }
+        /* 手機：點鈴鐺打開的通知整頁（原本是右上角很小的下拉框） */
+        .notif-page { position:fixed; inset:0; z-index:3000; background:var(--white); color:var(--black); display:flex; flex-direction:column; font-family:var(--font); }
+        .notif-page-hd { display:flex; align-items:center; gap:10px; padding:calc(14px + env(safe-area-inset-top)) 16px 12px; border-bottom:1px solid var(--gray-100); }
+        .notif-page-back { background:none; border:none; font-size:26px; line-height:1; padding:0 6px 0 0; cursor:pointer; color:var(--black); }
+        .notif-page-title { font-family:var(--din); font-weight:800; font-size:22px; letter-spacing:.5px; text-transform:uppercase; }
+        .notif-page-hd .notif-bell-badge { position:static; min-width:20px; height:20px; font-size:11px; }
+        .notif-page-hd .notif-mark-all-btn { margin-left:auto; font-size:12px; }
+        .notif-filters { display:flex; gap:8px; padding:12px 16px 4px; }
+        .notif-filter { font-family:var(--font); font-size:12px; font-weight:700; padding:7px 14px; border-radius:999px; border:1px solid var(--gray-200); background:var(--white); color:var(--black); cursor:pointer; }
+        .notif-filter.on { background:var(--black); color:var(--white); border-color:var(--black); }
+        .notif-page-body { flex:1; overflow-y:auto; padding-bottom:calc(20px + env(safe-area-inset-bottom)); }
+        .notif-page .notif-row { padding:13px 16px; }
+        .notif-page .notif-row-title { font-size:13.5px; }
+        .notif-page .notif-row-text { font-size:12.5px; }
+        .notif-page .notif-more-btn { width:auto; margin:10px 16px; border:1px solid var(--gray-200); border-radius:999px; background:var(--white); display:block; width:calc(100% - 32px); }
+        body[data-theme="dark"] .notif-row.unread { background:#13202e; }
+        body[data-theme="dark"] .notif-row.unread .notif-ico { background:#1e2a38; }
+        body[data-theme="dark"] .notif-more-btn { background:#141414; color:var(--white); }
         .buddies-empty {
             padding:48px 24px; text-align:center;
         }
@@ -5664,6 +5736,20 @@ function FeedCard(_ref5) {
     _useState18 = _slicedToArray(_useState17, 2),
     showComments = _useState18[0],
     setShowComments = _useState18[1];
+  // ★ 2026-10-31：作者管理自己的留言區——
+  //   commentBanned：我是不是被這篇的作者禁止留言了（打開留言區時問資料庫 can_comment_on_post）
+  //   ownerMenuFor：作者按了哪一則別人留言的「Remove」（展開「刪除／刪除並禁止留言」選項）
+  var _useStateCB = useState(false), commentBanned = _useStateCB[0], setCommentBanned = _useStateCB[1];
+  var _useStateOM = useState(null), ownerMenuFor = _useStateOM[0], setOwnerMenuFor = _useStateOM[1];
+  React.useEffect(function() {
+    if (!showComments || !currentUser || !post || !post.id || !window._supabaseClient) return;
+    if (currentUser.uid === post.userId) return; // 自己的貼文一定能留言
+    var cancelled = false;
+    window._supabaseClient.rpc('can_comment_on_post', { p_post: String(post.id) }).then(function(r) {
+      if (!cancelled && r && !r.error && r.data === false) setCommentBanned(true);
+    }, function() {});
+    return function() { cancelled = true; };
+  }, [showComments, post && post.id]);
   var _useState19 = useState([]),
     _useState20 = _slicedToArray(_useState19, 2),
     comments = _useState20[0],
@@ -6079,6 +6165,13 @@ function FeedCard(_ref5) {
           );
         }
       }).catch(function(_err) {
+        // ★ 2026-10-31：被作者禁止留言（資料庫 trigger 擋下）→ 不要假裝送出成功
+        if (/comment_banned/.test((_err && _err.message) || '')) {
+          setCommentBanned(true);
+          setCommentText(''); handleRemoveCommentMedia();
+          setSendingComment(false);
+          return;
+        }
         // insert 失敗：仍在本地顯示作為 fallback
         console.error('[Comment] Failed:', _err && _err.message);
         setComments(function (prev) {
@@ -6262,6 +6355,27 @@ function FeedCard(_ref5) {
     var cLikedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
     var cLiked = currentUser ? cLikedBy.includes(currentUser.uid) : false;
     var isOwnComment = currentUser && c.userId === currentUser.uid;
+    // ★ 2026-10-31：我是這篇的作者、這則是別人的留言 → 可以刪除，也可以順便禁止他再留言
+    var canOwnerRemove = isOwner && !isOwnComment && !!c.userId;
+    function ownerRemoveComment(alsoBan) {
+      setOwnerMenuFor(null);
+      db.collection('posts').doc(post.id).collection('comments').doc(c.id).delete()
+        .then(function() {
+          setComments(function(prev) { return prev.filter(function(x){ return x.id !== c.id; }); });
+          setLocalCommentCount(function(n) { var base = n != null ? n : (post.commentCount != null ? post.commentCount : (post.comments || 0)); return Math.max(0, base - 1); });
+          db.collection('posts').doc(post.id).update({ commentCount: FieldValue.increment(-1), comments: FieldValue.increment(-1) }).catch(function(){});
+          if (alsoBan && window._supabaseClient) {
+            window._supabaseClient.from('comment_bans').upsert(
+              { owner_id: currentUser.uid, banned_user_id: String(c.userId) },
+              { onConflict: 'owner_id,banned_user_id', ignoreDuplicates: true }
+            ).then(function(r) {
+              if (r && r.error) { alert("The comment was removed, but we couldn't stop them from commenting: " + r.error.message); return; }
+              if (typeof _showAppToast === 'function') _showAppToast((c.userName || 'They') + " can no longer comment on your posts.");
+            });
+          } else if (typeof _showAppToast === 'function') _showAppToast('Comment removed.');
+        })
+        .catch(function(err) { alert('Delete failed: ' + err.message); });
+    }
     function handleCommentLike() {
       if (!currentUser) return;
       if (isOwnComment) return; // Cannot like your own comment
@@ -6358,7 +6472,7 @@ function FeedCard(_ref5) {
         }) : null
       ];
     })()), (editingCommentId !== c.id) && /*#__PURE__*/React.createElement("div", {
-      style:{display:'flex',alignItems:'center',gap:10,marginTop:5}
+      style:{display:'flex',alignItems:'center',gap:10,marginTop:5,flexWrap:'wrap'}
     },
       /*#__PURE__*/React.createElement("div", {
         className:"comment-time",
@@ -6370,6 +6484,12 @@ function FeedCard(_ref5) {
       }, /*#__PURE__*/React.createElement("svg",{width:12,height:12,fill:cLiked?'currentColor':'none',viewBox:'0 0 24 24',stroke:'currentColor',strokeWidth:2},
            /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',d:'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'})
          ), /*#__PURE__*/React.createElement("span",null, c.likes||0)),
+      canOwnerRemove && /*#__PURE__*/React.createElement("button", {
+        onClick: function(e) { e.stopPropagation(); setOwnerMenuFor(ownerMenuFor === c.id ? null : c.id); },
+        style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-500)',padding:0,fontFamily:'var(--font)',fontWeight:600,marginLeft:'auto'}
+      }, /*#__PURE__*/React.createElement("svg",{width:11,height:11,fill:'none',viewBox:'0 0 24 24',stroke:'currentColor'},
+          /*#__PURE__*/React.createElement("path",{strokeLinecap:'round',strokeLinejoin:'round',strokeWidth:2,d:'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'})
+        ), "Remove"),
       !isOwnComment && /*#__PURE__*/React.createElement("button", {
         onClick: function(){if(typeof window.openReportModal==='function') window.openReportModal(Object.assign({},c,{text:c.text,user:c.userName,isComment:true,postId:post.id,commentId:c.id}));},
         style:{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:2,fontSize:10,color:'var(--gray-400)',padding:0,fontFamily:'var(--font)',opacity:.55,marginLeft:'auto'}
@@ -6405,6 +6525,26 @@ function FeedCard(_ref5) {
       isOwnComment && c.moderationStatus === 'hidden' && renderModerationActionButtons(
         { status: commentAppeals[c.id] || c.moderationAppealStatus, onRequest: function() { handleRequestCommentAppeal(c); } },
         function() { handleStartEditComment(c); }
+      ),
+      // ★ 2026-10-31：作者按了「Remove」→ 展開兩個選項（只刪這則／刪除並禁止他在我的貼文和影片留言）
+      canOwnerRemove && ownerMenuFor === c.id && /*#__PURE__*/React.createElement("div", {
+        onClick: function(e) { e.stopPropagation(); },
+        style:{ width:'100%', display:'flex', flexWrap:'wrap', gap:6, marginTop:4, padding:8, background:'var(--gray-50)', border:'1px solid var(--gray-200)', borderRadius:8 }
+      },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() { ownerRemoveComment(false); },
+          style:{ fontSize:11, fontWeight:700, padding:'6px 10px', borderRadius:6, border:'1px solid var(--gray-200)', background:'var(--white)', color:'var(--black)', cursor:'pointer', fontFamily:'var(--font)' }
+        }, "Remove comment"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() { ownerRemoveComment(true); },
+          style:{ fontSize:11, fontWeight:700, padding:'6px 10px', borderRadius:6, border:'none', background:'#dc2626', color:'#fff', cursor:'pointer', fontFamily:'var(--font)' }
+        }, "Remove & stop " + (c.userName || 'them') + " commenting"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() { setOwnerMenuFor(null); },
+          style:{ fontSize:11, padding:'6px 8px', border:'none', background:'none', color:'var(--gray-500)', cursor:'pointer', fontFamily:'var(--font)' }
+        }, "Cancel"),
+        /*#__PURE__*/React.createElement("div", { style:{ width:'100%', fontSize:10, color:'var(--gray-400)', lineHeight:1.5 } },
+          "\u201cStop commenting\u201d applies to all your posts and habit clips. They won't be told. You can undo it in Profile.")
       )
     )));
   }), comments.length === 0 && !loadingComments && /*#__PURE__*/React.createElement("div", {
@@ -6413,7 +6553,12 @@ function FeedCard(_ref5) {
       color: 'var(--gray-400)',
       padding: '4px 0 8px'
     }
-  }, "No comments yet. Be the first!"), currentUser && /*#__PURE__*/React.createElement("div", {
+  }, "No comments yet. Be the first!"),
+  // ★ 2026-10-31：被作者禁止留言 → 不顯示輸入框（不透露是誰、為什麼）
+  currentUser && commentBanned && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 11, color: 'var(--gray-400)', padding: '8px 0 4px' }
+  }, "You can't comment on this post."),
+  currentUser && !commentBanned && /*#__PURE__*/React.createElement("div", {
     style: { display: 'flex', flexDirection: 'column', gap: 6 }
   },
   // [NEW 2026-09] 附加照片/影片的預覽（送出前可以移除）
@@ -6563,7 +6708,9 @@ var VIOLATION_MESSAGES = {
   ILLICIT:       "Buying or selling drugs or weapons, or how-tos for crimes, aren't allowed on FamStreak.",
   // ★ [新增 2026-09] 語氣刻意跟其他分類不同：其他分類是「請保持整潔/尊重」，
   //   這則是關心語氣，不是規則提醒，並附上申訴入口以外的求助資源方向。
-  SELF_HARM:  "We noticed this post touches on some heavy stuff. It's hidden from others for now — if you're going through something difficult, please reach out to someone you trust or a support line. You're welcome to edit and resubmit, or request a review if this was a mistake."
+  SELF_HARM:  "We noticed this post touches on some heavy stuff. It's hidden from others for now — if you're going through something difficult, please reach out to someone you trust or a support line. You're welcome to edit and resubmit, or request a review if this was a mistake.",
+  // ★ 2026-10-29（moderate-content v8）：當天的自動審查次數用完了——不是違規，只是先等人工看過再公開
+  HELD:       "You've posted a lot today, so this one is waiting for a quick review before others can see it. Nothing's wrong — it'll show up once it's checked."
 };
 
 // [FIX 2026-09] Content moderation no longer blocks posting (see the post
@@ -6589,7 +6736,9 @@ var MODERATION_CATEGORY_INFO = {
   // ★ [新增 2026-09] 跟 interpret-values-text 共用同一套分類命名，新增自傷/
   //   自殺分類；配色刻意用中性藍綠而非其他分類慣用的警示紅/黑，避免對可能
   //   正在低潮的使用者呈現太強烈的「你違規了」觀感。
-  SELF_HARM:  { label: 'Self-harm content',icon: '💙', bg: '#e3f2fa', border: '#a9d4e8', fg: '#1f5c7a' }
+  SELF_HARM:  { label: 'Self-harm content',icon: '💙', bg: '#e3f2fa', border: '#a9d4e8', fg: '#1f5c7a' },
+  // ★ 2026-10-29：當天自動審查次數用完，等人工審查（不是違規）
+  HELD:       { label: 'Waiting for review', icon: '⏳', bg: '#f3f4f6', border: '#d1d5db', fg: '#4b5563' }
 };
 
 // [v5 2026-09 REDESIGN] What everyone — including the author now, per Andy's
@@ -8762,8 +8911,10 @@ var FREQ_PRESETS = [{
 function AddHabitModal(_ref12) {
   var onClose = _ref12.onClose,
     onAdd = _ref12.onAdd;
+  // ★ 2026-10-29：贊助挑戰的「Join challenge」會帶入預設的習慣名稱跟起訖日期（使用者還是可以改）
+  var _prefill = _ref12.prefill || null;
   var now = new Date();
-  var _useState37 = useState(''),
+  var _useState37 = useState((_prefill && _prefill.name) || ''),
     _useState38 = _slicedToArray(_useState37, 2),
     name = _useState38[0],
     setName = _useState38[1];
@@ -8784,11 +8935,11 @@ function AddHabitModal(_ref12) {
   // Start/End Date (date string for <input type="date">)
   var todayStr = toISODay(now); // use local date, not UTC
   var endOfYear = "".concat(now.getFullYear(), "-12-31");
-  var _useState41 = useState(todayStr),
+  var _useState41 = useState((_prefill && _prefill.startDate && _prefill.startDate > todayStr) ? _prefill.startDate : todayStr),
     _useState42 = _slicedToArray(_useState41, 2),
     startDate = _useState42[0],
     setStartDate = _useState42[1];
-  var _useState43 = useState(endOfYear),
+  var _useState43 = useState((_prefill && _prefill.endDate && _prefill.endDate >= todayStr) ? _prefill.endDate : endOfYear),
     _useState44 = _slicedToArray(_useState43, 2),
     endDate = _useState44[0],
     setEndDate = _useState44[1];
@@ -9816,6 +9967,18 @@ function DesktopNav(props) {
       d: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
     })) }),
     React.createElement(NavItem, { tab: "profile", label: "Profile", icon: React.createElement(ProfileIcon, null) }),
+    // ★ 2026-10-29：上方搜尋列（只是靜態展示、沒接搜尋功能）拿掉，新增習慣按鈕移到這裡，每一頁都看得到。
+    //   不在 Home 時先切回 Home，新增完才看得到剛建立的習慣。
+    props.onAddHabit && React.createElement("button", {
+      className: "desktop-nav-new",
+      onClick: function() {
+        if (activeTab !== 'home') { setActiveTab('home'); if (setSelectedHabit) setSelectedHabit(null); }
+        props.onAddHabit();
+      }
+    },
+      React.createElement("span", { className: "add-btn-plus" }, React.createElement(PlusIcon, null)),
+      "New habit"
+    ),
     React.createElement("div", { className: "desktop-nav-footer" },
       React.createElement("div", { className: "desktop-nav-avatar" },
         (user && user.photoURL) ? React.createElement("img", { src: user.photoURL, alt: "" }) : initials
@@ -9824,6 +9987,115 @@ function DesktopNav(props) {
       React.createElement("button", {
         className: "desktop-signout", style: { marginLeft: 'auto' }, onClick: onLogout
       }, "Sign out")
+    )
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ 2026-10-29：贊助挑戰（Home 最上方的主廣告位，電腦版＋手機版都有）
+   - 廣告內容放在 sponsored_campaigns 表，從後台 Sponsored 頁管理（上下架日期、優先順序），
+     換廣告不用重新部署。同時有好幾檔在檔期內時，顯示 priority 最高的那一檔。
+   - 沒有任何在檔期內的廣告（或 SQL 還沒跑）→ 這個元件什麼都不畫，不會留空白。
+   - 成效記在 sponsored_events：曝光（每次打開 App 每檔記一次）、點擊、加入挑戰、Learn more、關閉，
+     後台用來給廣告主看報表。
+   - 使用者按 ✕ 關掉 → 這一檔 7 天內不再出現（存在這台裝置）。
+   ══════════════════════════════════════════════════════════════════ */
+var _SP_CACHE_MS = 10 * 60 * 1000;
+window._spImpLogged = window._spImpLogged || {};
+function _spLogEvent(campaignId, event) {
+  if (!campaignId || !window._supabaseClient) return;
+  window._supabaseClient.from('sponsored_events').insert({ campaign_id: campaignId, event: event })
+    .then(function(r) { if (r && r.error) console.warn('[Sponsored] log failed:', r.error.message); }, function() {});
+}
+function _spDismissed(id) {
+  try { var until = Number(localStorage.getItem('_sp_dismiss_' + id) || 0); return until > Date.now(); } catch (e) { return false; }
+}
+function _spLoadCampaign() {
+  var c = window._spCache;
+  if (c && Date.now() - c.at < _SP_CACHE_MS) return Promise.resolve(c.list);
+  if (!window._supabaseClient) return Promise.resolve([]);
+  var nowIso = new Date().toISOString();
+  return window._supabaseClient.from('sponsored_campaigns').select('*')
+    .eq('is_active', true)
+    .order('priority', { ascending: false })
+    .limit(20)
+    .then(function(r) {
+      if (!r || r.error) return [];   // SQL 還沒跑 → 當作沒有廣告
+      var list = (r.data || []).filter(function(x) {
+        return (!x.starts_at || x.starts_at <= nowIso) && (!x.ends_at || x.ends_at >= nowIso);
+      });
+      window._spCache = { at: Date.now(), list: list };
+      return list;
+    }, function() { return []; });
+}
+function SponsoredHero(props) {
+  var _st = React.useState(null), camp = _st[0], setCamp = _st[1];
+  var _jc = React.useState(null), joined = _jc[0], setJoined = _jc[1];
+  var _tick = React.useState(0), setTick = _tick[1];
+  React.useEffect(function() {
+    var cancelled = false;
+    _spLoadCampaign().then(function(list) {
+      if (cancelled) return;
+      var pick = (list || []).find(function(x) { return !_spDismissed(x.id); }) || null;
+      setCamp(pick);
+      if (!pick) return;
+      if (!window._spImpLogged[pick.id]) { window._spImpLogged[pick.id] = true; _spLogEvent(pick.id, 'impression'); }
+      // 「N joined」：至少 20 人才顯示，人數太少反而扣分
+      window._supabaseClient.rpc('sponsored_join_count', { p_campaign: pick.id }).then(function(r) {
+        if (!cancelled && r && !r.error && typeof r.data === 'number') setJoined(r.data);
+      }, function() {});
+    });
+    return function() { cancelled = true; };
+  }, []);
+  if (!camp || _spDismissed(camp.id)) return null;
+  var bg = camp.bg_color || '#0f1a14';
+  var accent = camp.accent_color || '#c8e86b';
+  var isHabit = (camp.cta_type || 'habit') === 'habit';
+  var ctaLabel = camp.cta_label || (isHabit ? 'Join challenge' : 'Learn more');
+  function openUrl(u) { if (u) { try { window.open(u, '_blank', 'noopener'); } catch (e) {} } }
+  function onCta() {
+    _spLogEvent(camp.id, 'click');
+    if (isHabit) { if (props.onJoin) props.onJoin(camp); }
+    else openUrl(camp.cta_url);
+  }
+  function onMore() { _spLogEvent(camp.id, 'learn_more'); openUrl(camp.learn_more_url); }
+  function onClose() {
+    _spLogEvent(camp.id, 'dismiss');
+    try { localStorage.setItem('_sp_dismiss_' + camp.id, String(Date.now() + 7 * 86400000)); } catch (e) {}
+    setTick(function(n) { return n + 1; });
+  }
+  var initials = String(camp.brand_name || '?').slice(0, 1).toUpperCase();
+  return React.createElement("div", {
+    className: "sp-hero" + (props.compact ? " compact" : ""),
+    style: { background: bg },
+    role: "complementary", "aria-label": "Sponsored"
+  },
+    React.createElement("button", { className: "sp-close", "aria-label": "Hide this ad", title: "Hide", onClick: onClose }, "✕"),
+    React.createElement("div", {
+      className: "sp-hero-img",
+      style: camp.image_url
+        ? { backgroundImage: 'url("' + String(camp.image_url).replace(/"/g, '') + '")' }
+        : { background: 'linear-gradient(135deg,' + bg + ',' + accent + ')' }
+    }),
+    React.createElement("div", { className: "sp-hero-body" },
+      React.createElement("div", { className: "sp-eyebrow" },
+        React.createElement("span", { className: "sp-tag" }, "Sponsored"),
+        props.compact ? (camp.brand_name || '') : (camp.eyebrow || '')
+      ),
+      React.createElement("div", { className: "sp-brand" },
+        React.createElement("span", { className: "sp-logo", style: { background: accent, color: bg } },
+          camp.logo_url ? React.createElement("img", { src: camp.logo_url, alt: "" }) : initials),
+        camp.brand_name || ''
+      ),
+      React.createElement("div", { className: "sp-headline" }, camp.headline || ''),
+      camp.body && React.createElement("p", { className: "sp-text" }, camp.body),
+      React.createElement("div", { className: "sp-row" },
+        React.createElement("button", { className: "sp-cta", style: { background: accent, color: bg }, onClick: onCta },
+          (isHabit ? '+ ' : '') + ctaLabel),
+        camp.learn_more_url && React.createElement("button", { className: "sp-more", onClick: onMore }, "Learn more"),
+        joined != null && joined >= 20 && React.createElement("span", { className: "sp-joined" }, joined.toLocaleString() + ' joined')
+      )
     )
   );
 }
@@ -9895,8 +10167,8 @@ function DesktopHomeSidebar(props) {
       ),
       unreadCount > 0 && React.createElement("button", { className: "notif-mark-all-btn", onClick: props.onMarkAllNotifs }, "Mark all read")
     ),
-    React.createElement("div", { style: { border: '1px solid var(--gray-100)', borderRadius: 10, maxHeight: 380, overflowY: 'auto', marginBottom: 36 } },
-      React.createElement(NotificationList, { notifs: notifs, limit: 20, onItemClick: props.onNotifClick })
+    React.createElement("div", { style: { border: '1px solid var(--gray-200)', borderRadius: 12, overflow: 'hidden', marginBottom: 36 } },
+      React.createElement(NotificationList, { notifs: notifs, pageSize: 5, onItemClick: props.onNotifClick })
     ),
     catList.length > 0 && React.createElement("div", { style: { height: 1, background: 'var(--gray-100)', marginBottom: 28 } }),
     // ── By category（歷史累計，含手動刪除）──
@@ -10057,6 +10329,10 @@ function MainApp(_ref16) {
     _useState68 = _slicedToArray(_useState67, 2),
     showModal = _useState68[0],
     setShowModal = _useState68[1];
+  // ★ 2026-10-29：從贊助挑戰「Join challenge」打開新增習慣視窗時帶入的預設值（含 campaignId，新增成功後記一筆 join）
+  var _useStateAddPrefill = useState(null),
+    addPrefill = _useStateAddPrefill[0],
+    setAddPrefill = _useStateAddPrefill[1];
   var _useState69 = useState(false),
     _useState70 = _slicedToArray(_useState69, 2),
     showHistory = _useState70[0],
@@ -10633,6 +10909,9 @@ function MainApp(_ref16) {
   //   看邀請報告這些畫面跟狀態都在 BuddiesPage 裡。
   var _mobileNotifState = React.useState(false);
   var mobileNotifOpen = _mobileNotifState[0], setMobileNotifOpen = _mobileNotifState[1];
+  // ★ 2026-10-29：手機通知整頁上方的 All／Unread 切換
+  var _mobileNotifFilterState = React.useState('all');
+  var mobileNotifFilter = _mobileNotifFilterState[0], setMobileNotifFilter = _mobileNotifFilterState[1];
   // ★ 2026-10：這幾種通知跟「某個習慣接下來要怎麼做」有關（重新找夥伴、背景還在找），
   //   點了留在 Home、捲到那張習慣卡並閃一下，不跳到 Buddies（那邊沒有相關畫面，
   //   夥伴關係已經結束／邀請已撤回，聊天室也打不開）。
@@ -13125,6 +13404,16 @@ function MainApp(_ref16) {
       }); });
     }
   });
+  // ★ 2026-10-29：贊助挑戰按「Join challenge」→ 打開新增習慣視窗，名稱跟起訖日期預先填好
+  function handleJoinChallenge(camp) {
+    var _t = toISODay();
+    var _active = habits.filter(function(h){ var e = parseTimeRange(h.timeRange).end; return !e || e >= _t; }).length;
+    if (_active >= 3) { alert('Max 3 active habits. A slot frees up once a habit reaches its end date.'); return; }
+    var days = Math.max(1, Math.min(365, Number(camp.habit_days) || 30));
+    var end = new Date(); end.setDate(end.getDate() + days - 1);
+    setAddPrefill({ campaignId: camp.id, name: camp.habit_name || camp.headline || '', startDate: _t, endDate: toISODay(end) });
+    setShowModal(true);
+  }
   var renderHome = function renderHome() {
     if (selectedHabit) {
       var habit = habits.find(function (h) {
@@ -13144,6 +13433,8 @@ function MainApp(_ref16) {
       });
     }
     return /*#__PURE__*/React.createElement("div", null,
+      // ★ 2026-10-29：主廣告位（贊助挑戰），電腦版橫式、手機版直式
+      React.createElement(SponsoredHero, { compact: !isDesktop, onJoin: handleJoinChallenge }),
       // ★ 修正（2026-09）：手機版 Home 頁最上方的黑卡「AI Search Credits」拿掉——
       //   跟下面的習慣清單風格反差太大、一打開 App 就先看到一個跟打卡無關的區塊。
       //   這個 widget 原本的資料（現在是 aiCredits / AI_CREDIT_MAX）現在改顯示
@@ -13183,7 +13474,7 @@ function MainApp(_ref16) {
       });
       return React.createElement(React.Fragment, null,
         allActive.length === 0 ? React.createElement("div", { className: "empty-state" },
-          React.createElement(HomeIcon, null), React.createElement("h3", null, "No habits yet"), React.createElement("p", null, "Tap + Create your first habit")
+          React.createElement(HomeIcon, null), React.createElement("h3", null, "No habits yet"), React.createElement("p", null, "Tap \u201cNew habit\u201d to create your first one")
         ) : null,
         allActive.length > 0 && React.createElement(React.Fragment, null,
           allActive.map(function (habit) {
@@ -14136,7 +14427,7 @@ function MainApp(_ref16) {
         borderTop: '1px solid var(--gray-100)',
         paddingTop: 20
       }
-    }, React.createElement(BlockedAccountsSection, { user: user, nested: true }), /*#__PURE__*/React.createElement("div", {
+    }, React.createElement(BlockedAccountsSection, { user: user, nested: true }), React.createElement(CommentBansSection, { user: user }), /*#__PURE__*/React.createElement("div", {
       className: "section-title",
       style: {
         marginBottom: 12,
@@ -14288,7 +14579,7 @@ function MainApp(_ref16) {
   );
   return /*#__PURE__*/React.createElement("div", {
     className: isDesktop ? "desktop-shell" : "app-container"
-  }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, { activeTab: activeTab, setActiveTab: setActiveTab, setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout }),
+  }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, { activeTab: activeTab, setActiveTab: setActiveTab, setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout, onAddHabit: handleAddHabitClick }),
   // ★ 2026-10-26：帳號被停權時固定顯示在最上面（發文、留言、聊天、配對都會被資料庫擋下）
   mySuspension && React.createElement("div", {
     role: "alert",
@@ -14312,30 +14603,52 @@ function MainApp(_ref16) {
           React.createElement("span", { "aria-hidden": "true" }, "🔔"),
           unreadCount > 0 && React.createElement("span", { className: "notif-bell-badge" }, unreadCount > 9 ? '9+' : unreadCount)
         ),
-        mobileNotifOpen && React.createElement(React.Fragment, null,
-          React.createElement("div", { style: { position: 'fixed', inset: 0, zIndex: 49 }, onClick: function() { setMobileNotifOpen(false); } }),
-          React.createElement("div", { className: "notif-panel", onClick: function(e) { e.stopPropagation(); } },
-            React.createElement("div", { className: "notif-panel-hd" },
-              React.createElement("span", null, "Notifications"),
-              unreadCount > 0 && React.createElement("button", {
-                className: "notif-mark-all-btn",
-                onClick: function() { if (window._markNotificationsRead) window._markNotificationsRead(); }
-              }, "Mark all read")
-            ),
-            React.createElement(NotificationList, { notifs: myNotifs, onItemClick: handleHomeNotifClick })
+        // ★ 2026-10-29：原本是右上角很小的下拉框，改成打開一整頁通知（Today／Yesterday／Earlier 分組、All／Unread 切換）
+        //   用 portal 掛到 body 底下：header 是 sticky + z-index:100，直接放在裡面的話會被底部按鈕／分頁列蓋住
+        mobileNotifOpen && ReactDOM.createPortal(React.createElement("div", { className: "notif-page", role: "dialog", "aria-label": "Notifications", onClick: function(e) { e.stopPropagation(); } },
+          React.createElement("div", { className: "notif-page-hd" },
+            React.createElement("button", { className: "notif-page-back", "aria-label": "Back", onClick: function() { setMobileNotifOpen(false); } }, "\u2039"),
+            React.createElement("span", { className: "notif-page-title" }, "Notifications"),
+            unreadCount > 0 && React.createElement("span", { className: "notif-bell-badge" }, unreadCount > 99 ? '99+' : unreadCount),
+            unreadCount > 0 && React.createElement("button", {
+              className: "notif-mark-all-btn",
+              onClick: function() { if (window._markNotificationsRead) window._markNotificationsRead(); }
+            }, "Mark all read")
+          ),
+          React.createElement("div", { className: "notif-filters" },
+            React.createElement("button", { className: "notif-filter" + (mobileNotifFilter === 'all' ? ' on' : ''), onClick: function() { setMobileNotifFilter('all'); } }, "All"),
+            React.createElement("button", { className: "notif-filter" + (mobileNotifFilter === 'unread' ? ' on' : ''), onClick: function() { setMobileNotifFilter('unread'); } }, "Unread" + (unreadCount > 0 ? ' \u00b7 ' + unreadCount : ''))
+          ),
+          React.createElement("div", { className: "notif-page-body" },
+            React.createElement(NotificationList, {
+              key: mobileNotifFilter,   // 切換 All／Unread 時從 5 則重新開始
+              notifs: mobileNotifFilter === 'unread' ? myNotifs.filter(function(n) { return !n.is_read; }) : myNotifs,
+              grouped: true, pageSize: 5,
+              emptyText: mobileNotifFilter === 'unread' ? "You're all caught up" : "No notifications yet",
+              onItemClick: handleHomeNotifClick
+            })
           )
-        )
+        ), document.body)
       );
     })(),
     /*#__PURE__*/React.createElement("button", {
       className: "logout-btn",
       onClick: onLogout
     }, "Sign Out")
-  )), isDesktop && /*#__PURE__*/React.createElement(DesktopTopbar, { onAddHabit: handleAddHabitClick }), _desktopMainContent), /*#__PURE__*/React.createElement(CheerDetailPanel, null), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
+  )),
+  // ★ 2026-10-29：桌面版上方搜尋列（DesktopTopbar）拿掉——搜尋從來沒接上真正的功能，新增按鈕已移到左側選單
+  _desktopMainContent), /*#__PURE__*/React.createElement(CheerDetailPanel, null), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
+    prefill: addPrefill,
     onClose: function onClose() {
+      setAddPrefill(null);
       return setShowModal(false);
     },
-    onAdd: addHabit
+    onAdd: function(h) {
+      // 從贊助挑戰加入的 → 記一筆 join（給廣告主看的轉換數）
+      if (addPrefill && addPrefill.campaignId) _spLogEvent(addPrefill.campaignId, 'join');
+      setAddPrefill(null);
+      return addHabit(h);
+    }
   }),
 
   /* ── 建立習慣後：詢問是否公開到 Challengers 列表 ── */
@@ -14442,6 +14755,7 @@ function MainApp(_ref16) {
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "center-add-btn-standalone",
+    "aria-label": "New habit",
     style: {
       pointerEvents: 'auto',
       opacity: (function(){ var _t=toISODay(); return habits.filter(function(h){ var e=parseTimeRange(h.timeRange).end; return !e||e>=_t; }).length >= 30 ? 0.4 : 1; })()
@@ -14458,7 +14772,7 @@ function MainApp(_ref16) {
       }
       setShowModal(true);
     }
-  }, /*#__PURE__*/React.createElement(PlusIcon, null))), !isDesktop && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", { className: "add-btn-plus" }, /*#__PURE__*/React.createElement(PlusIcon, null)), "New habit")), !isDesktop && /*#__PURE__*/React.createElement("div", {
     className: "tab-bar",
     role: "tablist",
     "aria-label": "Main navigation"
@@ -15093,7 +15407,10 @@ function PairWallPage(_ref_pw) {
         //   跟文字訊息被擋（頁面內的警示列）不一致。現在跟文字訊息共用同一個
         //   chatBlockedMsg 警示列（2026-10 起不再有回報按鈕）。
         _showChatBlocked({
-          text: 'Media not sent — ' + (VIOLATION_MESSAGES[v] || 'Please review our community guidelines.'),
+          // ★ 2026-10-29：HELD＝今天的圖片／影片審查次數用完（聊天室不能「先隱藏再審」，只能請他明天再傳）
+          text: v === 'HELD'
+            ? "You've shared a lot of photos and videos today \u2014 please try again tomorrow."
+            : 'Media not sent — ' + (VIOLATION_MESSAGES[v] || 'Please review our community guidelines.'),
           contentType: isVid ? 'chat_video' : 'chat_image',
           category: v
         });
@@ -15515,16 +15832,53 @@ function PairWallPage(_ref_pw) {
 //   狀態用的「active Xm ago」）分開寫，這裡的用途跟文案都不一樣，共用反而
 //   要為了兩種不同語氣互相妥協。ts 缺值或無法解析時回傳空字串，呼叫端已經
 //   用 timeLabel && ... 擋掉，不會顯示出奇怪的空殼。
-function _fmtNotifTime(ts) {
+// ★ 2026-10-29：通知時間寫清楚（原本 1d／3d 看不出是哪一天幾點）
+//   1 小時內：「8 min ago · Today 10:38 PM」　今天：「Today · 9:02 AM」　昨天：「Yesterday · 11:47 PM」
+//   今年更早：「Tue, Oct 27 · 8:15 PM」　去年以前：「Oct 27, 2025 · 8:15 PM」
+//   grouped=true（手機通知整頁已經有 Today／Yesterday 分組標題）→ 今天、昨天只寫時間
+function _notifDayDiff(d) {
+  var a = new Date(); a.setHours(0, 0, 0, 0);
+  var b = new Date(d.getTime()); b.setHours(0, 0, 0, 0);
+  return Math.round((a - b) / 86400000);
+}
+function _fmtNotifTime(ts, grouped) {
   if (!ts) return '';
   var t = Date.parse(ts);
   if (isNaN(t)) return '';
+  var d = new Date(t);
+  var clock = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   var diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (diffSec < 60) return 'Just now';
-  if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
-  if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
-  if (diffSec < 604800) return Math.floor(diffSec / 86400) + 'd ago';
-  return new Date(t).toLocaleDateString();
+  var dayDiff = _notifDayDiff(d);
+  if (dayDiff <= 0) {
+    if (diffSec < 60) return 'Just now \u00b7 ' + clock;
+    if (diffSec < 3600) return Math.floor(diffSec / 60) + ' min ago \u00b7 ' + (grouped ? '' : 'Today ') + clock;
+    return grouped ? clock : 'Today \u00b7 ' + clock;
+  }
+  if (dayDiff === 1) return grouped ? clock : 'Yesterday \u00b7 ' + clock;
+  var sameYear = d.getFullYear() === new Date().getFullYear();
+  var date = sameYear
+    ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return date + ' \u00b7 ' + clock;
+}
+// 手機通知整頁的分組：Today／Yesterday／Earlier
+function _notifGroup(ts) {
+  var t = Date.parse(ts || '');
+  if (isNaN(t)) return 'Earlier';
+  var dd = _notifDayDiff(new Date(t));
+  return dd <= 0 ? 'Today' : (dd === 1 ? 'Yesterday' : 'Earlier');
+}
+// 每一類通知左邊的小圖示，一眼看出是哪一類
+function _notifIcon(type) {
+  return ({
+    partner_request: '\ud83d\udc4b', partner_accepted: '\ud83e\udd1d', partner_declined: '\ud83d\ude45',
+    partnership_ended: '\ud83d\udd1a', partner_left: '\ud83d\udeaa', partner_request_closed: '\ud83d\udcea',
+    pair_message: '\ud83d\udcac', match_found_alert: '\ud83c\udf89', ai_credit_awarded: '\ud83c\udf81',
+    moderation_appeal_approved: '\u2705', moderation_appeal_denied_kept: '\ud83d\udee1\ufe0f', moderation_appeal_denied_deleted: '\ud83d\uddd1\ufe0f',
+    report_actioned: '\ud83d\udee1\ufe0f', report_reviewed: '\ud83d\udee1\ufe0f', account_warning: '\u26a0\ufe0f',
+    support_checkin: '\ud83d\udc9b', video_removed: '\ud83c\udfac',
+    media_consent_requested: '\ud83d\udcf7', media_consent_granted: '\ud83d\udcf7', media_consent_declined: '\ud83d\udcf7'
+  })[type] || '\ud83d\udd14';
 }
 
 // ★ 2026-10-26：檢舉／封鎖（Apple 規範 1.2：有使用者互傳內容的 App 必須能檢舉、封鎖對方）
@@ -15561,6 +15915,53 @@ var REPORT_REASONS = [
   { code: 'UNDERAGE',      label: 'They may be under 13' },
   { code: 'OTHER',         label: 'Something else' }
 ];
+
+// ★ 2026-10-31：Profile → Stopped from commenting：我禁止了誰在我的貼文／習慣影片底下留言，可以解除
+function CommentBansSection(props) {
+  var _s = React.useState(null); var list = _s[0]; var setList = _s[1];
+  var _b = React.useState(null); var busyId = _b[0]; var setBusyId = _b[1];
+  var me = props.user && props.user.uid;
+  function load() {
+    var c = window._supabaseClient;
+    if (!c || !me) return;
+    c.from('comment_bans').select('banned_user_id, created_at').eq('owner_id', me).order('created_at', { ascending: false })
+      .then(function(r) {
+        if (!r || r.error) { setList([]); return; }   // SQL 還沒跑 → 當作沒有
+        var rows = r.data || [];
+        if (!rows.length) { setList([]); return; }
+        c.from('users').select('id, display_name, photo_url').in('id', rows.map(function(x) { return x.banned_user_id; }))
+          .then(function(ur) {
+            var m = {}; ((ur && ur.data) || []).forEach(function(u) { m[String(u.id)] = u; });
+            setList(rows.map(function(x) { var u = m[String(x.banned_user_id)] || {}; return { user_id: x.banned_user_id, display_name: u.display_name, photo_url: u.photo_url }; }));
+          }, function() { setList(rows.map(function(x) { return { user_id: x.banned_user_id }; })); });
+      }, function() { setList([]); });
+  }
+  React.useEffect(load, [me]);
+  function allow(row) {
+    if (!window.confirm('Let ' + (row.display_name || 'this person') + ' comment on your posts and habit clips again?')) return;
+    setBusyId(row.user_id);
+    window._supabaseClient.from('comment_bans').delete().eq('owner_id', me).eq('banned_user_id', row.user_id)
+      .then(function() { setBusyId(null); load(); }, function() { setBusyId(null); });
+  }
+  return React.createElement("div", { style: { margin: '0 0 8px' } },
+    React.createElement("div", { className: "section-title", style: { marginBottom: 12, marginTop: 16 } }, "Stopped from commenting"),
+    list === null
+      ? React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)' } }, "Loading…")
+      : list.length === 0
+        ? React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', lineHeight: 1.6 } }, "No one. When you remove a comment on your post or habit clip, you can also stop that person from commenting.")
+        : list.map(function(row) {
+            return React.createElement("div", { key: row.user_id, style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--gray-100)' } },
+              React.createElement("div", { style: { width: 28, height: 28, borderRadius: '50%', background: 'var(--gray-100)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--gray-500)' } },
+                row.photo_url ? React.createElement("img", { src: row.photo_url, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover' } }) : String(row.display_name || '?').slice(0, 2).toUpperCase()),
+              React.createElement("div", { style: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 } }, row.display_name || 'Unknown user'),
+              React.createElement("button", {
+                onClick: function() { allow(row); }, disabled: busyId === row.user_id,
+                style: { fontSize: 11, fontWeight: 700, padding: '6px 12px', border: '1px solid var(--gray-200)', background: '#fff', borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font)' }
+              }, busyId === row.user_id ? '…' : 'Allow')
+            );
+          })
+  );
+}
 
 // ★ Profile → Blocked accounts：看自己封鎖了誰、可以解除封鎖
 function BlockedAccountsSection(props) {
@@ -15663,30 +16064,52 @@ function _notifTitle(n) {
     'Notification'
   );
 }
+// ★ 2026-10-29 改版：
+//   - 一次顯示 5 則，底下「Show more · N older」每按一次再多 5 則
+//   - 未讀：淺藍底 + 左邊藍線 + 粗體標題 + NEW 標籤 + 藍色時間（原本只有很淡的底色跟小點，幾乎看不出來）
+//   - 每則左邊有類型小圖示；時間寫完整日期與時刻
+//   - grouped=true（手機通知整頁）→ 依 Today／Yesterday／Earlier 分組
 function NotificationList(props) {
   var notifs = props.notifs || [];
-  var limit = props.limit || 20;
-  if (notifs.length === 0) return React.createElement("div", { className: "notif-panel-empty" }, "No notifications yet");
+  var pageSize = props.pageSize || 5;
+  var _sh = React.useState(pageSize), shown = _sh[0], setShown = _sh[1];
+  if (notifs.length === 0) return React.createElement("div", { className: "notif-panel-empty" }, props.emptyText || "No notifications yet");
+  var visible = notifs.slice(0, shown);
+  var rest = notifs.length - visible.length;
+  var rows = [];
+  var lastGroup = null;
+  visible.forEach(function(n, idx) {
+    var ts = n.created_at || n.createdAt;
+    if (props.grouped) {
+      var g = _notifGroup(ts);
+      if (g !== lastGroup) { rows.push(React.createElement("div", { key: 'g-' + g, className: "notif-group" }, g)); lastGroup = g; }
+    }
+    var title = _notifTitle(n);
+    var body = n.body || n.message || '';
+    // ★ 2026-10-26：關心通知的專線換成這台裝置所在地區的號碼（後端寫的是不分地區的預設文字）
+    if (n.type === 'support_checkin') body = "Your post sounded like things might be heavy right now. You're not alone \u2014 " + _helplineSentence();
+    var timeLabel = _fmtNotifTime(ts, !!props.grouped);
+    rows.push(React.createElement("div", {
+      key: n.id || (title + idx),
+      className: "notif-row".concat(n.is_read ? '' : ' unread'),
+      onClick: function() { if (props.onItemClick) props.onItemClick(n); }
+    },
+      React.createElement("span", { className: "notif-ico", "aria-hidden": "true" }, _notifIcon(n.type)),
+      React.createElement("div", { className: "notif-row-body" },
+        React.createElement("div", { className: "notif-row-title" },
+          title,
+          !n.is_read && React.createElement("span", { className: "notif-new" }, "NEW")),
+        body && React.createElement("div", { className: "notif-row-text" }, body),
+        timeLabel && React.createElement("div", { className: "notif-row-time" }, timeLabel)
+      )
+    ));
+  });
   return React.createElement("div", { className: "notif-panel-list" },
-    notifs.slice(0, limit).map(function(n, idx) {
-      var title = _notifTitle(n);
-      var body = n.body || n.message || '';
-      // ★ 2026-10-26：關心通知的專線換成這台裝置所在地區的號碼（後端寫的是不分地區的預設文字）
-      if (n.type === 'support_checkin') body = "Your post sounded like things might be heavy right now. You're not alone \u2014 " + _helplineSentence();
-      var timeLabel = _fmtNotifTime(n.created_at || n.createdAt);
-      return React.createElement("div", {
-        key: n.id || (title + idx),
-        className: "notif-row".concat(n.is_read ? '' : ' unread'),
-        onClick: function() { if (props.onItemClick) props.onItemClick(n); }
-      },
-        !n.is_read && React.createElement("span", { className: "notif-dot" }),
-        React.createElement("div", { className: "notif-row-body" },
-          React.createElement("div", { className: "notif-row-title" }, title),
-          body && React.createElement("div", { className: "notif-row-text" }, body),
-          timeLabel && React.createElement("div", { className: "notif-row-time" }, timeLabel)
-        )
-      );
-    })
+    rows,
+    rest > 0 && React.createElement("button", {
+      className: "notif-more-btn",
+      onClick: function(e) { e.stopPropagation(); setShown(function(v) { return v + pageSize; }); }
+    }, "Show more", React.createElement("span", null, " \u00b7 " + rest + " older"))
   );
 }
 
