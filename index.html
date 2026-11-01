@@ -3685,11 +3685,16 @@ var ImageIcon = function ImageIcon() {
     d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
   }));
 };
-var VideoIcon = function VideoIcon() {
+// ★ 2026-11-01 修正：原本不接受任何參數，呼叫端傳的 style（寬高）完全沒作用，
+//   放在沒有限制大小的地方（例如 clip 編輯視窗的「Replace video」）就會被撐成超大圖示、把文字擠到旁邊。
+//   只有呼叫端有傳 style 才套用（其他地方的大小是 CSS 控制的，不能被 inline style 蓋掉）。
+var VideoIcon = function VideoIcon(props) {
+  var _st = props && props.style ? Object.assign({ flexShrink: 0 }, props.style) : undefined;
   return /*#__PURE__*/React.createElement("svg", {
     fill: "none",
     viewBox: "0 0 24 24",
-    stroke: "currentColor"
+    stroke: "currentColor",
+    style: _st
   }, /*#__PURE__*/React.createElement("path", {
     strokeLinecap: "round",
     strokeLinejoin: "round",
@@ -4226,11 +4231,20 @@ function _mediaFileToModerationBase64(file, type) {
 //   - 日期用使用者本地時間（toISODay），原本用 toISOString() 是 UTC，
 //     台灣早上 8 點前貼的 clip 會被算成前一天
 //   上傳 modal 右上角、Challengers / 自己的 clip 牆縮圖，三個地方共用這一支，數字才會一致。
-function _clipDayNumber(checkedDates, clipCreatedAt, todayCounts) {
+// ★ 2026-11-01 改版：Day N 改成「習慣開始那天算 Day 1」的日曆天數（傳入 timeRange 時）。
+//   原本是「第 N 個打卡日」——中間有幾天沒按打卡，數字就停住不動（例如 10/26 開始、只打卡過一次，
+//   到 11/1 貼 clip 還是顯示 Day 2），使用者會以為壞掉了。日曆天數每天一定往前走，也跟挑戰期間一致。
+//   沒有 timeRange（舊資料）時退回原本「第 N 個打卡日」的算法。
+function _clipDayNumber(checkedDates, clipCreatedAt, todayCounts, timeRange) {
   if (!clipCreatedAt) return null;
   var d = new Date(clipCreatedAt);
   if (isNaN(d.getTime())) return null;
   var day = (typeof toISODay === 'function') ? toISODay(d) : d.toISOString().slice(0, 10);
+  var _start = timeRange ? String(timeRange).split(/～|~/)[0].trim().replace(/\//g, '-') : '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(_start)) {
+    var _diff = Math.round((Date.parse(day + 'T00:00:00') - Date.parse(_start + 'T00:00:00')) / 86400000);
+    if (!isNaN(_diff)) return Math.max(1, _diff + 1);
+  }
   var seen = {};
   (checkedDates || []).forEach(function(x) {
     var k = x ? String(x).slice(0, 10) : '';
@@ -7064,7 +7078,7 @@ function ClipShareModal(props) {
   //   存檔也會一起改成公開（畫面上已經明確告知）。
   var audience = 'everyone';
   // 這支 clip 是這個習慣的第幾天（新 clip = 今天；編輯 = 當初貼的那天）
-  var clipDayNum = _clipDayNumber(habit.checkedDates, editingPost ? editingPost.created_at : new Date().toISOString(), habit.todayCounts);
+  var clipDayNum = _clipDayNumber(habit.checkedDates, editingPost ? editingPost.created_at : new Date().toISOString(), habit.todayCounts, habit.timeRange);
   // ★ 修正：hideHabitName 這個 boolean 本身沒有獨立欄位，是用存進去的 habit 顯示文字
   //   反推——如果當初存的不是完整習慣名稱，代表當初有勾選隱藏，編輯時要沿用，
   //   不然一存檔就會把原本藏起來的習慣名稱意外洩漏出去。
@@ -7221,7 +7235,8 @@ function ClipShareModal(props) {
     }, 'Day ' + clipDayNum),
     showExistingVideo
       ? /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
-          renderPostVideo(editingPost.media_url, { style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } }),
+          // ★ 2026-11-01：Bunny 播放器原本吃不到 maxHeight，直式影片會把視窗撐得很長；改成固定高度的 9:16 框、置中
+          renderPostVideo(editingPost.media_url, { wrapStyle: { width: 'auto', height: 'min(46vh, 360px)', maxHeight: 'none', aspectRatio: '9/16', margin: '0 auto', borderRadius: 8 }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } }),
           /*#__PURE__*/React.createElement("button", {
             onClick: function() { setReplacing(true); },
             style: { marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--gray-600)', background: 'none', border: '1px dashed var(--gray-300)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }
@@ -7233,7 +7248,7 @@ function ClipShareModal(props) {
           }, /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 22, height: 22 } }), "Choose a video",
             /*#__PURE__*/React.createElement("input", { type: 'file', accept: 'video/*', onChange: handleFileChange, style: { display: 'none' } }))
         : /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
-            renderPostVideo(previewUrl, { videoProps: { preload: 'metadata' }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } })
+            renderPostVideo(previewUrl, { videoProps: { preload: 'metadata' }, style: { width: '100%', maxHeight: 'min(46vh, 360px)', objectFit: 'contain', background: '#000', borderRadius: 8 } })
           )
     ), // ← Day 徽章外層 wrapper 結束
     /*#__PURE__*/React.createElement("textarea", {
@@ -7244,18 +7259,34 @@ function ClipShareModal(props) {
       style: { width: '100%', minHeight: 50, fontSize: 12, fontFamily: 'var(--font)', border: '1px solid var(--gray-200)', borderRadius: 8, padding: 8, margin: '10px 0', resize: 'vertical', boxSizing: 'border-box' }
     }),
     // ★ 2026-10：原本的「Who can see this（Everyone / Buddies only）」拿掉，改成醒目的公開提示
-    /*#__PURE__*/React.createElement("div", {
-      role: 'note',
-      style: { display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fff7e6', border: '1.5px solid #f59e0b', borderRadius: 10, padding: '12px 12px', marginBottom: 12 }
-    },
-      /*#__PURE__*/React.createElement("span", { "aria-hidden": "true", style: { fontSize: 20, lineHeight: 1 } }, "\ud83c\udf0d"),
-      /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: '#92400e', marginBottom: 3 } }, "This clip is public"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: '#78350f', lineHeight: 1.5 } },
-          "It will appear on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, where ", /*#__PURE__*/React.createElement("strong", null, "anyone on FamStreak"), " can watch it. It may also be shown to people you get matched with."
+    // ★ 2026-11-01：依習慣有沒有公開在 Challengers 顯示不同說明——
+    //   公開：Challengers 上所有人看得到，也可能出現在配對報告、你的夥伴看得到
+    //   不公開：不會出現在 Challengers，只會出現在 AI 配對報告（可能跟你配對的人）跟你的夥伴那裡
+    (habit.challengeVisibility === 'private'
+      ? /*#__PURE__*/React.createElement("div", {
+          role: 'note',
+          style: { display: 'flex', gap: 10, alignItems: 'flex-start', background: '#eef4fb', border: '1.5px solid #93b8e0', borderRadius: 10, padding: '12px 12px', marginBottom: 12 }
+        },
+          /*#__PURE__*/React.createElement("span", { "aria-hidden": "true", style: { fontSize: 20, lineHeight: 1 } }, "\ud83e\udd1d"),
+          /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: '#1e3a5f', marginBottom: 3 } }, "Only for partner matching"),
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: '#1e3a5f', lineHeight: 1.5 } },
+              "This habit isn't on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, so this clip won't be listed there. It may be shown in ", /*#__PURE__*/React.createElement("strong", null, "AI match reports"), " to people you could be matched with, and to your buddy."
+            )
+          )
         )
-      )
-    ),
+      : /*#__PURE__*/React.createElement("div", {
+          role: 'note',
+          style: { display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fff7e6', border: '1.5px solid #f59e0b', borderRadius: 10, padding: '12px 12px', marginBottom: 12 }
+        },
+          /*#__PURE__*/React.createElement("span", { "aria-hidden": "true", style: { fontSize: 20, lineHeight: 1 } }, "\ud83c\udf0d"),
+          /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: '#92400e', marginBottom: 3 } }, "This clip is public"),
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: '#78350f', lineHeight: 1.5 } },
+              "It will appear on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, where ", /*#__PURE__*/React.createElement("strong", null, "anyone on FamStreak"), " can watch it. It may also be shown in AI match reports and to your buddy."
+            )
+          )
+        )),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, background: 'var(--gray-50)', borderRadius: 8, padding: 10, marginBottom: 12 } },
       /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)', lineHeight: 1.5 } },
         "Don't want to show your face? Film your hands, your journal, or your setup instead \u2014 that counts too."
@@ -7362,7 +7393,7 @@ function ClipGridModal(props) {
       ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: 'var(--gray-400)', textAlign: 'center', padding: '24px 0' } }, 'No clips yet.')
       : /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 } },
           clips.map(function(p, idx) {
-            var dayNum = _clipDayNumber(challenger.checkedDates, p.created_at, challenger.todayCounts) || (idx + 1);
+            var dayNum = _clipDayNumber(challenger.checkedDates, p.created_at, challenger.todayCounts, challenger.timeRange) || (idx + 1);
             return /*#__PURE__*/React.createElement("div", {
               key: p.id || idx,
               onClick: function() {
@@ -11297,6 +11328,7 @@ function MainApp(_ref16) {
               streak: liveStreak,
               checkedDates: checkedDates,
               todayCounts: row.today_counts || {},
+              timeRange: row.time_range || '',   // ★ 2026-11-01：clip 的 Day N 要用習慣開始日算
               challengeVisibility: row.challenge_visibility,
               todayCheerCount: row.today_cheer_count || 0,
               displayName: row.display_name || '',
