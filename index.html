@@ -1970,6 +1970,49 @@
         body[data-theme="dark"] .likers-popover-hdr { background:var(--bg-card); border-color:var(--border-dk); }
         body[data-theme="dark"] .desktop-nav,
         body[data-theme="dark"] .desktop-topbar { border-color:var(--border-dk); }
+
+        /* ══════════════════════════════════════════════════════════════
+           ★ 2026-11-07：View all posts／View all comments／Habit History 的網頁版
+           左邊選單 + 中間內容（兩欄卡片）+ 右側統計欄（不放廣告）。手機版維持原本設計。
+           ══════════════════════════════════════════════════════════════ */
+        .dsp { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:32px; align-items:start; }
+        .dsp-hd { display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+        .dsp-back { background:none; border:none; cursor:pointer; font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gray-500); display:flex; align-items:center; gap:4px; font-family:var(--font); padding:0; }
+        .dsp-back:hover { color:var(--black); }
+        .dsp-title { font-family:var(--din); font-size:26px; font-weight:700; color:var(--text-primary,var(--black)); }
+        .dsp-search { margin-left:auto; width:280px; display:flex; align-items:center; gap:8px; border:1px solid var(--gray-200); background:var(--gray-50); padding:8px 12px; color:var(--gray-400); }
+        .dsp-search input { flex:1; border:none; outline:none; background:transparent; font-size:12px; font-family:var(--font); color:var(--text-primary,var(--black)); min-width:0; }
+        .dsp-search button { background:none; border:none; cursor:pointer; color:var(--gray-400); font-size:12px; padding:0; }
+        .dsp-grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
+        .desktop-shell .dsp-grid2 .feed-card { margin:0; max-width:none; border-radius:10px; overflow:hidden; }
+        .dsp-grid2 .archive-item { margin:0; border-radius:10px; }
+        .dsp-side { position:sticky; top:28px; display:flex; flex-direction:column; gap:14px; }
+        .dsp-box { border:1px solid var(--gray-200); border-radius:10px; padding:16px; background:var(--white); }
+        .dsp-box.dark { background:var(--black); color:#fff; border-color:var(--black); }
+        .dsp-k { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--gray-400); margin-bottom:8px; }
+        .dsp-n { font-family:var(--din); font-size:34px; font-weight:700; line-height:1; color:var(--text-primary,var(--black)); }
+        .dsp-pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .dsp-row { display:flex; align-items:center; gap:8px; font-size:12.5px; padding:5px 0; color:var(--text-primary,var(--black)); }
+        .dsp-row span:first-child { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .dsp-row b { font-weight:700; }
+        .dsp-empty { font-size:12px; color:var(--gray-400); }
+        .dsp-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+        .dsp-chip { border:1px solid var(--gray-200); background:var(--white); border-radius:999px; padding:6px 12px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:var(--font); color:var(--black); }
+        .dsp-chip.on { background:var(--black); color:var(--white); border-color:var(--black); }
+        .dsp-cmt { border:1px solid var(--gray-200); border-radius:10px; margin-bottom:10px; background:var(--white); }
+        .dsp-more { display:block; width:100%; margin-top:14px; }
+        /* Habit History：唯讀影片區（縮圖 + 支數 + 累計加油數，點開看全部；沒有 Add／Edit） */
+        .hclips { display:flex; align-items:center; gap:6px; margin:0 16px 12px; padding:6px; border:1px solid var(--gray-100); border-radius:8px; background:var(--gray-50); cursor:pointer; font-family:var(--font); width:calc(100% - 32px); text-align:left; }
+        .hclips:hover { border-color:var(--gray-300); }
+        .hclips-t { width:36px; height:48px; border-radius:6px; overflow:hidden; background:var(--gray-200); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+        .hclips-x { font-size:11px; color:var(--gray-500); line-height:1.4; margin-left:4px; }
+        .hclips-x b { color:var(--text-primary,var(--black)); display:block; }
+        .hclips-cheer { margin-left:auto; font-size:10.5px; font-weight:700; color:#993556; background:#fbeaf0; border-radius:999px; padding:3px 9px; white-space:nowrap; }
+        .hclips-none { margin:0 16px 12px; font-size:11px; color:var(--gray-400); }
+        body[data-theme="dark"] .dsp-box,
+        body[data-theme="dark"] .dsp-cmt,
+        body[data-theme="dark"] .dsp-chip:not(.on) { background:var(--bg-card); border-color:var(--border-dk); color:var(--text-primary); }
+        body[data-theme="dark"] .hclips { background:var(--bg-card); border-color:var(--border-dk); }
     </style>
 </head>
 <body>
@@ -5739,7 +5782,7 @@ function FeedCard(_ref5) {
   // context/props 一路傳下來（見 handlePostSubmit / ClipShareModal.handleSubmit）。
   useEffect(function() {
     function _onAutoEditPost(e) {
-      if (e && e.detail && e.detail.postId === post.id) {
+      if (e && e.detail && e.detail.postId === post.id && !_isPastHabitClip(post)) {
         handleStartEditPost();
       }
     }
@@ -6159,8 +6202,8 @@ function FeedCard(_ref5) {
         setLocalCommentCount(function(c) { return (c != null ? c : (post.commentCount != null ? post.commentCount : (post.comments || 0))) + 1; });
         setCommentText(''); handleRemoveCommentMedia();
         setSendingComment(false);
-        // 更新貼文留言數（fire-and-forget）
-        db.collection('posts').doc(post.id).update({ comments: FieldValue.increment(1), commentCount: FieldValue.increment(1) }).catch(function(){});
+        // ★ 2026-11-02：貼文留言數改由資料庫 trigger 自動重算（comment_count_trigger.sql）。
+        //   原本這裡自己 +1，但別人的貼文前端沒有權限改，留言數一直卡在 0。
         // [NEW 2026-09] 送出的留言被 AI 標記隱藏的話，提示「這則留言AI已標記XX類，
         // 目前只有你看得到，要重新編輯嗎？」——這裡跟貼文不一樣，同一支 FeedCard
         // 本來就在畫面上（本來就是在這則貼文底下留言的），直接就地開編輯面板就好，
@@ -6321,7 +6364,8 @@ function FeedCard(_ref5) {
   })), /*#__PURE__*/React.createElement("span", { style:{fontSize:10} }, "Delete")),
   isHidden && isOwner && renderModerationActionButtons(
     { status: postAppealStatus, onRequest: handleRequestPostAppeal },
-    handleStartEditPost
+    // ★ 2026-11-07：過去的習慣影片（不是今天傳的）只能刪除、不能再編輯；唯讀模式（Habit History）也不能編輯
+    (_isPastHabitClip(post) || _ref5.readOnly) ? null : handleStartEditPost
   )),
   showLikers && /*#__PURE__*/React.createElement("div", {
     className: "likers-popover"
@@ -6377,7 +6421,7 @@ function FeedCard(_ref5) {
         .then(function() {
           setComments(function(prev) { return prev.filter(function(x){ return x.id !== c.id; }); });
           setLocalCommentCount(function(n) { var base = n != null ? n : (post.commentCount != null ? post.commentCount : (post.comments || 0)); return Math.max(0, base - 1); });
-          db.collection('posts').doc(post.id).update({ commentCount: FieldValue.increment(-1), comments: FieldValue.increment(-1) }).catch(function(){});
+          // 貼文留言數由資料庫 trigger 自動重算（comment_count_trigger.sql），前端不用改
           if (alsoBan && window._supabaseClient) {
             window._supabaseClient.from('comment_bans').upsert(
               { owner_id: currentUser.uid, banned_user_id: String(c.userId) },
@@ -6517,17 +6561,8 @@ function FeedCard(_ref5) {
             db.collection('posts').doc(post.id).collection('comments').doc(c.id).delete()
               .then(function() {
                 setComments(function(prev) { return prev.filter(function(x){ return x.id !== c.id; }); });
-                db.collection('posts').doc(post.id).update({
-                  commentCount: FieldValue.increment(-1),
-                  comments: FieldValue.increment(-1)
-                }).then(function() {
-                  db.collection('posts').doc(post.id).get().then(function(doc) {
-                    if (!doc.exists) return;
-                    var d = doc.data();
-                    var cc = typeof d.commentCount === 'number' ? d.commentCount : (typeof d.comments === 'number' ? d.comments : 0);
-                    if (cc < 0) db.collection('posts').doc(post.id).update({ commentCount: 0, comments: 0 });
-                  });
-                }).catch(function(){});
+                // ★ 2026-11-02：畫面上的留言數直接 -1；資料庫的留言數由 trigger 自動重算（comment_count_trigger.sql）
+                setLocalCommentCount(function(n) { var base = n != null ? n : (post.commentCount != null ? post.commentCount : (post.comments || 0)); return Math.max(0, base - 1); });
               })
               .catch(function(err) { alert('Delete failed: ' + err.message); });
           }
@@ -6691,7 +6726,8 @@ function ClipViewerModal(props) {
       currentUser: currentUser,
       hideLikeAction: true,
       onReport: null,
-      onDelete: (currentUser && post.userId === currentUser.uid) ? handleDeleteClip : null
+      onDelete: (!props.readOnly && currentUser && post.userId === currentUser.uid) ? handleDeleteClip : null,
+      readOnly: !!props.readOnly
     })
   ));
 }
@@ -7352,7 +7388,8 @@ function _ClipThumb(props) {
 function ClipGridModal(props) {
   var challenger = props.challenger, currentUser = props.currentUser,
     cheered = props.cheered, onCheer = props.onCheer, onClose = props.onClose,
-    hideCheer = props.hideCheer; // ★ 新增：看自己的 clip 時傳 true，不顯示 Cheer 按鈕（自己不能幫自己 cheer）
+    hideCheer = props.hideCheer, // ★ 新增：看自己的 clip 時傳 true，不顯示 Cheer 按鈕（自己不能幫自己 cheer）
+    readOnly = !!props.readOnly; // ★ 2026-11-07：Habit History 打開的影片牆只能看（不能刪除、不能編輯）
   var _vp = React.useState(null); var viewingPost = _vp[0], setViewingPost = _vp[1];
   if (!challenger) return null;
   var clips = challenger.clips || (challenger.clip ? [challenger.clip] : []);
@@ -7430,6 +7467,7 @@ function ClipGridModal(props) {
     viewingPost && /*#__PURE__*/React.createElement(ClipViewerModal, {
       post: viewingPost,
       currentUser: currentUser,
+      readOnly: readOnly,
       onClose: function() { setViewingPost(null); }
     })
   ));
@@ -7447,10 +7485,83 @@ function _globalFormatTime(date) {
   return Math.floor(diff / 86400) + ' day ago';
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   ★ 2026-11-07：三個子頁面（My posts／My comments／Habit History）網頁版共用的小元件
+   ══════════════════════════════════════════════════════════════════ */
+// 網頁版頁首：‹ BACK ＋ 標題 ＋ 右邊搜尋框
+function _dspHeader(opts) {
+  return React.createElement("div", { className: "dsp-hd" },
+    React.createElement("button", { className: "dsp-back", onClick: opts.onBack },
+      React.createElement("svg", { width: 12, height: 12, fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
+        React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2.5, d: "M15 19l-7-7 7-7" })),
+      "Back"),
+    React.createElement("div", { className: "dsp-title" }, opts.title),
+    opts.setSearch && React.createElement("label", { className: "dsp-search" },
+      React.createElement("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2 },
+        React.createElement("circle", { cx: 11, cy: 11, r: 7 }), React.createElement("path", { d: "M21 21l-4.3-4.3", strokeLinecap: "round" })),
+      React.createElement("input", { type: "text", placeholder: opts.placeholder || "Search…", value: opts.search || '',
+        onChange: function(e) { opts.setSearch(e.target.value); } }),
+      opts.search && React.createElement("button", { type: "button", "aria-label": "Clear search", onClick: function() { opts.setSearch(''); } }, "✕"))
+  );
+}
+// 右側欄的「名稱 ……… 數字」清單；rows = [{ label, count, color? }]
+function _dspRows(rows, emptyText) {
+  if (!rows || rows.length === 0) return React.createElement("div", { className: "dsp-empty" }, emptyText || "Nothing yet");
+  return rows.map(function(r) {
+    return React.createElement("div", { key: r.label, className: "dsp-row" },
+      r.color && React.createElement("span", { style: { flex: 'none', width: 8, height: 8, borderRadius: '50%', background: r.color } }),
+      React.createElement("span", null, r.label),
+      React.createElement("b", null, r.count));
+  });
+}
+// 把 { key: count } 轉成依數量排序的清單（前 limit 名）
+function _dspTopCounts(map, limit) {
+  return Object.keys(map).map(function(k) { return { label: k, count: map[k] }; })
+    .sort(function(a, b) { return b.count - a.count || (a.label > b.label ? 1 : -1); })
+    .slice(0, limit || 6);
+}
+// 貼文的建立時間（feed 來的是 Timestamp-like 的 createdAt，影片牆直接查 Supabase 的是 created_at 字串）
+function _postCreatedDate(post) {
+  if (!post) return null;
+  var ts = post.createdAt;
+  if (ts && typeof ts.toDate === 'function') return ts.toDate();
+  var raw = (ts && typeof ts === 'string') ? ts : post.created_at;
+  if (raw) { var d = new Date(raw); return isNaN(d) ? null : d; }
+  return null;
+}
+// ★ 2026-11-07：「過去的」習慣影片（不是今天上傳的）只能刪除、不能再編輯
+function _isPastHabitClip(post) {
+  if (!post || !(post.isHabitClip || post.is_habit_clip)) return false;
+  var d = _postCreatedDate(post);
+  if (!d) return false;
+  return toISODay(d) !== toISODay();
+}
+// ★ 2026-11-07：Habit History 每張習慣卡上的唯讀影片區——只能點開看，沒有 Add／Edit clip
+function HistoryClipStrip(props) {
+  var clips = props.clips || [];
+  var cheers = props.cheers || 0;
+  if (clips.length === 0) return React.createElement("div", { className: "hclips-none" }, "No clips shared");
+  return React.createElement("button", {
+    type: "button", className: "hclips",
+    "aria-label": "View " + clips.length + " clip" + (clips.length === 1 ? '' : 's'),
+    onClick: function(e) { e.stopPropagation(); if (props.onView) props.onView(); }
+  },
+    clips.slice(0, 3).map(function(p) {
+      return React.createElement("span", { key: p.id, className: "hclips-t" }, React.createElement(_ClipThumb, { url: p.thumbnail_url }));
+    }),
+    React.createElement("span", { className: "hclips-x" },
+      React.createElement("b", null, clips.length + (clips.length === 1 ? ' clip' : ' clips')), "View all ›"),
+    cheers > 0 && React.createElement("span", { className: "hclips-cheer" }, "♥ " + cheers + (cheers === 1 ? ' cheer' : ' cheers'))
+  );
+}
+
 /* ── USER ALL POSTS PAGE ── */
 function UserPostsPage(_ref_upp) {
-  var user = _ref_upp.user, onBack = _ref_upp.onBack, onPostDeleted = _ref_upp.onPostDeleted;
+  var user = _ref_upp.user, onBack = _ref_upp.onBack, onPostDeleted = _ref_upp.onPostDeleted,
+    isDesktop = !!_ref_upp.isDesktop;
   var POSTS_PER_PAGE = 10;
+  // ★ 2026-11-07：網頁版右上角的搜尋（找貼文內文／習慣標籤）
+  var _spQ = useState(''), postSearch = _spQ[0], setPostSearch = _spQ[1];
   var _sp1 = useState([]),   _sp1a = _slicedToArray(_sp1, 2), allPosts = _sp1a[0], setAllPosts = _sp1a[1];
   var _sp2 = useState(0),    _sp2a = _slicedToArray(_sp2, 2), page = _sp2a[0],     setPage = _sp2a[1];
   var _sp3 = useState(true), _sp3a = _slicedToArray(_sp3, 2), loading = _sp3a[0],  setLoading = _sp3a[1];
@@ -7475,7 +7586,9 @@ function UserPostsPage(_ref_upp) {
       .where('userId', '==', user.uid)
       .get()
       .then(function(snap) {
-        var docs = snap.docs.map(parsePost);
+        // ★ 2026-11-07：習慣打卡影片不算「貼文」——跟 Community、Profile 的 My Posts 一致
+        //   （影片在 Home 的習慣卡、Habit History 裡看），數字才會跟其他頁面對得起來
+        var docs = snap.docs.map(parsePost).filter(function(p) { return !p.isHabitClip && !p.is_habit_clip; });
         docs.sort(function(a, b) { return b._sortTs - a._sortTs; });
         setAllPosts(docs);
         setLoading(false);
@@ -7520,9 +7633,70 @@ function UserPostsPage(_ref_upp) {
     if (onPostDeleted) onPostDeleted(postId);
   }
 
-  var visiblePosts = allPosts.slice(0, (page + 1) * POSTS_PER_PAGE);
-  var hasMore = allPosts.length > visiblePosts.length;
+  var _pq = postSearch.trim().toLowerCase();
+  var filteredPosts = _pq ? allPosts.filter(function(p) {
+    return ((p.text || '') + ' ' + (p.habit || '')).toLowerCase().indexOf(_pq) !== -1;
+  }) : allPosts;
+  var visiblePosts = filteredPosts.slice(0, (page + 1) * POSTS_PER_PAGE);
+  var hasMore = filteredPosts.length > visiblePosts.length;
   var displayName = (user && (user.displayName || user.email)) || 'User';
+
+  function _renderPostCard(p) {
+    var likedBy = Array.isArray(p.likedBy) ? p.likedBy : [];
+    var liked = likedBy.includes(user.uid);
+    return /*#__PURE__*/React.createElement(FeedCard, {
+      key: p.id,
+      post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
+      currentUser: user,
+      onLike: handleLikeInPage,
+      onReport: null,
+      onDelete: handleDeleteInPage
+    });
+  }
+
+  // ── ★ 2026-11-07：網頁版（兩欄貼文 + 右側統計，不放廣告）──
+  //   統計全部從這頁目前的 allPosts 即時算：按讚、刪除貼文後數字立刻跟著變，
+  //   刪除也會通知 MainApp 更新 Profile／Community 的資料（onPostDeleted）。
+  if (isDesktop) {
+    var _likesTotal = allPosts.reduce(function(s, p) { return s + (p.likes || 0); }, 0);
+    var _mostLiked = allPosts.reduce(function(best, p) { return (p.likes || 0) > ((best && best.likes) || 0) ? p : best; }, null);
+    var _byHabit = {}, _untagged = 0;
+    allPosts.forEach(function(p) { if (p.habit) _byHabit[p.habit] = (_byHabit[p.habit] || 0) + 1; else _untagged++; });
+    var _habitRows = _dspTopCounts(_byHabit, 8);
+    if (_untagged > 0) _habitRows.push({ label: 'No habit tag', count: _untagged });
+    var _mlThumb = _mostLiked && (_mostLiked.thumbnailUrl || _mostLiked.thumbnail_url || (_mostLiked.hasImage ? _mostLiked.mediaUrl : null));
+    return React.createElement("div", { className: "dsp" },
+      React.createElement("div", null,
+        _dspHeader({ title: 'My posts', onBack: onBack, search: postSearch, placeholder: 'Search my posts\u2026',
+          setSearch: function(v) { setPostSearch(v); setPage(0); } }),
+        loading
+          ? React.createElement("div", { className: "dsp-empty", style: { padding: '40px 0', textAlign: 'center' } }, "Loading\u2026")
+          : filteredPosts.length === 0
+            ? React.createElement("div", { className: "empty-state", style: { paddingTop: 40 } },
+                React.createElement("h3", null, _pq ? 'No matches' : 'No posts yet'),
+                React.createElement("p", null, _pq ? ('No posts match \u201c' + postSearch + '\u201d.') : 'Share your first post from your profile'))
+            : React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "dsp-grid2" }, visiblePosts.map(_renderPostCard)),
+                hasMore && React.createElement("button", { className: "view-all-posts-btn dsp-more",
+                  onClick: function() { setPage(function(prev) { return prev + 1; }); } }, "Load more"))
+      ),
+      React.createElement("div", { className: "dsp-side" },
+        React.createElement("div", { className: "dsp-box dsp-pair" },
+          React.createElement("div", null, React.createElement("div", { className: "dsp-k" }, "Total posts"), React.createElement("div", { className: "dsp-n" }, loading ? '\u2014' : allPosts.length)),
+          React.createElement("div", null, React.createElement("div", { className: "dsp-k" }, "Likes received"), React.createElement("div", { className: "dsp-n" }, loading ? '\u2014' : _likesTotal))),
+        _mostLiked && (_mostLiked.likes || 0) > 0 && React.createElement("div", { className: "dsp-box" },
+          React.createElement("div", { className: "dsp-k" }, "Most liked"),
+          React.createElement("div", { style: { display: 'flex', gap: 10, alignItems: 'center' } },
+            _mlThumb && React.createElement("img", { src: _mlThumb, alt: "", style: { width: 40, height: 40, borderRadius: 6, objectFit: 'cover', flexShrink: 0 } }),
+            React.createElement("div", { style: { minWidth: 0 } },
+              React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, _mostLiked.text || (_mostLiked.habit ? _mostLiked.habit : 'Photo post')),
+              React.createElement("div", { style: { fontSize: 11, color: 'var(--gray-400)', marginTop: 2 } }, "\u2661 " + (_mostLiked.likes || 0) + (_mostLiked.time ? ' \u00b7 ' + _mostLiked.time : ''))))),
+        React.createElement("div", { className: "dsp-box" },
+          React.createElement("div", { className: "dsp-k" }, "Posts by habit"),
+          _dspRows(_habitRows, loading ? 'Loading\u2026' : 'No posts yet'))
+      )
+    );
+  }
 
   return /*#__PURE__*/React.createElement('div', { className: 'app-container' },
     /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
@@ -7581,8 +7755,11 @@ function UserPostsPage(_ref_upp) {
 
 /* ── USER ALL COMMENTS PAGE ── */
 function UserCommentsPage(_ref_ucp) {
-  var user = _ref_ucp.user, onBack = _ref_ucp.onBack, onCommentDeleted = _ref_ucp.onCommentDeleted;
+  var user = _ref_ucp.user, onBack = _ref_ucp.onBack, onCommentDeleted = _ref_ucp.onCommentDeleted,
+    isDesktop = !!_ref_ucp.isDesktop;
   var COMMENTS_PER_PAGE = 10;
+  // ★ 2026-11-07：網頁版右上角的搜尋（找留言內容／原貼文作者）
+  var _scQ = useState(''), commentSearch = _scQ[0], setCommentSearch = _scQ[1];
   var _sc1 = useState([]),   _sc1a = _slicedToArray(_sc1, 2), allComments = _sc1a[0], setAllComments = _sc1a[1];
   var _sc2 = useState(0),    _sc2a = _slicedToArray(_sc2, 2), page = _sc2a[0],       setPage = _sc2a[1];
   var _sc3 = useState(true), _sc3a = _slicedToArray(_sc3, 2), loading = _sc3a[0],    setLoading = _sc3a[1];
@@ -7765,18 +7942,7 @@ function UserCommentsPage(_ref_ucp) {
     if (isFirebaseConfigured) {
       db.collection('posts').doc(postId).collection('comments').doc(commentId).delete()
         .then(function() {
-          db.collection('posts').doc(postId).update({
-            commentCount: FieldValue.increment(-1),
-            comments: FieldValue.increment(-1)
-          }).then(function() {
-            // Clamp: if Firestore value went negative, reset to 0
-            db.collection('posts').doc(postId).get().then(function(doc) {
-              if (!doc.exists) return;
-              var d = doc.data();
-              var cc = typeof d.commentCount === 'number' ? d.commentCount : (typeof d.comments === 'number' ? d.comments : 0);
-              if (cc < 0) db.collection('posts').doc(postId).update({ commentCount: 0, comments: 0 });
-            });
-          }).catch(function(){});
+          // ★ 2026-11-02：貼文留言數由資料庫 trigger 自動重算（comment_count_trigger.sql），前端不用改
         })
         .catch(function(err) { alert('Delete failed: ' + err.message); });
     }
@@ -7786,44 +7952,21 @@ function UserCommentsPage(_ref_ucp) {
   var displayName = (user && (user.displayName || user.email)) || 'User';
   var avatarUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('avatar_' + (user && user.uid)) : null;
   var avatarLetter = displayName[0].toUpperCase();
-  var visibleComments = allComments.slice(0, (page + 1) * COMMENTS_PER_PAGE);
-  var hasMore = allComments.length > visibleComments.length;
+  var _cq = commentSearch.trim().toLowerCase();
+  var filteredComments = _cq ? allComments.filter(function(c) {
+    return ((c.text || '') + ' ' + (c.postUser || '') + ' ' + (c.postText || '')).toLowerCase().indexOf(_cq) !== -1;
+  }) : allComments;
+  var visibleComments = filteredComments.slice(0, (page + 1) * COMMENTS_PER_PAGE);
+  var hasMore = filteredComments.length > visibleComments.length;
+  // ★ 2026-11-07：網頁版的留言卡（每則一張卡片，樣式跟手機版的同一份內容）
+  var _cmtWrapStyle = isDesktop ? { padding: '14px 16px' } : { borderBottom: '1px solid var(--gray-100)', padding: '14px 16px' };
 
-  return /*#__PURE__*/React.createElement('div', { className: 'app-container' },
-
-    /* nav */
-    /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
-      /*#__PURE__*/React.createElement('button', { className: 'history-nav-back', onClick: onBack },
-        /*#__PURE__*/React.createElement('svg', { width: 14, height: 14, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
-          /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2.5, d: 'M15 19l-7-7 7-7' })
-        ), 'Back'
-      ),
-      /*#__PURE__*/React.createElement('span', { className: 'history-nav-title' }, 'My Comments')
-    ),
-
-    /* dark banner */
-    /*#__PURE__*/React.createElement('div', { className: 'history-chart-section' },
-      /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Comment History'),
-      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
-        /*#__PURE__*/React.createElement('div', null,
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, loading ? '—' : allComments.length),
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Total Comments')
-        ),
-        /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
-          /*#__PURE__*/React.createElement('div', { style: { fontSize: 15, fontWeight: 700 } }, displayName)
-        )
-      )
-    ),
-
-    /* comment list */
-    /*#__PURE__*/React.createElement('div', { style: { paddingBottom: 80 } },
-      loading
+  var _commentListNode = loading
         ? /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--gray-400)', fontSize: 13 } }, 'Loading…')
-        : allComments.length === 0
+        : filteredComments.length === 0
           ? /*#__PURE__*/React.createElement('div', { className: 'empty-state', style: { paddingTop: 40 } },
-              /*#__PURE__*/React.createElement('h3', null, 'No comments yet'),
-              /*#__PURE__*/React.createElement('p', null, 'Start joining conversations in the feed')
+              /*#__PURE__*/React.createElement('h3', null, _cq ? 'No matches' : 'No comments yet'),
+              /*#__PURE__*/React.createElement('p', null, _cq ? ('No comments match \u201c' + commentSearch + '\u201d.') : 'Start joining conversations in the feed')
             )
           : /*#__PURE__*/React.createElement('div', null,
               visibleComments.map(function(c) {
@@ -7831,12 +7974,13 @@ function UserCommentsPage(_ref_ucp) {
                 var cLiked = cLikedBy.includes(user.uid);
                 return /*#__PURE__*/React.createElement('div', {
                   key: c.id,
-                  style: { borderBottom: '1px solid var(--gray-100)', padding: '14px 16px' }
+                  className: isDesktop ? 'dsp-cmt' : undefined,
+                  style: _cmtWrapStyle
                 },
                   /* context: which post this was on */
-                  c.postText && /*#__PURE__*/React.createElement('div', {
+                  (c.postText || (isDesktop && c.postUser)) && /*#__PURE__*/React.createElement('div', {
                     style: { fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 8, fontWeight: 600 }
-                  }, 'On post: ', /*#__PURE__*/React.createElement('span', { style: { fontWeight: 400, textTransform: 'none' } },
+                  }, isDesktop && c.postUser ? ('On ' + c.postUser + '\u2019s post' + (c.postText ? ': ' : '')) : 'On post: ', c.postText && /*#__PURE__*/React.createElement('span', { style: { fontWeight: 400, textTransform: 'none' } },
                     c.postText.slice(0, 60) + (c.postText.length > 60 ? '…' : '')
                   )),
                   /* comment card with avatar */
@@ -7909,11 +8053,62 @@ function UserCommentsPage(_ref_ucp) {
                 ? /*#__PURE__*/React.createElement('button', {
                     className: 'view-all-posts-btn',
                     onClick: function() { setPage(function(p) { return p + 1; }); },
-                    style: { margin: '8px 16px', width: 'calc(100% - 32px)' }
+                    style: isDesktop ? { margin: '8px 0', width: '100%' } : { margin: '8px 16px', width: 'calc(100% - 32px)' }
                   }, 'Load more')
                 : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All comments loaded —')
-            )
-    )
+            );
+
+  // ── ★ 2026-11-07：網頁版（留言清單 + 右側統計，不放廣告）──
+  //   統計從這頁目前的 allComments 即時算，刪除留言後數字立刻跟著變。
+  if (isDesktop) {
+    var _cLikes = allComments.reduce(function(s, c) { return s + (c.likes || 0); }, 0);
+    var _byAuthor = {};
+    allComments.forEach(function(c) { if (c.postUser) _byAuthor[c.postUser] = (_byAuthor[c.postUser] || 0) + 1; });
+    return React.createElement("div", { className: "dsp" },
+      React.createElement("div", null,
+        _dspHeader({ title: 'My comments', onBack: onBack, search: commentSearch, placeholder: 'Search my comments\u2026',
+          setSearch: function(v) { setCommentSearch(v); setPage(0); } }),
+        _commentListNode),
+      React.createElement("div", { className: "dsp-side" },
+        React.createElement("div", { className: "dsp-box dsp-pair" },
+          React.createElement("div", null, React.createElement("div", { className: "dsp-k" }, "Total comments"), React.createElement("div", { className: "dsp-n" }, loading ? '\u2014' : allComments.length)),
+          React.createElement("div", null, React.createElement("div", { className: "dsp-k" }, "Likes received"), React.createElement("div", { className: "dsp-n" }, loading ? '\u2014' : _cLikes))),
+        React.createElement("div", { className: "dsp-box" },
+          React.createElement("div", { className: "dsp-k" }, "Where you comment most"),
+          _dspRows(_dspTopCounts(_byAuthor, 6), loading ? 'Loading\u2026' : 'No comments yet'))
+      )
+    );
+  }
+
+  return /*#__PURE__*/React.createElement('div', { className: 'app-container' },
+
+    /* nav */
+    /*#__PURE__*/React.createElement('div', { className: 'history-nav' },
+      /*#__PURE__*/React.createElement('button', { className: 'history-nav-back', onClick: onBack },
+        /*#__PURE__*/React.createElement('svg', { width: 14, height: 14, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' },
+          /*#__PURE__*/React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2.5, d: 'M15 19l-7-7 7-7' })
+        ), 'Back'
+      ),
+      /*#__PURE__*/React.createElement('span', { className: 'history-nav-title' }, 'My Comments')
+    ),
+
+    /* dark banner */
+    /*#__PURE__*/React.createElement('div', { className: 'history-chart-section' },
+      /*#__PURE__*/React.createElement('div', { className: 'history-chart-title' }, 'Comment History'),
+      /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20 } },
+        /*#__PURE__*/React.createElement('div', null,
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 42, fontWeight: 700, fontFamily: 'var(--din)', lineHeight: 1 } }, loading ? '—' : allComments.length),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 10, opacity: .55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 } }, 'Total Comments')
+        ),
+        /*#__PURE__*/React.createElement('div', { style: { flex: 1, borderLeft: '1px solid rgba(255,255,255,.12)', paddingLeft: 20 } },
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 11, opacity: .55, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .8 } }, 'Author'),
+          /*#__PURE__*/React.createElement('div', { style: { fontSize: 15, fontWeight: 700 } }, displayName)
+        )
+      )
+    ),
+
+    /* comment list */
+    /*#__PURE__*/React.createElement('div', { style: { paddingBottom: 80 } }, _commentListNode)
   );
 }
 
@@ -8220,6 +8415,43 @@ function parseTimeRange(timeRange) {
    Used to gate the "Find Partner" button on the History/Archive page —
    keeps the frontend's idea of "≥7 days" consistent with what the
    server will actually verify when it re-checks the habits row. */
+// ══════════════════════════════════════════════════════════════════════
+// ★ 2026-11-02：「中斷太久」的統一定義（Challengers、Find Partner、配對名單、送邀請前檢查都用這一套，
+//   後端 match-partner v24 的 isHabitDormant 是同一個規則，改的話兩邊要一起改）
+//   - 有活動＝打卡（checkedDates ∪ todayCounts≥1），或上傳習慣影片
+//   - 每天做的習慣：最後一次活動距今 ≥ 7 天 → 中斷太久
+//   - 每 N 天一次的習慣：≥ 3 個週期（最少 7 天）→ 中斷太久
+//   - 從來沒有任何活動 → 用習慣開始日起算
+//   - 只是暫時：再打卡或上傳影片就立刻恢復，累計天數、解鎖資格都不會被扣掉
+// ══════════════════════════════════════════════════════════════════════
+function _habitDormantAfterDays(h) {
+  var iv = Number((h && (h.intervalDays != null ? h.intervalDays : h.interval_days)) || 1);
+  return iv <= 1 ? 7 : Math.max(7, iv * 3);
+}
+// lastClipDay（選填）：這個習慣最近一支影片的日期 'YYYY-MM-DD'
+function _habitLastActiveDay(h, lastClipDay) {
+  var last = '';
+  (h && h.checkedDates || []).forEach(function(d) { var k = d ? String(d).slice(0, 10) : ''; if (k > last) last = k; });
+  var tc = (h && h.todayCounts) || {};
+  Object.keys(tc).forEach(function(k) { if ((tc[k] || 0) >= 1 && k > last) last = k; });
+  if (lastClipDay && lastClipDay > last) last = lastClipDay;
+  return last;
+}
+function _habitDaysSinceActive(h, lastClipDay) {
+  var last = _habitLastActiveDay(h, lastClipDay);
+  if (!last) {
+    var tr = h && (h.timeRange || h.time_range);
+    last = tr ? String(tr).split(/～|~/)[0].trim().replace(/\//g, '-') : '';
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(last)) return 0;
+  var today = toISODay();
+  if (last >= today) return 0;
+  return Math.round((Date.parse(today + 'T00:00:00') - Date.parse(last + 'T00:00:00')) / 86400000);
+}
+function _isHabitDormant(h, lastClipDay) {
+  return _habitDaysSinceActive(h, lastClipDay) >= _habitDormantAfterDays(h);
+}
+
 function countCheckedDays(habit) {
   var dayset = {};
   (habit.checkedDates || []).forEach(function(d) { if (d) dayset[String(d).slice(0,10)] = true; });
@@ -9615,7 +9847,15 @@ function HistoryPage(_ref15) {
     aiCredits = _ref15.aiCredits,
     aiCreditMax = _ref15.aiCreditMax || 10,
     onGoToBuddies = _ref15.onGoToBuddies,
-    onBack = _ref15.onBack;
+    onBack = _ref15.onBack,
+    isDesktop = !!_ref15.isDesktop,
+    // ★ 2026-11-07：唯讀影片區用的資料——跟 Home 習慣卡同一份（MainApp 的 myClipStatusByHabit／habitCheers），
+    //   不另外查，數字跟 Home 永遠一致
+    clipsByHabit = _ref15.clipsByHabit || {},
+    habitCheers = _ref15.habitCheers || {};
+  // ★ 2026-11-07：點影片區打開的影片牆（唯讀）、網頁版的分類篩選
+  var _hpClipV = useState(null), viewingClipsHabit = _hpClipV[0], setViewingClipsHabit = _hpClipV[1];
+  var _hpCat = useState('all'), historyCat = _hpCat[0], setHistoryCat = _hpCat[1];
   var _useStateHP = useState(10),
     _useStateHP2 = _slicedToArray(_useStateHP, 2),
     visibleCount = _useStateHP2[0],
@@ -9659,6 +9899,10 @@ function HistoryPage(_ref15) {
   var searchedSorted = _historySearchTrimmed
     ? sorted.filter(function(h) { return (h.name || '').toLowerCase().indexOf(_historySearchTrimmed) !== -1; })
     : sorted;
+  // ★ 2026-11-07：網頁版上方的分類篩選（All／Partner matching／各分類）；手機版沒有這排，維持 'all'
+  if (historyCat !== 'all' && historyCat !== '__partner') {
+    searchedSorted = searchedSorted.filter(function(h) { return (h.category || 'Other') === historyCat; });
+  }
   // ★ 2026-10：「配對進行中」的習慣置頂——背景在找、已經找到候選人、邀請在等回覆、
   //   或已經有夥伴。歷史習慣可能很多，不置頂的話，在很下面的習慣按了 Find Partner，
   //   之後要看報告就得一路往下滑找。其他習慣維持原本「最新到期的在前」排序。
@@ -9673,6 +9917,7 @@ function HistoryPage(_ref15) {
   var _hpPinnedIds = new Set(_hpPinned.map(function(h) { return h.id; }));
   searchedSorted = _hpPinned.concat(searchedSorted.filter(function(h) { return !_hpPinnedIds.has(h.id); }));
   var _hpPinnedCount = _hpPinned.length;
+  if (historyCat === '__partner') { searchedSorted = _hpPinned; }
   var visibleSorted = searchedSorted.slice(0, visibleCount);
   var hasMore = searchedSorted.length > visibleCount;
 
@@ -9722,6 +9967,174 @@ function HistoryPage(_ref15) {
   var highCount = sorted.filter(function (h) {
     return (h.finalRate || 0) >= 70;
   }).length;
+  // ★ 2026-11-07：一張習慣卡（手機版、網頁版共用）
+  function _renderHistoryCard(h, i) {
+    var r = h.finalRate || 0;
+    var barColor = r >= 70 ? '#4ade80' : r >= 40 ? '#fbbf24' : '#f87171';
+    var textColor = r >= 70 ? '#16a34a' : r >= 40 ? '#d97706' : '#dc2626';
+    // ★ 2026-10：置頂區塊的小標題（有置頂的習慣才顯示）
+    var _hpHeader = _hpPinnedCount > 0 && (i === 0 || i === _hpPinnedCount)
+      ? React.createElement("div", {
+          style: { fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gray-400)', margin: isDesktop ? (i === 0 ? '0' : '8px 0 0') : (i === 0 ? '4px 0 8px' : '18px 0 8px'), gridColumn: '1 / -1' }
+        }, i === 0 ? "\ud83e\udd1d Partner activity" : "Past habits")
+      : null;
+    return /*#__PURE__*/React.createElement(React.Fragment, { key: h.id || i }, _hpHeader, React.createElement("div", {
+      id: "history-habit-" + h.id,
+      className: "archive-item"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "archive-item-top"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "archive-item-left"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "archive-item-name"
+    }, h.name), /*#__PURE__*/React.createElement("div", {
+      className: "archive-item-range"
+    }, h.timeRange || '—', h.archivedAt && " \xB7 Ended ".concat(h.archivedAt))), /*#__PURE__*/React.createElement("div", {
+      className: "archive-rate-circle",
+      style: {
+        position: 'relative'
+      }
+    }, /*#__PURE__*/React.createElement(MiniDonut, {
+      pct: r
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%,-50%)',
+        fontSize: 10,
+        fontWeight: 700,
+        fontFamily: 'var(--din)',
+        color: textColor,
+        textAlign: 'center',
+        lineHeight: 1
+      }
+    }, r, "%"))), /*#__PURE__*/React.createElement("div", {
+      className: "archive-prog-bar"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "archive-prog-fill",
+      style: {
+        width: "".concat(r, "%"),
+        background: barColor
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "archive-item-tags"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "archive-tag"
+    }, h.category), h.freqLabel && /*#__PURE__*/React.createElement("span", {
+      className: "archive-tag"
+    }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
+      className: "archive-tag"
+    }, h.durLabel)),
+    /* ★ 2026-11-07：唯讀影片區——跟 Home 一樣的縮圖＋支數＋累計加油數，點開看全部；
+       習慣已經到期，所以沒有 Add／Edit clip。手動刪除的習慣影片已經一起刪掉，不顯示這區；
+       private 習慣本來就不能傳影片，也不顯示。 */
+    (h._isLive && h.challengeVisibility !== 'private') && React.createElement(HistoryClipStrip, {
+      clips: (clipsByHabit[h.id] && clipsByHabit[h.id].allPosts) || [],
+      cheers: (habitCheers[h.id] && habitCheers[h.id].totalCount) || 0,
+      onView: function() { setViewingClipsHabit(h); }
+    }),
+    /* ★ 2026-09 統一：到期但仍在 habits 表裡（沒被手動刪除）、打卡天數已經
+       ≥ PARTNER_UNLOCK_DAYS 的習慣——之前這批已經證明過自己會堅持的習慣，
+       挑戰一到期就再也叫不出配對按鈕了。跟 Home 共用同一套
+       getHabitPairState/renderHabitPartnerStatus，active/pending/declined/
+       ended/seeking 都能正確顯示，不再只是「有沒有 active」這個永遠判斷
+       不出結果的舊邏輯（habit_id/partner_habit_id 這兩欄資料庫裡根本不存在）。
+       沒解鎖過 Find Partner 的習慣（_checkedDays < PARTNER_UNLOCK_DAYS）
+       維持不顯示任何東西。 */
+    (h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS) && /*#__PURE__*/React.createElement("div", {
+      style: { padding:'10px 16px 14px', borderTop:'1px solid var(--gray-100)', marginTop:10 },
+      onClick: function(e) { e.stopPropagation(); }
+    }, renderHabitPartnerStatus(getHabitPairState(h, user.uid), {
+      habitName: h.name,
+      onFindPartner: function() { window.openMatchingModal(h); },
+      onEndPartnership: function(pair) { endPartnershipDirect(pair); },
+      onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
+      onGoToBuddies: function() { if (onGoToBuddies) onGoToBuddies(); },
+      onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(h, st.pendingMatchData); },
+      onDismissFoundMatch: function() { if (window._dismissFoundMatchKeepSearching) window._dismissFoundMatchKeepSearching(h.id); }
+    }))));
+  }
+
+  // ★ 2026-11-07：唯讀影片牆（點影片區打開；不能刪除、不能編輯）
+  var _clipWall = viewingClipsHabit && React.createElement(ClipGridModal, {
+    challenger: {
+      userId: user.uid,
+      displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'You'),
+      userAvatar: user.photoURL || null,
+      name: viewingClipsHabit.name,
+      streak: countCheckedDays(viewingClipsHabit),
+      checkedDates: viewingClipsHabit.checkedDates,
+      todayCounts: viewingClipsHabit.todayCounts,
+      timeRange: viewingClipsHabit.timeRange,
+      clips: (clipsByHabit[viewingClipsHabit.id] && clipsByHabit[viewingClipsHabit.id].allPosts) || []
+    },
+    currentUser: user,
+    cheered: true,
+    hideCheer: true,
+    readOnly: true,
+    onCheer: function() {},
+    onClose: function() { setViewingClipsHabit(null); }
+  });
+
+  // ── ★ 2026-11-07：網頁版（兩欄習慣卡 + 右側 AI Credits／統計，不放廣告）──
+  //   AI Credits 跟 Profile 同一個 aiCredits；完成數、平均完成率、分類數全部從同一份
+  //   habits／archivedHabits 即時算，跟 Home、Profile 顯示的資料來源一樣。
+  if (isDesktop) {
+    var _catColours = { 'Fitness': '#16a34a', 'Nutrition': '#d97706', 'Skincare': '#ec4899', 'Sleep': '#7c3aed', 'Mindfulness': '#0284c7', 'Hydration': '#0891b2', 'Learning': '#2563eb' };
+    var _byCat = {};
+    sorted.forEach(function(h) { var c = h.category || 'Other'; _byCat[c] = (_byCat[c] || 0) + 1; });
+    var _catRows = _dspTopCounts(_byCat, 10).map(function(r) { return Object.assign(r, { color: _catColours[r.label] || '#6b7280' }); });
+    var _chips = [{ key: 'all', label: 'All \u00b7 ' + sorted.length }];
+    if (_hpPinnedCount > 0 || historyCat === '__partner') _chips.push({ key: '__partner', label: 'Partner matching \u00b7 ' + _hpPinnedCount });
+    _catRows.forEach(function(r) { _chips.push({ key: r.label, label: r.label }); });
+    var _creditPct = aiCredits != null ? Math.min(1, Math.max(0, aiCredits / aiCreditMax)) : 0;
+    return React.createElement("div", { className: "dsp" },
+      React.createElement("div", null,
+        _dspHeader({ title: 'Habit History', onBack: onBack, search: historySearch, placeholder: 'Search past habits\u2026',
+          setSearch: sorted.length > 0 ? function(v) { setHistorySearch(v); setVisibleCount(10); } : null }),
+        sorted.length > 0 && React.createElement("div", { className: "dsp-chips" }, _chips.map(function(c) {
+          return React.createElement("button", { key: c.key, className: "dsp-chip" + (historyCat === c.key ? ' on' : ''),
+            onClick: function() { setHistoryCat(c.key); setVisibleCount(10); } }, c.label);
+        })),
+        sorted.length === 0
+          ? React.createElement("div", { className: "empty-state", style: { paddingTop: 40 } },
+              React.createElement("h3", null, "No history yet"),
+              React.createElement("p", null, "Habits will appear here once their end date has passed."))
+          : searchedSorted.length === 0
+            ? React.createElement("div", { className: "empty-state", style: { paddingTop: 40 } },
+                React.createElement("h3", null, "No matches"),
+                React.createElement("p", null, historySearch ? ('No past habits match \u201c' + historySearch + '\u201d.') : 'No past habits in this category.'))
+            : React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "dsp-grid2" }, visibleSorted.map(_renderHistoryCard)),
+                hasMore && React.createElement("button", { className: "view-all-posts-btn dsp-more",
+                  onClick: function() { setVisibleCount(function(c) { return c + 10; }); } },
+                  "Load more (" + (searchedSorted.length - visibleCount) + " remaining)"))
+      ),
+      React.createElement("div", { className: "dsp-side" },
+        aiCredits != null && React.createElement("div", { className: "dsp-box dark" },
+          React.createElement("div", { className: "dsp-k", style: { color: '#888' } }, "AI Credits"),
+          React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+            React.createElement("div", { style: { position: 'relative', width: 48, height: 48, flexShrink: 0 } },
+              React.createElement("svg", { width: 48, height: 48, style: { transform: 'rotate(-90deg)' } },
+                React.createElement("circle", { cx: 24, cy: 24, r: 19, fill: "none", stroke: "rgba(96,165,250,0.18)", strokeWidth: 5 }),
+                React.createElement("circle", { cx: 24, cy: 24, r: 19, fill: "none", stroke: "#60a5fa", strokeWidth: 5,
+                  strokeDasharray: (_creditPct * 2 * Math.PI * 19) + " " + (2 * Math.PI * 19) })),
+              React.createElement("div", { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--din)', fontWeight: 700, fontSize: 17, color: '#60a5fa' } }, aiCredits)),
+            React.createElement("div", null,
+              React.createElement("div", { style: { fontFamily: 'var(--din)', fontWeight: 700, fontSize: 16, color: '#60a5fa' } }, aiCredits + " of " + aiCreditMax + " credits"),
+              React.createElement("div", { style: { fontSize: 11, opacity: .6, marginTop: 2 } },
+                aiCredits <= 0 ? 'Out of credits \u2014 log in tomorrow for +1' : (aiCredits >= aiCreditMax ? 'Maxed out \u00b7 1 search uses 1 credit' : '+1 every day you log in \u00b7 max ' + aiCreditMax))))),
+        React.createElement("div", { className: "dsp-box dsp-pair" },
+          React.createElement("div", null, React.createElement("div", { className: "dsp-k" }, "Completed"), React.createElement("div", { className: "dsp-n" }, totalCompleted)),
+          React.createElement("div", null, React.createElement("div", { className: "dsp-k" }, "Avg. completion"), React.createElement("div", { className: "dsp-n" }, expiredAvg + "%"))),
+        React.createElement("div", { className: "dsp-box" },
+          React.createElement("div", { className: "dsp-k" }, "By category"),
+          _dspRows(_catRows, 'No past habits yet'))
+      ),
+      _clipWall
+    );
+  }
   return /*#__PURE__*/React.createElement("div", {
     className: "app-container",
     style: {
@@ -9865,85 +10278,7 @@ function HistoryPage(_ref15) {
       color: 'var(--gray-300)',
       lineHeight: 1.6
     }
-  }, "No past habits match \u201c", historySearch, "\u201d.")) : visibleSorted.map(function (h, i) {
-    var r = h.finalRate || 0;
-    var barColor = r >= 70 ? '#4ade80' : r >= 40 ? '#fbbf24' : '#f87171';
-    var textColor = r >= 70 ? '#16a34a' : r >= 40 ? '#d97706' : '#dc2626';
-    // ★ 2026-10：置頂區塊的小標題（有置頂的習慣才顯示）
-    var _hpHeader = _hpPinnedCount > 0 && (i === 0 || i === _hpPinnedCount)
-      ? React.createElement("div", {
-          style: { fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gray-400)', margin: i === 0 ? '4px 0 8px' : '18px 0 8px' }
-        }, i === 0 ? "\ud83e\udd1d Partner activity" : "Past habits")
-      : null;
-    return /*#__PURE__*/React.createElement(React.Fragment, { key: h.id || i }, _hpHeader, React.createElement("div", {
-      id: "history-habit-" + h.id,
-      className: "archive-item"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "archive-item-top"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "archive-item-left"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "archive-item-name"
-    }, h.name), /*#__PURE__*/React.createElement("div", {
-      className: "archive-item-range"
-    }, h.timeRange || '—', h.archivedAt && " \xB7 Ended ".concat(h.archivedAt))), /*#__PURE__*/React.createElement("div", {
-      className: "archive-rate-circle",
-      style: {
-        position: 'relative'
-      }
-    }, /*#__PURE__*/React.createElement(MiniDonut, {
-      pct: r
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%,-50%)',
-        fontSize: 10,
-        fontWeight: 700,
-        fontFamily: 'var(--din)',
-        color: textColor,
-        textAlign: 'center',
-        lineHeight: 1
-      }
-    }, r, "%"))), /*#__PURE__*/React.createElement("div", {
-      className: "archive-prog-bar"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "archive-prog-fill",
-      style: {
-        width: "".concat(r, "%"),
-        background: barColor
-      }
-    })), /*#__PURE__*/React.createElement("div", {
-      className: "archive-item-tags"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "archive-tag"
-    }, h.category), h.freqLabel && /*#__PURE__*/React.createElement("span", {
-      className: "archive-tag"
-    }, h.freqLabel), h.durLabel && /*#__PURE__*/React.createElement("span", {
-      className: "archive-tag"
-    }, h.durLabel)),
-    /* ★ 2026-09 統一：到期但仍在 habits 表裡（沒被手動刪除）、打卡天數已經
-       ≥ PARTNER_UNLOCK_DAYS 的習慣——之前這批已經證明過自己會堅持的習慣，
-       挑戰一到期就再也叫不出配對按鈕了。跟 Home 共用同一套
-       getHabitPairState/renderHabitPartnerStatus，active/pending/declined/
-       ended/seeking 都能正確顯示，不再只是「有沒有 active」這個永遠判斷
-       不出結果的舊邏輯（habit_id/partner_habit_id 這兩欄資料庫裡根本不存在）。
-       沒解鎖過 Find Partner 的習慣（_checkedDays < PARTNER_UNLOCK_DAYS）
-       維持不顯示任何東西。 */
-    (h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS) && /*#__PURE__*/React.createElement("div", {
-      style: { padding:'10px 16px 14px', borderTop:'1px solid var(--gray-100)', marginTop:10 },
-      onClick: function(e) { e.stopPropagation(); }
-    }, renderHabitPartnerStatus(getHabitPairState(h, user.uid), {
-      habitName: h.name,
-      onFindPartner: function() { window.openMatchingModal(h); },
-      onEndPartnership: function(pair) { endPartnershipDirect(pair); },
-      onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
-      onGoToBuddies: function() { if (onGoToBuddies) onGoToBuddies(); },
-      onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(h, st.pendingMatchData); },
-      onDismissFoundMatch: function() { if (window._dismissFoundMatchKeepSearching) window._dismissFoundMatchKeepSearching(h.id); }
-    }))));
-  }), hasMore && /*#__PURE__*/React.createElement("div", {
+  }, "No past habits match \u201c", historySearch, "\u201d.")) : visibleSorted.map(_renderHistoryCard), hasMore && /*#__PURE__*/React.createElement("div", {
     style: { padding: '16px 0 0', textAlign: 'center' }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function() { setVisibleCount(function(c) { return c + 10; }); },
@@ -9969,7 +10304,7 @@ function HistoryPage(_ref15) {
       height: 40,
       background: 'var(--white)'
     }
-  })));
+  })), _clipWall);
 }
 
 /* ── DESKTOP NAV（桌面版左側常駐導覽，取代手機版底部 tab-bar）── */
@@ -10444,6 +10779,8 @@ function MainApp(_ref16) {
           var todayPost = list.find(function(p) { return (p.created_at || '').slice(0, 10) === todayISOStr; }) || null;
           _status[hid] = {
             totalCount: list.length,
+            // ★ 2026-11-02：最近一支影片的日期（判斷「中斷太久」時，上傳影片也算有活動）
+            lastDay: (list[0] && list[0].created_at) ? toISODay(new Date(list[0].created_at)) : '',
             post: todayPost,
             visibility: todayPost ? todayPost.clip_visibility : null,
             reacted: false,
@@ -10464,6 +10801,17 @@ function MainApp(_ref16) {
           }).catch(function() { setMyClipStatusByHabit(_status); });
       }).catch(function() {});
   }, [user, habits.length, clipStatusRefreshTick]);
+  // ★ 2026-11-07：Profile「View all posts (N)」的 N 改成資料庫裡真正的貼文總數。
+  //   原本用的是 myPosts（只是 Community 第一頁裡剛好是自己的貼文），舊貼文一多就跟
+  //   My posts 頁面的 Total posts 對不起來。習慣打卡影片不算貼文（跟 My posts 頁一致）。
+  var _useStateMPT = useState(null), myPostTotal = _useStateMPT[0], setMyPostTotal = _useStateMPT[1];
+  var refreshMyPostTotal = React.useCallback(function() {
+    if (!user || !window._supabaseClient) return;
+    window._supabaseClient.from('posts').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.uid).or('is_habit_clip.is.null,is_habit_clip.eq.false')
+      .then(function(r) { if (!r.error && typeof r.count === 'number') setMyPostTotal(r.count); })
+      .catch(function() {});
+  }, [user && user.uid]);
   var _useState73 = useState([]),
     _useState74 = _slicedToArray(_useState73, 2),
     archivedHabits = _useState74[0],
@@ -10509,6 +10857,8 @@ function MainApp(_ref16) {
     _useState88 = _slicedToArray(_useState87, 2),
     myPosts = _useState88[0],
     setMyPosts = _useState88[1];
+  // ★ 2026-11-07：發文／刪文（myPosts 數量變動）後重新抓一次貼文總數，Profile 跟 My posts 頁數字一致
+  React.useEffect(function() { refreshMyPostTotal(); }, [refreshMyPostTotal, myPosts.length]);
   var _useState89 = useState(''),
     _useState90 = _slicedToArray(_useState89, 2),
     postText = _useState90[0],
@@ -11107,7 +11457,17 @@ function MainApp(_ref16) {
 
   // Challengers + PTR state
   var [feedSubTab, setFeedSubTab] = React.useState('community');
-  var [challengers, setChallengers] = React.useState([]);
+  // ★ 2026-11-07：Challengers 秒開——先顯示這台裝置上「今天」存的上一份名單，背景再更新
+  //   （名單規則跟日期有關，所以只沿用今天的快取；讀不到就當作沒有）
+  var _chalCacheKey = '_chal_cache_v1_' + ((user && user.uid) || '');
+  var [challengers, setChallengers] = React.useState(function() {
+    try {
+      var c = JSON.parse(localStorage.getItem(_chalCacheKey) || 'null');
+      if (c && c.day === toISODay() && Array.isArray(c.list)) return c.list;
+    } catch (e) {}
+    return [];
+  });
+  var [challengersLoaded, setChallengersLoaded] = React.useState(false);
   var [cheerMap, setCheerMap] = React.useState({});
   var [viewingChallengerKey, setViewingChallengerKey] = React.useState(null); // Challenger 卡片影片全螢幕檢視（Concept B）
   var [showClipShareForHabit, setShowClipShareForHabit] = React.useState(null); // Home 頁「Add a clip」開啟的分享設定 modal，存目前的 habit 物件
@@ -11329,6 +11689,7 @@ function MainApp(_ref16) {
               checkedDates: checkedDates,
               todayCounts: row.today_counts || {},
               timeRange: row.time_range || '',   // ★ 2026-11-01：clip 的 Day N 要用習慣開始日算
+              intervalDays: row.interval_days || 1, // ★ 2026-11-02：「中斷太久」依習慣頻率計算
               challengeVisibility: row.challenge_visibility,
               todayCheerCount: row.today_cheer_count || 0,
               displayName: row.display_name || '',
@@ -11349,6 +11710,38 @@ function MainApp(_ref16) {
           return list;
         });
 
+    // ★ 2026-11-02：Challengers 改成「有上傳過公開習慣影片才上榜」——先把每個習慣的
+    //   公開影片數（_clipCount）跟最近一支影片的日期（_lastClipDay）抓回來，下面篩選要用。
+    //   被隱藏的影片不算。
+    promise = promise.then(function(list) {
+      if (!_sb || !list.length) return list;
+      // ★ 2026-11-07：這裡一次把卡片要顯示的欄位也抓齊（_clipRows），後面就不用再查一次 posts
+      return _sb.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
+        .eq('is_habit_clip', true).eq('clip_visibility', 'everyone')
+        .in('habit_id', list.map(function(h) { return h.id; }))
+        .order('created_at', { ascending: true })
+        .then(function(r) {
+          var info = {};
+          var rowsByHabit = {};
+          ((r && r.data) || []).forEach(function(p) {
+            if (!p.habit_id) return;
+            (rowsByHabit[String(p.habit_id)] = rowsByHabit[String(p.habit_id)] || []).push(p);
+            if (p.moderation_status === 'hidden') return;
+            var k = String(p.habit_id);
+            var day = p.created_at ? toISODay(new Date(p.created_at)) : '';
+            var cur = info[k] || (info[k] = { count: 0, last: '' });
+            cur.count++;
+            if (day > cur.last) cur.last = day;
+          });
+          list.forEach(function(h) {
+            var i = info[String(h.id)];
+            h._clipCount = i ? i.count : 0; h._lastClipDay = i ? i.last : '';
+            h._clipRows = (r && !r.error) ? (rowsByHabit[String(h.id)] || []) : null;
+          });
+          return list;
+        }, function() { return list; });
+    });
+
     promise.then(function(list) {
       console.log('[Challenger DEBUG] 查詢回傳習慣數(他人):', list.length, list.map(function(h){ return { name:h.name, checkedDates:h.checkedDates, todayCounts:h.todayCounts, visibility:h.challengeVisibility }; }));
       // ── Filter 0: 排除設為私密(private)的習慣（用戶建立時選擇不公開）──
@@ -11368,22 +11761,24 @@ function MainApp(_ref16) {
       }
       var yesterdayISO = (function(){ var d=new Date(); d.setDate(d.getDate()-1); return toISODay(d); })();
       console.log('[Challenger DEBUG] todayISO=', todayISO, 'yesterdayISO=', yesterdayISO, 'CHALLENGER_UNLOCK_DAYS=', CHALLENGER_UNLOCK_DAYS);
-      // ── Filter 1: 今天或昨天至少打過 1 次卡（今天還沒打的也顯示，讓別人 cheer 鼓勵）
+      // ── Filter 1（2026-11-02 改）：有上傳過公開習慣影片，而且沒有「中斷太久」──
+      //   原本是「今天或昨天有打卡」，只上傳影片沒按打卡的人會整個消失。現在改成：
+      //   有影片就上榜；最後一次活動（打卡或影片）距今太久才暫時下榜，再打卡／上傳就回來。
       list = list.filter(function(h) {
-        if (checkedInToday(h)) return true;
-        var tc = h.todayCounts || {};
-        if ((h.checkedDates || []).includes(yesterdayISO)) return true;
-        if ((tc[yesterdayISO] || 0) >= 1) return true;
-        return false;
+        if (!(h._clipCount > 0)) return false;
+        // 已經到期（進了 Habit History）的習慣不算「正在挑戰」，不上榜
+        var _end = parseTimeRange(h.timeRange || '').end;
+        if (_end && _end < todayISO) return false;
+        return !_isHabitDormant(h, h._lastClipDay);
       });
-      console.log('[Challenger DEBUG] Filter1 後(今天或昨天有打卡):', list.length, list.map(function(h){return h.name;}));
+      console.log('[Challenger DEBUG] Filter1 後(有公開影片且沒有中斷太久):', list.length, list.map(function(h){return h.name + '(clips=' + (h._clipCount||0) + ', idle=' + _habitDaysSinceActive(h, h._lastClipDay) + 'd)';}));
 
-      // ── Filter 2: activeDayCount >= 1 且 < CHALLENGER_UNLOCK_DAYS（未解鎖 AI 配對的挑戰者）──
+      // ── Filter 2: 累計打卡 < CHALLENGER_UNLOCK_DAYS（還沒解鎖 AI 配對的挑戰者；滿 7 天就「畢業」）──
+      //   2026-11-02：拿掉「至少 1 天」——只有上傳影片、還沒按過打卡的新挑戰者也能上榜
       list = list.filter(function(h) {
-        var days = activeDayCount(h);
-        return days >= 1 && days < CHALLENGER_UNLOCK_DAYS;
+        return activeDayCount(h) < CHALLENGER_UNLOCK_DAYS;
       });
-      console.log('[Challenger DEBUG] Filter2 後(activeDayCount 1~' + (CHALLENGER_UNLOCK_DAYS-1) + '):', list.length, list.map(function(h){return h.name + '(days=' + activeDayCount(h) + ')';}));
+      console.log('[Challenger DEBUG] Filter2 後(累計打卡 < ' + CHALLENGER_UNLOCK_DAYS + '):', list.length, list.map(function(h){return h.name + '(days=' + activeDayCount(h) + ')';}));
 
       // ── Filter 3: one habit per user, fair daily rotation ────────────────
       list = pickOnePerUser(list);
@@ -11403,11 +11798,22 @@ function MainApp(_ref16) {
       var _sbClient = window._supabaseClient;
 
       // ── 附加今日公開 clip（只抓 clip_visibility='everyone' 的，Buddies-only 的不會出現在這裡）──
+      function _publish(finalList) {
+        setChallengers(finalList);
+        if (finalList.length > 0) setTodayPick(finalList[0]);
+        setChallengersLoaded(true);
+        try { localStorage.setItem(_chalCacheKey, JSON.stringify({ day: todayISO, list: finalList })); } catch (e) {}
+      }
       function _attachClipsAndFinish(finalList) {
         var _habitIds = finalList.map(function(h){ return h.id; });
-        if (!_sbClient || _habitIds.length === 0) {
-          setChallengers(finalList);
-          if (finalList.length > 0) setTodayPick(finalList[0]);
+        if (!_sbClient || _habitIds.length === 0) { _publish(finalList); return; }
+        // ★ 2026-11-07：上面篩選時已經把影片抓回來了 → 直接用，不再多查一次
+        if (finalList.every(function(h) { return Array.isArray(h._clipRows); })) {
+          finalList.forEach(function(h) {
+            h.clips = h._clipRows;
+            h.clip = h._clipRows.length > 0 ? h._clipRows[h._clipRows.length - 1] : null;
+          });
+          _publish(finalList);
           return;
         }
         // ★ 修正：同一個「comment_count 沒選到」的問題也存在於 Challenger 頁的
@@ -11434,36 +11840,35 @@ function MainApp(_ref16) {
                 h.clip = arr.length > 0 ? arr[arr.length - 1] : null; // 最新一支，卡片縮圖用
               });
             }
-            setChallengers(finalList);
-            if (finalList.length > 0) setTodayPick(finalList[0]);
+            _publish(finalList);
           }).catch(function() {
-            setChallengers(finalList);
-            if (finalList.length > 0) setTodayPick(finalList[0]);
+            _publish(finalList);
           });
       }
 
+      // ★ 2026-11-07：先把名單顯示出來，舊習慣缺的名字／頭像補抓到再更新一次（原本要等補抓完才顯示）
+      _attachClipsAndFinish(list);
       if (_sbClient && _needBackfill.length > 0) {
         var _uids = _needBackfill.map(function(h){ return h.userId; }).filter(Boolean);
         _sbClient.from('users').select('id, display_name, photo_url').in('id', _uids).then(function(ur) {
-          if (!ur.error && ur.data) {
-            var _umap = {};
-            ur.data.forEach(function(u){ _umap[u.id] = u; });
-            list.forEach(function(h){
-              var u = _umap[h.userId];
-              if (u) {
-                if (!h.displayName) h.displayName = u.display_name || '';
-                if (!h.userAvatar) h.userAvatar = u.photo_url || null;
-              }
+          if (ur.error || !ur.data) return;
+          var _umap = {};
+          ur.data.forEach(function(u){ _umap[u.id] = u; });
+          var updated = list.map(function(h) {
+            var u = _umap[h.userId];
+            if (!u) return h;
+            return Object.assign({}, h, {
+              displayName: h.displayName || u.display_name || '',
+              userAvatar: h.userAvatar || u.photo_url || null
             });
-          }
-          _attachClipsAndFinish(list);
-        }).catch(function(){
-          _attachClipsAndFinish(list);
-        });
-      } else {
-        _attachClipsAndFinish(list);
+          });
+          _publish(updated);
+        }).catch(function(){});
       }
-    }).catch(function(e) { console.error('[Challenger DEBUG] 查詢失敗(可能是 RLS 或缺欄位):', e && e.message, e); });
+    }).catch(function(e) {
+      console.error('[Challenger DEBUG] 查詢失敗(可能是 RLS 或缺欄位):', e && e.message, e);
+      setChallengersLoaded(true); // 失敗也結束「載入中」，不要一直轉
+    });
   }, [user, isFirebaseConfigured]);
 
 
@@ -11563,6 +11968,13 @@ function MainApp(_ref16) {
       setCheerMap(function(prev) { return Object.assign({}, map, prev); });
     }).catch(function(){});
   }, [user, isFirebaseConfigured]);
+
+  // ★ 2026-11-07：登入後 1.5 秒在背景先抓一次 Challengers，第一次切過去就不用等
+  useEffect(function() {
+    if (!user) return;
+    var t = setTimeout(function() { loadChallengers(); }, 1500);
+    return function() { clearTimeout(t); };
+  }, [user && user.uid]);
 
   useEffect(function() {
     if (activeTab === 'feed' && feedSubTab === 'challengers') {
@@ -13202,28 +13614,9 @@ function MainApp(_ref16) {
           });
         }, Promise.resolve());
 
-        /* Update comment counters on parent posts after deletion */
-        return deleteChain.then(function() {
-          var updatePromises = Object.keys(postCountMap).map(function(postId) {
-            var entry = postCountMap[postId];
-            return entry.ref.update({
-              commentCount: FieldValue.increment(-entry.count),
-              comments:     FieldValue.increment(-entry.count)
-            })
-            /* Clamp to 0 if count went negative */
-            .then(function() {
-              return entry.ref.get().then(function(snap) {
-                if (!snap.exists) return;
-                var d = snap.data();
-                var cc = typeof d.commentCount === 'number' ? d.commentCount
-                       : (typeof d.comments === 'number' ? d.comments : 0);
-                if (cc < 0) return entry.ref.update({ commentCount: 0, comments: 0 });
-              }).catch(function() {});
-            })
-            .catch(function() {});
-          });
-          return Promise.all(updatePromises);
-        });
+        /* ★ 2026-11-02：留言刪掉後，各貼文的留言數由資料庫 trigger 自動重算（comment_count_trigger.sql），
+           這裡不用再自己去減別人貼文的數字（原本也常常因為權限被擋下） */
+        return deleteChain;
       })
 
       // Step 2d: Delete archived habits
@@ -13403,7 +13796,13 @@ function MainApp(_ref16) {
   }, /*#__PURE__*/React.createElement("div", {
     className: "loading"
   }, "Loading..."));
-  if (showHistory) return /*#__PURE__*/React.createElement(HistoryPage, {
+  // ★ 2026-11-07：三個子頁面改成先組好元素——手機版跟以前一樣整頁取代；
+  //   網頁版放進桌面外殼裡（左邊選單還在、右側是各頁自己的統計欄）
+  var _subPage = null;
+  if (showHistory) _subPage = /*#__PURE__*/React.createElement(HistoryPage, {
+    isDesktop: isDesktop,
+    clipsByHabit: myClipStatusByHabit,
+    habitCheers: habitCheers,
     habits: habits,
     archivedHabits: archivedHabits,
     percentile: percentile,
@@ -13415,15 +13814,18 @@ function MainApp(_ref16) {
       return setShowHistory(false);
     }
   });
-  if (showAllPosts) return /*#__PURE__*/React.createElement(UserPostsPage, {
+  else if (showAllPosts) _subPage = /*#__PURE__*/React.createElement(UserPostsPage, {
+    isDesktop: isDesktop,
     user: user,
-    onBack: function onBack() { return setShowAllPosts(false); },
+    onBack: function onBack() { setShowAllPosts(false); refreshMyPostTotal(); },
     onPostDeleted: function(postId) {
       setFeedPosts(function(prev) { return prev.filter(function(p){ return p.id !== postId; }); });
       setMyPosts(function(prev)  { return prev.filter(function(p){ return p.id !== postId; }); });
+      setMyPostTotal(function(n) { return n == null ? n : Math.max(0, n - 1); });
     }
   });
-  if (showAllComments) return /*#__PURE__*/React.createElement(UserCommentsPage, {
+  else if (showAllComments) _subPage = /*#__PURE__*/React.createElement(UserCommentsPage, {
+    isDesktop: isDesktop,
     user: user,
     onBack: function onBack() { return setShowAllComments(false); },
     onCommentDeleted: function(commentId, postId) {
@@ -13436,6 +13838,7 @@ function MainApp(_ref16) {
       }); });
     }
   });
+  if (_subPage && !isDesktop) return _subPage;
   // ★ 2026-10-29：贊助挑戰按「Join challenge」→ 打開新增習慣視窗，名稱跟起訖日期預先填好
   function handleJoinChallenge(camp) {
     var _t = toISODay();
@@ -13541,6 +13944,10 @@ function MainApp(_ref16) {
         : 999;
       var habitTooShort = _habitDuration < PARTNER_UNLOCK_DAYS;
       var pairState = isQualified ? getHabitPairState(habit, user.uid) : null;
+      // ★ 2026-11-02：中斷太久 → 暫時從 Challengers／配對名單下架（再打卡或上傳影片就恢復）
+      var _myLastClipDay = (myClipStatusByHabit[habit.id] && myClipStatusByHabit[habit.id].lastDay) || '';
+      var _habitDormant = _isHabitDormant(habit, _myLastClipDay);
+      var _habitIdleDays = _habitDaysSinceActive(habit, _myLastClipDay);
       var habitCheerData = habitCheers[habit.id] || null;
       var _catCol = getCatColours(habit.category);
       var _cheerUid = habit.id + '-cheer';
@@ -13609,10 +14016,27 @@ function MainApp(_ref16) {
          History 共用的同一套夥伴狀態卡（active/pending/declined/ended/seeking），
          取代原本各自獨立、而且一直有 bug 的「+ Find Partner」按鈕跟舊版
          Completed Challenges 卡片。 ── */
+      // ★ 2026-11-02：中斷太久的提示（只是暫時，再打卡或上傳影片就自動恢復）
+      _habitDormant && (isQualified || habit.challengeVisibility !== 'private') && React.createElement("div", {
+        style:{ margin:'10px 16px 0', padding:'9px 12px', background:'#fff8e6', border:'1px solid #f5d38a', borderRadius:8, fontSize:11.5, color:'#7a5200', lineHeight:1.5 },
+        onClick: function(e) { e.stopPropagation(); }
+      },
+        "\ud83d\udca4 ",
+        React.createElement("strong", null, isQualified ? "Paused from partner matching" : "Paused on Challengers"),
+        " \u2014 no check-ins for " + _habitIdleDays + " days. Check in or share a clip to show up again."
+      ),
       isQualified && React.createElement("div", { style:{ padding:'10px 16px 0' } },
         renderHabitPartnerStatus(pairState, {
           habitName: habit.name,
-          onFindPartner: function() { window.openMatchingModal(habit); },
+          onFindPartner: function() {
+            // ★ 2026-11-02：中斷太久時先不讓找新夥伴（後端也會擋），不扣點
+            if (_habitDormant) {
+              if (typeof _showAppToast === 'function') _showAppToast('Check in or share a clip today to start matching again.');
+              else alert('Check in or share a clip today to start matching again.');
+              return;
+            }
+            window.openMatchingModal(habit);
+          },
           onEndPartnership: function(pair) { endPartnershipDirect(pair); },
           onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
           onGoToBuddies: function() { setActiveTab('buddies'); },
@@ -14017,10 +14441,11 @@ function MainApp(_ref16) {
         );
       }
       return React.createElement(React.Fragment, null,
-        challengers.length === 0 && React.createElement("div", { style: { textAlign: "center", padding: "48px 20px", color: "var(--gray-400)", fontSize: 13 } },
+        challengers.length === 0 && !challengersLoaded && React.createElement("div", { style: { textAlign: "center", padding: "48px 20px", color: "var(--gray-400)", fontSize: 13 } }, "Loading challengers\u2026"),
+        challengers.length === 0 && challengersLoaded && React.createElement("div", { style: { textAlign: "center", padding: "48px 20px", color: "var(--gray-400)", fontSize: 13 } },
           React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "\ud83c\udfc6"),
           React.createElement("div", null, "No active challengers right now"),
-          React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Keep a streak going to appear here!")
+          React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Share a clip of a public habit to appear here!") /* ★ 2026-11-02：上榜條件改成「有公開影片」 */
         ),
         React.createElement(SegSection, { label: "\u26a1 About to unlock AI matching \u00b7 Day 5\u20136", list: almostUnlocking }),
         React.createElement(SegSection, { label: "Building momentum \u00b7 Day 3\u20134", list: buildingMomentum }),
@@ -14327,10 +14752,10 @@ function MainApp(_ref16) {
         onReport: null,
         onDelete: handleDeletePost
       });
-    }), myPosts.length > 3 && /*#__PURE__*/React.createElement("button", {
+    }), (myPostTotal != null ? myPostTotal : myPosts.length) > 3 && /*#__PURE__*/React.createElement("button", {
       className: "view-all-posts-btn",
       onClick: function onClick() { return setShowAllPosts(true); }
-    }, "View all posts (", myPosts.length, ")  →"), /*#__PURE__*/React.createElement("button", {
+    }, "View all posts (", (myPostTotal != null ? myPostTotal : myPosts.length), ")  →"), /*#__PURE__*/React.createElement("button", {
       className: "view-all-posts-btn",
       style: { marginTop: 8, background: 'var(--gray-800)' },
       onClick: function onClick() { return setShowAllComments(true); }
@@ -14611,7 +15036,11 @@ function MainApp(_ref16) {
   );
   return /*#__PURE__*/React.createElement("div", {
     className: isDesktop ? "desktop-shell" : "app-container"
-  }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, { activeTab: activeTab, setActiveTab: setActiveTab, setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout, onAddHabit: handleAddHabitClick }),
+  }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, {
+    // ★ 2026-11-07：在子頁面（My posts／My comments／Habit History）時點左邊選單，先把子頁面關掉
+    activeTab: activeTab,
+    setActiveTab: function(t) { setShowHistory(false); setShowAllPosts(false); setShowAllComments(false); setActiveTab(t); },
+    setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout, onAddHabit: handleAddHabitClick }),
   // ★ 2026-10-26：帳號被停權時固定顯示在最上面（發文、留言、聊天、配對都會被資料庫擋下）
   mySuspension && React.createElement("div", {
     role: "alert",
@@ -14669,7 +15098,7 @@ function MainApp(_ref16) {
     }, "Sign Out")
   )),
   // ★ 2026-10-29：桌面版上方搜尋列（DesktopTopbar）拿掉——搜尋從來沒接上真正的功能，新增按鈕已移到左側選單
-  _desktopMainContent), /*#__PURE__*/React.createElement(CheerDetailPanel, null), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
+  (isDesktop && _subPage) ? /*#__PURE__*/React.createElement("div", { className: "desktop-content" }, _subPage) : _desktopMainContent), /*#__PURE__*/React.createElement(CheerDetailPanel, null), showModal && /*#__PURE__*/React.createElement(AddHabitModal, {
     prefill: addPrefill,
     onClose: function onClose() {
       setAddPrefill(null);
@@ -17019,7 +17448,8 @@ function BuddiesPage(_ref_buddies) {
                 reason: _pairReasonFor(rp, user.uid) || (_pairReasonPending(rp, user.uid) && !perspectiveFailed[rp.id] ? 'Writing up why you two match\u2026' : ''),
                 // ★ 2026-10-28：ai_match_data.clips 存的是「候選人」（也就是收到邀請的這個人自己）的影片，
                 //   只有送邀請那方（pairs.user_id）看才是「對方的影片」；收到邀請的人看就不顯示，免得看到自己的影片。
-                clips: (rpIsUser && Array.isArray(md.clips)) ? md.clips : []
+                // ★ 2026-11-02：收到邀請的人看「送邀請那方」的影片（requesterClips，送出邀請時存的）
+                clips: rpIsUser ? (Array.isArray(md.clips) ? md.clips : []) : (Array.isArray(md.requesterClips) ? md.requesterClips : [])
               }, { label: 'Wants to be your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report for this pair yet.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -17078,7 +17508,7 @@ function BuddiesPage(_ref_buddies) {
                 score: vmd.score != null ? vmd.score : vp.match_score,
                 breakdown: vmd.breakdown || {},
                 reason: _pairReasonFor(vp, user.uid) || (_pairReasonPending(vp, user.uid) && !perspectiveFailed[vp.id] ? 'Writing up why you two match\u2026' : ''),
-                clips: (vpIsUser && Array.isArray(vmd.clips)) ? vmd.clips : []
+                clips: vpIsUser ? (Array.isArray(vmd.clips) ? vmd.clips : []) : (Array.isArray(vmd.requesterClips) ? vmd.requesterClips : [])
               }, { label: 'Your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report was saved for this pair.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -19037,7 +19467,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       //   不再讀 users.habits JSON 欄位（該欄位無同步機制，永遠是空的）。
       var myActType0 = habit.activityType || 'other';
       var { data: candHabitRows } = await _supabase.from('habits')
-        .select('id, user_id, name, category, activity_type, mind_body, dur_label, time_range, checked_dates, today_counts, check_timestamps, display_name')
+        .select('id, user_id, name, category, activity_type, mind_body, dur_label, time_range, checked_dates, today_counts, check_timestamps, display_name, interval_days')
         .neq('user_id', myUserId || '')
         .eq('activity_type', myActType0);
       console.log('[MatchDebug] fallback: myActivityType=', myActType0, '| candHabitRows found=', candHabitRows ? candHabitRows.length : 0); // 🧪TEST MODE 診斷log
@@ -19046,6 +19476,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       // 依 user_id 分組，欄位轉回 camelCase 供下方評分程式使用
       var byUser = {};
       candHabitRows.forEach(function(row) {
+        // ★ 2026-11-02：中斷太久的習慣不當候選人（跟 match-partner v24 同一套規則；備援配對只看打卡）
+        if (_isHabitDormant({ checkedDates: row.checked_dates || [], todayCounts: row.today_counts || {}, intervalDays: row.interval_days || 1, timeRange: row.time_range || '' })) return;
+        // ★ 2026-11-02：已經到期（進了 Habit History）的習慣也不當候選人——
+        //   match-partner v23 起後端已經排除，但這條備援配對（後端失敗時才走）之前漏掉了
+        var _fbEnd = parseTimeRange(row.time_range || '').end;
+        if (_fbEnd && _fbEnd < toISODay()) return;
         (byUser[row.user_id] = byUser[row.user_id] || []).push({
           name: row.name, category: row.category,
           activityType: row.activity_type || 'other',
@@ -19321,6 +19757,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           // ★ 2026-10：伺服器端發現還沒有價值觀資料（問卷必填）→ 直接帶去填
           document.getElementById('matchingOverlay').style.display = 'none';
           _openSurveyModal(habit);
+        } else if (data.error === 'inactive') {
+          // ★ 2026-11-02：match-partner v24——這個習慣中斷太久，暫停配對（不扣點）
+          showMatchingError('Paused for now \ud83d\udca4', data.message || 'Check in or share a clip on this habit to start matching again.');
         } else if (res.status === 403 && data.error === 'not_qualified') {
           // 伺服器端 7 天門檻擋下 → 顯示原因，絕不降級走程式碼配對（否則門檻會被繞過）
           showMatchingError('Not unlocked yet 🔒', data.message || 'This habit needs more check-in days before partner matching unlocks.');
@@ -19597,7 +20036,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     return '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
       '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;display:flex;align-items:baseline;justify-content:space-between;">' +
         '<span>Challenge clips</span>' +
-        '<span style="color:#444;letter-spacing:.5px;text-transform:none;font-weight:600;">Top ' + clips.length + ' by views</span>' +
+        '<span style="color:#444;letter-spacing:.5px;text-transform:none;font-weight:600;">' + (clips.some(function(c) { return c.views != null; }) ? ('Top ' + clips.length + ' by views') : ('Latest ' + clips.length)) + '</span>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(' + clips.length + ',1fr);gap:8px;">' +
         clips.map(function(c) { return _renderClipTile(c, av); }).join('') +
@@ -19612,7 +20051,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     var safeUrl = String(c.mediaUrl || '').replace(/'/g, "\\'");
     return '<div onclick="window._mrcPlayClip(\'' + safeUrl + '\')" style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;cursor:pointer;' + bg + '">' +
       '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;">▶</div>' +
-      '<div style="position:absolute;bottom:5px;left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);border-radius:4px;padding:3px 5px;font-family:var(--din);">👁 ' + _fmtViews(c.views) + '</div>' +
+      (c.views != null ? '<div style="position:absolute;bottom:5px;left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);border-radius:4px;padding:3px 5px;font-family:var(--din);">👁 ' + _fmtViews(c.views) + '</div>' : '') +
     '</div>';
   }
 
@@ -19681,7 +20120,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     my_habit_taken: 'This habit already has a partner.',
     candidate_habit_gone: 'This person no longer has this habit.',
     candidate_taken: 'This person just found a partner for this habit. Try the next one!',
-    candidate_pending: "This person is considering another request right now. Try the next one, or check back in a few days."
+    candidate_pending: "This person is considering another request right now. Try the next one, or check back in a few days.",
+    // ★ 2026-11-02：對方這個習慣中斷太久（存著的名單可能是幾天前找到的）
+    candidate_inactive: "This person hasn't been active on this habit lately. Try the next one!",
+    // ★ 2026-11-02：對方這個習慣已經到期（名單是在到期前找到的）
+    candidate_ended: "This person's challenge for this habit has ended. Try the next one!"
   };
   // 從存起來的名單（pending_match_suggestions）拿掉一位已經不能邀請的人
   function _dropCandidateFromSaved(habitId, candUserId) {
@@ -19718,7 +20161,23 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
         // ★ 把當初的配對報告（分數、理由、細項）存成快照，收到邀請的人才看得到
         //   完整資訊來決定要不要接受，不用只看一張空空的邀請卡。
+        // ★ 2026-11-02：把「我（送邀請的人）」這個習慣的影片也存進報告快照——
+        //   原本報告裡只有候選人的影片（給送邀請的人看），收到邀請的人完全看不到送邀請那方的影片。
+        //   從 Habit History 找夥伴時，這裡就是那個習慣以前上傳的影片。取最新 3 支、不含被隱藏的。
+        var _requesterClips = [];
+        try {
+          var _mcRes = await _withTimeout(
+            _supabase.from('posts').select('id, media_url, thumbnail_url, media_public_id, moderation_status, created_at')
+              .eq('user_id', userId).eq('habit_id', _currentHabit.id).eq('is_habit_clip', true).eq('has_video', true)
+              .eq('clip_visibility', 'everyone').order('created_at', { ascending: false }).limit(10),
+            5000, 'Load my clips');
+          _requesterClips = ((_mcRes && _mcRes.data) || [])
+            .filter(function(p) { return p.moderation_status !== 'hidden' && p.media_url; })
+            .slice(0, 3)
+            .map(function(p) { return { postId: p.id, thumbnailUrl: p.thumbnail_url || null, mediaUrl: p.media_url, createdAt: p.created_at, views: null }; });
+        } catch (_e) { console.warn('[mrcInviteCard] load my clips skipped:', _e && _e.message); }
         var snapshot = {
+          requesterClips: _requesterClips,
           score: m.score,
           reason: m.reason || '',
           breakdown: m.breakdown || {},
@@ -19768,6 +20227,35 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           }
           if (_matchCardIdx < _matchCards.length - 1) setTimeout(function(){ _matchCardIdx++; _renderMatchCard(); }, 900);
           return;
+        }
+
+        // ★ 2026-11-02：送出前再確認一次對方的習慣沒有「中斷太久」——名單可能是幾天前找到的。
+        //   查不到資料（舊資料沒有 habitId、網路錯誤）就不擋，照舊送出。
+        if (m.habitId) {
+          try {
+            var _chRes = await _withTimeout(Promise.all([
+              _supabase.from('habits').select('id, checked_dates, today_counts, interval_days, time_range').eq('id', m.habitId).maybeSingle(),
+              _supabase.from('posts').select('created_at').eq('habit_id', m.habitId).eq('is_habit_clip', true).order('created_at', { ascending: false }).limit(1)
+            ]), 8000, 'Check activity');
+            var _ch = _chRes[0] && _chRes[0].data;
+            var _chClip = _chRes[1] && _chRes[1].data && _chRes[1].data[0];
+            // 對方的習慣已經到期（結束日早於今天）→ 也不能邀請
+            var _chEnd = _ch ? parseTimeRange(_ch.time_range || '').end : null;
+            var _chWhy = (_chEnd && _chEnd < toISODay()) ? 'candidate_ended' : null;
+            if (!_chWhy && _ch && _isHabitDormant({
+                  checkedDates: _ch.checked_dates || [], todayCounts: _ch.today_counts || {},
+                  intervalDays: _ch.interval_days || 1, timeRange: _ch.time_range || ''
+                }, _chClip && _chClip.created_at ? toISODay(new Date(_chClip.created_at)) : '')) _chWhy = 'candidate_inactive';
+            if (_chWhy) {
+              _matchSending = false;
+              _matchUnavailable[idx] = _chWhy;
+              _renderMatchCard();
+              if (typeof _showAppToast === 'function') _showAppToast(_INVITE_BLOCK_MESSAGES[_chWhy]);
+              if (window._supabaseClient && window._currentUser) _dropCandidateFromSaved(_currentHabit.id, m.userId);
+              if (_matchCardIdx < _matchCards.length - 1) setTimeout(function(){ _matchCardIdx++; _renderMatchCard(); }, 900);
+              return;
+            }
+          } catch (_e) { console.warn('[mrcInviteCard] activity check skipped:', _e && _e.message); }
         }
 
         var existingRes = await _withTimeout(
