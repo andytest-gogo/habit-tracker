@@ -777,8 +777,10 @@
         .hc-clips-title { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--black); }
         .hc-shared { font-size:11px; font-weight:700; color:#15803d; }
         .hc-buddy-note { font-size:11px; color:var(--gray-600); }
-        .hc-cheer-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border:1px solid #f4c0d1; background:#fbeaf0; color:#993556; font-family:var(--font); font-size:11px; font-weight:700; cursor:pointer; }
-        .hc-cheer-pill svg { width:13px; height:13px; }
+        /* ★ 2026-11-08：愛心不再用粉紅框——只留紅色愛心＋深色文字 */
+        .hc-cheer-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 4px; border:none; background:none; color:var(--black); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; }
+        .hc-cheer-pill svg { width:15px; height:15px; color:#e11d48; }
+        .hc-cheer-pill:hover { text-decoration:underline; }
         .hc-clip-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 11px; border:1px dashed var(--gray-400); background:var(--white); font-family:var(--font); font-size:11px; font-weight:700; color:var(--black); cursor:pointer; }
         .hc-spacer { flex:1 1 auto; }
         .hc-wall-wrap { position:relative; }
@@ -10502,7 +10504,9 @@ function HistoryPage(_ref15) {
       React.createElement("div", { className: "hc-clips-head" },
         React.createElement("span", { className: "hc-clips-title" }, "Clips \u00b7 " + clips.length),
         React.createElement("span", { className: "hc-spacer" }),
-        cheers > 0 && React.createElement("span", { className: "hc-cheer-pill", style: { cursor: 'default' } }, "\u2665 " + cheers + (cheers === 1 ? " cheer" : " cheers"))
+        cheers > 0 && React.createElement("span", { className: "hc-cheer-pill", style: { cursor: 'default', textDecoration: 'none' } },
+          React.createElement("span", { style: { color: '#e11d48', fontSize: 14 }, "aria-hidden": "true" }, "\u2665"),
+          cheers + (cheers === 1 ? " cheer" : " cheers"))
       ),
       React.createElement(HabitClipWall, {
         habit: h, clips: clips, todayPost: null, readOnly: true,
