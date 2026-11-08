@@ -5673,7 +5673,16 @@ function FeedCard(_ref5) {
     cheerMode = _ref5.cheerMode,
     cheered = _ref5.cheered,
     onCheer = _ref5.onCheer,
-    hideLikeAction = _ref5.hideLikeAction;
+    hideLikeAction = _ref5.hideLikeAction,
+    // ★ 2026-11-08：留言區一打開就展開（有留言直接列出來，沒有就只顯示輸入框）。
+    //   目前只有單支習慣影片的檢視畫面用；按留言數一樣可以收合／展開。
+    defaultShowComments = !!_ref5.defaultShowComments,
+    // ★ 2026-11-08：Community 列表用——照片／影片預設收成一行精簡列，點了才展開，
+    //   讓有媒體的貼文跟純文字貼文差不多高。單支貼文檢視（clip 視窗等）不傳就照舊直接顯示。
+    collapsibleMedia = !!_ref5.collapsibleMedia;
+  var _useStateMediaOpen = useState(!collapsibleMedia),
+    mediaOpen = _useStateMediaOpen[0],
+    setMediaOpen = _useStateMediaOpen[1];
   var isOwner = !!(currentUser && post.userId && currentUser.uid === post.userId);
   // [FIX 2026-09] hidden+color-tag moderation instead of blocking at submit time —
   // see renderModerationHiddenOther() / renderModerationActionButtons() below,
@@ -5847,7 +5856,7 @@ function FeedCard(_ref5) {
     window.addEventListener('famstreak:autoEditPost', _onAutoEditPost);
     return function() { window.removeEventListener('famstreak:autoEditPost', _onAutoEditPost); };
   }, [post.id]);
-  var _useState17 = useState(false),
+  var _useState17 = useState(defaultShowComments),
     _useState18 = _slicedToArray(_useState17, 2),
     showComments = _useState18[0],
     setShowComments = _useState18[1];
@@ -5903,12 +5912,59 @@ function FeedCard(_ref5) {
       return;
     }
     if (commentMedia && commentMedia.previewUrl) { try { URL.revokeObjectURL(commentMedia.previewUrl); } catch (_e) {} }
+    _cancelCommentUpload(); // 換檔案：舊的那份如果已經傳上去，排進刪除佇列
     setCommentMedia({ type: mediaKind, file: f, previewUrl: URL.createObjectURL(f) });
+    _startCommentUpload(f, mediaKind);
   }
+  // ★ 2026-11-08：留言附圖／影片改成「選好檔案就在背景上傳」（原本按送出才開始傳，
+  //   圖片還要轉 base64 經過 bunny-upload，要等好幾秒）。每張卡片各自用自己的 ref，
+  //   不會像全域 _mediaPickerCallbacks 那樣互相打架。送出時直接等這份已經在跑的上傳。
+  var commentUploadRef = useRef(null); // { file, kind, promise, result, cancelled }
+  function _startCommentUpload(f, kind) {
+    var entry = { file: f, kind: kind, result: null, cancelled: false };
+    commentUploadRef.current = entry;
+    setCommentMediaProgress(1);
+    entry.promise = uploadToBunny(f, kind, function(pct) {
+      if (commentUploadRef.current === entry) setCommentMediaProgress(pct);
+    }).then(function(r) {
+      entry.result = r;
+      if (entry.cancelled) _queueCommentMediaDelete(r, kind); // 傳完之前就被取消了
+      return r;
+    });
+    entry.promise.catch(function(err) {
+      // 背景上傳失敗：清掉這份，按送出時會重新上傳一次（真的再失敗才顯示錯誤）
+      console.warn('[Comment] background upload failed, will retry on send:', err && err.message);
+      if (commentUploadRef.current === entry) { commentUploadRef.current = null; setCommentMediaProgress(0); }
+    });
+  }
+  function _queueCommentMediaDelete(r, kind) {
+    if (!r || !r.publicId || !isFirebaseConfigured || !currentUser) return;
+    db.collection('pending_storage_deletes').add({
+      userId: currentUser.uid,
+      publicIds: [{ id: r.publicId, type: kind === 'video' ? 'video' : 'image' }],
+      reason: 'comment_cancelled',
+      createdAt: FieldValue.serverTimestamp(),
+      status: 'pending'
+    }).catch(function() {});
+  }
+  function _cancelCommentUpload() {
+    var entry = commentUploadRef.current;
+    commentUploadRef.current = null;
+    if (!entry) return;
+    entry.cancelled = true;
+    if (entry.result) _queueCommentMediaDelete(entry.result, entry.kind);
+  }
+  // 送出成功／失敗後的清理（檔案已經用在留言上，不能刪）
   function handleRemoveCommentMedia() {
+    commentUploadRef.current = null;
     if (commentMedia && commentMedia.previewUrl) { try { URL.revokeObjectURL(commentMedia.previewUrl); } catch (_e) {} }
     setCommentMedia(null);
     setCommentMediaProgress(0);
+  }
+  // 使用者按 ✕ 取消附件：已經傳上去的檔案排進刪除佇列
+  function handleCancelCommentMedia() {
+    _cancelCommentUpload();
+    handleRemoveCommentMedia();
   }
   // 本地留言數 override：留言成功後立即 +1，不等 DB / prop 刷新
   var _useStateLCC = useState(null),
@@ -6198,8 +6254,11 @@ function FeedCard(_ref5) {
 
     // [NEW 2026-09] 上傳跟審查平行跑，不互相等——反正不管審查結果如何都會照常
     // 送出留言（只是隱藏與否的差別），沒有「先審過才上傳」的必要。
+    var _bgUpload = commentUploadRef.current;
     var _uploadPromise = commentMedia
-      ? uploadToBunny(commentMedia.file, commentMedia.type, function(pct) { setCommentMediaProgress(pct); })
+      ? ((_bgUpload && _bgUpload.file === commentMedia.file)
+          ? _bgUpload.promise // ★ 2026-11-08：選檔案時就開始傳了，直接等它
+          : uploadToBunny(commentMedia.file, commentMedia.type, function(pct) { setCommentMediaProgress(pct); }))
       : Promise.resolve(null);
 
     Promise.all([_modPromise, _uploadPromise]).then(function(_results) {
@@ -6353,7 +6412,21 @@ function FeedCard(_ref5) {
     ];
   })()), post.habit && /*#__PURE__*/React.createElement("span", {
     className: "feed-habit-tag"
-  }, post.habit), effectiveHasImage && effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
+  }, post.habit),
+  // ★ 2026-11-08：收合狀態——一行精簡列（小縮圖＋「Photo / Video · Tap to view」）
+  !mediaOpen && ((effectiveHasImage || effectiveHasVideo) && effectiveMediaUrl) && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "feed-media-collapsed",
+    onClick: function(e) { e.stopPropagation(); setMediaOpen(true); },
+    style: { marginTop: 10, width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: 6, background: 'var(--gray-50)', border: '1px solid var(--gray-100)', borderRadius: 8, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }
+  },
+    (effectiveHasImage || post.thumbnailUrl)
+      ? /*#__PURE__*/React.createElement("img", { src: effectiveHasImage ? effectiveMediaUrl : post.thumbnailUrl, alt: "", loading: "lazy", style: { width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0, background: 'var(--gray-200)' } })
+      : /*#__PURE__*/React.createElement("span", { style: { width: 44, height: 44, borderRadius: 6, background: '#111', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } }, /*#__PURE__*/React.createElement(VideoIcon, { style: { width: 18, height: 18 } })),
+    /*#__PURE__*/React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: 'var(--gray-700)' } }, effectiveHasVideo ? 'Video' : 'Photo'),
+    /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-500)', marginLeft: 'auto', paddingRight: 6 } }, effectiveHasVideo ? 'Tap to play \u25BE' : 'Tap to view \u25BE')
+  ),
+  mediaOpen && effectiveHasImage && effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
   }, /*#__PURE__*/React.createElement("img", {
     src: effectiveMediaUrl,
@@ -6372,9 +6445,14 @@ function FeedCard(_ref5) {
     className: "feed-media"
   }, /*#__PURE__*/React.createElement("div", {
     className: "feed-media-placeholder"
-  }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), effectiveHasVideo && effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ImageIcon, null), /*#__PURE__*/React.createElement("span", null, "Photo"))), mediaOpen && effectiveHasVideo && effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
     className: "feed-media"
-  }, renderPostVideo(effectiveMediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } }))) ), !isEditingPost && /*#__PURE__*/React.createElement("div", {
+  }, renderPostVideo(effectiveMediaUrl, { videoProps: { preload: "metadata" }, style: { width:'100%', height:260, objectFit:'contain', display:'block', background:'#000' }, wrapStyle: { maxHeight: 460 } })),
+  // 展開後可以再收起來（只有 Community 列表會出現）
+  collapsibleMedia && mediaOpen && ((effectiveHasImage || effectiveHasVideo) && effectiveMediaUrl) && /*#__PURE__*/React.createElement("span", {
+    onClick: function(e) { e.stopPropagation(); setMediaOpen(false); },
+    style: { display: 'inline-block', marginTop: 6, fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', cursor: 'pointer', userSelect: 'none' }
+  }, 'Hide ' + (effectiveHasVideo ? 'video' : 'photo') + ' \u25B4')) ), !isEditingPost && /*#__PURE__*/React.createElement("div", {
     className: "feed-actions"
   }, !hideLikeAction && /*#__PURE__*/React.createElement("div", {
     className: "feed-action".concat((cheerMode ? cheered : post.liked) ? ' liked' : ''),
@@ -6685,9 +6763,9 @@ function FeedCard(_ref5) {
       type: "button",
       className: "composer-media-remove",
       "aria-label": "Remove attachment",
-      onClick: handleRemoveCommentMedia
+      onClick: handleCancelCommentMedia
     }, "✕"),
-    sendingComment && commentMediaProgress > 0 && commentMediaProgress < 100 && /*#__PURE__*/React.createElement("div", {
+    commentMediaProgress > 0 && commentMediaProgress < 100 && /*#__PURE__*/React.createElement("div", {
       style: { position: 'absolute', bottom: 3, left: 3, right: 3, fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,.6)', borderRadius: 4, padding: '2px 0', textAlign: 'center' }
     }, commentMediaProgress + '%')
   ),
@@ -6787,6 +6865,7 @@ function ClipViewerModal(props) {
     /*#__PURE__*/React.createElement(FeedCard, {
       post: post,
       currentUser: currentUser,
+      defaultShowComments: true, // ★ 2026-11-08：習慣影片留言預設展開
       hideLikeAction: true,
       onReport: null,
       onDelete: (!props.readOnly && currentUser && post.userId === currentUser.uid) ? handleDeleteClip : null,
@@ -7407,10 +7486,8 @@ function ClipShareModal(props) {
         "Don't want to show your face? Film your hands, your journal, or your setup instead \u2014 that counts too."
       )
     ),
-    /*#__PURE__*/React.createElement("label", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, cursor: 'pointer' } },
-      /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: 'var(--gray-600)' } }, "Hide habit name (show as \"" + (habit.category || 'category') + "\")"),
-      /*#__PURE__*/React.createElement("input", { type: 'checkbox', checked: hideHabitName, onChange: function(e) { setHideHabitName(e.target.checked); } })
-    ),
+    // ★ 2026-11-08：「Hide habit name」選項移除。新 clip 一律顯示完整習慣名稱；
+    //   以前勾過隱藏的舊 clip，編輯時仍沿用隱藏（hideHabitName 初始值的判斷保留），避免名稱意外曝光。
     errorMsg && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: '#c00', marginBottom: 8 } }, errorMsg),
     /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8 } },
       /*#__PURE__*/React.createElement("button", {
@@ -7725,6 +7802,7 @@ function UserPostsPage(_ref_upp) {
     var liked = likedBy.includes(user.uid);
     return /*#__PURE__*/React.createElement(FeedCard, {
       key: p.id,
+      collapsibleMedia: true, // ★ 2026-11-08：照片／影片預設收合
       post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
       currentUser: user,
       onLike: handleLikeInPage,
@@ -7813,6 +7891,7 @@ function UserPostsPage(_ref_upp) {
                 var liked = likedBy.includes(user.uid);
                 return /*#__PURE__*/React.createElement(FeedCard, {
                   key: p.id,
+                  collapsibleMedia: true, // ★ 2026-11-08：照片／影片預設收合
                   post: Object.assign({}, p, { liked: liked, likes: p.likes || 0 }),
                   currentUser: user,
                   onLike: handleLikeInPage,
@@ -14433,6 +14512,7 @@ function MainApp(_ref16) {
           var liked = isFirebaseConfigured ? likedBy.includes(user.uid) : post.liked || false;
           return React.createElement(FeedCard, {
             key: post.id,
+            collapsibleMedia: true, // ★ 2026-11-08：Community 照片／影片預設收合
             post: Object.assign({}, post, { liked: liked, likes: post.likes || 0 }),
             currentUser: user, onLike: handleLikeFeed,
             onReport: function(p) { if (typeof window.openReportModal === "function") window.openReportModal(p); },
