@@ -4151,10 +4151,17 @@ var BUNNY_UPLOAD_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/bun
 var PAIR_INSIGHT_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/pair-insight';
 
 // 取得目前使用者的 access token（呼叫 edge function 用）
+// ★ 2026-11-08 修正：getSession() 偶爾會卡住不回（supabase-js 的 auth lock 被其他分頁／
+//   token 刷新佔住時），整個上傳流程就跟著停在 0%。加 8 秒逾時，拿不到就回 null，
+//   讓呼叫端走「沒登入」的錯誤路徑，至少使用者會看到錯誤訊息而不是永遠轉圈。
 async function _getAccessToken() {
   try {
-    var s = await _supabase.auth.getSession();
-    return (s.data.session && s.data.session.access_token) || null;
+    var s = await Promise.race([
+      _supabase.auth.getSession(),
+      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 8000); })
+    ]);
+    if (!s) { console.warn('[Auth] getSession timed out'); return null; }
+    return (s.data && s.data.session && s.data.session.access_token) || null;
   } catch (e) { return null; }
 }
 
@@ -4310,13 +4317,23 @@ async function _moderateClipCaption(caption, imageBase64) {
     if (!token) return { approved: true };
     var payload = { caption: caption || '' };
     if (imageBase64) { payload.imageBase64 = imageBase64; payload.imageMediaType = 'image/jpeg'; }
-    var res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) return { approved: true };
-    return await res.json();
+    // ★ 2026-11-08 修正：原本 fetch 沒有逾時，Edge Function（Claude 看圖）慢或沒回應時
+    //   會無限等下去。加 25 秒逾時，超過就照原本的失敗規則放行（approved:true）。
+    var _ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var _abortTimer = _ctrl ? setTimeout(function() { _ctrl.abort(); }, 25000) : null;
+    var res;
+    try {
+      res = await fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(payload),
+        signal: _ctrl ? _ctrl.signal : undefined
+      });
+      if (!res.ok) return { approved: true };
+      return await res.json();
+    } finally {
+      if (_abortTimer) clearTimeout(_abortTimer);
+    }
   } catch (e) {
     console.warn('[Clip] Moderation check failed, proceeding:', e);
     return { approved: true };
@@ -7157,13 +7174,24 @@ function ClipShareModal(props) {
     if (uploading) return;
     if (!file && !editingPost) return; // 沒選影片、也不是在編輯既有的 clip，沒什麼好送出的
     setUploading(true);
+    setProgress(0);
     setErrorMsg('');
     // [NEW 2026-09] 真的換了新影片才需要擷取畫面送審——沒換片（editingPost 且沒選新檔）
     // 就沿用原本審查結果，不用重新判斷視覺內容。
-    var _modInput = file ? _extractVideoFrameBase64(file) : Promise.resolve(null);
-    _modInput.then(function(frameB64) {
-      return _moderateClipCaption(caption, frameB64);
-    }).then(function(mod) {
+    // ★ 2026-11-08 修正「上傳進度卡在 0%」：
+    //   原本是「擷取畫面 → 等 AI 審查回來 → 才開始上傳」串在一起，審查那段沒有逾時、
+    //   外層 promise 也沒有 catch，只要審查慢或卡住，進度就永遠停在 0%、按鈕也解不開。
+    //   反正審查結果不會擋上傳（只決定要不要隱藏），所以改成跟留言一樣「審查和上傳平行跑」，
+    //   進度條一按下去就會開始動；兩邊都完成才寫進資料庫。
+    var _modPromise = (file ? _extractVideoFrameBase64(file) : Promise.resolve(null))
+      .catch(function() { return null; })
+      .then(function(frameB64) { return _moderateClipCaption(caption, frameB64); })
+      .catch(function() { return { approved: true }; });
+    // 編輯模式沒換新影片的話，這裡就不用再上傳一次
+    // ★ 2026-10-26：標成習慣打卡影片（purpose:'clip'），不佔 Community／聊天室的每日額度
+    var _uploadPromise = file ? uploadToBunny(file, 'video', function(pct) { setProgress(pct); }, { purpose: 'clip', habitId: habit.id }) : Promise.resolve(null);
+    Promise.all([_modPromise, _uploadPromise]).then(function(_r) {
+      var mod = _r[0];
       // [FIX 2026-09] Don't block the clip from posting anymore. If the caption
       // is flagged (any of SCAM/ADULT/VIOLENCE/HATE/SPAM/IRRELEVANT/POLITICAL),
       // the clip still uploads as usual; the verdict just gets stashed on
@@ -7171,10 +7199,7 @@ function ClipShareModal(props) {
       // card (caption + video) for everyone except the person who posted it —
       // same hidden+watermark treatment as regular posts/comments.
       var _modViolation = (mod && mod.approved === false) ? (mod.violation || 'IRRELEVANT') : null;
-      // 編輯模式沒換新影片的話，這裡就不用再上傳一次
-      // ★ 2026-10-26：標成習慣打卡影片（purpose:'clip'），不佔 Community／聊天室的每日額度
-      var doUpload = file ? uploadToBunny(file, 'video', function(pct) { setProgress(pct); }, { purpose: 'clip', habitId: habit.id }) : Promise.resolve(null);
-      doUpload.then(function(result) {
+      return Promise.resolve(_r[1]).then(function(result) {
         var updates = {
           text: caption.trim(),
           clipVisibility: audience,
@@ -7231,11 +7256,15 @@ function ClipShareModal(props) {
           })(_created.id, _created.violation);
         }
         onPosted && onPosted();
-      }).catch(function(e) {
-        console.warn('[ClipShare] upload/post failed:', e);
-        setUploading(false);
-        setErrorMsg('Something went wrong. Please try again.');
       });
+    }).catch(function(e) {
+      // ★ 2026-11-08：catch 移到最外層，審查／上傳／寫資料庫任何一段失敗都會解鎖按鈕
+      console.warn('[ClipShare] upload/post failed:', e);
+      setUploading(false);
+      setProgress(0);
+      // 後端（bunny-upload）或檔案檢查丟出的是給使用者看的句子，就直接顯示
+      var _msg = (e && e.message && !/^(Bunny|tus|Failed to fetch|Load failed|NetworkError|Not authenticated)/i.test(e.message)) ? e.message : 'Something went wrong. Please try again.';
+      setErrorMsg(_msg);
     });
   }
 
@@ -7272,7 +7301,11 @@ function ClipShareModal(props) {
     showExistingVideo
       ? /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
           // ★ 2026-11-01：Bunny 播放器原本吃不到 maxHeight，直式影片會把視窗撐得很長；改成固定高度的 9:16 框、置中
-          renderPostVideo(editingPost.media_url, { wrapStyle: { width: 'auto', height: 'min(46vh, 360px)', maxHeight: 'none', aspectRatio: '9/16', margin: '0 auto', borderRadius: 8 }, style: { width: '100%', maxHeight: 200, objectFit: 'contain', background: '#000', borderRadius: 8 } }),
+          // ★ 2026-11-08 修正：9:16 框在固定高度下只剩約 200px 寬，Bunny 播放器的控制列
+          //   （音量、設定、子母畫面、全螢幕）塞不下，整個畫面被往右推、右邊被裁掉。
+          //   改成跟「剛選好影片的預覽」一樣：寬度撐滿 modal、高度固定，直式影片由播放器
+          //   自己在左右補黑邊，控制列就有足夠空間，編輯前後兩個畫面大小也一致。
+          renderPostVideo(editingPost.media_url, { wrapStyle: { width: '100%', height: 'min(46vh, 360px)', maxHeight: 'none', aspectRatio: 'auto', margin: 0, borderRadius: 8 }, style: { width: '100%', maxHeight: 'min(46vh, 360px)', objectFit: 'contain', background: '#000', borderRadius: 8 } }),
           /*#__PURE__*/React.createElement("button", {
             onClick: function() { setReplacing(true); },
             style: { marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--gray-600)', background: 'none', border: '1px dashed var(--gray-300)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }
