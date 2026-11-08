@@ -1416,7 +1416,7 @@
         .feed-text { font-size:13px; line-height:1.6; margin-bottom:10px; color:var(--gray-800); white-space:pre-wrap; word-break:break-word; }
         .feed-habit-tag { display:inline-block; padding:3px 9px; background:var(--gray-100); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--gray-600); }
         .feed-media { margin-top:12px; border:1px solid var(--gray-100); overflow:hidden; }
-        .feed-media img { width:100%; height:180px; object-fit:cover; display:block; }
+        .feed-media img { width:auto; max-width:100%; height:auto; max-height:460px; margin:0 auto; display:block; }
         .feed-media-placeholder { width:100%; height:160px; background:var(--gray-100); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--gray-400); font-size:12px; }
         .feed-actions { padding:10px 14px; border-top:1px solid var(--gray-50); display:flex; gap:18px; align-items:center; }
         .feed-action-report { margin-left:auto; opacity:.45; transition:.15s; }
@@ -1614,7 +1614,8 @@
         .my-post-delete:hover { color:#c00; }
         .my-post-body { padding:10px 14px 12px; font-size:13px; line-height:1.6; color:var(--gray-800); }
         .my-post-media { border-top:1px solid var(--gray-100); }
-        .my-post-media img, .my-post-media video { width:100%; max-height:180px; object-fit:cover; display:block; }
+        .my-post-media img { width:auto; max-width:100%; height:auto; max-height:460px; margin:0 auto; display:block; }
+        .my-post-media video { width:100%; max-height:460px; object-fit:contain; background:#000; display:block; }
         .my-post-actions { padding:8px 14px; border-top:1px solid var(--gray-50); display:flex; gap:16px; }
 
         /* ── EMPTY STATE ── */
@@ -4269,6 +4270,7 @@ function _extractVideoFrameBase64(file) {
 // 給任何送出流程（貼文／習慣影片／留言）在審查前呼叫，回傳 base64 或 null。
 function _mediaFileToModerationBase64(file, type) {
   if (!file) return Promise.resolve(null);
+  if (_moderationDisabled) return Promise.resolve(null); // ★ 2026-11-08：審查關閉時不用準備送審畫面
   if (type === 'video') return _extractVideoFrameBase64(file);
   if (type === 'image') return _resizeImageForModeration(file);
   return Promise.resolve(null);
@@ -4311,7 +4313,46 @@ function _clipDayNumber(checkedDates, clipCreatedAt, todayCounts, timeRange) {
 // 習慣打卡 clip 的審查（沿用 moderate-content edge function，跟社群貼文/留言同一套）。
 // [2026-09] 加上可選的 imageBase64 參數——影片會先擷一張畫面送進來，這裡就能一起
 // 送給 Claude 視覺分析；沒有帶這個參數的舊呼叫點（純文字）行為完全不變。
+// ★ 2026-11-08：審查開關偵測。moderate-content v9 在 Secret MODERATION_MODE 不是 'on' 時會回
+//   { disabled: true }。頁面載入後先問一次，確定是關閉的話，之後發文／留言／習慣影片就完全不呼叫
+//   這支 function（也不擷取影片畫面），省掉每次 Edge Function 冷啟動的好幾秒。
+//   以後在 Supabase 把 MODERATION_MODE 設成 on，使用者重新整理頁面就會自動恢復審查，不用改前端。
+//   偵測失敗（沒登入、網路錯誤）就當作「開著」，維持原本照常呼叫的行為，不會漏審。
+var _moderationDisabled = false;
+var _moderationProbeStarted = false;
+function _noteModerationResponse(json) {
+  if (json && json.disabled === true) _moderationDisabled = true;
+  return json;
+}
+function _probeModerationMode(attempt) {
+  attempt = attempt || 0;
+  if (_moderationDisabled) return;
+  _getAccessToken().then(function(token) {
+    if (!token) {
+      // 還沒登入（或 session 還在載入）→ 稍後再試，最多試 6 次
+      if (attempt < 6) setTimeout(function() { _probeModerationMode(attempt + 1); }, 5000);
+      return;
+    }
+    return fetch('https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/moderate-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ caption: 'hello', probe: true })
+    }).then(function(res) { return res.ok ? res.json() : null; })
+      .then(function(j) {
+        _noteModerationResponse(j);
+        console.log('[Moderation] mode:', _moderationDisabled ? 'off（前端跳過審查）' : 'on');
+      });
+  }).catch(function() {});
+}
+function _startModerationProbe() {
+  if (_moderationProbeStarted) return;
+  _moderationProbeStarted = true;
+  setTimeout(function() { _probeModerationMode(0); }, 1500);
+}
+if (typeof window !== 'undefined') _startModerationProbe();
+
 async function _moderateClipCaption(caption, imageBase64) {
+  if (_moderationDisabled) return { approved: true, disabled: true };
   try {
     var token = await _getAccessToken();
     if (!token) return { approved: true };
@@ -4330,7 +4371,7 @@ async function _moderateClipCaption(caption, imageBase64) {
         signal: _ctrl ? _ctrl.signal : undefined
       });
       if (!res.ok) return { approved: true };
-      return await res.json();
+      return _noteModerationResponse(await res.json());
     } finally {
       if (_abortTimer) clearTimeout(_abortTimer);
     }
@@ -6110,6 +6151,7 @@ function FeedCard(_ref5) {
     // 有附照片/影片的話，下面 _modPromise 會改走另一條路，不查這個快取（快取只
     // 存文字結果，圖影審查每次都要重新判斷真正的畫面內容）。
     function _moderateCommentText() {
+      if (_moderationDisabled) return Promise.resolve({ approved: true, disabled: true }); // ★ 2026-11-08
       try {
         // 1) 先查共享快取（前端只能讀，不能寫；寫入由 edge function 用 service_role 處理）
         var _ck = 'mod:' + String(_text).trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 800);
@@ -6316,10 +6358,14 @@ function FeedCard(_ref5) {
   }, /*#__PURE__*/React.createElement("img", {
     src: effectiveMediaUrl,
     alt: "post",
+    // ★ 2026-11-08：原本 cover＋固定高度會把照片裁成寬寬一條（CSS 的 height:180px 也一起作用）。
+    //   改成依照片原比例顯示、最高 460px；直式照片就縮小置中，不補黑邊、不裁切。
     style: {
-      width: '100%',
-      maxHeight: 280,
-      objectFit: 'cover',
+      width: 'auto',
+      maxWidth: '100%',
+      height: 'auto',
+      maxHeight: 460,
+      margin: '0 auto',
       display: 'block'
     }
   })), effectiveHasImage && !effectiveMediaUrl && /*#__PURE__*/React.createElement("div", {
@@ -7183,7 +7229,7 @@ function ClipShareModal(props) {
     //   外層 promise 也沒有 catch，只要審查慢或卡住，進度就永遠停在 0%、按鈕也解不開。
     //   反正審查結果不會擋上傳（只決定要不要隱藏），所以改成跟留言一樣「審查和上傳平行跑」，
     //   進度條一按下去就會開始動；兩邊都完成才寫進資料庫。
-    var _modPromise = (file ? _extractVideoFrameBase64(file) : Promise.resolve(null))
+    var _modPromise = ((file && !_moderationDisabled) ? _extractVideoFrameBase64(file) : Promise.resolve(null))
       .catch(function() { return null; })
       .then(function(frameB64) { return _moderateClipCaption(caption, frameB64); })
       .catch(function() { return { approved: true }; });
@@ -13274,6 +13320,7 @@ function MainApp(_ref16) {
             _context1.n = 30;
             // ★ 2026-11-08：整段審查加 25 秒逾時（原本 getSession／fetch 都沒逾時，卡住的話
             //   按鈕會一直停在送出中）。逾時就照原本的失敗規則放行。token 改用有逾時的 _getAccessToken。
+            if (_moderationDisabled) return { approved: true, disabled: true }; // ★ 2026-11-08：審查關閉 → 不等，直接發
             return Promise.race([(function() {
               var _modToken, _modPayload;
               return _getAccessToken().then(function(_tk) {
@@ -13338,7 +13385,7 @@ function MainApp(_ref16) {
                 if (res && typeof res === 'object' && typeof res.json !== 'function' && ('approved' in res)) return res;
                 if (!res || res === true || typeof res.json !== 'function') return { approved: true };
                 if (!res.ok) return { approved: true };
-                return res.json();
+                return res.json().then(_noteModerationResponse);
               }).catch(function(e) {
                 console.warn('Moderation failed, proceeding:', e);
                 return { approved: true };
@@ -14628,13 +14675,15 @@ function MainApp(_ref16) {
         return setPostText(e.target.value);
       }
     }), /*#__PURE__*/React.createElement("div", {
-      className: "composer-media-preview" + (!postMedia ? " hidden" : "")
+      className: "composer-media-preview" + (!postMedia ? " hidden" : ""),
+      // ★ 2026-11-08：照片預覽不補黑邊——框底色改成白色（影片維持原本深色底）
+      style: (postMedia && postMedia.type === 'image') ? { background: 'var(--white)' } : undefined
     },
     /*#__PURE__*/React.createElement("img", {
       src: (postMedia && postMedia.type === 'image') ? postMedia.url : '',
       alt: "preview",
       // ★ 2026-11-08：原本 cover 會把照片裁成寬寬一條（直式照片只剩中間），改成 contain 完整顯示，跟影片預覽一致
-      style: { width: '100%', height: '100%', objectFit: 'contain', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
+      style: { width: '100%', height: '100%', objectFit: 'contain', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: 'var(--white)' }
     }),
     (postMedia && postMedia.type === 'video') ? /*#__PURE__*/React.createElement("div", {
       style: { position: 'absolute', inset: 0, background: '#111', zIndex: 1 }
