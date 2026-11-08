@@ -752,6 +752,51 @@
         .habit-category-spark { font-size:8px; opacity:.65; font-style:normal; }
         .habit-streak { display:flex; align-items:center; gap:4px; font-size:12px; font-weight:700; color:var(--gray-600); }
         .habit-time-range { font-size:12px; color:var(--gray-500); display:flex; align-items:center; gap:5px; margin-top:4px; }
+        /* ★ 2026-11-08 Home 習慣卡改版：日期＋進度面板、標題列右側配對按鈕、IG 風無邊框影片牆 */
+        .hc-side { display:flex; flex-direction:column; align-items:flex-end; gap:5px; margin-right:22px; flex-shrink:0; max-width:55%; }
+        .hc-match-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 14px; background:var(--black); color:#fff; border:none; font-family:var(--font); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
+        .hc-match-btn .hc-dot { width:8px; height:8px; border-radius:50%; background:#4ade80; flex-shrink:0; }
+        .hc-match-btn .hc-n { padding:1px 6px; background:#fff; color:#0a0a0a; font-size:10px; }
+        .hc-side-sub { font-size:10px; color:var(--gray-600); text-align:right; line-height:1.4; }
+        .hc-unlock-pill { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border:1.5px solid var(--black); font-size:11px; font-weight:700; color:var(--black); }
+        .hc-unlock-pill svg { width:13px; height:13px; flex-shrink:0; }
+        .hc-dates { display:flex; flex-wrap:wrap; border:1px solid var(--gray-200); background:var(--gray-50); margin:10px 0 14px; }
+        .hc-dates-main { flex:1 1 240px; min-width:0; padding:12px 14px; display:flex; flex-direction:column; gap:9px; }
+        .hc-dates-done { flex:0 0 150px; padding:12px 14px; border-left:1px solid var(--gray-200); display:flex; flex-direction:column; gap:9px; }
+        .hc-dates-row { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+        .hc-day { font-family:var(--din); font-size:26px; font-weight:700; line-height:1; color:var(--black); }
+        .hc-day small { font-size:16px; color:var(--gray-600); }
+        .hc-range { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:var(--gray-900); }
+        .hc-range svg { width:14px; height:14px; flex-shrink:0; }
+        .hc-left { margin-left:auto; font-size:12px; font-weight:700; color:var(--gray-700); }
+        .hc-lbl { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--gray-700); }
+        .hc-track { height:8px; background:var(--gray-200); border-radius:99px; overflow:hidden; }
+        .hc-fill { height:100%; background:var(--black); border-radius:99px; min-width:8px; }
+        .hc-fill.hc-green { background:#16a34a; }
+        .hc-clips-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:2px 16px 10px; }
+        .hc-clips-title { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--black); }
+        .hc-shared { font-size:11px; font-weight:700; color:#15803d; }
+        .hc-buddy-note { font-size:11px; color:var(--gray-600); }
+        .hc-cheer-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border:1px solid #f4c0d1; background:#fbeaf0; color:#993556; font-family:var(--font); font-size:11px; font-weight:700; cursor:pointer; }
+        .hc-cheer-pill svg { width:13px; height:13px; }
+        .hc-clip-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 11px; border:1px dashed var(--gray-400); background:var(--white); font-family:var(--font); font-size:11px; font-weight:700; color:var(--black); cursor:pointer; }
+        .hc-spacer { flex:1 1 auto; }
+        .hc-wall-wrap { position:relative; }
+        .hc-wall { display:flex; gap:2px; overflow-x:auto; scroll-behavior:smooth; scrollbar-width:none; }
+        .hc-wall::-webkit-scrollbar { display:none; }
+        .hc-tile { flex:0 0 auto; width:140px; aspect-ratio:4/5; position:relative; background:var(--gray-100); border:none; padding:0; margin:0; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center; font-family:var(--font); }
+        @media (min-width:900px) { .hc-tile { width:170px; } }
+        .hc-tile > img { width:100%; height:100%; object-fit:cover; }
+        .hc-badge { position:absolute; top:7px; right:7px; padding:2px 7px; background:rgba(0,0,0,.65); color:#fff; font-size:10px; font-weight:700; border-radius:4px; z-index:1; }
+        .hc-today { position:absolute; top:7px; left:7px; padding:2px 7px; background:#fff; color:#0a0a0a; font-size:9px; font-weight:700; border-radius:4px; z-index:1; }
+        .hc-play { position:absolute; bottom:9px; left:9px; width:16px; height:16px; color:#fff; z-index:1; filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+        .hc-tile-add { border:1.5px dashed var(--gray-400); background:var(--gray-50); flex-direction:column; gap:8px; font-size:12px; font-weight:700; color:var(--black); box-sizing:border-box; }
+        .hc-tile-add .hc-plus { width:38px; height:38px; border-radius:50%; background:var(--black); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; }
+        .hc-tile-add .hc-badge { background:var(--black); }
+        .hc-tile-empty { cursor:default; color:var(--gray-400); }
+        .hc-tile-empty svg { width:24px; height:24px; }
+        .hc-arrow { position:absolute; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; border:none; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.25); cursor:pointer; font-size:20px; font-weight:700; color:#0a0a0a; display:flex; align-items:center; justify-content:center; z-index:2; padding:0; line-height:1; }
+        .hc-arrow.hc-r { right:10px; } .hc-arrow.hc-l { left:10px; }
         /* pill tags for freq/dur */
         .habit-tag-pill { display:inline-flex; align-items:center; padding:3px 8px; border-radius:20px; font-size:9px; font-weight:500; letter-spacing:.3px; background:var(--gray-100); color:var(--gray-600); border:1px solid var(--gray-200); }
         /* cheer row */
@@ -1234,6 +1279,41 @@
            app-container 本來就只有 480px，套 640 上限不會有視覺差異；
            桌面版則確保這幾塊不會再一個窄一個寬。 */
         .pw-page { min-height:100vh; background:var(--white); display:flex; flex-direction:column; }
+        /* ★ 2026-11-08 夥伴聊天室網頁版（≥1024px）：左邊聊天、右邊配對資訊欄 */
+        .pw-page.pw-web { display:grid; grid-template-columns:minmax(0,1fr) 300px; align-items:start; min-height:100vh; }
+        .pw-page.pw-web > * { grid-column:1; }
+        .pw-page.pw-web > .pw-web-side { grid-column:2; grid-row:1 / span 30; position:sticky; top:0; height:100vh; overflow-y:auto; }
+        .pw-web .pw-hdr, .pw-web .pw-chat, .pw-web .pw-input-bar, .pw-web .pw-end-bar, .pw-web .pw-ai-card { max-width:none; }
+        .pw-web .pw-hdr { background:#0a0a0a; }
+        .pw-web .pw-identity { padding:16px 24px; gap:14px; }
+        .pw-web .pw-av { width:40px; height:40px; font-size:11px; }
+        .pw-web .pw-pair-name { font-size:17px; }
+        .pw-web .pw-pair-sub { font-size:11px; letter-spacing:1px; }
+        .pw-web .pw-chat { min-height:calc(100vh - 150px); }
+        .pw-web .pw-chat-label { display:none; }
+        .pw-web .pw-msgs { max-width:720px; margin:0 auto; padding:20px 24px; gap:10px; }
+        .pw-web .pw-mbub { max-width:460px; font-size:14px; padding:10px 14px; }
+        .pw-web .pw-mav { width:30px; height:30px; font-size:10px; }
+        .pw-web .pw-mt { font-size:10px; color:var(--gray-500); }
+        .pw-web .pw-sys-msg { font-size:12px; color:var(--gray-600); }
+        .pw-web .pw-input-bar { padding:14px 24px; justify-content:center; }
+        .pw-web .pw-input-bar > * { flex-shrink:0; }
+        .pw-web .pw-input { max-width:620px; font-size:15px; padding:12px 14px; flex:1 1 auto; }
+        .pw-web .pw-cam, .pw-web .pw-send { width:46px; height:46px; font-size:16px; }
+        .pw-web-side { border-left:1px solid var(--gray-200); background:var(--white); padding:22px 20px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px; }
+        .pw-side-k { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--gray-600); }
+        .pw-side-habit { font-family:var(--din); font-weight:700; font-size:28px; line-height:1.05; color:var(--black); text-transform:uppercase; word-break:break-word; }
+        .pw-side-stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+        .pw-side-stat { border:1px solid var(--gray-200); padding:12px; }
+        .pw-side-stat b { display:block; font-family:var(--din); font-size:26px; line-height:1; color:var(--black); }
+        .pw-side-stat span { font-size:11px; font-weight:700; color:var(--gray-700); }
+        .pw-side-ai { background:#0a0a0a; color:#fff; padding:14px 16px; display:flex; flex-direction:column; gap:6px; }
+        .pw-side-ai .pw-side-k { color:#c4c4c4; }
+        .pw-side-ai p { margin:0; font-size:13px; line-height:1.6; }
+        .pw-side-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:10px 0; border-top:1px solid var(--gray-100); }
+        .pw-side-actions { margin-top:auto; display:flex; flex-direction:column; gap:8px; }
+        .pw-side-btn { height:40px; border:1px solid var(--gray-200); background:var(--white); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; text-align:left; padding:0 12px; color:var(--black); }
+        .pw-side-btn.danger { border-color:#fecaca; background:#fff5f5; color:#b91c1c; }
         .pw-hdr { max-width:640px; width:100%; margin:0 auto; box-sizing:border-box; background:linear-gradient(135deg,#3d5e6a 0%,#4a6e7a 55%,#3f6272 100%); padding:0; position:sticky; top:0; z-index:50; }
         .pw-status { display:flex; justify-content:space-between; align-items:center; padding:10px 16px 0; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,.25); }
         .pw-identity { padding:10px 16px 12px; display:flex; align-items:center; gap:10px; }
@@ -1309,10 +1389,20 @@
             font-size:14px; font-weight:700; letter-spacing:.3px;
             text-transform:uppercase; color:var(--black);
         }
+        /* ★ 2026-11-08：習慣名稱放大一點（不加粗、不全大寫），比較好讀 */
         .pair-habit-tag {
-            font-size:10px; font-weight:700; letter-spacing:.8px;
-            text-transform:uppercase; color:var(--gray-600); margin-top:3px;
+            font-size:14px; font-weight:500; letter-spacing:.2px;
+            color:var(--gray-800); margin-top:4px;
         }
+        /* ★ 2026-11-08：最新訊息改成醒目的訊息框（未讀時加紅色 NEW、粗體） */
+        .pair-latest { display:flex; align-items:flex-start; gap:10px; margin-top:12px; padding:10px 12px; background:var(--gray-50); border:1px solid var(--gray-200); }
+        .pair-latest.unread { background:#fff5f5; border-color:#fecaca; }
+        .pair-latest-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+        .pair-latest-top { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--gray-600); }
+        .pair-latest-new { padding:1px 6px; background:#e11d48; color:#fff; font-size:9px; font-weight:700; letter-spacing:.5px; }
+        .pair-latest-time { margin-left:auto; flex-shrink:0; }
+        .pair-latest-text { font-size:14px; color:var(--black); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .pair-latest.unread .pair-latest-text { font-weight:700; }
         .pair-streak {
             font-size:9px; font-weight:700; letter-spacing:.5px;
             text-transform:uppercase; color:#fff;
@@ -7546,7 +7636,23 @@ function ClipGridModal(props) {
     cheered = props.cheered, onCheer = props.onCheer, onClose = props.onClose,
     hideCheer = props.hideCheer, // ★ 新增：看自己的 clip 時傳 true，不顯示 Cheer 按鈕（自己不能幫自己 cheer）
     readOnly = !!props.readOnly; // ★ 2026-11-07：Habit History 打開的影片牆只能看（不能刪除、不能編輯）
-  var _vp = React.useState(null); var viewingPost = _vp[0], setViewingPost = _vp[1];
+  // 把查詢結果（snake_case）轉成 FeedCard／ClipViewerModal 讀得懂的形狀（原因見下面點縮圖那段註解）
+  function _toViewPost(p) {
+    return Object.assign({}, p, {
+      userId: challenger.userId, user: challenger.displayName, avatarUrl: challenger.userAvatar,
+      habit: challenger.name, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
+      commentCount: p.comment_count || 0,
+      moderationStatus: p.moderation_status, moderationCategory: p.moderation_category,
+      moderationAppealStatus: p.moderation_appeal_status, moderationAppealAt: p.moderation_appeal_at
+    });
+  }
+  // ★ 2026-11-08：Home 影片牆點某一支 → 直接打開那支（props.initialPostId）
+  var _vp = React.useState(function() {
+    if (!challenger || !props.initialPostId) return null;
+    var _all = challenger.clips || (challenger.clip ? [challenger.clip] : []);
+    var _hit = _all.find(function(c) { return c && c.id === props.initialPostId; });
+    return _hit ? _toViewPost(_hit) : null;
+  }); var viewingPost = _vp[0], setViewingPost = _vp[1];
   if (!challenger) return null;
   var clips = challenger.clips || (challenger.clip ? [challenger.clip] : []);
   return /*#__PURE__*/React.createElement("div", {
@@ -7603,13 +7709,7 @@ function ClipGridModal(props) {
                 //   結果，也要手動轉成 camelCase 帶進去，FeedCard 才讀得到——這裡不是走
                 //   db.collection() 那層有自動轉欄位名稱的 shim，是直接呼叫 _supabase，
                 //   沒列出來的欄位不會自動出現。
-                setViewingPost(Object.assign({}, p, {
-                  userId: challenger.userId, user: challenger.displayName, avatarUrl: challenger.userAvatar,
-                  habit: challenger.name, hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
-                  commentCount: p.comment_count || 0,
-                  moderationStatus: p.moderation_status, moderationCategory: p.moderation_category,
-                  moderationAppealStatus: p.moderation_appeal_status, moderationAppealAt: p.moderation_appeal_at
-                }));
+                setViewingPost(_toViewPost(p));
               },
               style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
             },
@@ -7624,7 +7724,8 @@ function ClipGridModal(props) {
       post: viewingPost,
       currentUser: currentUser,
       readOnly: readOnly,
-      onClose: function() { setViewingPost(null); }
+      // ★ 2026-11-08：從 Home 影片牆直接點開某一支的話，關掉影片就回到 Home（不停在影片牆）
+      onClose: function() { if (props.initialPostId) { onClose && onClose(); } else { setViewingPost(null); } }
     })
   ));
 }
@@ -7693,6 +7794,76 @@ function _isPastHabitClip(post) {
   return toISODay(d) !== toISODay();
 }
 // ★ 2026-11-07：Habit History 每張習慣卡上的唯讀影片區——只能點開看，沒有 Add／Edit clip
+// ★ 2026-11-08：Home 習慣卡的 IG 風無邊框影片牆（取代原本的「1 of 5 found」大卡片位置）。
+//   - 橫向一排、可左右滑；左右箭頭按鈕在可以捲動時才出現
+//   - 每格右上角 Day X（跟上傳視窗、Challengers 共用 _clipDayNumber，數字一致），今天這支左上角標 TODAY
+//   - 今天還沒傳影片 → 最前面一格是「Add today's clip」
+//   - 影片不到 5 格時補空格，讓版面固定、知道還能往後放
+//   props: habit, clips（新到舊）, todayPost, onAdd(), onOpen(post)
+function HabitClipWall(props) {
+  var habit = props.habit || {};
+  var clips = props.clips || [];
+  var todayPost = props.todayPost || null;
+  var wallRef = React.useRef(null);
+  var _cl = React.useState(false), canL = _cl[0], setCanL = _cl[1];
+  var _cr = React.useState(false), canR = _cr[0], setCanR = _cr[1];
+  var updateArrows = React.useCallback(function() {
+    var el = wallRef.current; if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+  React.useEffect(function() {
+    updateArrows();
+    window.addEventListener('resize', updateArrows);
+    return function() { window.removeEventListener('resize', updateArrows); };
+  }, [clips.length, !!todayPost, updateArrows]);
+  function scrollBy(dir) {
+    var el = wallRef.current; if (!el) return;
+    el.scrollBy({ left: dir * Math.max(200, el.clientWidth * 0.8), behavior: 'smooth' });
+  }
+  var todayIso = (typeof toISODay === 'function') ? toISODay() : new Date().toISOString().slice(0, 10);
+  var tiles = [];
+  var readOnly = !!props.readOnly; // ★ Habit History：習慣已到期，不放「Add today's clip」，空格只補到 3 格
+  if (!todayPost && !readOnly) {
+    var _dayToday = _clipDayNumber(habit.checkedDates, new Date().toISOString(), habit.todayCounts, habit.timeRange);
+    tiles.push(React.createElement("button", {
+      key: "add", type: "button", className: "hc-tile hc-tile-add",
+      onClick: function(e) { e.stopPropagation(); props.onAdd && props.onAdd(); }
+    },
+      _dayToday ? React.createElement("span", { className: "hc-badge" }, "Day " + _dayToday) : null,
+      React.createElement("span", { className: "hc-plus" }, "+"),
+      "Add today's clip"
+    ));
+  }
+  clips.forEach(function(p) {
+    var dayNum = _clipDayNumber(habit.checkedDates, p.created_at, habit.todayCounts, habit.timeRange);
+    var isToday = !readOnly && (p.created_at || '') && toISODay(new Date(p.created_at)) === todayIso;
+    tiles.push(React.createElement("button", {
+      key: p.id, type: "button", className: "hc-tile",
+      "aria-label": "Open clip" + (dayNum ? " from day " + dayNum : ""),
+      onClick: function(e) { e.stopPropagation(); props.onOpen && props.onOpen(p); }
+    },
+      React.createElement(_ClipThumb, { url: p.thumbnail_url }),
+      dayNum ? React.createElement("span", { className: "hc-badge" }, "Day " + dayNum) : null,
+      isToday ? React.createElement("span", { className: "hc-today" }, "TODAY") : null,
+      React.createElement("svg", { className: "hc-play", viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" }, React.createElement("path", { d: "M8 5v14l11-7z" }))
+    ));
+  });
+  // 不到 5 格補空格（Habit History 唯讀時補到 3 格就好）
+  for (var i = tiles.length; i < (readOnly ? 3 : 5); i++) {
+    tiles.push(React.createElement("div", { key: "empty-" + i, className: "hc-tile hc-tile-empty", "aria-hidden": "true" },
+      React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6 },
+        React.createElement("rect", { x: 3, y: 6, width: 13, height: 12, rx: 2 }),
+        React.createElement("path", { d: "M16 10l5-3v10l-5-3" }))
+    ));
+  }
+  return React.createElement("div", { className: "hc-wall-wrap", onClick: function(e) { e.stopPropagation(); } },
+    React.createElement("div", { className: "hc-wall", ref: wallRef, onScroll: updateArrows }, tiles),
+    canL && React.createElement("button", { type: "button", className: "hc-arrow hc-l", "aria-label": "Scroll clips left", onClick: function(e) { e.stopPropagation(); scrollBy(-1); } }, "\u2039"),
+    canR && React.createElement("button", { type: "button", className: "hc-arrow hc-r", "aria-label": "Scroll clips right", onClick: function(e) { e.stopPropagation(); scrollBy(1); } }, "\u203A")
+  );
+}
+
 function HistoryClipStrip(props) {
   var clips = props.clips || [];
   var cheers = props.cheers || 0;
@@ -10013,6 +10184,7 @@ function HistoryPage(_ref15) {
     habitCheers = _ref15.habitCheers || {};
   // ★ 2026-11-07：點影片區打開的影片牆（唯讀）、網頁版的分類篩選
   var _hpClipV = useState(null), viewingClipsHabit = _hpClipV[0], setViewingClipsHabit = _hpClipV[1];
+  var _hpClipId = useState(null), viewingClipId = _hpClipId[0], setViewingClipId = _hpClipId[1]; // ★ 2026-11-08：影片牆點某一支直接打開
   var _hpCat = useState('all'), historyCat = _hpCat[0], setHistoryCat = _hpCat[1];
   var _useStateHP = useState(10),
     _useStateHP2 = _slicedToArray(_useStateHP, 2),
@@ -10136,6 +10308,11 @@ function HistoryPage(_ref15) {
           style: { fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gray-400)', margin: isDesktop ? (i === 0 ? '0' : '8px 0 0') : (i === 0 ? '4px 0 8px' : '18px 0 8px'), gridColumn: '1 / -1' }
         }, i === 0 ? "\ud83e\udd1d Partner activity" : "Past habits")
       : null;
+    // ★ 2026-11-08：解鎖過 Find Partner，或有傳過影片的歷史習慣 → 跟 Home 一樣的新版卡片
+    //   （日期＋完成率面板、IG 風影片牆）。只有解鎖過的才有配對區；其他歷史習慣維持原本的精簡卡片。
+    var _hpClips = (h._isLive && clipsByHabit[h.id] && clipsByHabit[h.id].allPosts) || [];
+    var _hpUnlocked = !!(h._isLive && h._checkedDays >= PARTNER_UNLOCK_DAYS);
+    if (h._isLive && (_hpUnlocked || _hpClips.length > 0)) return React.createElement(React.Fragment, { key: h.id || i }, _hpHeader, _renderHistoryCardRich(h, r, textColor, _hpClips, _hpUnlocked));
     return /*#__PURE__*/React.createElement(React.Fragment, { key: h.id || i }, _hpHeader, React.createElement("div", {
       id: "history-habit-" + h.id,
       className: "archive-item"
@@ -10214,6 +10391,84 @@ function HistoryPage(_ref15) {
     }))));
   }
 
+  // ★ 2026-11-08：新版歷史卡片（跟 Home 習慣卡同一套樣式：hc-dates／hc-clips-head／HabitClipWall）
+  function _renderHistoryCardRich(h, r, textColor, clips, unlocked) {
+    var tr = parseTimeRange(h.timeRange);
+    var total = (tr.start && tr.end) ? Math.max(1, Math.round((dateFromISO(tr.end) - dateFromISO(tr.start)) / 86400000) + 1) : null;
+    var fmt = function(iso, y) { try { return dateFromISO(iso).toLocaleDateString('en-US', y ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (_e) { return iso; } };
+    var rangeLabel = (tr.start && tr.end) ? (fmt(tr.start, false) + " \u2192 " + fmt(tr.end, true)) : (h.timeRange || '\u2014');
+    var cheers = (habitCheers[h.id] && habitCheers[h.id].totalCount) || 0;
+    var st = unlocked ? getHabitPairState(h, user.uid) : null;
+    var ms = (st && st.matchStatus) || 'none';
+    var found = !!(st && ['seeking', 'declined', 'ended'].indexOf(st.kind) !== -1 && (ms === 'partial' || ms === 'complete') && st.pendingMatchData);
+    var foundN = (st && st.matchFoundCount) || 0;
+    // getCatColours 定義在 MainApp 裡面，這裡拿不到 → 直接用 CSS 變數（--cat-fitness-bg 等，同一組顏色）
+    var _ck = String(h.category || 'Other').toLowerCase().replace(/[^a-z]/g, '');
+    var catCol = { bg: 'var(--cat-' + _ck + '-bg, var(--cat-other-bg))', text: 'var(--cat-' + _ck + '-text, var(--cat-other-text))', bd: 'var(--cat-' + _ck + '-bd, var(--cat-other-bd))' };
+    return React.createElement("div", { id: "history-habit-" + h.id, className: "archive-item" },
+      React.createElement("div", { className: "archive-item-top" },
+        React.createElement("div", { className: "archive-item-left", style: { minWidth: 0 } },
+          React.createElement("div", { className: "archive-item-name", style: { fontSize: 16, fontWeight: 700 } }, h.name),
+          React.createElement("div", { className: "habit-meta", style: { marginBottom: 0 } },
+            React.createElement("span", { className: "habit-category", style: { background: catCol.bg, color: catCol.text, borderColor: catCol.bd } }, h.category || 'Other'),
+            h.freqLabel && React.createElement("span", { className: "habit-tag-pill" }, h.freqLabel),
+            h.durLabel && React.createElement("span", { className: "habit-tag-pill" }, h.durLabel))
+        ),
+        // 找到配對時，按鈕放這裡（跟 Home 一樣；原本那張「N of 5 found」大卡片不顯示）
+        found && React.createElement("div", { className: "hc-side", style: { marginRight: 0 } },
+          React.createElement("button", {
+            type: "button", className: "hc-match-btn",
+            onClick: function(e) { e.stopPropagation(); if (window._showPreloadedMatch) window._showPreloadedMatch(h, st.pendingMatchData, { complete: ms === 'complete' }); }
+          }, React.createElement("span", { className: "hc-dot" }), foundN > 1 ? "View your matches" : "View your match", React.createElement("span", { className: "hc-n" }, String(foundN || 1))),
+          React.createElement("div", { className: "hc-side-sub" }, ms === 'partial' ? ("Still looking for " + Math.max(0, 5 - foundN) + " more") : (foundN >= 5 ? "All 5 matches are ready" : "Take a look and decide"))
+        )
+      ),
+      React.createElement("div", { className: "hc-dates", style: { margin: '0 16px 12px' } },
+        React.createElement("div", { className: "hc-dates-main" },
+          React.createElement("div", { className: "hc-dates-row" },
+            total ? React.createElement("span", { className: "hc-day" }, total + " DAYS") : null,
+            React.createElement("span", { className: "hc-range" },
+              React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, "aria-hidden": "true" },
+                React.createElement("rect", { x: 3, y: 5, width: 18, height: 16, rx: 2 }),
+                React.createElement("path", { d: "M3 10h18M8 3v4M16 3v4" })),
+              rangeLabel),
+            React.createElement("span", { className: "hc-left" }, "Ended")
+          ),
+          React.createElement("div", { className: "hc-track" }, React.createElement("div", { className: "hc-fill", style: { width: '100%' } }))
+        ),
+        React.createElement("div", { className: "hc-dates-done" },
+          React.createElement("div", { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' } },
+            React.createElement("span", { className: "hc-lbl" }, "Done"),
+            React.createElement("span", { className: "hc-day", style: { color: textColor } }, r + "%")),
+          React.createElement("div", { className: "hc-track" },
+            React.createElement("div", { className: "hc-fill hc-green", style: { width: r + "%", minWidth: r > 0 ? 8 : 0 } })))
+      ),
+      // 配對區：只有解鎖過的才有（找到配對時已經在上面放按鈕，不再顯示大卡片）
+      unlocked && !found && React.createElement("div", {
+        style: { padding: '0 16px 12px' },
+        onClick: function(e) { e.stopPropagation(); }
+      }, renderHabitPartnerStatus(st, {
+        habitName: h.name,
+        onFindPartner: function() { window.openMatchingModal(h); },
+        onEndPartnership: function(pair) { endPartnershipDirect(pair); },
+        onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
+        onGoToBuddies: function() { if (onGoToBuddies) onGoToBuddies(); },
+        onViewFoundMatch: function(s2) { if (window._showPreloadedMatch) window._showPreloadedMatch(h, s2.pendingMatchData, { complete: s2.matchStatus === 'complete' }); },
+        onDismissFoundMatch: function() { if (window._dismissFoundMatchKeepSearching) window._dismissFoundMatchKeepSearching(h.id); }
+      })),
+      // 影片區（唯讀：習慣已到期，沒有 Add／Edit clip）
+      React.createElement("div", { className: "hc-clips-head" },
+        React.createElement("span", { className: "hc-clips-title" }, "Clips \u00b7 " + clips.length),
+        React.createElement("span", { className: "hc-spacer" }),
+        cheers > 0 && React.createElement("span", { className: "hc-cheer-pill", style: { cursor: 'default' } }, "\u2665 " + cheers + (cheers === 1 ? " cheer" : " cheers"))
+      ),
+      React.createElement(HabitClipWall, {
+        habit: h, clips: clips, todayPost: null, readOnly: true,
+        onOpen: function(post) { setViewingClipId(post.id); setViewingClipsHabit(h); }
+      })
+    );
+  }
+
   // ★ 2026-11-07：唯讀影片牆（點影片區打開；不能刪除、不能編輯）
   var _clipWall = viewingClipsHabit && React.createElement(ClipGridModal, {
     challenger: {
@@ -10231,8 +10486,9 @@ function HistoryPage(_ref15) {
     cheered: true,
     hideCheer: true,
     readOnly: true,
+    initialPostId: viewingClipId,
     onCheer: function() {},
-    onClose: function() { setViewingClipsHabit(null); }
+    onClose: function() { setViewingClipsHabit(null); setViewingClipId(null); }
   });
 
   // ── ★ 2026-11-07：網頁版（兩欄習慣卡 + 右側 AI Credits／統計，不放廣告）──
@@ -10900,6 +11156,9 @@ function MainApp(_ref16) {
   //   存目前正在看哪個習慣（null 代表沒開）。
   var _useState_viewingMyClips = React.useState(null);
   var viewingMyClipsForHabit = _useState_viewingMyClips[0], setViewingMyClipsForHabit = _useState_viewingMyClips[1];
+  // ★ 2026-11-08：從 Home 影片牆點某一支時，直接打開那支（存 post id）
+  var _useState_viewingMyClipId = React.useState(null);
+  var viewingMyClipInitialId = _useState_viewingMyClipId[0], setViewingMyClipInitialId = _useState_viewingMyClipId[1];
   // ★ 新增：貼/改/刪 clip 後手動 +1，讓上面的 effect 重新抓一次，卡片才會立刻反映
   //   最新狀態，不用等 habits.length 剛好變動或整頁重新整理。
   var _useState_clipRefreshTick = React.useState(0);
@@ -14114,6 +14373,31 @@ function MainApp(_ref16) {
       var habitCheerData = habitCheers[habit.id] || null;
       var _catCol = getCatColours(habit.category);
       var _cheerUid = habit.id + '-cheer';
+      // ★ 2026-11-08：找到配對（partial／complete）時，改在標題列右側放「View your match」，
+      //   不再顯示那張「1 of 5 found」大卡片（active／pending／還沒找過等其他狀態維持原本的卡片）。
+      var _foundStatus = (pairState && pairState.matchStatus) || 'none';
+      var _foundMatch = !!(pairState && ['seeking', 'declined', 'ended'].indexOf(pairState.kind) !== -1 &&
+        (_foundStatus === 'partial' || _foundStatus === 'complete') && pairState.pendingMatchData);
+      var _foundN = (pairState && pairState.matchFoundCount) || 0;
+      var _showUnlockPill = !isQualified && !habitTooShort;
+      // ★ 2026-11-08：日期面板用的數字（挑戰第幾天／總天數／剩幾天／時間進度）
+      var _hcStart = _habitTr.start, _hcEnd = _habitTr.end;
+      var _hcToday = currentDay || toISODay();
+      var _hcDiff = function(a, b) { return Math.round((dateFromISO(a) - dateFromISO(b)) / 86400000); };
+      var _hcTotalDays = (_hcStart && _hcEnd) ? Math.max(1, _hcDiff(_hcEnd, _hcStart) + 1) : null;
+      var _hcNotStarted = !!(_hcStart && _hcToday < _hcStart);
+      var _hcDayNow = _hcStart ? Math.min(_hcTotalDays || 99999, Math.max(1, _hcDiff(_hcToday, _hcStart) + 1)) : null;
+      var _hcTimePct = (_hcTotalDays && !_hcNotStarted) ? Math.min(100, Math.round((_hcDayNow / _hcTotalDays) * 100)) : 0;
+      var _hcFmt = function(iso, withYear) {
+        try { return dateFromISO(iso).toLocaleDateString('en-US', withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }); }
+        catch (_e) { return iso; }
+      };
+      var _hcRangeLabel = (_hcStart && _hcEnd) ? (_hcFmt(_hcStart, false) + " \u2192 " + _hcFmt(_hcEnd, true)) : (habit.timeRange || '');
+      var _hcLeftLabel = null;
+      if (_hcStart && _hcEnd) {
+        if (_hcNotStarted) { var _hcIn = _hcDiff(_hcStart, _hcToday); _hcLeftLabel = "Starts in " + _hcIn + (_hcIn === 1 ? " day" : " days"); }
+        else { var _hcLeft = Math.max(0, _hcDiff(_hcEnd, _hcToday)); _hcLeftLabel = _hcLeft === 0 ? "Last day" : (_hcLeft + (_hcLeft === 1 ? " day left" : " days left")); }
+      }
       return /*#__PURE__*/React.createElement("div", {
         key: habit.id,
         id: "habit-card-" + habit.id, // ★ 2026-10：點小鈴鐺通知時捲到這張卡片用
@@ -14146,30 +14430,65 @@ function MainApp(_ref16) {
               habit.freqLabel && React.createElement("span", { className: "habit-tag-pill" }, habit.freqLabel),
               habit.durLabel  && React.createElement("span", { className: "habit-tag-pill" }, habit.durLabel)
             ),
-            habit.timeRange && React.createElement("div", { className: "habit-time-range", style: { marginTop: 4 } },
-              React.createElement("svg", { width:12, height:12, viewBox:"0 0 16 16", fill:"none", style:{flexShrink:0} },
-                React.createElement("rect", { x:1, y:3, width:14, height:12, rx:2, stroke:"currentColor", strokeWidth:1.5 }),
-                React.createElement("path", { d:"M5 1v3M11 1v3M1 7h14", stroke:"currentColor", strokeWidth:1.5, strokeLinecap:"round" })
-              ),
-              habit.timeRange
-            )
           ),
-          React.createElement("div", {
-            className: "habit-progress-section",
+          /* ★ 2026-11-08：標題列右側——找到配對時放「View your match」按鈕（原本那張「1 of 5 found」
+             大卡片拿掉，位置讓給影片牆）；還沒解鎖配對時放「再 N 次打卡解鎖」。 */
+          (_foundMatch || _showUnlockPill) && React.createElement("div", {
+            className: "hc-side",
             onClick: function(e) { e.stopPropagation(); }
           },
-            React.createElement("div", { className: "habit-progress-bar-wrap" },
-              React.createElement("div", { className: "habit-prog-label" },
-                React.createElement("span", null, "Done"),
-                React.createElement("span", { style:{ fontFamily:'var(--din)' } }, progPct, "%")
-              ),
-              React.createElement("div", { className: "habit-prog-track" },
-                React.createElement("div", {
-                  className: "habit-prog-fill".concat(progPct >= 100 ? ' done' : ''),
-                  style: { width: progPct + "%" }
-                })
-              )
-            )
+            _foundMatch && React.createElement("button", {
+              type: "button", className: "hc-match-btn",
+              onClick: function(e) {
+                e.stopPropagation();
+                if (window._showPreloadedMatch) window._showPreloadedMatch(habit, pairState.pendingMatchData, { complete: _foundStatus === 'complete' });
+              }
+            },
+              React.createElement("span", { className: "hc-dot" }),
+              _foundN > 1 ? "View your matches" : "View your match",
+              React.createElement("span", { className: "hc-n" }, String(_foundN || 1))
+            ),
+            _foundMatch && React.createElement("div", { className: "hc-side-sub" },
+              _foundStatus === 'partial'
+                ? ("Still looking for " + Math.max(0, 5 - _foundN) + " more \u00b7 we'll notify you")
+                : (_foundN >= 5 ? "All 5 matches are ready" : "Take a look and decide")
+            ),
+            _showUnlockPill && React.createElement("span", { className: "hc-unlock-pill" },
+              React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, "aria-hidden": "true" },
+                React.createElement("rect", { x: 5, y: 11, width: 14, height: 10, rx: 2 }),
+                React.createElement("path", { d: "M8 11V8a4 4 0 018 0v3" })),
+              daysLeft + (daysLeft === 1 ? " check-in" : " check-ins") + " to unlock partner"
+            ),
+            _showUnlockPill && React.createElement("div", { className: "hc-side-sub" }, daysCompleted + " / " + PARTNER_UNLOCK_DAYS + " check-ins")
+          )
+        ),
+        /* ★ 2026-11-08：日期＋進度改成獨立面板——原本是灰色小字＋右上角細細一條，不好讀。
+           左邊：挑戰第幾天／總天數、起訖日期、剩幾天＋時間進度條；右邊：完成率（Done %）。 */
+        React.createElement("div", { className: "hc-dates" },
+          React.createElement("div", { className: "hc-dates-main" },
+            React.createElement("div", { className: "hc-dates-row" },
+              _hcTotalDays
+                ? React.createElement("span", { className: "hc-day" },
+                    _hcNotStarted ? "STARTS SOON" : ("DAY " + _hcDayNow),
+                    !_hcNotStarted && React.createElement("small", null, " / " + _hcTotalDays))
+                : null,
+              _hcRangeLabel && React.createElement("span", { className: "hc-range" },
+                React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, "aria-hidden": "true" },
+                  React.createElement("rect", { x: 3, y: 5, width: 18, height: 16, rx: 2 }),
+                  React.createElement("path", { d: "M3 10h18M8 3v4M16 3v4" })),
+                _hcRangeLabel),
+              _hcLeftLabel && React.createElement("span", { className: "hc-left" }, _hcLeftLabel)
+            ),
+            _hcTotalDays ? React.createElement("div", { className: "hc-track" },
+              React.createElement("div", { className: "hc-fill", style: { width: _hcTimePct + "%" } })) : null
+          ),
+          React.createElement("div", { className: "hc-dates-done" },
+            React.createElement("div", { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' } },
+              React.createElement("span", { className: "hc-lbl" }, "Done"),
+              React.createElement("span", { className: "hc-day" }, progPct + "%")
+            ),
+            React.createElement("div", { className: "hc-track" },
+              React.createElement("div", { className: "hc-fill hc-green", style: { width: progPct + "%", minWidth: progPct > 0 ? 8 : 0 } }))
           )
         )
       ),
@@ -14188,7 +14507,7 @@ function MainApp(_ref16) {
         React.createElement("strong", null, isQualified ? "Paused from partner matching" : "Paused on Challengers"),
         " \u2014 no check-ins for " + _habitIdleDays + " days. Check in or share a clip to show up again."
       ),
-      isQualified && React.createElement("div", { style:{ padding:'10px 16px 0' } },
+      isQualified && !_foundMatch && React.createElement("div", { style:{ padding:'10px 16px 0' } },
         renderHabitPartnerStatus(pairState, {
           habitName: habit.name,
           onFindPartner: function() {
@@ -14203,122 +14522,52 @@ function MainApp(_ref16) {
           onEndPartnership: function(pair) { endPartnershipDirect(pair); },
           onCancelRequest: function(pair) { cancelPendingRequestDirect(pair); },
           onGoToBuddies: function() { setActiveTab('buddies'); },
-          onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(habit, st.pendingMatchData); },
+          onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(habit, st.pendingMatchData, { complete: st.matchStatus === 'complete' }); },
           onDismissFoundMatch: function() { if (window._dismissFoundMatchKeepSearching) window._dismissFoundMatchKeepSearching(habit.id); }
         })
       ),
-      /* ── card footer ── */
-      React.createElement("div", {
-        className: "habit-card-footer",
-        onClick: function(e) { e.stopPropagation(); }
-      },
-        /* left side: unlock bar（未解鎖時）；已解鎖的話上面已經有夥伴狀態卡了，
-           這裡留空當 spacer，讓 cheer-bar 繼續靠右對齊 */
-        React.createElement("div", { style:{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 } },
-          !isQualified && !habitTooShort && React.createElement("div", {
-            className: "unlock-progress-wrap", style:{ margin:0, flex:1 },
-            onClick: function(e) { e.stopPropagation(); }
-          },
-            React.createElement("div", { className: "unlock-progress-row" },
-              React.createElement("span", { className: "unlock-progress-label" }, daysLeft + " days to unlock partner"),
-              React.createElement("span", { className: "unlock-progress-days" }, daysCompleted + "/" + PARTNER_UNLOCK_DAYS)
+      /* ── ★ 2026-11-08：影片區（取代原本的 footer）──
+         上面一行：影片數、今天傳了沒、cheers（公開習慣才顯示）、Add／Edit today's clip；
+         下面：IG 風無邊框影片牆（HabitClipWall），貼齊卡片左右邊。
+         原本 footer 左邊的「N days to unlock partner」移到標題列右側（hc-unlock-pill）。 */
+      (function() {
+        var _cs = myClipStatusByHabit[habit.id];
+        var _todayPost = _cs && _cs.post;
+        var _allClips = (_cs && _cs.allPosts) || [];
+        var _openAdd = function() { setEditingClipPost(_todayPost || null); setShowClipShareForHabit(habit); };
+        return React.createElement("div", { onClick: function(e) { e.stopPropagation(); } },
+          React.createElement("div", { className: "hc-clips-head", style: { paddingTop: 12 } },
+            React.createElement("span", { className: "hc-clips-title" }, "Clips \u00b7 " + _allClips.length),
+            _todayPost && _cs.visibility !== 'buddies' && React.createElement("span", { className: "hc-shared" }, "\u2713 Shared today"),
+            // Buddies-only clip 的心意標記（跟公開 cheer 數字是兩件事）
+            _todayPost && _cs.visibility === 'buddies' && React.createElement("span", { className: "hc-buddy-note" },
+              _cs.reacted ? "\u2665 Your buddy found this encouraging" : "Shared with your buddy"),
+            React.createElement("span", { className: "hc-spacer" }),
+            /* cheers：僅當習慣公開時顯示；點擊開啟 CheerDetailPanel */
+            habit.challengeVisibility !== 'private' && React.createElement("button", {
+              type: "button", className: "hc-cheer-pill",
+              onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(habit.id); }
+            },
+              React.createElement("svg", { viewBox: "0 0 24 24", fill: (habitCheerData && habitCheerData.totalCount > 0) ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 2, "aria-hidden": "true" },
+                React.createElement("path", { d: "M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572", strokeLinecap: "round", strokeLinejoin: "round" })),
+              (habitCheerData ? habitCheerData.totalCount : 0).toLocaleString() + " cheers",
+              (habitCheerData && habitCheerData.todayCount > 0) ? (" \u00b7 +" + habitCheerData.todayCount + " today") : ""
             ),
-            React.createElement("div", { className: "unlock-progress-track" },
-              React.createElement("div", { className: "unlock-progress-fill", style:{ width: unlockPct + "%" } })
-            )
-          )
-        ),
-        /* right side: cheer bar（顯示收到的鼓勵）— 僅當習慣公開時顯示；選擇 private 則隱藏 */
-        /* ★ 點擊開啟 CheerDetailPanel——手機版程式碼裡這個面板本來就有寫，只是從未接上觸發點 */
-        habit.challengeVisibility !== 'private' && React.createElement("div", {
-          className: "cheer-bar-a",
-          style: { cursor: 'pointer' },
-          onClick: function(e) { e.stopPropagation(); setCheerPanelHabitId(habit.id); }
-        },
-          React.createElement("span", {
-            className: "cheer-bar-heart",
-            key: "h-" + habit.id + "-" + (habitCheerData ? habitCheerData.todayCount : 0)
-          },
-            React.createElement("svg", { viewBox:"0 0 24 24", fill:"currentColor", "aria-hidden":"true" },
-              React.createElement("path", { d:"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572", fill:"none", stroke:"currentColor", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round" })
-            )
+            /* 一天只能有一支 clip——今天已經貼過就變成「Edit today's clip」 */
+            React.createElement("button", {
+              type: "button", className: "hc-clip-btn add-clip-btn",
+              onClick: function(e) { e.stopPropagation(); _openAdd(); }
+            }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), _todayPost ? "Edit today's clip" : "Add a clip")
           ),
-          React.createElement("div", null,
-            React.createElement("div", { className: "cheer-bar-main" },
-              React.createElement("span", { className: "cheer-bar-rollbox" },
-                React.createElement("span", {
-                  className: "cheer-bar-num rolling",
-                  key: "n-" + habit.id + "-" + (habitCheerData ? habitCheerData.totalCount : 0)
-                }, (habitCheerData ? habitCheerData.totalCount : 0).toLocaleString())
-              ),
-              React.createElement("span", { className: "cheer-bar-label" }, "cheers")
-            ),
-            React.createElement("div", { className: "cheer-bar-sub" },
-              (habitCheerData && habitCheerData.todayCount > 0)
-                ? ("+" + habitCheerData.todayCount + " cheering you on today")
-                : "cheering you on today"
-            )
-          )
-        ),
-        /* ── ★ 新增：這個習慣至今總共貼過幾支 clip——之前完全沒有這個數字，只知道
-           「今天貼了沒」。跟下面的今日狀態分開一行，一眼掃過去就有總量概念。 ── */
-        (function() {
-          var _cs = myClipStatusByHabit[habit.id];
-          if (!_cs || !_cs.totalCount) return null;
-          return React.createElement("div", {
-            style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--gray-400)', cursor: 'pointer' },
-            onClick: function(e) { e.stopPropagation(); setViewingMyClipsForHabit(habit); }
-          },
-            React.createElement(VideoIcon, { style: { width: 11, height: 11, flexShrink: 0 } }),
-            _cs.totalCount + " clip" + (_cs.totalCount === 1 ? '' : 's') + " shared so far"
-          );
-        })(),
-        /* ── Buddies-only clip 的心意標記：跟上面公開 cheer 數字是兩件事，不會互相影響 ── */
-        (function() {
-          var _cs = myClipStatusByHabit[habit.id];
-          if (!_cs || _cs.visibility !== 'buddies') return null;
-          return React.createElement("div", {
-            style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--gray-500)' }
-          },
-            React.createElement("svg", { width: 12, height: 12, viewBox: "0 0 24 24", fill: _cs.reacted ? "#993556" : "none", stroke: "#993556", strokeWidth: 2 },
-              React.createElement("path", { d: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" })
-            ),
-            _cs.reacted ? "Your buddy found this encouraging" : "Shared with your buddy"
-          );
-        })(),
-        /* ── 今天已經上傳過（Everyone 公開）的提醒：縮圖 + 文字。 ── */
-        (function() {
-          var _cs = myClipStatusByHabit[habit.id];
-          if (!_cs || _cs.visibility !== 'everyone') return null;
-          return React.createElement("div", {
-            style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--gray-500)' }
-          },
-            _cs.thumbnailUrl
-              ? React.createElement("img", { src: _cs.thumbnailUrl, alt: "", style: { width: 20, height: 20, borderRadius: 4, objectFit: 'cover', flexShrink: 0 } })
-              : React.createElement(VideoIcon, { style: { width: 12, height: 12, flexShrink: 0 } }),
-            "\u2713 Clip shared today"
-          );
-        })(),
-        /* ── ★ 修正：一天只能有一支 clip——今天已經貼過的話，按鈕改成「編輯今天那支」
-           （打開同一個 modal，帶著 editingPost），不再讓人無限往上疊加同一天的 clip。
-           ★ 2026-11-08：private 習慣也要能傳影片——private 只代表「不上 Challengers」，
-           還是會進 AI 配對，沒影片的話配對報告就看不到他的打卡影片。上傳視窗本來就有
-           private 專用的說明（Only for partner matching），之前只是按鈕被藏起來。
-           private 習慣的影片不會出現在 Challengers（那邊先把 private 習慣整個濾掉了）。 ── */
-        (function() {
-          var _cs = myClipStatusByHabit[habit.id];
-          var _todayPost = _cs && _cs.post;
-          return React.createElement("button", {
-            className: "add-clip-btn",
-            style: { display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "var(--gray-600)", background: "none", border: "1px dashed var(--gray-300)", borderRadius: 8, padding: "6px 8px", cursor: "pointer", flexShrink: 0 },
-            onClick: function(e) {
-              e.stopPropagation();
-              setEditingClipPost(_todayPost || null);
-              setShowClipShareForHabit(habit);
-            }
-          }, React.createElement(VideoIcon, { style: { width: 13, height: 13 } }), _todayPost ? "Edit today's clip" : "Add a clip");
-        })()
-      )
+          React.createElement(HabitClipWall, {
+            habit: habit,
+            clips: _allClips,
+            todayPost: _todayPost,
+            onAdd: _openAdd,
+            onOpen: function(post) { setViewingMyClipInitialId(post.id); setViewingMyClipsForHabit(habit); }
+          })
+        );
+      })()
       );
     }) // end allActive.map
         ) // end allActive section
@@ -15200,8 +15449,9 @@ function MainApp(_ref16) {
       currentUser: user,
       cheered: true, // 不會顯示 Cheer 按鈕（hideCheer），這個值其實用不到，保留只是符合 props 形狀
       hideCheer: true, // ★ 看自己的 clip，不需要（也不該能）自己幫自己 cheer
+      initialPostId: viewingMyClipInitialId,
       onCheer: function() {},
-      onClose: function() { setViewingMyClipsForHabit(null); }
+      onClose: function() { setViewingMyClipsForHabit(null); setViewingMyClipInitialId(null); }
     })
   );
   return /*#__PURE__*/React.createElement("div", {
@@ -16143,6 +16393,8 @@ function PairWallPage(_ref_pw) {
 
   // ★ 改動：聊天室不再要求「雙方都先貼今日進度」才能用——直接開放聊天。
   var canChat = true;
+  // ★ 2026-11-08：網頁版（≥1024px）改成兩欄：左邊聊天、右邊配對資訊（End partnership／Report／Block／AI 說明都移到右欄）
+  var _pwWeb = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
 
   if (loading) return React.createElement('div', { className: 'pw-page' },
     React.createElement('div', { className: 'pw-hdr' },
@@ -16154,7 +16406,7 @@ function PairWallPage(_ref_pw) {
     React.createElement('div', { style:{ padding:32, textAlign:'center', fontSize:12, color:'var(--gray-400)' } }, 'Loading...')
   );
 
-  return React.createElement('div', { className: 'pw-page' },
+  return React.createElement('div', { className: 'pw-page' + (_pwWeb ? ' pw-web' : '') },
     /* END PARTNERSHIP CONFIRM MODAL */
     showEndConfirm && React.createElement('div', {
       style: { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }
@@ -16268,7 +16520,7 @@ function PairWallPage(_ref_pw) {
     /* END PARTNERSHIP — ★ 改版：從標題列右上角的 9px 小字拉出來，獨立成一整條，
        固定在標題正下方、位置好找，但用淡色調而不是強烈警示色，避免份量過重。 */
     // ★ 2026-10-26：同一條加上「Report」「Block」（Apple 規範 1.2），End partnership 維持原本的位置跟樣子
-    React.createElement('div', { className: 'pw-end-bar', style: { cursor:'default' } },
+    !_pwWeb && React.createElement('div', { className: 'pw-end-bar', style: { cursor:'default' } },
       React.createElement('div', { style: { display:'flex', alignItems:'center', gap:8, cursor:'pointer', flex:1, minWidth:0 }, onClick: function(){ setShowEndConfirm(true); } },
         React.createElement('div', { className: 'pw-end-icon' }, '✕'),
         React.createElement('div', { className: 'pw-end-label' }, 'End partnership')
@@ -16279,7 +16531,7 @@ function PairWallPage(_ref_pw) {
 
     /* AI INSIGHT — 一兩句話提醒雙方的共同點，直接讀配對當下算好的 ai_match_data.reason
        （或 pair.ai_insight 手動覆寫），不用再打 pair-insight 重新生成一次 */
-    aiInsight && React.createElement('div', { className: 'pw-ai-card' },
+    !_pwWeb && aiInsight && React.createElement('div', { className: 'pw-ai-card' },
       React.createElement('div', { className: 'pw-ai-dot' }),
       React.createElement('div', { style: { flex: 1, minWidth: 0 } },
         React.createElement('div', { className: 'pw-ai-lbl' }, 'AI · Why this match'),
@@ -16454,7 +16706,39 @@ function PairWallPage(_ref_pw) {
         onKeyDown: function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
       }),
       React.createElement('button', { className: 'pw-send', disabled: !inputText.trim(), onClick: sendMessage }, '↑')
-    )
+    ),
+
+    /* ★ 2026-11-08：網頁版右欄——配對資訊 */
+    _pwWeb && (function() {
+      var _md = pair.ai_match_data || {};
+      var _score = _md.score != null ? _md.score : pair.match_score;
+      var _myShare = (mediaConsent || {})[user.uid];
+      var _theirShare = (mediaConsent || {})[partnerId];
+      var _shareLbl = function(st) { return st === 'approved' ? 'On' : st === 'declined' ? 'Declined' : st === 'pending' ? 'Waiting' : 'Off'; };
+      return React.createElement('aside', { className: 'pw-web-side', 'aria-label': 'Pair details' },
+        React.createElement('div', null,
+          React.createElement('div', { className: 'pw-side-k' }, 'Paired habit'),
+          React.createElement('div', { className: 'pw-side-habit' }, habitName || '\u2014')
+        ),
+        React.createElement('div', { className: 'pw-side-stats' },
+          React.createElement('div', { className: 'pw-side-stat' }, React.createElement('b', null, _score != null ? _score + '%' : '\u2014'), React.createElement('span', null, 'Match')),
+          React.createElement('div', { className: 'pw-side-stat' }, React.createElement('b', null, String(daysSince)), React.createElement('span', null, daysSince === 1 ? 'Day together' : 'Days together'))
+        ),
+        aiInsight && React.createElement('div', { className: 'pw-side-ai' },
+          React.createElement('div', { className: 'pw-side-k' }, 'AI \u00b7 Why this match'),
+          React.createElement('p', null, aiInsight)
+        ),
+        React.createElement('div', null,
+          React.createElement('div', { className: 'pw-side-row' }, React.createElement('span', null, 'You can share photos & videos'), React.createElement('b', { style: { color: _myShare === 'approved' ? '#15803d' : 'var(--gray-600)' } }, _shareLbl(_myShare))),
+          React.createElement('div', { className: 'pw-side-row' }, React.createElement('span', null, (partnerName || 'Buddy') + ' can share'), React.createElement('b', { style: { color: _theirShare === 'approved' ? '#15803d' : 'var(--gray-600)' } }, _shareLbl(_theirShare)))
+        ),
+        React.createElement('div', { className: 'pw-side-actions' },
+          React.createElement('button', { type: 'button', className: 'pw-side-btn', onClick: function(){ setReportReason(''); setReportDetails(''); setReportAlsoBlock(true); setShowReport(true); } }, '\u2691 Report'),
+          React.createElement('button', { type: 'button', className: 'pw-side-btn', onClick: function(){ setShowBlockConfirm(true); } }, '\u2298 Block'),
+          React.createElement('button', { type: 'button', className: 'pw-side-btn danger', onClick: function(){ setShowEndConfirm(true); } }, '\u2715 End partnership')
+        )
+      );
+    })()
   );
 }
 
@@ -17393,7 +17677,7 @@ function BuddiesPage(_ref_buddies) {
                               .sort(function(a,b){ return b[1] - a[1]; })
                               .slice(0, 2)
                               .map(function(e) {
-                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit', recentFit:'Recent pace', totalFit:'Total check-ins', recencyFit:'Last check-in', breakFit:'Breaks' }[e[0]] || e[0]; // ★ 2026-11-08：v23 新增的分數項目
                                 return React.createElement("span", {
                                   key: e[0],
                                   style:{ fontSize:9, fontWeight:700, color:'#3d5e6a', background:'#e2ebec', borderRadius:5, padding:'4px 8px', whiteSpace:'nowrap' }
@@ -17423,14 +17707,16 @@ function BuddiesPage(_ref_buddies) {
                     React.createElement("span", { style:{ fontSize:11, fontWeight:700, color:'#166534' } },
                       "Together " + togetherStreak + " day" + (togetherStreak === 1 ? '' : 's') + " in a row")
                   ),
-                  latestMsg && React.createElement("div", {
-                    style:{ display:'flex', alignItems:'center', gap:8, marginTop:12, paddingTop:12, borderTop:'1px solid var(--gray-100)', fontSize:11, color: isUnread ? 'var(--black)' : 'var(--gray-500)' }
-                  },
-                    isUnread && React.createElement("span", { style:{ width:7, height:7, borderRadius:'50%', background:'#ef4444', flexShrink:0 } }),
-                    React.createElement("span", { style:{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: isUnread ? 700 : 400 } },
-                      (latestMsg.sender_id === user.uid ? 'You' : (partnerName || 'Buddy')) + ': ' + fmtMsgPreview(latestMsg)
-                    ),
-                    React.createElement("span", { style:{ marginLeft:'auto', color: isUnread ? 'var(--gray-500)' : 'var(--gray-300)', flexShrink:0, fontWeight: isUnread ? 700 : 400 } }, fmtMsgAgo(latestMsg.created_at))
+                  // ★ 2026-11-08：最新訊息改成醒目的訊息框（誰傳的、NEW 標籤、時間在上面一行，訊息內容放大）
+                  latestMsg && React.createElement("div", { className: "pair-latest" + (isUnread ? " unread" : "") },
+                    React.createElement("div", { className: "pair-latest-body" },
+                      React.createElement("div", { className: "pair-latest-top" },
+                        React.createElement("span", { style:{ fontWeight:700, color:'var(--black)' } }, latestMsg.sender_id === user.uid ? 'You' : (partnerName || 'Buddy')),
+                        isUnread && React.createElement("span", { className: "pair-latest-new" }, "NEW"),
+                        React.createElement("span", { className: "pair-latest-time" }, fmtMsgAgo(latestMsg.created_at))
+                      ),
+                      React.createElement("div", { className: "pair-latest-text" }, fmtMsgPreview(latestMsg))
+                    )
                   )
                 ),
                 // ★ 夥伴打卡 clip：Buddies-only 的心意標記不計入公開 cheer 數，
@@ -17492,7 +17778,7 @@ function BuddiesPage(_ref_buddies) {
                   Object.entries(pair.ai_match_data.breakdown)
                     .filter(function(e){ return e[1] != null; })
                     .map(function(e) {
-                      var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                      var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit', recentFit:'Recent pace', totalFit:'Total check-ins', recencyFit:'Last check-in', breakFit:'Breaks' }[e[0]] || e[0]; // ★ 2026-11-08：v23 新增的分數項目
                       return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
                         React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
                         React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
@@ -17518,7 +17804,7 @@ function BuddiesPage(_ref_buddies) {
                             Object.entries(pair.ai_match_data.breakdown)
                               .filter(function(e){ return e[1] != null; })
                               .map(function(e) {
-                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit' }[e[0]] || e[0];
+                                var lbl = { activityFit:'Activity Fit', rhythmScore:'Rhythm Score', mindBody:'Mind-Body', durationFit:'Duration Fit', valuesFit:'Values Fit', recentFit:'Recent pace', totalFit:'Total check-ins', recencyFit:'Last check-in', breakFit:'Breaks' }[e[0]] || e[0]; // ★ 2026-11-08：v23 新增的分數項目
                                 return React.createElement("div", { key: e[0], style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
                                   React.createElement("div", { style:{ fontSize:9, fontWeight:700, color:'var(--gray-500)', width:80, flexShrink:0, textTransform:'uppercase' } }, lbl),
                                   React.createElement("div", { style:{ flex:1, height:3, background:'var(--gray-100)', borderRadius:2 } },
@@ -17619,7 +17905,10 @@ function BuddiesPage(_ref_buddies) {
                 // ★ 2026-10-28：ai_match_data.clips 存的是「候選人」（也就是收到邀請的這個人自己）的影片，
                 //   只有送邀請那方（pairs.user_id）看才是「對方的影片」；收到邀請的人看就不顯示，免得看到自己的影片。
                 // ★ 2026-11-02：收到邀請的人看「送邀請那方」的影片（requesterClips，送出邀請時存的）
-                clips: rpIsUser ? (Array.isArray(md.clips) ? md.clips : []) : (Array.isArray(md.requesterClips) ? md.requesterClips : [])
+                clips: rpIsUser ? (Array.isArray(md.clips) ? md.clips : []) : (Array.isArray(md.requesterClips) ? md.requesterClips : []),
+                // ★ 2026-11-08：打卡紀錄也換視角（主角是對方、You 是自己）
+                checkin: rpIsUser ? (md.checkin || null) : (md.myCheckin || null),
+                myCheckin: rpIsUser ? (md.myCheckin || null) : (md.checkin || null)
               }, { label: 'Wants to be your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report for this pair yet.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -17678,7 +17967,9 @@ function BuddiesPage(_ref_buddies) {
                 score: vmd.score != null ? vmd.score : vp.match_score,
                 breakdown: vmd.breakdown || {},
                 reason: _pairReasonFor(vp, user.uid) || (_pairReasonPending(vp, user.uid) && !perspectiveFailed[vp.id] ? 'Writing up why you two match\u2026' : ''),
-                clips: vpIsUser ? (Array.isArray(vmd.clips) ? vmd.clips : []) : (Array.isArray(vmd.requesterClips) ? vmd.requesterClips : [])
+                clips: vpIsUser ? (Array.isArray(vmd.clips) ? vmd.clips : []) : (Array.isArray(vmd.requesterClips) ? vmd.requesterClips : []),
+                checkin: vpIsUser ? (vmd.checkin || null) : (vmd.myCheckin || null),
+                myCheckin: vpIsUser ? (vmd.myCheckin || null) : (vmd.checkin || null)
               }, { label: 'Your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report was saved for this pair.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -18956,9 +19247,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
            3. 從頭到尾沒有任何 JS 依「候選人數量 < 5」去控制它的顯示，
               註解寫的意圖從來沒被真的實作。
            已整個移除，只保留 _renderMatchCard() 裡那個正確、唯一的版本。 -->
-      <div style="padding:0 10px 16px;">
-        <button class="result-skip" onclick="window.closeMatchingModal()">Close</button>
-      </div>
+      <!-- ★ 2026-11-08：Close 移進 _renderMatchCard() 的按鈕區（跟 Send 一樣顯眼），這裡不再放固定的 -->
     </div>
     <!-- State C: Error -->
     <div id="matchingError" style="display:none;padding:48px 20px;text-align:center;min-height:60vh;flex-direction:column;align-items:center;justify-content:center;">
@@ -19990,6 +20279,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
   // ── showMatchingResults：滑卡式，最多 5 張 ────────────────────────────────
   var _matchCards = [];
+  // ★ 2026-11-08：已經找齊（5 位，或背景已經停止找）才顯示「Find new people」；
+  //   還在找的時候只顯示 Close，避免「系統還在找，又叫它重找」這種矛盾。
+  var _matchAllFound = false;
   var _matchCardIdx = 0;
   var _matchInvited = {};
   // ★ 2026-10：送邀請前資料庫端檢查發現「已經不能邀請」的卡片（idx → 原因代碼）
@@ -20005,12 +20297,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
   // ── Find Partner 最多回傳 5 位候選人（match-partner v10 的 3+2 分桶結果），
   //   讓使用者用 Prev/Next 滑卡片瀏覽、挑一位喜歡的送出邀請。
-  function showMatchingResults(matches) {
+  function showMatchingResults(matches, opts) {
     document.getElementById('matchingScanning').style.display = 'none';
     document.getElementById('matchingResult').style.display = '';
     document.getElementById('matchingError').style.display = 'none';
 
     _matchCards = matches;
+    _matchAllFound = !!(opts && opts.complete) || matches.length >= 5 || matches.some(function(m) { return m && m._isFallback; });
     _matchCardIdx = 0;
     _matchInvited = {};
     _matchUnavailable = {};
@@ -20021,7 +20314,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     var _topup = document.getElementById('matchTopupNote');
     if (_topup) {
       var _isFb = matches.some(function(m) { return m && m._isFallback; });
-      if (matches.length < 5 && !_isFb) {
+      if (matches.length < 5 && !_isFb && !_matchAllFound) {
         _topup.textContent = '\ud83d\udd0e ' + matches.length + ' of 5 found \u2014 we\u2019ll keep looking for ' + (5 - matches.length) + ' more every day and let you know in your \ud83d\udd14 notifications. No extra credits used.';
         _topup.style.display = '';
       } else {
@@ -20079,7 +20372,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         '<div style="height:100%;width:' + score + '%;background:' + av.fg + ';"></div>' +
       '</div>' +
 
-      // breakdown
+      // ★ 2026-11-08（match-partner v23）：有真實打卡紀錄（m.checkin）就顯示「Check-in activity」，
+      //   取代原本 Activity／Rhythm／Mind-Body／Duration 四條分數；舊報告沒有這份資料才顯示舊的分數條。
+      (m.checkin ? _checkinActivityHtml(m.checkin, m.myCheckin, bd) :
       '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
         '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;">Match breakdown</div>' +
         _progRow('Activity Fit', bd.activityFit,  av.fg) +
@@ -20087,7 +20382,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         _progRow('Mind-Body',    bd.mindBody,      av.fg) +
         _progRow('Duration Fit', bd.durationFit,   av.fg) +
         valuesFitHtml +
-      '</div>' +
+      '</div>') +
 
       // ★ v14：挑戰影片——瀏覽數最高的 3 部；m.clips 是空陣列就整個區塊不渲染
       //   （這個人這個習慣沒有公開的影片，或 Bunny 當下查不到瀏覽數）
@@ -20155,6 +20450,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         (_matchCards.length > 1 ?
           '<button onclick="window._mrcNext()" ' + (idx === _matchCards.length - 1 ? 'disabled' : '') + ' aria-label="Next match" style="width:44px;height:44px;flex-shrink:0;background:#111;color:' + (idx === _matchCards.length - 1 ? '#333' : '#ccc') + ';border:1px solid #222;border-radius:6px;font-size:16px;cursor:' + (idx === _matchCards.length - 1 ? 'default' : 'pointer') + ';font-family:inherit;">›</button>'
           : '') +
+      '</div>' +
+      // ★ 2026-11-08：第二排——跟 Send 一樣高、一樣字級。找齊才多一顆「Find new people」
+      //   （原本在 Home 卡片上那行灰色小字連結「None of these feel right — find me new people」）。
+      '<div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;">' +
+        (_matchAllFound
+          ? '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">' +
+              '<button onclick="window._mrcFindNew()" style="height:44px;background:transparent;color:#fff;border:1.5px solid #fff;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-family:inherit;">\u21bb Find new people</button>' +
+              '<button onclick="window.closeMatchingModal()" style="height:44px;background:transparent;color:#fff;border:1.5px solid #fff;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-family:inherit;">Close</button>' +
+            '</div>' +
+            '<div style="font-size:10px;color:#9a9a9a;text-align:center;line-height:1.5;">None of these feel right? Find new people searches again for this habit and lets you know in your \ud83d\udd14 notifications.</div>'
+          : '<button onclick="window.closeMatchingModal()" style="height:44px;background:transparent;color:#fff;border:1.5px solid #fff;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-family:inherit;">Close</button>' +
+            (_matchCards.length < 5 ? '<div style="font-size:10px;color:#9a9a9a;text-align:center;line-height:1.5;">Still looking for ' + (5 - _matchCards.length) + ' more \u2014 we\u2019ll let you know in your \ud83d\udd14 notifications.</div>' : '')
+        ) +
       '</div>';
 
     // store match data for invite
@@ -20187,6 +20495,72 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     if (list && list.scrollIntoView) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // ★ 2026-11-08：配對報告的「Check-in activity」區塊（資料由 match-partner v23 算好：c＝對方、me＝自己）
+  //   四格數字（累計、最近 30 天、上次打卡、最長中斷）＋整段期間的每週（或每月）打卡條＋一句事實描述。
+  function _checkinActivityHtml(c, me, bd) {
+    var num = function(x) { return (x == null || isNaN(x)) ? '\u2014' : String(x); };
+    var fmtDate = function(iso, y) { try { return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', y ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (_e) { return iso || ''; } };
+    var fmtAgo = function(d) { return d == null ? '\u2014' : d === 0 ? 'Today' : d === 1 ? 'Yesterday' : d + ' days ago'; };
+    var fmtSpan = function(d) {
+      if (d == null) return '\u2014';
+      if (d < 14) return d + (d === 1 ? ' day' : ' days');
+      if (d < 60) return Math.round(d / 7) + ' weeks';
+      var mo = Math.round(d / 30); return mo + (mo === 1 ? ' month' : ' months');
+    };
+    var iv = Math.max(1, c.intervalDays || 1);
+    var freq = c.freqLabel || (iv === 1 ? 'Every day' : 'Every ' + iv + ' days');
+    var range = c.start ? (fmtDate(c.start, !c.end) + (c.end ? ' \u2192 ' + fmtDate(c.end, true) : '')) : '';
+    var longBreak = (c.longestBreakDays || 0) / iv > 8;
+    var tile = function(val, lbl, color, border) {
+      return '<div style="background:#141414;border:1px solid ' + (border || '#222') + ';padding:9px 11px;">' +
+        '<div style="font-family:var(--din);font-size:22px;font-weight:700;line-height:1;color:' + (color || '#fff') + ';">' + val + '</div>' +
+        '<div style="font-size:10px;color:#b0b0b0;margin-top:3px;">' + lbl + '</div></div>';
+    };
+    // 打卡條
+    var n = Math.max(1, Math.min(78, c.buckets || 1));
+    var done = {}; (c.done || []).forEach(function(i) { done[i] = true; });
+    var cells = '';
+    for (var i = 0; i < n; i++) {
+      var st = done[i] ? 'background:#4ade80;' : (c.todayBucket != null && i > c.todayBucket ? 'background:transparent;border:1px dashed #444;box-sizing:border-box;' : 'background:#2a2a2a;');
+      cells += '<span style="flex:1 1 0;min-width:0;' + st + '"></span>';
+    }
+    var unitLbl = c.unit === 'month' ? 'Each bar = 1 month' : 'Each bar = 1 week';
+    // 一句事實描述（程式算，不是 AI 寫的）
+    var note = '';
+    var spanAdj = function(d) { return fmtSpan(d).replace(/ (day|week|month)s?$/, '-$1'); }; // 「9-month break」
+    if (longBreak && (c.last30 || 0) > 0) note = 'Back at it after a ' + spanAdj(c.longestBreakDays) + ' break \u2014 ' + c.last30 + ' check-in' + (c.last30 === 1 ? '' : 's') + ' in the last 30 days.';
+    else if (c.lastDaysAgo != null && c.lastDaysAgo > iv * 2) note = 'No check-in for ' + c.lastDaysAgo + ' days.';
+    var fitLine = [];
+    if (bd && bd.valuesFit != null) fitLine.push('Values fit ' + bd.valuesFit + '%');
+    if (bd && bd.activityFit != null) fitLine.push('Activity fit ' + bd.activityFit + '%');
+    return '<div style="padding:12px 16px 14px;border-bottom:1px solid #111;">' +
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px;">' +
+        '<span style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;">Check-in activity</span>' +
+        '<span style="font-size:10px;color:#b0b0b0;text-align:right;">' + freq + (range ? ' \u00b7 ' + range : '') + '</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;">' +
+        tile(num(c.total), 'Total check-ins') +
+        tile(num(c.last30), 'In the last 30 days', (c.last30 || 0) > 0 ? '#4ade80' : '#fff') +
+        tile(fmtAgo(c.lastDaysAgo), 'Last check-in') +
+        tile(fmtSpan(c.longestBreakDays), 'Longest break', longBreak ? '#fbbf24' : '#fff', longBreak ? '#3a2a12' : null) +
+      '</div>' +
+      '<div style="display:flex;gap:1px;height:26px;margin-top:12px;">' + cells + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:9px;color:#9a9a9a;margin-top:4px;">' +
+        '<span>' + (c.start ? fmtDate(c.start, false) : '') + '</span><span>' + unitLbl + '</span><span>' + (c.end ? fmtDate(c.end, false) : 'Today') + '</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:12px;font-size:9px;color:#b0b0b0;margin-top:6px;flex-wrap:wrap;">' +
+        '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:#4ade80;"></span>Checked in</span>' +
+        '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:#2a2a2a;"></span>No check-in</span>' +
+        '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border:1px dashed #444;box-sizing:border-box;"></span>Not yet</span>' +
+      '</div>' +
+      (note ? '<div style="margin-top:10px;padding:8px 10px;background:#161208;border:1px solid #3a2a12;font-size:11px;line-height:1.6;color:#f3e3c2;">' + note + '</div>' : '') +
+      (me ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid #1a1a1a;font-size:10px;color:#b0b0b0;">' +
+          '<b style="color:#fff;">You</b><span>' + num(me.total) + ' check-ins</span><span>\u00b7</span><span>' + num(me.last30) + ' in the last 30 days</span><span>\u00b7</span><span>' +
+          (me.freqLabel || ((me.intervalDays || 1) === 1 ? 'Every day' : 'Every ' + me.intervalDays + ' days')) + '</span></div>' : '') +
+      (fitLine.length ? '<div style="font-size:10px;color:#9a9a9a;margin-top:8px;">' + fitLine.join(' \u00b7 ') + '</div>' : '') +
+    '</div>';
+  }
+
   function _progRow(lbl, val, color) {
     var v = val != null ? val : 0;
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">' +
@@ -20200,16 +20574,21 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   //   m.clips 是 match-partner 回傳的陣列（可能是空的），每個元素形如
   //   { postId, thumbnailUrl, mediaUrl, createdAt, views }。沒有縮圖網址時
   //   退回純色漸層色塊（跟排版 mockup 一致），不會因為缺圖就整個不顯示。
+  // ★ 2026-11-08：固定 3 格、IG 風無邊框（2px 間隔）。影片不到 3 支時補「No clip yet」空格，
+  //   不會再出現「只有 1 支影片就撐滿整個報告寬度」的情況；一支都沒有也照樣留 3 格。
   function _renderClipsSection(m, av) {
-    var clips = (m && Array.isArray(m.clips)) ? m.clips : [];
-    if (clips.length === 0) return '';
+    var clips = (m && Array.isArray(m.clips)) ? m.clips.slice(0, 3) : [];
+    var tiles = clips.map(function(c) { return _renderClipTile(c, av); });
+    for (var i = clips.length; i < 3; i++) {
+      tiles.push('<div style="aspect-ratio:4/5;background:#151515;border:1px dashed #333;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#737373;">No clip yet</div>');
+    }
     return '<div style="padding:12px 16px;border-bottom:1px solid #111;">' +
       '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#777;margin-bottom:10px;display:flex;align-items:baseline;justify-content:space-between;">' +
         '<span>Challenge clips</span>' +
-        '<span style="color:#444;letter-spacing:.5px;text-transform:none;font-weight:600;">' + (clips.some(function(c) { return c.views != null; }) ? ('Top ' + clips.length + ' by views') : ('Latest ' + clips.length)) + '</span>' +
+        (clips.length ? '<span style="color:#444;letter-spacing:.5px;text-transform:none;font-weight:600;">' + (clips.some(function(c) { return c.views != null; }) ? ('Top ' + clips.length + ' by views') : ('Latest ' + clips.length)) + '</span>' : '') +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(' + clips.length + ',1fr);gap:8px;">' +
-        clips.map(function(c) { return _renderClipTile(c, av); }).join('') +
+      '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;">' +
+        tiles.join('') +
       '</div>' +
     '</div>';
   }
@@ -20219,7 +20598,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       ? ('background-image:url(\'' + String(c.thumbnailUrl).replace(/'/g, "\\'") + '\');background-size:cover;background-position:center;')
       : 'background:linear-gradient(145deg,#232323,#141414);';
     var safeUrl = String(c.mediaUrl || '').replace(/'/g, "\\'");
-    return '<div onclick="window._mrcPlayClip(\'' + safeUrl + '\')" style="position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;cursor:pointer;' + bg + '">' +
+    var _dLbl = '';
+    if (c.createdAt) { try { _dLbl = new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch (_e) {} }
+    return '<div onclick="window._mrcPlayClip(\'' + safeUrl + '\')" style="position:relative;aspect-ratio:4/5;overflow:hidden;cursor:pointer;' + bg + '">' +
+      (_dLbl ? '<div style="position:absolute;top:5px;right:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(0,0,0,.65);border-radius:3px;padding:2px 6px;">' + _dLbl + '</div>' : '') +
       '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;">▶</div>' +
       (c.views != null ? '<div style="position:absolute;bottom:5px;left:5px;font-size:9px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);border-radius:4px;padding:3px 5px;font-family:var(--din);">👁 ' + _fmtViews(c.views) + '</div>' : '') +
     '</div>';
@@ -20355,6 +20737,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           partnerHabitName: m.habitName,
           avgDuration: m.avgDuration || null,
           habitLifespan: m.habitLifespan || null,
+          // ★ 2026-11-08（v23）：雙方的打卡紀錄快照——報告的 Check-in activity 區塊用
+          //   checkin＝候選人（收到邀請的人），myCheckin＝送邀請的人（就是我）
+          checkin: m.checkin || null,
+          myCheckin: m.myCheckin || null,
+          checkinAt: new Date().toISOString().slice(0, 10),
           // ★ v14 新增：挑戰影片快照也一起存，之後如果「AI report」展開頁要
           //   一併顯示，資料已經在這裡了，不用再另外補查。
           clips: m.clips || []
@@ -20562,7 +20949,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   // ── 顯示背景排程（check-pending-matches）已經預先算好、存在
   //   pending_match_suggestions 的配對結果——不重新掃描、不再打一次 Claude，
   //   使用者從「找到新夥伴」的信件點進來，直接看到跟信件裡承諾的同一個人。──
-  window._showPreloadedMatch = function(habit, matchData) {
+  window._showPreloadedMatch = function(habit, matchData, opts) {
     if (!habit || !matchData) return;
     if (typeof habit.id === 'string' && habit.id.indexOf('temp-') === 0) return;
 
@@ -20587,7 +20974,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     // ★ 修正：match_data 可能是舊資料留下的陣列形狀，也可能是單一物件——用
     //   Array.isArray 防呆，兩種形狀都能正確處理，避免陣列包陣列讓畫面壞掉。
     var _preloadedArr = Array.isArray(matchData) ? matchData : [matchData];
-    showMatchingResults(_preloadedArr);
+    showMatchingResults(_preloadedArr, opts);
 
     // ★ 2026-10 修正：不再「顯示過一次就刪」。原本這裡顯示完立刻刪掉
     //   pending_match_suggestions，使用者關掉 modal 之後就再也看不到這筆結果了——
@@ -20604,6 +20991,16 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   //   match_notifications.enabled 重新打開，讓明天的 check-pending-matches
   //   排程重新把這個習慣納入掃描範圍。這是 Andy 要的「重開 notify 開關」：
   //   不用像以前一樣故意讓一次即時搜尋失敗，才能看到那個開關。
+  // ★ 2026-11-08：配對報告裡的「Find new people」——清掉這批結果、重新打開背景搜尋，然後關掉視窗
+  window._mrcFindNew = function() {
+    var _h = _currentHabit;
+    if (!_h) { window.closeMatchingModal(); return; }
+    var _p = window._dismissFoundMatchKeepSearching ? window._dismissFoundMatchKeepSearching(_h.id) : null;
+    window.closeMatchingModal();
+    if (typeof _showAppToast === 'function') _showAppToast("Got it \u2014 we'll look for new people and let you know.");
+    if (_p && _p.then) _p.then(function() { if (window._refreshMyPairs) window._refreshMyPairs(); });
+  };
+
   window._dismissFoundMatchKeepSearching = function(habitId) {
     if (!habitId || !window._supabaseClient || !window._currentUser) return;
     return window._supabaseClient.from('pending_match_suggestions')
