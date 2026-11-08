@@ -9193,6 +9193,51 @@ function renderHabitPartnerStatus(state, opts) {
   );
 }
 
+// ★ 2026-11-08：習慣卡片標題列右側的配對按鈕（Home、Habit History 共用）
+//   取代原本「Looking for your accountability partner」／「Your last request wasn't accepted」／
+//   「Your previous partnership has ended」／「N of 5 found」這幾張大卡片。
+//   只處理 seeking／declined／ended 三種狀態；active、pending 仍顯示原本的卡片。
+function _isSidePartnerState(state) {
+  return !!(state && ['seeking', 'declined', 'ended'].indexOf(state.kind) !== -1);
+}
+function renderPartnerSideAction(state, opts) {
+  opts = opts || {};
+  var stop = function(e) { e.stopPropagation(); };
+  var ms = state.matchStatus || 'none';
+  var n = state.matchFoundCount || 0;
+  if ((ms === 'partial' || ms === 'complete') && state.pendingMatchData) {
+    return [
+      React.createElement("button", {
+        key: "btn", type: "button", className: "hc-match-btn",
+        onClick: function(e) { stop(e); opts.onViewFoundMatch && opts.onViewFoundMatch(state); }
+      }, React.createElement("span", { className: "hc-dot" }), n > 1 ? "View your matches" : "View your match", React.createElement("span", { className: "hc-n" }, String(n || 1))),
+      React.createElement("div", { key: "sub", className: "hc-side-sub" },
+        ms === 'partial' ? (n + " of 5 found \u00b7 still looking") : (n >= 5 ? "All 5 matches are ready" : (n + " found \u00b7 take a look")))
+    ];
+  }
+  if (ms === 'searching') {
+    return [
+      React.createElement("button", { key: "btn", type: "button", className: "hc-match-btn", disabled: true, style: { opacity: .45, cursor: 'default' }, onClick: stop }, "Searching\u2026"),
+      React.createElement("div", { key: "sub", className: "hc-side-sub" }, "Searching in the background \u00b7 we'll notify you")
+    ];
+  }
+  var label = state.kind === 'seeking' ? "Find partner" : "Find new partner";
+  // ★ 2026-11-08：狀態只用按鈕下方這一行小字說明（不另外放圖示或卡片）
+  var sub = state.kind === 'declined' ? "Last request wasn't accepted \u00b7 1 AI credit"
+    : state.kind === 'ended' ? "Partnership ended \u00b7 1 AI credit"
+    : "1 AI credit per search";
+  return [
+    React.createElement("button", {
+      key: "btn", type: "button", className: "hc-match-btn",
+      onClick: function(e) { stop(e); opts.onFindPartner && opts.onFindPartner(); }
+    },
+      React.createElement("svg", { width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.4, "aria-hidden": "true" },
+        React.createElement("circle", { cx: 11, cy: 11, r: 7 }), React.createElement("path", { d: "M20 20l-4-4" })),
+      label),
+    React.createElement("div", { key: "sub", className: "hc-side-sub" }, sub)
+  ];
+}
+
 /* ── Calculate cumulative completion rate (shared helper) ──
    Formula: sum of completed sessions across all cycles (max per cycle = timesPerCycle)
          ÷ (Total Days ÷ intervalDays × timesPerCycle)
@@ -10399,9 +10444,7 @@ function HistoryPage(_ref15) {
     var rangeLabel = (tr.start && tr.end) ? (fmt(tr.start, false) + " \u2192 " + fmt(tr.end, true)) : (h.timeRange || '\u2014');
     var cheers = (habitCheers[h.id] && habitCheers[h.id].totalCount) || 0;
     var st = unlocked ? getHabitPairState(h, user.uid) : null;
-    var ms = (st && st.matchStatus) || 'none';
-    var found = !!(st && ['seeking', 'declined', 'ended'].indexOf(st.kind) !== -1 && (ms === 'partial' || ms === 'complete') && st.pendingMatchData);
-    var foundN = (st && st.matchFoundCount) || 0;
+    var sidePartner = unlocked && _isSidePartnerState(st); // ★ Find partner／View your match 放標題列右側
     // getCatColours 定義在 MainApp 裡面，這裡拿不到 → 直接用 CSS 變數（--cat-fitness-bg 等，同一組顏色）
     var _ck = String(h.category || 'Other').toLowerCase().replace(/[^a-z]/g, '');
     var catCol = { bg: 'var(--cat-' + _ck + '-bg, var(--cat-other-bg))', text: 'var(--cat-' + _ck + '-text, var(--cat-other-text))', bd: 'var(--cat-' + _ck + '-bd, var(--cat-other-bd))' };
@@ -10415,12 +10458,11 @@ function HistoryPage(_ref15) {
             h.durLabel && React.createElement("span", { className: "habit-tag-pill" }, h.durLabel))
         ),
         // 找到配對時，按鈕放這裡（跟 Home 一樣；原本那張「N of 5 found」大卡片不顯示）
-        found && React.createElement("div", { className: "hc-side", style: { marginRight: 0 } },
-          React.createElement("button", {
-            type: "button", className: "hc-match-btn",
-            onClick: function(e) { e.stopPropagation(); if (window._showPreloadedMatch) window._showPreloadedMatch(h, st.pendingMatchData, { complete: ms === 'complete' }); }
-          }, React.createElement("span", { className: "hc-dot" }), foundN > 1 ? "View your matches" : "View your match", React.createElement("span", { className: "hc-n" }, String(foundN || 1))),
-          React.createElement("div", { className: "hc-side-sub" }, ms === 'partial' ? ("Still looking for " + Math.max(0, 5 - foundN) + " more") : (foundN >= 5 ? "All 5 matches are ready" : "Take a look and decide"))
+        sidePartner && React.createElement("div", { className: "hc-side", style: { marginRight: 0 }, onClick: function(e) { e.stopPropagation(); } },
+          renderPartnerSideAction(st, {
+            onFindPartner: function() { window.openMatchingModal(h); },
+            onViewFoundMatch: function(s2) { if (window._showPreloadedMatch) window._showPreloadedMatch(h, s2.pendingMatchData, { complete: s2.matchStatus === 'complete' }); }
+          })
         )
       ),
       React.createElement("div", { className: "hc-dates", style: { margin: '0 16px 12px' } },
@@ -10443,8 +10485,8 @@ function HistoryPage(_ref15) {
           React.createElement("div", { className: "hc-track" },
             React.createElement("div", { className: "hc-fill hc-green", style: { width: r + "%", minWidth: r > 0 ? 8 : 0 } })))
       ),
-      // 配對區：只有解鎖過的才有（找到配對時已經在上面放按鈕，不再顯示大卡片）
-      unlocked && !found && React.createElement("div", {
+      // 配對區：只有解鎖過、而且是 active／pending 的才顯示卡片（其他狀態的按鈕已經在標題列右側）
+      unlocked && !sidePartner && React.createElement("div", {
         style: { padding: '0 16px 12px' },
         onClick: function(e) { e.stopPropagation(); }
       }, renderHabitPartnerStatus(st, {
@@ -14375,10 +14417,21 @@ function MainApp(_ref16) {
       var _cheerUid = habit.id + '-cheer';
       // ★ 2026-11-08：找到配對（partial／complete）時，改在標題列右側放「View your match」，
       //   不再顯示那張「1 of 5 found」大卡片（active／pending／還沒找過等其他狀態維持原本的卡片）。
-      var _foundStatus = (pairState && pairState.matchStatus) || 'none';
-      var _foundMatch = !!(pairState && ['seeking', 'declined', 'ended'].indexOf(pairState.kind) !== -1 &&
-        (_foundStatus === 'partial' || _foundStatus === 'complete') && pairState.pendingMatchData);
-      var _foundN = (pairState && pairState.matchFoundCount) || 0;
+      // ★ 2026-11-08：還沒配對（seeking／declined／ended）時，Find partner／View your match 都放在標題列右側，
+      //   不再顯示整張「Looking for your accountability partner」卡片
+      var _sidePartner = isQualified && _isSidePartnerState(pairState);
+      var _partnerOpts = {
+        onFindPartner: function() {
+          // 中斷太久時先不讓找新夥伴（後端也會擋），不扣點
+          if (_habitDormant) {
+            if (typeof _showAppToast === 'function') _showAppToast('Check in or share a clip today to start matching again.');
+            else alert('Check in or share a clip today to start matching again.');
+            return;
+          }
+          window.openMatchingModal(habit);
+        },
+        onViewFoundMatch: function(st) { if (window._showPreloadedMatch) window._showPreloadedMatch(habit, st.pendingMatchData, { complete: st.matchStatus === 'complete' }); }
+      };
       var _showUnlockPill = !isQualified && !habitTooShort;
       // ★ 2026-11-08：日期面板用的數字（挑戰第幾天／總天數／剩幾天／時間進度）
       var _hcStart = _habitTr.start, _hcEnd = _habitTr.end;
@@ -14433,26 +14486,11 @@ function MainApp(_ref16) {
           ),
           /* ★ 2026-11-08：標題列右側——找到配對時放「View your match」按鈕（原本那張「1 of 5 found」
              大卡片拿掉，位置讓給影片牆）；還沒解鎖配對時放「再 N 次打卡解鎖」。 */
-          (_foundMatch || _showUnlockPill) && React.createElement("div", {
+          (_sidePartner || _showUnlockPill) && React.createElement("div", {
             className: "hc-side",
             onClick: function(e) { e.stopPropagation(); }
           },
-            _foundMatch && React.createElement("button", {
-              type: "button", className: "hc-match-btn",
-              onClick: function(e) {
-                e.stopPropagation();
-                if (window._showPreloadedMatch) window._showPreloadedMatch(habit, pairState.pendingMatchData, { complete: _foundStatus === 'complete' });
-              }
-            },
-              React.createElement("span", { className: "hc-dot" }),
-              _foundN > 1 ? "View your matches" : "View your match",
-              React.createElement("span", { className: "hc-n" }, String(_foundN || 1))
-            ),
-            _foundMatch && React.createElement("div", { className: "hc-side-sub" },
-              _foundStatus === 'partial'
-                ? ("Still looking for " + Math.max(0, 5 - _foundN) + " more \u00b7 we'll notify you")
-                : (_foundN >= 5 ? "All 5 matches are ready" : "Take a look and decide")
-            ),
+            _sidePartner && renderPartnerSideAction(pairState, _partnerOpts),
             _showUnlockPill && React.createElement("span", { className: "hc-unlock-pill" },
               React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, "aria-hidden": "true" },
                 React.createElement("rect", { x: 5, y: 11, width: 14, height: 10, rx: 2 }),
@@ -14507,7 +14545,7 @@ function MainApp(_ref16) {
         React.createElement("strong", null, isQualified ? "Paused from partner matching" : "Paused on Challengers"),
         " \u2014 no check-ins for " + _habitIdleDays + " days. Check in or share a clip to show up again."
       ),
-      isQualified && !_foundMatch && React.createElement("div", { style:{ padding:'10px 16px 0' } },
+      isQualified && !_sidePartner && React.createElement("div", { style:{ padding:'10px 16px 0' } },
         renderHabitPartnerStatus(pairState, {
           habitName: habit.name,
           onFindPartner: function() {
