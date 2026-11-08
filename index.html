@@ -1512,7 +1512,7 @@
             overflow:hidden;
         }
         .composer-media-preview img {
-            width:100%; height:100%; object-fit:cover; display:block;
+            width:100%; height:100%; object-fit:contain; display:block;
             transform:translateZ(0);
         }
         /* video-portal sits OUTSIDE React tree to avoid any re-render flicker */
@@ -10061,8 +10061,8 @@ function HistoryPage(_ref15) {
     }, h.durLabel)),
     /* ★ 2026-11-07：唯讀影片區——跟 Home 一樣的縮圖＋支數＋累計加油數，點開看全部；
        習慣已經到期，所以沒有 Add／Edit clip。手動刪除的習慣影片已經一起刪掉，不顯示這區；
-       private 習慣本來就不能傳影片，也不顯示。 */
-    (h._isLive && h.challengeVisibility !== 'private') && React.createElement(HistoryClipStrip, {
+       ★ 2026-11-08：private 習慣現在也能傳影片了，這區一起顯示。 */
+    h._isLive && React.createElement(HistoryClipStrip, {
       clips: (clipsByHabit[h.id] && clipsByHabit[h.id].allPosts) || [],
       cheers: (habitCheers[h.id] && habitCheers[h.id].totalCount) || 0,
       onView: function() { setViewingClipsHabit(h); }
@@ -13272,11 +13272,12 @@ function MainApp(_ref16) {
             // ── AI content moderation（先審後傳：圖片用 base64 送審，通過才上傳）──
             setIsReviewing(true);
             _context1.n = 30;
-            return (function() {
-              var _modSession, _modToken, _modPayload;
-              return _supabase.auth.getSession().then(function(s) {
-                _modSession = s;
-                _modToken = _modSession.data.session && _modSession.data.session.access_token;
+            // ★ 2026-11-08：整段審查加 25 秒逾時（原本 getSession／fetch 都沒逾時，卡住的話
+            //   按鈕會一直停在送出中）。逾時就照原本的失敗規則放行。token 改用有逾時的 _getAccessToken。
+            return Promise.race([(function() {
+              var _modToken, _modPayload;
+              return _getAccessToken().then(function(_tk) {
+                _modToken = _tk;
                 if (!_modToken) return { approved: true };
                 _modPayload = { caption: postText.trim() || '' };
                 var _isTextOnly = !(postMedia && (postMedia.type === 'image' || postMedia.type === 'video'));
@@ -13342,7 +13343,9 @@ function MainApp(_ref16) {
                 console.warn('Moderation failed, proceeding:', e);
                 return { approved: true };
               });
-            })();
+            })(), new Promise(function(resolve) {
+              setTimeout(function() { console.warn('Moderation timed out, proceeding'); resolve({ approved: true }); }, 25000);
+            })]);
           case 30:
             var _modResult = _context1.v;
             // ★ 修正（2026-09）：改成「不擋貼文」——不管審查判定哪一類（SCAM/ADULT/
@@ -13388,6 +13391,7 @@ function MainApp(_ref16) {
           case 16:
             _context1.p = 16;
             _t1 = _context1.v;
+            setIsReviewing(false); // ★ 2026-11-08：寫入失敗也要解鎖按鈕，不然會一直卡在送出中
             alert('Post failed: ' + _t1.message);
             return _context1.a(2);
           case 17:
@@ -14171,8 +14175,11 @@ function MainApp(_ref16) {
         })(),
         /* ── ★ 修正：一天只能有一支 clip——今天已經貼過的話，按鈕改成「編輯今天那支」
            （打開同一個 modal，帶著 editingPost），不再讓人無限往上疊加同一天的 clip。
-           只在習慣公開（非 private）時出現，private 習慣完全不會看到。 ── */
-        habit.challengeVisibility !== 'private' && (function() {
+           ★ 2026-11-08：private 習慣也要能傳影片——private 只代表「不上 Challengers」，
+           還是會進 AI 配對，沒影片的話配對報告就看不到他的打卡影片。上傳視窗本來就有
+           private 專用的說明（Only for partner matching），之前只是按鈕被藏起來。
+           private 習慣的影片不會出現在 Challengers（那邊先把 private 習慣整個濾掉了）。 ── */
+        (function() {
           var _cs = myClipStatusByHabit[habit.id];
           var _todayPost = _cs && _cs.post;
           return React.createElement("button", {
@@ -14626,7 +14633,8 @@ function MainApp(_ref16) {
     /*#__PURE__*/React.createElement("img", {
       src: (postMedia && postMedia.type === 'image') ? postMedia.url : '',
       alt: "preview",
-      style: { width: '100%', height: '100%', objectFit: 'cover', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
+      // ★ 2026-11-08：原本 cover 會把照片裁成寬寬一條（直式照片只剩中間），改成 contain 完整顯示，跟影片預覽一致
+      style: { width: '100%', height: '100%', objectFit: 'contain', display: (postMedia && postMedia.type === 'image') ? 'block' : 'none', background: '#111' }
     }),
     (postMedia && postMedia.type === 'video') ? /*#__PURE__*/React.createElement("div", {
       style: { position: 'absolute', inset: 0, background: '#111', zIndex: 1 }
@@ -14768,7 +14776,7 @@ function MainApp(_ref16) {
     }, isReviewing
       ? [
           React.createElement('span', { key: 'spin', style: { width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 } }),
-          React.createElement('span', { key: 'txt' }, 'AI Reviewing…')
+          React.createElement('span', { key: 'txt' }, 'Posting…') // ★ 2026-11-08：審查關閉中，不再顯示「AI Reviewing」
         ]
       : (postMedia !== null && postMedia !== void 0 && postMedia.uploading ? 'Uploading…' : 'Post'))))), /*#__PURE__*/React.createElement("div", {
       className: "my-posts-section"
