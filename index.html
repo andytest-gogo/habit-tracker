@@ -1874,16 +1874,6 @@
         .gdpr-policy-link { font-size:10.5px; color:rgba(255,255,255,.5); text-align:center; cursor:pointer; font-weight:600; text-decoration:underline; }
         .gdpr-policy-link:hover { color:#7FC8CC; }
         /* ── AGE GATE ── */
-        .age-gate-overlay { position:fixed; inset:0; background:rgba(10,10,10,.88); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; }
-        .age-gate-box { background:var(--white); max-width:360px; width:100%; border-top:4px solid var(--black); padding:30px 26px; text-align:center; }
-        .age-gate-icon { font-size:34px; margin-bottom:14px; }
-        .age-gate-title { font-family:var(--din); font-size:22px; font-weight:800; margin-bottom:12px; }
-        .age-gate-desc { font-size:12px; line-height:1.7; color:var(--gray-600); margin-bottom:26px; }
-        .age-gate-desc a { color:var(--black); font-weight:700; cursor:pointer; text-decoration:underline; }
-        .age-gate-btn-yes { display:block; width:100%; padding:13px; background:var(--black); color:var(--white); border:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; cursor:pointer; font-family:var(--font); margin-bottom:9px; }
-        .age-gate-btn-no { display:block; width:100%; padding:11px; background:transparent; color:var(--gray-500); border:1px solid var(--gray-200); font-size:11px; font-weight:600; text-transform:uppercase; cursor:pointer; font-family:var(--font); }
-        .age-gate-btn-no:hover { border-color:var(--gray-500); color:var(--black); }
-        .age-gate-denied { margin-top:16px; padding:12px; background:var(--gray-50); border:1px solid var(--gray-200); font-size:11px; color:var(--gray-600); display:none; }
         /* ── SIGNUP LEGAL CHECKBOXES ── */
         .legal-checks-wrap { margin:14px 0 4px; display:flex; flex-direction:column; gap:10px; }
         .legal-check-row { display:flex; align-items:flex-start; gap:9px; cursor:pointer; }
@@ -1915,15 +1905,6 @@
         .legal-modal-highlight strong { color:var(--white); }
 
         /* ── AGE GATE ENHANCED ── */
-        .age-gate-input-group { margin-bottom:20px; text-align:left; }
-        .age-gate-input-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--gray-600); margin-bottom:8px; }
-        .age-gate-year-input { width:100%; padding:13px 14px; border:1px solid var(--gray-200); font-size:16px; font-family:var(--mono); text-align:center; letter-spacing:4px; outline:none; border-radius:0; transition:border-color .2s; -moz-appearance:textfield; }
-        .age-gate-year-input::-webkit-outer-spin-button,
-        .age-gate-year-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
-        .age-gate-year-input:focus { border-color:var(--black); }
-        .age-gate-hint { font-size:10px; color:var(--gray-400); margin-top:6px; text-align:center; }
-        .age-gate-error { font-size:11px; color:#dc2626; margin-top:8px; padding:8px 10px; background:#fef2f2; border:1px solid #fca5a5; text-align:left; }
-        .age-gate-btn-yes:disabled { background:var(--gray-300); cursor:not-allowed; }
 
         /* ── PRIVACY SETTINGS PANEL ── */
         .privacy-settings-panel { position:fixed; inset:0; background:rgba(10,10,10,.7); z-index:10002; display:flex; align-items:flex-end; justify-content:center; }
@@ -2484,43 +2465,6 @@
   });
 })();
 </script>
-
-<!-- ── AGE GATE (Enhanced: birth year verification + accessibility) ── -->
-<div id="ageGateOverlay" class="age-gate-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ageGateTitle" aria-describedby="ageGateDesc">
-    <div class="age-gate-box">
-        <div class="age-gate-icon" aria-hidden="true">🔒</div>
-        <div class="age-gate-title" id="ageGateTitle">Age Verification Required</div>
-        <div class="age-gate-desc" id="ageGateDesc">
-            FamStreak requires users to be <strong>16+</strong> (or 13+ in the US).<br><br>
-            Please enter your birth year to continue. By continuing you agree to our
-            <a onclick="openLegalModal('privacy')" role="button" tabindex="0">Privacy Policy</a> and
-            <a onclick="openLegalModal('terms')" role="button" tabindex="0">Terms of Service</a>.
-        </div>
-        <div class="age-gate-input-group" id="ageGateInputGroup">
-            <label for="birthYearInput" class="age-gate-input-label">Enter your birth year</label>
-            <input
-                type="number"
-                id="birthYearInput"
-                class="age-gate-year-input"
-                placeholder="e.g. 1995"
-                min="1900"
-                max="2025"
-                inputmode="numeric"
-                aria-required="true"
-                aria-describedby="ageGateYearHint"
-                autocomplete="bday-year"
-            />
-            <div id="ageGateYearHint" class="age-gate-hint">Enter a 4-digit year (e.g. 1990)</div>
-            <div id="ageGateError" class="age-gate-error" role="alert" aria-live="assertive" style="display:none;"></div>
-        </div>
-        <button class="age-gate-btn-yes" id="ageGateConfirmBtn" onclick="ageGateConfirm()" disabled aria-disabled="true">
-            Confirm Age &amp; Continue
-        </button>
-        <div class="age-gate-denied" id="ageGateDenied" role="alert">
-            Sorry — FamStreak is not available for users under the required age. Please close this page.
-        </div>
-    </div>
-</div>
 
 <!-- ── GDPR BANNER (Accessible, with granular consent) ── -->
 <div id="gdprBanner" class="gdpr-banner" style="display:none;" role="dialog" aria-modal="false" aria-labelledby="gdprTitle" aria-describedby="gdprDesc">
@@ -4176,6 +4120,8 @@ function _extractBunnyVideoId(url) {
   return m ? m[1] : null;
 }
 
+var SIGNUP_MIN_AGE = 16; // ★ 2026-11-09：註冊最低年齡（全區一致）
+
 /* ── 模組層級：刪貼文時連動刪 Bunny 媒體（供各元件共用）── */
 function _deletePostBunnyMedia(post, user) {
   if (!post || !user) return;
@@ -5439,6 +5385,14 @@ function AuthPage(_ref2) {
     _useStateDob2 = _slicedToArray(_useStateDob1, 2),
     dobInput = _useStateDob2[0],
     setDobInput = _useStateDob2[1];
+  // ★ 2026-11-09：出生日期一填好就判斷是否未滿 16 歲，未滿直接提示並停用 Sign Up
+  var _dobUnderage = (function() {
+    if (!dobInput) return false;
+    var d = new Date(dobInput); if (isNaN(d.getTime())) return false;
+    var t = new Date(), a = t.getFullYear() - d.getFullYear(), md = t.getMonth() - d.getMonth();
+    if (md < 0 || (md === 0 && t.getDate() < d.getDate())) a--;
+    return a < SIGNUP_MIN_AGE;
+  })();
   var _useStateGender1 = useState(''),
     _useStateGender2 = _slicedToArray(_useStateGender1, 2),
     gender = _useStateGender2[0],
@@ -5721,7 +5675,7 @@ function AuthPage(_ref2) {
         }
 
         // 2. Final check username uniqueness via public `usernames` collection
-        // 年齡驗證（COPPA：13 歲以上）— computed from date of birth
+        // ★ 2026-11-09：年齡驗證改成 16 歲以上（全區一致），用出生日期計算
         if (!dobInput) {
           setError('Please enter your date of birth.');
           setLoading(false);
@@ -5737,8 +5691,8 @@ function AuthPage(_ref2) {
         var ageNum = _today.getFullYear() - _dob.getFullYear();
         var _mDiff = _today.getMonth() - _dob.getMonth();
         if (_mDiff < 0 || (_mDiff === 0 && _today.getDate() < _dob.getDate())) ageNum--;
-        if (ageNum < 13) {
-          setError('You must be at least 13 years old to register (COPPA requirement).');
+        if (ageNum < SIGNUP_MIN_AGE) {
+          setError('You must be at least ' + SIGNUP_MIN_AGE + ' years old to create a FamStreak account.');
           setLoading(false);
           return;
         }
@@ -6095,10 +6049,15 @@ function AuthPage(_ref2) {
         className: "fs-finput",
         value: dobInput,
         onChange: function(e) { setDobInput(e.target.value); },
-        max: (function(){ var d = new Date(); d.setFullYear(d.getFullYear()-13); return d.toISOString().split('T')[0]; })(),
+        max: (function(){ var d = new Date(); d.setFullYear(d.getFullYear()-SIGNUP_MIN_AGE); return d.toISOString().split('T')[0]; })(),
         min: "1900-01-01",
-        style: { cursor: 'pointer' }
-      })
+        "aria-invalid": _dobUnderage ? 'true' : 'false',
+        style: { cursor: 'pointer', borderColor: _dobUnderage ? '#dc2626' : undefined }
+      }),
+      _dobUnderage && /*#__PURE__*/React.createElement("div", {
+        role: "alert",
+        style: { fontSize: 11, color: '#dc2626', marginTop: 6, lineHeight: 1.4 }
+      }, "You must be at least " + SIGNUP_MIN_AGE + " to sign up.")
     ),
     /*#__PURE__*/React.createElement("div", { className: "fs-fgroup" },
       /*#__PURE__*/React.createElement("label", { className: "fs-flabel" }, "Gender"),
@@ -6128,7 +6087,7 @@ function AuthPage(_ref2) {
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
       /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkAge" }),
       /*#__PURE__*/React.createElement("span", { className: "legal-check-label" },
-        "I confirm I am at least ", /*#__PURE__*/React.createElement("strong", null, "16 years old"), " (or 13 if I am a US resident)."
+        "I confirm I am at least ", /*#__PURE__*/React.createElement("strong", null, "16 years old"), "."
       )
     ),
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
@@ -6154,7 +6113,7 @@ function AuthPage(_ref2) {
   }, loading ? 'Sending...' : 'Send Reset Email') : /*#__PURE__*/React.createElement("button", {
     type: "submit",
     className: "fs-btn fs-btn-primary",
-    disabled: loading
+    disabled: loading || (!isLogin && _dobUnderage)
   }, loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up')), !forgotMode && isLogin && /*#__PURE__*/React.createElement("div", {
     className: "fs-forgot",
     onClick: function onClick() {
@@ -17517,7 +17476,7 @@ var REPORT_REASONS = [
   { code: 'THREAT',        label: 'Threats or violence' },
   { code: 'SCAM',          label: 'Scam, asking for money' },
   { code: 'SELF_HARM',     label: "I'm worried about their safety" },
-  { code: 'UNDERAGE',      label: 'They may be under 13' },
+  { code: 'UNDERAGE',      label: 'They may be under 16' },
   { code: 'OTHER',         label: 'Something else' }
 ];
 
@@ -19203,7 +19162,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <p>Your data is retained while your account is active. When you delete your account, your Firebase account and habit data are permanently erased immediately.</p>
 <p><strong>Uploaded media (photos &amp; videos):</strong> Media files stored on Cloudinary are queued for deletion by the administrator on a <strong>best-effort basis</strong>. Due to technical limitations of our media storage infrastructure, we <strong>cannot guarantee complete or immediate removal</strong> of all uploaded media files. Some files — including previously uploaded profile photos or media that was uploaded but never published — may persist on Cloudinary servers for an indeterminate period after account deletion. If you require confirmation or escalation of media removal, please contact us at <a class="_eml" href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a> and we will make every reasonable effort to locate and remove your files.</p>
 <h3>8. Children</h3>
-<p>FamStreak is not intended for users under 16 years old (or 13 in the US). We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
+<p>FamStreak is not intended for users under 16 years old. We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
 <h3>9. Data Breach Notification</h3>
 <p>In the event of a personal data breach that poses a risk to your rights and freedoms, we will notify the relevant supervisory authority within <strong>72 hours</strong> of becoming aware of the breach, as required by GDPR Art. 33. If the breach is likely to result in high risk to you personally, we will also notify you directly without undue delay, as required by GDPR Art. 34, via the email address associated with your account.</p>
 <h3>10. Changes to This Policy</h3>
@@ -19220,7 +19179,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   <p><strong>By creating an account or using FamStreak, you agree to these Terms.</strong> If you do not agree, please do not use the app.</p>
 </div>
 <h3>1. Eligibility</h3>
-<p>You must be at least <strong>16 years old</strong> (or 13 if you are a US resident) and have the legal capacity to enter a binding agreement. By using the app, you confirm you meet these requirements.</p>
+<p>You must be at least <strong>16 years old</strong> and have the legal capacity to enter a binding agreement. By using the app, you confirm you meet these requirements.</p>
 <h3>2. Your Account</h3>
 <p>You are responsible for keeping your password secure and for all activity under your account. Provide accurate information and notify us immediately of any unauthorized access. You may only maintain one account.</p>
 <h3>3. Acceptable Use</h3>
@@ -19330,77 +19289,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     var EU_MIN_AGE = 16;
     var US_MIN_AGE = 13;
 
+    // ★ 2026-11-09：拿掉進站的出生年份驗證（Andy 決定），年齡只在註冊時用出生日期檢查（16 歲以上）。
+    //   函式名稱保留，載入時直接進到 GDPR 提示。
     function initAgeGate() {
-        if (localStorage.getItem('ht-age-confirmed')) {
-            initGdprBanner();
-            return;
-        }
-        var overlay = document.getElementById('ageGateOverlay');
-        if (overlay) {
-            overlay.style.display = 'flex';
-            // Focus the year input for accessibility
-            setTimeout(function() {
-                var input = document.getElementById('birthYearInput');
-                if (input) input.focus();
-            }, 100);
-        }
-
-        // Birth year input listener
-        var input = document.getElementById('birthYearInput');
-        var confirmBtn = document.getElementById('ageGateConfirmBtn');
-        if (input && confirmBtn) {
-            input.addEventListener('input', function () {
-                var val = parseInt(this.value, 10);
-                var isValidYear = !isNaN(val) && this.value.length === 4 && val >= 1900 && val <= CURRENT_YEAR;
-                confirmBtn.disabled = !isValidYear;
-                confirmBtn.setAttribute('aria-disabled', isValidYear ? 'false' : 'true');
-                // Clear error while typing
-                var errEl = document.getElementById('ageGateError');
-                if (errEl) errEl.style.display = 'none';
-            });
-            // Allow Enter key to confirm
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !confirmBtn.disabled) ageGateConfirm();
-            });
-        }
-    }
-
-    window.ageGateConfirm = function () {
-        var input = document.getElementById('birthYearInput');
-        var errEl = document.getElementById('ageGateError');
-        if (!input) return;
-
-        var birthYear = parseInt(input.value, 10);
-        var age = CURRENT_YEAR - birthYear;
-
-        // Validate year format
-        if (isNaN(birthYear) || input.value.length !== 4 || birthYear < 1900 || birthYear > CURRENT_YEAR) {
-            if (errEl) { errEl.textContent = 'Please enter a valid birth year (e.g. 1995).'; errEl.style.display = 'block'; }
-            input.focus();
-            return;
-        }
-
-        // Check minimum age (use EU standard of 16 as default; US is 13)
-        var minAge = EU_MIN_AGE; // conservative: apply stricter EU standard globally
-        if (age < minAge) {
-            // Show denial
-            var inputGroup = document.getElementById('ageGateInputGroup');
-            var confirmBtn = document.getElementById('ageGateConfirmBtn');
-            if (inputGroup) inputGroup.style.display = 'none';
-            if (confirmBtn) confirmBtn.style.display = 'none';
-            var deniedEl = document.getElementById('ageGateDenied');
-            if (deniedEl) deniedEl.style.display = 'block';
-            return;
-        }
-
-        // Age confirmed
-        localStorage.setItem('ht-age-confirmed', '1');
-        localStorage.setItem('ht-age-confirmed-year', String(birthYear));
-        var overlay = document.getElementById('ageGateOverlay');
-        if (overlay) overlay.style.display = 'none';
-        document.body.style.overflow = '';
         initGdprBanner();
-    };
+    }
 
     /* ─────────────────────────────────────────
        GDPR BANNER
