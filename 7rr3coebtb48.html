@@ -1240,6 +1240,7 @@ await supabase.from('claude_api_calls').insert({
         <div class="stat" style="border-left:3px solid #99315f"><div class="stat-lbl">Sexual / Violent / Hateful</div><div class="stat-val" id="flgHarmful" style="color:#99315f">—</div><div class="stat-note">Safety categories</div></div>
         <div class="stat" style="border-left:3px solid #9ca3af"><div class="stat-lbl">Spam / Scam / Off-topic</div><div class="stat-val" id="flgQuality" style="color:#6b7280">—</div><div class="stat-note">Quality categories</div></div>
         <div class="stat" style="border-left:3px solid #d97706"><div class="stat-lbl">Pending Appeals</div><div class="stat-val" id="flgAppeals" style="color:#b45309">—</div><div class="stat-note">Author asked for a review</div></div>
+        <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Hidden by Reports</div><div class="stat-val" id="flgReported" style="color:#b45309">—</div><div class="stat-note">9+ different people reported it</div></div>
       </div>
 
       <div class="tbl-card">
@@ -1248,6 +1249,7 @@ await supabase.from('claude_api_calls').insert({
           <div style="display:flex;gap:8px;align-items:center">
             <select id="flgCategoryFilter" onchange="renderFlaggedContent()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
               <option value="all">All categories</option>
+              <option value="REPORTED">Hidden by reports (9+ people)</option>
               <!-- ★ 2026-10-26：FamStreak Content Policy v1（對照 OpenAI Moderation 分類） -->
               <option value="HARASSMENT">Harassment</option>
               <option value="THREAT">Threats / violence</option>
@@ -1444,6 +1446,7 @@ await supabase.from('claude_api_calls').insert({
               <th style="width:120px">Reported User</th>
               <th>Content</th>
               <th style="width:55px">Type</th>
+              <th style="width:80px" title="Different people who reported this item. At 9 it's hidden automatically.">Reporters</th>
               <th style="width:100px">Reason</th>
               <th style="width:160px">User Feedback</th>
               <th style="width:70px">Status</th>
@@ -1451,7 +1454,7 @@ await supabase.from('claude_api_calls').insert({
               <th style="width:160px">Actions</th>
           </thead>
           <tbody id="reportsTbody">
-            <tr class="loading-row"><td colspan="7">Loading reports...</td></tr>
+            <tr class="loading-row"><td colspan="8">Loading reports...</td></tr>
           </tbody>
         </table>
       </div>
@@ -3588,6 +3591,8 @@ function renderReportStats(){
   document.getElementById('rDismissed').textContent = dismissed;
 }
 
+var REPORT_HIDE_THRESHOLD = 9; // ★ 2026-11-15：要跟 report_hide.sql 的 v_threshold 一致
+
 var REASON_LABELS = {
   spam:          '📢 Spam',
   harassment:    '😡 Harassment',
@@ -3614,10 +3619,22 @@ function renderReports(){
   document.getElementById('reportsCnt').textContent = list.length + ' report(s) shown';
   var tb = document.getElementById('reportsTbody');
   if (!list.length) {
-    tb.innerHTML = '<tr class="loading-row"><td colspan="7">No reports match the current filter</td></tr>';
+    tb.innerHTML = '<tr class="loading-row"><td colspan="8">No reports match the current filter</td></tr>';
     return;
   }
+  // ★ 2026-11-15：每則內容（貼文或留言）被幾個「不同的人」檢舉；達 9 人資料庫會自動隱藏
+  var _reporterSets = {};
+  allReports.forEach(function(x){
+    if (!x.reporterUid || x.reporterUid === 'anonymous' || !x.postId) return;
+    var k = x.postId + '|' + (x.commentId || '');
+    (_reporterSets[k] = _reporterSets[k] || {})[x.reporterUid] = true;
+  });
   tb.innerHTML = list.map(function(r){
+    var _rk = (r.postId || '') + '|' + (r.commentId || '');
+    var _reporters = _reporterSets[_rk] ? Object.keys(_reporterSets[_rk]).length : 0;
+    var _autoHidden = _reporters >= REPORT_HIDE_THRESHOLD;
+    var reportersCell = '<div style="font-family:var(--mono);font-size:12px;font-weight:700;color:' + (_autoHidden ? '#b45309' : 'var(--ink)') + '">' + _reporters + ' / ' + REPORT_HIDE_THRESHOLD + '</div>'
+      + (_autoHidden ? '<div style="margin-top:3px"><span class="badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:9px">Auto-hidden</span></div>' : '');
     var reasonLabel = REASON_LABELS[r.reason] || r.reason || '-';
     var statusStyle = STATUS_STYLE[r.status] || '';
     var statusLabel = (r.status || 'pending').charAt(0).toUpperCase() + (r.status||'pending').slice(1);
@@ -3692,6 +3709,7 @@ function renderReports(){
       + mediaPreviewHtml
       + '<div style="font-size:9px;color:var(--g400);font-family:var(--mono);margin-top:2px">ID: '+htmlEsc(contentId)+'</div></td>'
       + '<td>'+typeLabel+'</td>'
+      + '<td>'+reportersCell+'</td>'
       + '<td style="font-size:11px">'+reasonLabel+'</td>'
       + '<td style="max-width:160px">'+feedbackCell+'</td>'
       + '<td><span class="badge" style="'+statusStyle+'">'+statusLabel+'</span></td>'
@@ -5368,7 +5386,28 @@ async function loadFlaggedContent() {
     if (postsRes.error) throw postsRes.error;
     if (commentsRes.error) throw commentsRes.error;
 
+    // ★ 2026-11-15：被 9 個不同的人檢舉而自動隱藏的內容（report_hidden）也列在這裡。
+    //   report_hide.sql 還沒跑的話這兩個查詢會失敗，直接略過、不影響原本的清單。
+    var [repPostsRes, repCommentsRes] = await Promise.all([
+      _supabase.from('posts').select('id, user_id, text, created_at, is_habit_clip, report_count, report_hidden_at, has_image, has_video, media_url, media_public_id, thumbnail_url')
+        .eq('report_hidden', true).order('report_hidden_at', { ascending: false }).limit(500),
+      _supabase.from('comments').select('id, user_id, post_id, text, created_at, report_count, report_hidden_at, has_image, has_video, media_url, media_public_id, thumbnail_url')
+        .eq('report_hidden', true).order('report_hidden_at', { ascending: false }).limit(500)
+    ]);
+
     var items = [];
+    var _seen = {};
+    (postsRes.data || []).forEach(function(p) { _seen['posts|' + p.id] = true; });
+    (commentsRes.data || []).forEach(function(c) { _seen['comments|' + c.id] = true; });
+    var _repItems = [];
+    if (!repPostsRes.error) (repPostsRes.data || []).forEach(function(p) {
+      if (_seen['posts|' + p.id]) return;
+      _repItems.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: 'REPORTED', createdAt: p.created_at, kind: p.is_habit_clip ? 'Habit clip' : 'Post', source: 'reports', reportCount: p.report_count, hiddenAt: p.report_hidden_at, hasImage: p.has_image, hasVideo: p.has_video, mediaUrl: p.media_url, mediaPublicId: p.media_public_id, thumbnailUrl: p.thumbnail_url });
+    });
+    if (!repCommentsRes.error) (repCommentsRes.data || []).forEach(function(c) {
+      if (_seen['comments|' + c.id]) return;
+      _repItems.push({ table: 'comments', id: c.id, userId: c.user_id, text: c.text, category: 'REPORTED', createdAt: c.created_at, kind: 'Comment', source: 'reports', reportCount: c.report_count, hiddenAt: c.report_hidden_at, hasImage: c.has_image, hasVideo: c.has_video, mediaUrl: c.media_url, mediaPublicId: c.media_public_id, thumbnailUrl: c.thumbnail_url });
+    });
     (postsRes.data || []).forEach(function(p) {
       items.push({ table: 'posts', id: p.id, userId: p.user_id, text: p.text, category: p.moderation_category, createdAt: p.created_at, kind: p.is_habit_clip ? 'Clip caption' : 'Post', appealStatus: p.moderation_appeal_status, appealAt: p.moderation_appeal_at, hasImage: p.has_image, hasVideo: p.has_video, mediaUrl: p.media_url, mediaPublicId: p.media_public_id, thumbnailUrl: p.thumbnail_url });
     });
@@ -5384,10 +5423,15 @@ async function loadFlaggedContent() {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
+    // 被檢舉隱藏的排在 AI 標記的後面（AI 標記的有申請複查的排最前面，原本的規則不變）
+    _repItems.sort(function(a, b) { return new Date(b.hiddenAt || b.createdAt) - new Date(a.hiddenAt || a.createdAt); });
+    items = items.concat(_repItems);
+    var repEl = document.getElementById('flgReported');
+    if (repEl) repEl.textContent = _repItems.length;
     _flaggedItems = items;
     document.getElementById('flgTotal').textContent = items.length;
     document.getElementById('flgHarmful').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) !== -1; }).length;
-    document.getElementById('flgQuality').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) === -1; }).length;
+    document.getElementById('flgQuality').textContent = items.filter(function(i){ return i.source !== 'reports' && _HARMFUL_CATEGORIES.indexOf(i.category) === -1; }).length;
     var appealEl = document.getElementById('flgAppeals');
     if (appealEl) appealEl.textContent = items.filter(function(i){ return i.appealStatus === 'pending'; }).length;
     var badge = document.getElementById('flaggedBadge');
@@ -5409,9 +5453,10 @@ function renderFlaggedContent() {
     return;
   }
   tbody.innerHTML = rows.map(function(item) {
-    var label = MODERATION_CATEGORY_LABELS[item.category] || item.category || '—';
-    var isHarmful = _HARMFUL_CATEGORIES.indexOf(item.category) !== -1;
-    var catColor = isHarmful ? '#99315f' : '#6b7280';
+    var isReportItem = item.source === 'reports';
+    var label = isReportItem ? ('Reported by ' + (item.reportCount || REPORT_HIDE_THRESHOLD) + ' people') : (MODERATION_CATEGORY_LABELS[item.category] || item.category || '—');
+    var isHarmful = !isReportItem && _HARMFUL_CATEGORIES.indexOf(item.category) !== -1;
+    var catColor = isReportItem ? '#b45309' : isHarmful ? '#99315f' : '#6b7280';
     var isPendingAppeal = item.appealStatus === 'pending';
     // 有申請複查的那一列加左邊色條 + 小標籤,讓它在畫面上比較顯眼(不用另外
     // 開分頁——排序已經把它們放最前面了,這裡只是視覺上再強調一次)。
@@ -5441,7 +5486,9 @@ function renderFlaggedContent() {
       '<td style="font-size:11px;max-width:320px;white-space:normal">' + htmlEsc((item.text || '').slice(0, 200)) + mediaPreviewHtml + '</td>' +
       '<td style="font-size:11px;color:var(--g400)">' + (item.createdAt ? new Date(item.createdAt).toLocaleString() : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
-        '<button class="refresh" style="margin-right:6px" onclick="unhideFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Unhide</button>' +
+        (isReportItem
+          ? '<button class="refresh" style="margin-right:6px" onclick="unhideReportedItem(\'' + item.table + '\',\'' + item.id + '\')" title="Show it to everyone again; later reports start counting from zero">Unhide</button>'
+          : '<button class="refresh" style="margin-right:6px" onclick="unhideFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Unhide</button>') +
         (isPendingAppeal ? '<button class="refresh" style="margin-right:6px" onclick="dismissFlaggedAppeal(\'' + item.table + '\',\'' + item.id + '\')" title="Reviewed, keeping it hidden">Mark Reviewed</button>' : '') +
         '<button class="refresh" style="color:#dc2626;border-color:#dc2626" onclick="deleteFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Delete</button>' +
       '</td>' +
@@ -5535,6 +5582,19 @@ function _notifyAppealResolved(item, outcome) {
 
 // 誤判（false positive）：解除隱藏，改回一般可見的貼文/留言。
 // 順便把申請複查的欄位一起清掉——內容都已經不隱藏了，這兩欄留著沒意義。
+// ★ 2026-11-15：解除「被檢舉隱藏」——之後的新檢舉從 0 重新算（report_cleared_at）
+async function unhideReportedItem(table, id) {
+  try {
+    var { error } = await _supabase.from(table).update({
+      report_hidden: false, report_count: 0, report_hidden_at: null, report_cleared_at: new Date().toISOString()
+    }).eq('id', id);
+    if (error) throw error;
+    loadFlaggedContent();
+  } catch (e) {
+    alert('Unhide failed: ' + e.message);
+  }
+}
+
 async function unhideFlaggedItem(table, id) {
   try {
     var item = _flaggedItems.find(function(i){ return i.table === table && i.id === id; });

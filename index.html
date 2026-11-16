@@ -2087,6 +2087,9 @@
         .hclips:hover { border-color:var(--gray-300); }
         /* ★ 2026-11-09：影片還在 Bunny 轉檔時，縮圖上蓋一層「Processing」 */
         .clip-proc { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; background:rgba(0,0,0,.55); color:#fff; font-size:10px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; pointer-events:none; text-align:center; padding:4px; }
+        /* ★ 2026-11-15：從通知跳過來時閃一下目標貼文／留言 */
+        .fs-flash { animation: fsFlash 2.4s ease-out 1; }
+        @keyframes fsFlash { 0%,40% { box-shadow: 0 0 0 4px rgba(245,158,11,.55); } 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); } }
         .clip-proc-spin { width:18px; height:18px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:clipProcSpin .9s linear infinite; }
         .clip-proc.compact .clip-proc-spin { width:14px; height:14px; }
         @keyframes clipProcSpin { to { transform:rotate(360deg); } }
@@ -3235,7 +3238,9 @@ if (isFirebaseConfigured) {
       'moderation_status':'moderationStatus','moderation_category':'moderationCategory',
       // ★ 新增（2026-09）：作者「申請複查」功能要讀 moderationAppealStatus/
       //   moderationAppealAt，同樣的坑先在這裡補上，避免又重演一次上面的問題。
-      'moderation_appeal_status':'moderationAppealStatus','moderation_appeal_at':'moderationAppealAt'
+      'moderation_appeal_status':'moderationAppealStatus','moderation_appeal_at':'moderationAppealAt',
+      // ★ 2026-11-15：被 9 個不同的人檢舉後自動隱藏（資料庫 trigger 寫入）
+      'report_hidden':'reportHidden','report_count':'reportCount'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];
@@ -4933,6 +4938,97 @@ var FamBgUpload = (function() {
   return api;
 })();
 
+/* ★ 2026-11-09：上傳計時模式（給 Andy 實測用，一般使用者看不到）
+   開啟：網址後面加 ?timing=1（會記在這台裝置）；關閉：?timing=0
+   記錄：選好影片按發布 → 壓縮完成 → 傳完 → 貼文存好 → Bunny 轉檔完成（可以播放）
+   每一段的秒數會顯示在畫面上方的小面板，Console 也會印一份 [ClipTiming]。 */
+var _ClipTiming = (function() {
+  try {
+    var q = (location.search || '').match(/[?&]timing=([01])/);
+    if (q) localStorage.setItem('fs_timing', q[1]);
+  } catch (e) {}
+  var on = false; try { on = localStorage.getItem('fs_timing') === '1'; } catch (e) {}
+  var cur = null, subs = [];
+  function emit() { subs.slice().forEach(function(fn) { try { fn(cur); } catch (e) {} }); }
+  function secs(a, b) { return (a && b) ? ((b - a) / 1000).toFixed(1) : null; }
+  return {
+    enabled: function() { return on; },
+    get: function() { return cur; },
+    subscribe: function(fn) { subs.push(fn); return function() { subs = subs.filter(function(x) { return x !== fn; }); }; },
+    start: function(file) {
+      if (!on) return;
+      cur = { t0: Date.now(), inMB: file ? file.size / 1048576 : 0, inType: (file && file.type) || '', outMB: null, compressed: false };
+      emit();
+    },
+    mark: function(key, extra) {
+      if (!on || !cur) return;
+      cur = Object.assign({}, cur, extra || {}); cur[key] = Date.now(); emit();
+      if (key === 'ready' || key === 'readyTimeout') {
+        console.log('[ClipTiming]', {
+          inputMB: cur.inMB.toFixed(1), uploadedMB: cur.outMB != null ? cur.outMB.toFixed(1) : null, compressed: cur.compressed,
+          compressSec: secs(cur.t0, cur.tCompressed), uploadSec: secs(cur.tCompressed || cur.t0, cur.tUploaded),
+          saveSec: secs(cur.tUploaded, cur.tSaved), userWaitSec: secs(cur.t0, cur.tSaved),
+          bunnySec: secs(cur.tSaved, cur.ready || cur.readyTimeout), totalSec: secs(cur.t0, cur.ready || cur.readyTimeout)
+        });
+      }
+    },
+    // 貼文存好後，每 3 秒看一次 Bunny 的 playlist，有可播放畫質就記下時間（最多等 15 分鐘）
+    watchBunny: function(mediaUrl) {
+      if (!on || !cur) return;
+      var vid = _bunnyGuidFromUrl(mediaUrl), me = cur, until = Date.now() + 15 * 60 * 1000;
+      if (!vid) { this.mark('readyTimeout', { note: 'no Bunny video id' }); return; }
+      var self = this;
+      (function tick() {
+        if (cur !== me) return;
+        if (Date.now() > until) { self.mark('readyTimeout', { note: 'still processing after 15 min' }); return; }
+        // ★ 2026-11-15：跟縮圖／播放判斷用同一套（先問 Bunny API，沒部署才退回 playlist）
+        (_bunnyStatusFnMissing ? Promise.resolve(null) : _clipProbeViaApi(vid))
+          .then(function(res) { return res ? Object.assign({ via: 'api' }, res) : _clipProbeViaPlaylist(vid).then(function(r2) { return Object.assign({ via: 'playlist' }, r2); }); })
+          .then(function(res) {
+            if (res.state === 'ready') self.mark('ready', { note: res.via === 'playlist' ? 'checked via playlist (bunny-video-status not deployed)' : null });
+            else if (res.state === 'error') self.mark('readyTimeout', { note: 'Bunny reported an encoding error' });
+            else { if (res.progress != null) self.mark('tProgress', { progress: res.progress }); setTimeout(tick, 3000); }
+          });
+      })();
+    },
+    clear: function() { cur = null; emit(); },
+    secs: secs
+  };
+})();
+
+function ClipTimingPanel() {
+  var _s = React.useState(_ClipTiming.get()), t = _s[0], setT = _s[1];
+  var _n = React.useState(0), setNow = _n[1];
+  React.useEffect(function() { return _ClipTiming.subscribe(setT); }, []);
+  React.useEffect(function() {
+    if (!t || t.ready || t.readyTimeout) return;
+    var id = setInterval(function() { setNow(function(n) { return n + 1; }); }, 1000);
+    return function() { clearInterval(id); };
+  }, [t]);
+  if (!t) return null;
+  var S = _ClipTiming.secs, now = Date.now();
+  var row = function(label, val, strong) {
+    return React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: strong ? 700 : 400, color: strong ? '#fff' : '#cfcfcf' } },
+      React.createElement("span", null, label), React.createElement("span", { style: { fontFamily: 'var(--mono, monospace)' } }, val));
+  };
+  var run = function(a, b) { return b ? S(a, b) + 's' : (a ? (S(a, now) + 's…') : '—'); };
+  return React.createElement("div", {
+    style: { position: 'fixed', top: 'calc(10px + env(safe-area-inset-top, 0px))', right: 10, zIndex: 9001, width: 250, background: 'rgba(10,10,10,.92)', color: '#fff', fontSize: 11, lineHeight: 1.7, padding: '10px 12px', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.3)' }
+  },
+    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
+      React.createElement("strong", null, "Upload timing"),
+      React.createElement("button", { type: "button", onClick: function() { _ClipTiming.clear(); }, style: { background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 14 } }, "✕")),
+    row('File', t.inMB.toFixed(1) + ' MB' + (t.outMB != null ? ' → ' + t.outMB.toFixed(1) + ' MB' : '')),
+    row(t.compressed ? 'Compress' : 'Compress (skipped)', t.compressed ? run(t.t0, t.tCompressed) : '—'),
+    row('Upload', t.tCompressed ? run(t.tCompressed, t.tUploaded) : (t.compressed ? '—' : run(t.t0, t.tUploaded))),
+    row('Save post', t.tUploaded ? run(t.tUploaded, t.tSaved) : '—'),
+    row('User waits', t.tSaved ? S(t.t0, t.tSaved) + 's' : run(t.t0, null), true),
+    row('Bunny processing', t.tSaved ? (t.ready ? S(t.tSaved, t.ready) + 's' : t.readyTimeout ? 'n/a' : (run(t.tSaved, null) + (t.progress ? ' (' + Math.round(t.progress) + '%)' : ''))) : '—'),
+    row('Until playable', t.ready ? S(t.t0, t.ready) + 's' : (t.readyTimeout ? 'n/a' : '—'), true),
+    t.note ? React.createElement("div", { style: { color: '#fca5a5', marginTop: 4 } }, t.note) : null
+  );
+}
+
 // 畫面下方的上傳進度提示
 function BgUploadToast() {
   var _s = React.useState(FamBgUpload.get()), st = _s[0], setSt = _s[1];
@@ -6177,6 +6273,11 @@ function FeedCard(_ref5) {
   var effectiveHasVideo = (modOverride && modOverride.media) ? modOverride.media.hasVideo : post.hasVideo;
   var effectiveMediaUrl = (modOverride && modOverride.media) ? modOverride.media.mediaUrl : post.mediaUrl;
   var isHidden = effectiveModStatus === 'hidden';
+  // ★ 2026-11-15：被檢舉隱藏（見 renderReportedCover / renderReportedOwnerBanner）
+  var isReportHidden = _isReportHidden(post);
+  var _useStateReportReveal = useState(false), reportRevealed = _useStateReportReveal[0], setReportRevealed = _useStateReportReveal[1];
+  var _useStateRevealedComments = useState({}), revealedComments = _useStateRevealedComments[0], setRevealedComments = _useStateRevealedComments[1];
+  var reportCovered = isReportHidden && !isOwner && !reportRevealed;
   // [NEW 2026-09] 作者「申請複查」——用 post.moderationAppealStatus 當初始值(讀取
   // 已經走過 _snakeToCamel 白名單),樂觀更新 + 失敗時回滾,寫法跟其他樂觀更新一致。
   var _useStatePostAppeal = useState(post.moderationAppealStatus || null),
@@ -6837,8 +6938,11 @@ function FeedCard(_ref5) {
   var likeCount = post.likes + (post.liked ? 0 : 0); // likes already updated by parent
 
   return /*#__PURE__*/React.createElement("div", {
-    className: "feed-card"
-  }, /*#__PURE__*/React.createElement("div", {
+    className: "feed-card",
+    id: post.id != null ? ('fs-post-' + post.id) : undefined,
+    style: (isReportHidden && isOwner) ? { border: '2px solid #f59e0b' } : undefined
+  }, isReportHidden && isOwner && renderReportedOwnerBanner(post.isHabitClip ? 'clip' : 'post'),
+  /*#__PURE__*/React.createElement("div", {
     className: "feed-header"
   }, /*#__PURE__*/React.createElement("div", {
     className: "feed-avatar"
@@ -6869,7 +6973,9 @@ function FeedCard(_ref5) {
       type: "file", ref: editMediaFileInputRef, accept: effectiveHasVideo ? "video/*" : "image/*",
       onChange: handleEditMediaFileChange, style: { display: 'none' }
     })
-  }) : isHidden ? renderModerationHiddenOther(effectiveModCategory, post.isHabitClip ? 'clip' : 'post', { text: effectiveText, hasMedia: !!(effectiveHasImage || effectiveHasVideo) }) : /*#__PURE__*/React.createElement(React.Fragment, null,
+  }) : isHidden ? renderModerationHiddenOther(effectiveModCategory, post.isHabitClip ? 'clip' : 'post', { text: effectiveText, hasMedia: !!(effectiveHasImage || effectiveHasVideo) })
+    : reportCovered ? renderReportedCover(post.isHabitClip ? 'clip' : 'post', function() { setReportRevealed(true); })
+    : /*#__PURE__*/React.createElement(React.Fragment, null,
   effectiveText && /*#__PURE__*/React.createElement("div", {
     className: "feed-text"
   }, (function() {
@@ -7087,6 +7193,7 @@ function FeedCard(_ref5) {
     }
     return /*#__PURE__*/React.createElement("div", {
       key: c.id,
+      id: 'fs-comment-' + c.id,
       className: "comment-item"
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-avatar"
@@ -7119,7 +7226,10 @@ function FeedCard(_ref5) {
         }))
       : (c.moderationStatus === 'hidden')
       ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderModerationHiddenOther(c.moderationCategory, 'comment', { text: c.text, hasMedia: !!(c.hasImage || c.hasVideo), mediaKind: c.hasVideo ? 'video' : 'image' }))
+      : (_isReportHidden(c) && !isOwnComment && !revealedComments[c.id])
+      ? /*#__PURE__*/React.createElement("div", { className: "comment-text" }, renderReportedCover('comment', function() { setRevealedComments(function(prev) { var n = Object.assign({}, prev); n[c.id] = true; return n; }); }))
       : /*#__PURE__*/React.createElement("div", { className: "comment-text" },
+          (_isReportHidden(c) && isOwnComment) ? renderReportedOwnerBanner('comment') : null,
           (function() {
       var commentNeedsTrunc = needsTruncation(c.text, COMMENT_LINE_LIMIT);
       var isExpanded = !!expandedComments[c.id];
@@ -7301,9 +7411,13 @@ function ClipViewerModal(props) {
     onCheer = props.onCheer, currentUser = props.currentUser;
   // ★ 2026-11-09：影片還在 Bunny 轉檔就先不打開播放器，改跳「處理中」提示。
   //   視窗開著的時候如果剛好處理完，會直接換成影片，不用再點一次。
-  var _procState = _useClipProcessing(post ? [post.mediaUrl || post.media_url, post.thumbnailUrl || post.thumbnail_url] : [], post && (post.created_at || post.createdAt));
+  var _procInfo = _useClipProcInfo(post ? [post.mediaUrl || post.media_url, post.thumbnailUrl || post.thumbnail_url] : [], post && (post.created_at || post.createdAt));
+  var _procState = _procInfo.state;
   if (!post) return null;
-  if (_procState === 'processing' && (post.hasVideo || post.has_video || post.isHabitClip || post.is_habit_clip)) {
+  var _procIsVideo = !!(post.hasVideo || post.has_video || post.isHabitClip || post.is_habit_clip);
+  // ★ 2026-11-15：還在確認狀態（第一次查詢回來前，通常不到 1 秒）也先不放播放器，避免閃一下黑畫面
+  var _procBlock = _procState === 'error' || (!BUNNY_EARLY_PLAY && (_procState === 'processing' || _procState === 'checking'));
+  if (_procBlock && _procIsVideo) {
     return /*#__PURE__*/React.createElement("div", {
       style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
       onClick: function(e) { if (e.target === e.currentTarget) onClose && onClose(); }
@@ -7311,9 +7425,17 @@ function ClipViewerModal(props) {
       role: "dialog", "aria-live": "polite",
       style: { background: 'var(--white)', maxWidth: 320, width: '100%', borderRadius: 12, padding: '24px 20px 18px', textAlign: 'center' }
     },
-      /*#__PURE__*/React.createElement("div", { style: { width: 28, height: 28, margin: '0 auto 12px', border: '3px solid var(--gray-200)', borderTopColor: 'var(--black)', borderRadius: '50%', animation: 'clipProcSpin .9s linear infinite' } }),
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 700, marginBottom: 6 } }, "This clip is still processing"),
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.5, marginBottom: 16 } }, "It usually takes a minute or two. Please tap it again once it\u2019s ready."),
+      _procState === 'error'
+        ? /*#__PURE__*/React.createElement("div", { style: { width: 28, height: 28, margin: '0 auto 12px', borderRadius: '50%', background: '#fee2e2', color: '#b91c1c', fontWeight: 800, lineHeight: '28px' } }, "!")
+        : /*#__PURE__*/React.createElement("div", { style: { width: 28, height: 28, margin: '0 auto 12px', border: '3px solid var(--gray-200)', borderTopColor: 'var(--black)', borderRadius: '50%', animation: 'clipProcSpin .9s linear infinite' } }),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 700, marginBottom: 6 } },
+        _procState === 'error' ? "This clip couldn\u2019t be processed"
+          : _procState === 'checking' ? "Loading clip\u2026"
+          : "This clip is still processing" + (_procInfo.progress > 0 && _procInfo.progress < 100 ? " (" + Math.round(_procInfo.progress) + "%)" : "")),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.5, marginBottom: 16 } },
+        _procState === 'error' ? "Something went wrong while preparing this video. Please delete it and upload it again."
+          : _procState === 'checking' ? "Just a moment."
+          : "Please tap it again once it\u2019s ready. It\u2019ll start playing here automatically if you wait."),
       /*#__PURE__*/React.createElement("button", {
         type: "button", onClick: onClose,
         style: { width: '100%', padding: '11px 0', background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)' }
@@ -7332,6 +7454,8 @@ function ClipViewerModal(props) {
     _supabase.from('posts').delete().eq('id', postId)
       .then(function() {
         try { _deletePostBunnyMedia(post, currentUser); } catch (e) {}
+        // ★ 2026-11-15：通知首頁習慣卡片、影片牆等地方馬上拿掉這支影片，不用手動重新整理
+        try { window.dispatchEvent(new CustomEvent('famstreak:clipDeleted', { detail: { postId: postId, habitId: post.habitId || post.habit_id || null } })); } catch (e) {}
         onClose && onClose();
       })
       .catch(function(err) {
@@ -7441,6 +7565,55 @@ var MODERATION_CATEGORY_INFO = {
 // action row (see renderModerationActionButtons below) and, when they tap
 // Edit, an inline panel with the real (unblurred) text to fix and resubmit
 // (see renderModerationEditPanel below) — both live in FeedCard itself.
+/* ★ 2026-11-15：被檢舉隱藏（9 個不同的人檢舉 → 資料庫自動標記 report_hidden）
+   - 其他人：內容蓋起來，按「View anyway」才顯示（只對這次瀏覽有效）
+   - 發文者：內容照常顯示，上方多一條橘色提示 */
+var REPORT_HIDE_THRESHOLD = 9; // 只是給畫面參考，真正的門檻在資料庫 trigger
+function _isReportHidden(x) { return !!(x && (x.reportHidden || x.report_hidden)); }
+function _fsFlashFocus(elId) {
+  var tries = 0;
+  (function attempt() {
+    var el = document.getElementById(elId);
+    if (!el) { if (++tries < 20) setTimeout(attempt, 250); return; }
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { el.scrollIntoView(); }
+    el.classList.remove('fs-flash'); void el.offsetWidth; el.classList.add('fs-flash');
+    setTimeout(function() { el.classList.remove('fs-flash'); }, 2600);
+  })();
+}
+
+function renderReportedCover(kind, onReveal) {
+  var isComment = kind === 'comment';
+  var label = kind === 'clip' ? 'This clip was reported by the community' : kind === 'comment' ? 'This comment was reported by the community' : 'This post was reported by the community';
+  return React.createElement("div", {
+    style: isComment
+      ? { margin: '4px 0', padding: '10px 12px', background: 'var(--gray-50, #f5f5f5)', border: '1px solid var(--gray-200)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }
+      : { margin: '6px 0 4px', padding: '22px 18px', background: 'var(--gray-50, #f5f5f5)', border: '1px solid var(--gray-200)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' }
+  },
+    React.createElement("svg", { width: isComment ? 16 : 22, height: isComment ? 16 : 22, viewBox: "0 0 24 24", fill: "none", stroke: "#525252", strokeWidth: 2, "aria-hidden": "true" },
+      React.createElement("path", { d: "M17.9 17.9A10 10 0 0112 20c-7 0-10-8-10-8a18 18 0 015-6M9.9 4.2A9 9 0 0112 4c7 0 10 8 10 8a18 18 0 01-2.2 3.2M1 1l22 22" })),
+    React.createElement("div", { style: isComment ? { flex: '1 1 auto', minWidth: 0 } : null },
+      React.createElement("div", { style: { fontSize: isComment ? 12 : 14, fontWeight: 700, color: 'var(--black)' } }, label),
+      React.createElement("div", { style: { fontSize: isComment ? 11 : 12, color: 'var(--gray-500)', marginTop: 2 } }, "It may contain sensitive content.")),
+    React.createElement("button", {
+      type: "button",
+      onClick: function(e) { e.stopPropagation(); onReveal && onReveal(); },
+      style: { marginTop: isComment ? 0 : 4, padding: isComment ? '6px 12px' : '9px 18px', background: 'var(--white)', border: '1px solid var(--black)', color: 'var(--black)', fontFamily: 'var(--font)', fontSize: isComment ? 10 : 12, fontWeight: 700, letterSpacing: '.8px', cursor: 'pointer' }
+    }, "VIEW ANYWAY"));
+}
+function renderReportedOwnerBanner(kind) {
+  var isComment = kind === 'comment';
+  return React.createElement("div", {
+    role: "note",
+    style: { display: 'flex', gap: 10, alignItems: 'flex-start', padding: isComment ? '7px 10px' : '12px 16px', margin: isComment ? '4px 0' : 0, background: '#fffbeb', borderBottom: isComment ? 'none' : '1px solid #fde68a', border: isComment ? '1px solid #fde68a' : undefined }
+  },
+    React.createElement("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "#b45309", strokeWidth: 2.2, style: { flex: '0 0 16px', marginTop: 1 }, "aria-hidden": "true" },
+      React.createElement("path", { d: "M12 9v4M12 17h.01" }), React.createElement("path", { d: "M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" })),
+    React.createElement("div", null,
+      React.createElement("div", { style: { fontSize: isComment ? 11 : 13, fontWeight: 700, color: '#78350f' } }, "Hidden from others after several reports"),
+      React.createElement("div", { style: { fontSize: isComment ? 11 : 12, color: '#78350f', lineHeight: 1.45, marginTop: 1 } },
+        "Only you can see it as normal. Others see a warning and can choose to view it.")));
+}
+
 function renderModerationHiddenOther(category, kind, opts) {
   opts = opts || {};
   var hasText = !!(opts.text && String(opts.text).trim());
@@ -7877,6 +8050,7 @@ function ClipShareModal(props) {
       var _file = file;
       var _onBgPosted = props.onBgPosted;
       FamBgUpload.run(habit.name, function(update, token) {
+        _ClipTiming.start(_file);
         // 擷取一張畫面：當作這台手機上的暫時縮圖，審查開著時也一起送審（不重複擷取）
         var framePromise = _extractVideoFrameBase64(_file).catch(function() { return null; });
         var modPromise = framePromise.then(function(b64) {
@@ -7887,15 +8061,22 @@ function ClipShareModal(props) {
         return _compressVideoForUpload(_file, function(p) { update({ pct: p }); }, token)
           .then(function(toUpload) {
             if (token.cancelled) { var ce = new Error('Upload cancelled'); ce.cancelled = true; throw ce; }
+            if (needCompress) _ClipTiming.mark('tCompressed', { compressed: toUpload !== _file, outMB: toUpload.size / 1048576 });
+            else _ClipTiming.mark('tSkip', { outMB: toUpload.size / 1048576 });
             update({ phase: 'uploading', pct: 0 });
             // ★ 2026-10-26：標成習慣打卡影片（purpose:'clip'），不佔 Community／聊天室的每日額度
             return uploadToBunny(toUpload, 'video', function(pct) { update({ pct: pct }); }, { purpose: 'clip', habitId: snap.habit.id, cancelToken: token });
           })
           .then(function(result) {
+            _ClipTiming.mark('tUploaded');
             return modPromise.then(function(mod) {
               if (token.cancelled) { var ce = new Error('Upload cancelled'); ce.cancelled = true; throw ce; }
               update({ phase: 'saving' });
-              return _saveClipPost(result, mod, snap);
+              return _saveClipPost(result, mod, snap).then(function(created) {
+                _ClipTiming.mark('tSaved');
+                _ClipTiming.watchBunny(result && (result.url || result.mediaUrl || result.media_url));
+                return created;
+              });
             });
           })
           .then(function(_created) {
@@ -8001,7 +8182,7 @@ function ClipShareModal(props) {
           /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: '#1e3a5f', marginBottom: 3 } }, "Only for partner matching"),
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: '#1e3a5f', lineHeight: 1.5 } },
-              "This habit isn't on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, so this clip won't be listed there. It may be shown in ", /*#__PURE__*/React.createElement("strong", null, "AI match reports"), " to people you could be matched with, and to your buddy."
+              "This habit isn't on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, so this clip won't be listed there. It may be shown in ", /*#__PURE__*/React.createElement("strong", null, "AI match reports"), " to people you could be matched with."
             )
           )
         )
@@ -8013,7 +8194,7 @@ function ClipShareModal(props) {
           /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: '#92400e', marginBottom: 3 } }, "This clip is public"),
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: '#78350f', lineHeight: 1.5 } },
-              "It will appear on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, where ", /*#__PURE__*/React.createElement("strong", null, "anyone on FamStreak"), " can watch it. It may also be shown in AI match reports and to your buddy."
+              "It will appear on the ", /*#__PURE__*/React.createElement("strong", null, "Challengers"), " page, where ", /*#__PURE__*/React.createElement("strong", null, "anyone on FamStreak"), " can watch it. It may also be shown in AI match reports."
             )
           )
         )),
@@ -8087,67 +8268,107 @@ function _freshThumbUrl(url, createdAt) {
    讀取失敗（CORS／權限／網路）一律當成「可以播」，寧可放行也不要把影片卡住；
    超過 15 分鐘也一律當成好了，不再發請求，舊影片完全不受影響。
    同一支影片在畫面上出現幾次，都共用同一份狀態跟同一個計時器。 */
-var _CLIP_PROC_WINDOW_MS = 15 * 60 * 1000;
-var _CLIP_PROC_POLL_MS = 6000;
-var _clipProcStore = {};      // vid -> { state: 'checking'|'processing'|'ready', subs: [], timer, until }
-var _clipProbeBroken = false; // 讀不到 playlist（例如 CORS 沒開）就整個停掉，不再嘗試
+// ★ 2026-11-15：Bunny 已開啟 Early-Play（轉檔還沒完成就能先播原始檔）。
+//   true：處理中的影片照常顯示、照常播放，只有「轉檔失敗」才在縮圖標示並擋下播放。
+//   false：恢復成「Bunny 全部轉完才放行」（處理中顯示 Processing 並跳提示）。
+var BUNNY_EARLY_PLAY = true;
+var _CLIP_PROC_WINDOW_MS = 60 * 60 * 1000;   // ★ 2026-11-15：手機 4K 影片轉檔可能比較久，觀察時間拉長到 60 分鐘
+var _CLIP_PROC_POLL_MS = 5000;
+var _BUNNY_STATUS_FN = 'https://nvyyneoiocyjxbtcyxyi.supabase.co/functions/v1/bunny-video-status';
+var _clipProcStore = {};      // vid -> { state, progress, subs: [], timer, until }
+var _clipProbeBroken = false; // 兩種查法都失敗就整個停掉，不再嘗試（一律當成可以播）
+var _bunnyStatusFnMissing = false; // bunny-video-status 還沒部署 → 退回讀 playlist
+/* ★ 2026-11-15：改成問 Bunny API 拿真正的轉檔狀態（bunny-video-status Edge Function）
+   原本讀 playlist.m3u8 判斷，但 Bunny 轉檔還沒完成時 playlist 可能已經有內容，
+   被誤判成「可以播」，點開就是黑畫面（手機上傳的 4K 影片特別明顯）。
+   Bunny 回 Finished 才算好；Error 顯示「處理失敗」；其他都算處理中，並帶進度 %。
+   Edge Function 還沒部署或回錯時，才退回舊的 playlist 判斷。 */
 function _bunnyGuidFromUrl(url) {
   if (!url || typeof url !== 'string') return null;
   if (url.indexOf('b-cdn.net') === -1 && url.indexOf('mediadelivery.net') === -1) return null;
   var m = url.match(/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/);
   return m ? m[1] : null;
 }
-function _clipProcSet(vid, state) {
-  var e = _clipProcStore[vid]; if (!e || e.state === state) return;
-  e.state = state;
-  e.subs.slice().forEach(function(fn) { try { fn(state); } catch (x) {} });
+function _clipProcSet(vid, state, progress) {
+  var e = _clipProcStore[vid]; if (!e) return;
+  progress = progress == null ? e.progress : progress;
+  if (e.state === state && e.progress === progress) return;
+  e.state = state; e.progress = progress;
+  var info = { state: state, progress: progress };
+  e.subs.slice().forEach(function(fn) { try { fn(info); } catch (x) {} });
+}
+function _clipProbeViaPlaylist(vid) {
+  return fetch(BUNNY_STREAM_CDN + '/' + vid + '/playlist.m3u8?probe=' + Date.now(), { cache: 'no-store' }).then(function(r) {
+    if (r.status === 404) return { state: 'processing' };
+    if (!r.ok) return { state: 'ready' };
+    return r.text().then(function(t) { return { state: (/#EXT-X-STREAM-INF|#EXTINF/.test(t || '')) ? 'ready' : 'processing' }; });
+  }).catch(function() { _clipProbeBroken = true; return { state: 'ready' }; });
+}
+function _clipProbeViaApi(vid) {
+  return _getAccessToken().then(function(tok) {
+    if (!tok) return null;
+    return fetch(_BUNNY_STATUS_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify({ videoIds: [vid] })
+    }).then(function(r) {
+      if (r.status === 404) { _bunnyStatusFnMissing = true; return null; }
+      if (!r.ok) return null;
+      return r.json().then(function(j) {
+        var v = j && j.videos && j.videos[vid];
+        if (!v || v.state === 'unknown') return null;
+        return { state: v.state, progress: v.progress || 0 };
+      });
+    });
+  }).catch(function() { return null; });
 }
 function _clipProcProbe(vid) {
   var e = _clipProcStore[vid]; if (!e) return;
   if (e.timer) { clearTimeout(e.timer); e.timer = null; }
-  if (_clipProbeBroken || Date.now() > e.until) { _clipProcSet(vid, 'ready'); return; }
-  var url = BUNNY_STREAM_CDN + '/' + vid + '/playlist.m3u8?probe=' + Date.now();
-  fetch(url, { cache: 'no-store' }).then(function(r) {
-    if (r.status === 404) return 'processing';
-    if (!r.ok) return 'ready'; // 403 之類：可能開了權杖驗證，不判斷，直接放行
-    return r.text().then(function(t) { return (/#EXT-X-STREAM-INF|#EXTINF/.test(t || '')) ? 'ready' : 'processing'; });
-  }).catch(function() { _clipProbeBroken = true; return 'ready'; })
-  .then(function(state) {
-    _clipProcSet(vid, state);
+  if (_clipProbeBroken || Date.now() > e.until) { _clipProcSet(vid, 'ready', 100); return; }
+  var p = _bunnyStatusFnMissing ? Promise.resolve(null) : _clipProbeViaApi(vid);
+  p.then(function(res) { return res || _clipProbeViaPlaylist(vid); })
+  .then(function(res) {
+    _clipProcSet(vid, res.state, res.progress);
     var cur = _clipProcStore[vid];
-    if (state === 'processing' && cur && cur.subs.length) cur.timer = setTimeout(function() { _clipProcProbe(vid); }, _CLIP_PROC_POLL_MS);
+    if (res.state === 'processing' && cur && cur.subs.length) cur.timer = setTimeout(function() { _clipProcProbe(vid); }, _CLIP_PROC_POLL_MS);
   });
 }
-// 回傳 'ready' | 'checking' | 'processing'；urls 可以傳 media_url / thumbnail_url，有一個認得出影片 id 就好
-function _useClipProcessing(urls, createdAt) {
+// 回傳 { state: 'ready'|'checking'|'processing'|'error', progress }；
+// urls 可以傳 media_url / thumbnail_url，有一個認得出影片 id 就好
+function _useClipProcInfo(urls, createdAt) {
   var vid = null;
   (Array.isArray(urls) ? urls : [urls]).some(function(u) { vid = _bunnyGuidFromUrl(u); return !!vid; });
   var createdMs = createdAt ? new Date(createdAt).getTime() : NaN;
   var recent = !!vid && !isNaN(createdMs) && (Date.now() - createdMs) < _CLIP_PROC_WINDOW_MS && !_clipProbeBroken;
+  var READY = { state: 'ready', progress: 100 };
   var _st = React.useState(function() {
-    if (!recent) return 'ready';
-    var e = _clipProcStore[vid]; return e ? e.state : 'checking';
+    if (!recent) return READY;
+    var e = _clipProcStore[vid]; return e ? { state: e.state, progress: e.progress } : { state: 'checking', progress: 0 };
   });
-  var state = _st[0], setState = _st[1];
+  var info = _st[0], setInfo = _st[1];
   React.useEffect(function() {
-    if (!recent) { setState('ready'); return; }
+    if (!recent) { setInfo(READY); return; }
     var e = _clipProcStore[vid];
-    if (!e) e = _clipProcStore[vid] = { state: 'checking', subs: [], timer: null, until: createdMs + _CLIP_PROC_WINDOW_MS };
-    e.subs.push(setState);
-    setState(e.state);
+    if (!e) e = _clipProcStore[vid] = { state: 'checking', progress: 0, subs: [], timer: null, until: createdMs + _CLIP_PROC_WINDOW_MS };
+    e.subs.push(setInfo);
+    setInfo({ state: e.state, progress: e.progress });
     if (e.state === 'checking' || (e.state === 'processing' && !e.timer)) _clipProcProbe(vid);
     return function() {
       var cur = _clipProcStore[vid]; if (!cur) return;
-      cur.subs = cur.subs.filter(function(fn) { return fn !== setState; });
+      cur.subs = cur.subs.filter(function(fn) { return fn !== setInfo; });
       if (!cur.subs.length && cur.timer) { clearTimeout(cur.timer); cur.timer = null; }
     };
   }, [vid, recent]);
-  return recent ? state : 'ready';
+  return recent ? info : READY;
 }
+function _useClipProcessing(urls, createdAt) { return _useClipProcInfo(urls, createdAt).state; }
 function _ClipProcOverlay(props) {
-  return React.createElement("span", { className: "clip-proc" + (props.compact ? " compact" : ""), "aria-label": "Processing" },
-    React.createElement("span", { className: "clip-proc-spin" }),
-    props.compact ? null : "Processing…");
+  var failed = props.state === 'error';
+  var pct = props.progress > 0 && props.progress < 100 ? ' ' + Math.round(props.progress) + '%' : '';
+  return React.createElement("span", { className: "clip-proc" + (props.compact ? " compact" : ""), "aria-label": failed ? "Processing failed" : "Processing" },
+    failed ? React.createElement("span", { style: { fontSize: props.compact ? 14 : 18 } }, "!") : React.createElement("span", { className: "clip-proc-spin" }),
+    props.compact ? null : (failed ? "Couldn’t process" : ("Processing" + pct + "…")));
 }
 
 function _ClipThumb(props) {
@@ -8156,8 +8377,18 @@ function _ClipThumb(props) {
   var _rt = React.useState(0); var retryCount = _rt[0], setRetryCount = _rt[1];
   var _fl = React.useState(false); var failed = _fl[0], setFailed = _fl[1];
   React.useEffect(function() { setRetryCount(0); setFailed(false); }, [url]);
-  var _proc = _useClipProcessing([props.mediaUrl, props.url], props.createdAt) === 'processing';
-  var _ov = _proc ? React.createElement(_ClipProcOverlay, { key: 'proc', compact: !!props.compact }) : null;
+  var _pi = _useClipProcInfo([props.mediaUrl, props.url], props.createdAt);
+  var _ov = (_pi.state === 'error' || (!BUNNY_EARLY_PLAY && _pi.state === 'processing')) ? React.createElement(_ClipProcOverlay, { key: 'proc', compact: !!props.compact, state: _pi.state, progress: _pi.progress }) : null;
+  // ★ 2026-11-15：被檢舉隱藏的影片——自己的：左下角「REPORTED」小標籤；別人的：整張蓋住
+  if (!_ov && props.reported) {
+    _ov = props.reportedCover
+      ? React.createElement("span", { key: 'rep', className: "clip-proc" + (props.compact ? " compact" : ""), style: { background: '#e5e5e5', color: '#3d3d3d' }, "aria-label": "Reported clip" },
+          React.createElement("svg", { width: props.compact ? 14 : 18, height: props.compact ? 14 : 18, viewBox: "0 0 24 24", fill: "none", stroke: "#525252", strokeWidth: 2, "aria-hidden": "true" },
+            React.createElement("path", { d: "M17.9 17.9A10 10 0 0112 20c-7 0-10-8-10-8a18 18 0 015-6M9.9 4.2A9 9 0 0112 4c7 0 10 8 10 8a18 18 0 01-2.2 3.2M1 1l22 22" })),
+          props.compact ? null : "Reported")
+      : React.createElement("span", { key: 'rep', style: { position: 'absolute', left: 4, bottom: 4, zIndex: 2, padding: props.compact ? '1px 3px' : '2px 6px', background: '#f59e0b', color: '#0a0a0a', fontSize: props.compact ? 7 : 9, fontWeight: 700, letterSpacing: '.4px', pointerEvents: 'none' } }, "REPORTED");
+  }
+  if (props.reported && props.reportedCover) return _ov;
   if (!url || failed) {
     var _ic = /*#__PURE__*/React.createElement(VideoIcon, { key: 'ic', style: { width: 24, height: 24, color: 'var(--gray-500)' } });
     return _ov ? React.createElement(React.Fragment, null, _ic, _ov) : _ic;
@@ -8261,7 +8492,8 @@ function ClipGridModal(props) {
               },
               style: { position: 'relative', aspectRatio: '3/4', background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }
             },
-              /*#__PURE__*/React.createElement(_ClipThumb, { url: p.thumbnail_url, mediaUrl: p.media_url, postId: p.id, createdAt: p.created_at }),
+              /*#__PURE__*/React.createElement(_ClipThumb, { url: p.thumbnail_url, mediaUrl: p.media_url, postId: p.id, createdAt: p.created_at,
+                reported: _isReportHidden(p), reportedCover: !!(p.user_id && currentUser && String(p.user_id) !== String(currentUser.uid)) }),
               /*#__PURE__*/React.createElement("span", {
                 style: { position: 'absolute', top: 5, right: 5, fontSize: 10, fontWeight: 800, background: 'var(--black)', color: '#fff', borderRadius: 4, padding: '2px 6px', letterSpacing: '.3px' }
               }, 'Day ' + dayNum)
@@ -8391,7 +8623,7 @@ function HabitClipWall(props) {
       "aria-label": "Open clip" + (dayNum ? " from day " + dayNum : ""),
       onClick: function(e) { e.stopPropagation(); props.onOpen && props.onOpen(p); }
     },
-      React.createElement(_ClipThumb, { url: p.thumbnail_url, mediaUrl: p.media_url, postId: p.id, createdAt: p.created_at }),
+      React.createElement(_ClipThumb, { url: p.thumbnail_url, mediaUrl: p.media_url, postId: p.id, createdAt: p.created_at, reported: _isReportHidden(p) }),
       dayNum ? React.createElement("span", { className: "hc-badge" }, "Day " + dayNum) : null,
       isToday ? React.createElement("span", { className: "hc-today" }, "TODAY") : null,
       React.createElement("svg", { className: "hc-play", viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" }, React.createElement("path", { d: "M8 5v14l11-7z" }))
@@ -8422,7 +8654,7 @@ function HistoryClipStrip(props) {
     onClick: function(e) { e.stopPropagation(); if (props.onView) props.onView(); }
   },
     clips.slice(0, 3).map(function(p) {
-      return React.createElement("span", { key: p.id, className: "hclips-t" }, React.createElement(_ClipThumb, { url: p.thumbnail_url, mediaUrl: p.media_url, compact: true, postId: p.id, createdAt: p.created_at }));
+      return React.createElement("span", { key: p.id, className: "hclips-t" }, React.createElement(_ClipThumb, { url: p.thumbnail_url, mediaUrl: p.media_url, compact: true, postId: p.id, createdAt: p.created_at, reported: _isReportHidden(p) }));
     }),
     React.createElement("span", { className: "hclips-x" },
       React.createElement("b", null, clips.length + (clips.length === 1 ? ' clip' : ' clips')), "View all ›"),
@@ -8512,6 +8744,18 @@ function UserPostsPage(_ref_upp) {
   var filteredPosts = _pq ? allPosts.filter(function(p) {
     return ((p.text || '') + ' ' + (p.habit || '')).toLowerCase().indexOf(_pq) !== -1;
   }) : allPosts;
+  // ★ 2026-11-15：從「貼文被檢舉」通知跳過來 → 確保那則在目前顯示的頁數內，再捲過去閃一下
+  React.useEffect(function() {
+    var fid = window._fsFocusPostId;
+    if (!fid || loading) return;
+    var idx = allPosts.findIndex(function(p) { return String(p.id) === String(fid); });
+    window._fsFocusPostId = null;
+    if (idx < 0) { if (typeof _showAppToast === 'function') _showAppToast("That post isn't available anymore."); return; }
+    if (postSearch) setPostSearch('');
+    var needPage = Math.floor(idx / POSTS_PER_PAGE);
+    if (needPage > page) setPage(needPage);
+    _fsFlashFocus('fs-post-' + fid);
+  }, [loading, allPosts.length]);
   var visiblePosts = filteredPosts.slice(0, (page + 1) * POSTS_PER_PAGE);
   var hasMore = filteredPosts.length > visiblePosts.length;
   var displayName = (user && (user.displayName || user.email)) || 'User';
@@ -8861,6 +9105,18 @@ function UserCommentsPage(_ref_ucp) {
   var filteredComments = _cq ? allComments.filter(function(c) {
     return ((c.text || '') + ' ' + (c.postUser || '') + ' ' + (c.postText || '')).toLowerCase().indexOf(_cq) !== -1;
   }) : allComments;
+  // ★ 2026-11-15：從「留言被檢舉」通知跳過來 → 確保那則在顯示範圍內，捲過去閃一下
+  React.useEffect(function() {
+    var fid = window._fsFocusCommentId;
+    if (!fid || loading) return;
+    var idx = allComments.findIndex(function(c) { return String(c.id) === String(fid); });
+    window._fsFocusCommentId = null;
+    if (idx < 0) { if (typeof _showAppToast === 'function') _showAppToast("That comment isn't available anymore."); return; }
+    if (commentSearch) setCommentSearch('');
+    var needPage = Math.floor(idx / COMMENTS_PER_PAGE);
+    if (needPage > page) setPage(needPage);
+    _fsFlashFocus('fs-mycomment-' + fid);
+  }, [loading, allComments.length]);
   var visibleComments = filteredComments.slice(0, (page + 1) * COMMENTS_PER_PAGE);
   var hasMore = filteredComments.length > visibleComments.length;
   // ★ 2026-11-07：網頁版的留言卡（每則一張卡片，樣式跟手機版的同一份內容）
@@ -8877,11 +9133,15 @@ function UserCommentsPage(_ref_ucp) {
               visibleComments.map(function(c) {
                 var cLikedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
                 var cLiked = cLikedBy.includes(user.uid);
+                var _cRep = _isReportHidden(c);
                 return /*#__PURE__*/React.createElement('div', {
                   key: c.id,
+                  id: 'fs-mycomment-' + c.id,
                   className: isDesktop ? 'dsp-cmt' : undefined,
-                  style: _cmtWrapStyle
+                  style: _cRep ? Object.assign({}, _cmtWrapStyle, { border: '2px solid #f59e0b' }) : _cmtWrapStyle
                 },
+                  // ★ 2026-11-15：這則留言被 9 個人檢舉而對其他人隱藏
+                  _cRep && React.createElement('div', { style: { marginBottom: 8 } }, renderReportedOwnerBanner('comment')),
                   /* context: which post this was on */
                   /*#__PURE__*/React.createElement('div', {
                     onClick: c.postRaw ? function() { _openCommentPost(c); } : undefined,
@@ -9797,6 +10057,15 @@ function _isSidePartnerState(state) {
 function renderPartnerSideAction(state, opts) {
   opts = opts || {};
   var stop = function(e) { e.stopPropagation(); };
+  // ★ 2026-11-15：這個習慣有影片被檢舉隱藏 → 不能找夥伴（match-partner v24 也會擋，回 reported_clip）。
+  //   後台解除隱藏、或自己刪掉那支影片後就恢復。
+  if (opts.reported) {
+    return [
+      React.createElement("button", { key: "btn", type: "button", className: "hc-match-btn", disabled: true, "aria-disabled": "true", style: { opacity: .45, cursor: 'not-allowed' }, onClick: stop,
+        title: "Partner matching is paused because a clip on this habit was hidden after several reports." }, "Find partner"),
+      React.createElement("div", { key: "sub", className: "hc-side-sub" }, "Paused \u00b7 a clip was reported")
+    ];
+  }
   var ms = state.matchStatus || 'none';
   var n = state.matchFoundCount || 0;
   if ((ms === 'partial' || ms === 'complete') && state.pendingMatchData) {
@@ -11054,6 +11323,7 @@ function HistoryPage(_ref15) {
         // 找到配對時，按鈕放這裡（跟 Home 一樣；原本那張「N of 5 found」大卡片不顯示）
         sidePartner && React.createElement("div", { className: "hc-side", style: { marginRight: 0 }, onClick: function(e) { e.stopPropagation(); } },
           renderPartnerSideAction(st, {
+            reported: (clips || []).some(_isReportHidden),
             onFindPartner: function() { window.openMatchingModal(h); },
             onViewFoundMatch: function(s2) { if (window._showPreloadedMatch) window._showPreloadedMatch(h, s2.pendingMatchData, { complete: s2.matchStatus === 'complete' }); }
           })
@@ -11801,7 +12071,33 @@ function MainApp(_ref16) {
   // ★ 新增：貼/改/刪 clip 後手動 +1，讓上面的 effect 重新抓一次，卡片才會立刻反映
   //   最新狀態，不用等 habits.length 剛好變動或整頁重新整理。
   var _useState_clipRefreshTick = React.useState(0);
+  var _useState_reportedClip = React.useState(null);
+  var viewingReportedClip = _useState_reportedClip[0], setViewingReportedClip = _useState_reportedClip[1];
   var clipStatusRefreshTick = _useState_clipRefreshTick[0], bumpClipStatusRefresh = function() { _useState_clipRefreshTick[1](function(n) { return n + 1; }); };
+  // ★ 2026-11-15：任何地方刪掉習慣影片後，重新抓首頁習慣卡片上的影片清單
+  React.useEffect(function() {
+    var onDel = function(ev) {
+      // 先在畫面上直接拿掉（馬上消失），再重新抓一次確認
+      var pid = ev && ev.detail && ev.detail.postId;
+      if (pid != null && typeof setMyClipStatusByHabit === 'function') {
+        setMyClipStatusByHabit(function(prev) {
+          if (!prev) return prev;
+          var next = {};
+          Object.keys(prev).forEach(function(hid) {
+            var st = prev[hid];
+            if (!st) { next[hid] = st; return; }
+            var all = (st.allPosts || []).filter(function(p) { return String(p.id) !== String(pid); });
+            var isToday = st.post && String(st.post.id) === String(pid);
+            next[hid] = Object.assign({}, st, { allPosts: all }, isToday ? { post: null, visibility: null, thumbnailUrl: null, reacted: false } : {});
+          });
+          return next;
+        });
+      }
+      _useState_clipRefreshTick[1](function(n) { return n + 1; });
+    };
+    window.addEventListener('famstreak:clipDeleted', onDel);
+    return function() { window.removeEventListener('famstreak:clipDeleted', onDel); };
+  }, []);
   React.useEffect(function() {
     if (!user || !habits || habits.length === 0) return;
     var _sbc = window._supabaseClient;
@@ -11817,7 +12113,7 @@ function MainApp(_ref16) {
     //   moderation_appeal_status/moderation_appeal_at，害這幾個欄位在 p 上永遠是
     //   undefined——FeedCard 判斷 isHidden 靠 post.moderationStatus === 'hidden'，
     //   undefined 恆為 false，等於被 AI 標記隱藏的 clip 在這裡完全被當成正常內容處理。
-    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
+    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
       .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
       .order('created_at', { ascending: false })
       .limit(500)
@@ -12418,9 +12714,42 @@ function MainApp(_ref16) {
     if (typeof setSelectedHabit === 'function') { try { setSelectedHabit(null); } catch (e) {} }
     _scrollToHabitCard(hid);
   }
+  // ★ 2026-11-15：「你的內容被檢舉隱藏」通知 → 帶到那則內容
+  //   貼文 → Profile 的 My posts（捲到那則並閃一下）；留言 → My comments；
+  //   習慣影片 → 回到 Home，直接打開那支影片（不管習慣還在進行中或已在 Habit History）
+  function _openReportedContent(n) {
+    var d = {};
+    try { d = (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) || {}; } catch (e) { d = {}; }
+    setShowHistory(false);
+    if (d.kind === 'comment') {
+      window._fsFocusCommentId = d.comment_id || null;
+      setShowAllPosts(false); setShowAllComments(true); setActiveTab('profile');
+      return;
+    }
+    if (d.kind === 'clip' && d.post_id) {
+      setShowAllPosts(false); setShowAllComments(false); setActiveTab('home');
+      _supabase.from('posts').select('*').eq('id', d.post_id).maybeSingle().then(function(r) {
+        var p = r && r.data;
+        if (!p) { if (typeof _showAppToast === 'function') _showAppToast("That clip isn't available anymore."); return; }
+        setViewingReportedClip(Object.assign({}, p, {
+          userId: p.user_id, user: p.user || p.user_name || (user && user.displayName) || '',
+          avatarUrl: p.avatar_url || p.user_avatar || p.user_avatar_url || null,
+          habit: p.habit || '', hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
+          commentCount: p.comment_count || 0, isHabitClip: true, clipVisibility: p.clip_visibility,
+          habitId: p.habit_id, reportHidden: !!p.report_hidden,
+          moderationStatus: p.moderation_status, moderationCategory: p.moderation_category
+        }));
+      }, function() {});
+      return;
+    }
+    window._fsFocusPostId = d.post_id || null;
+    setShowAllComments(false); setShowAllPosts(true); setActiveTab('profile');
+  }
+  window._openReportedContent = _openReportedContent;
   function handleHomeNotifClick(n) {
     setMobileNotifOpen(false);
     if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]);
+    if (n.type === 'content_reported') { _openReportedContent(n); return; }
     if (n.type === 'ai_credit_awarded' || n.type === 'partner_declined') return;
     // ★ 2026-10：「找到夥伴」通知直接在 Home 打開候選人報告（跟習慣卡上「View N matches」
     //   同一個 modal），關掉之後還是停在 Home、看得到那張習慣卡，不會被切到 Buddies。
@@ -12782,7 +13111,7 @@ function MainApp(_ref16) {
     promise = promise.then(function(list) {
       if (!_sb || !list.length) return list;
       // ★ 2026-11-07：這裡一次把卡片要顯示的欄位也抓齊（_clipRows），後面就不用再查一次 posts
-      return _sb.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
+      return _sb.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
         .eq('is_habit_clip', true).eq('clip_visibility', 'everyone')
         .in('habit_id', list.map(function(h) { return h.id; }))
         .order('created_at', { ascending: true })
@@ -12888,7 +13217,7 @@ function MainApp(_ref16) {
         //   別人被 AI 標記隱藏的 clip，在 Challenger 頁點開會整支影片+文字正常播放，
         //   完全沒有套用隱藏邏輯。一併補上 appeal 欄位，跟其他查詢保持一致。
         _sbClient.from('posts')
-          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
+          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
           .in('habit_id', _habitIds)
           .eq('is_habit_clip', true)
           .eq('clip_visibility', 'everyone')
@@ -15017,6 +15346,8 @@ function MainApp(_ref16) {
       var pairState = isQualified ? getHabitPairState(habit, user.uid) : null;
       // ★ 2026-11-02：中斷太久 → 暫時從 Challengers／配對名單下架（再打卡或上傳影片就恢復）
       var _myLastClipDay = (myClipStatusByHabit[habit.id] && myClipStatusByHabit[habit.id].lastDay) || '';
+      // ★ 2026-11-15：這個習慣有沒有影片被檢舉隱藏（有的話 Find partner 停用）
+      var _habitHasReportedClip = !!(myClipStatusByHabit[habit.id] && (myClipStatusByHabit[habit.id].allPosts || []).some(_isReportHidden));
       var _habitDormant = _isHabitDormant(habit, _myLastClipDay);
       var _habitIdleDays = _habitDaysSinceActive(habit, _myLastClipDay);
       var habitCheerData = habitCheers[habit.id] || null;
@@ -15028,6 +15359,7 @@ function MainApp(_ref16) {
       //   不再顯示整張「Looking for your accountability partner」卡片
       var _sidePartner = isQualified && _isSidePartnerState(pairState);
       var _partnerOpts = {
+        reported: _habitHasReportedClip,
         onFindPartner: function() {
           // 中斷太久時先不讓找新夥伴（後端也會擋），不扣點
           if (_habitDormant) {
@@ -15472,7 +15804,8 @@ function MainApp(_ref16) {
               "aria-label": "Watch clip",
               onClick: function(e) { e.stopPropagation(); setViewingChallengerKey(ckey); },
               style: { width: 44, height: 44, borderRadius: 8, background: "var(--gray-100)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", overflow: "hidden" }
-            }, React.createElement(_ClipThumb, { url: c.clip.thumbnail_url, mediaUrl: c.clip.media_url, compact: true, postId: c.clip.id, createdAt: c.clip.created_at }))
+            }, React.createElement(_ClipThumb, { url: c.clip.thumbnail_url, mediaUrl: c.clip.media_url, compact: true, postId: c.clip.id, createdAt: c.clip.created_at,
+              reported: _isReportHidden(c.clip), reportedCover: !!(c.clip.user_id && user && String(c.clip.user_id) !== String(user.uid)) }))
           ),
           React.createElement("div", { className: "challenger-card-progress" },
             React.createElement("div", { className: "challenger-card-prog-row" },
@@ -16084,6 +16417,11 @@ function MainApp(_ref16) {
     }),
     /* ★ 2026-11-08：背景上傳進度提示 */
     React.createElement(BgUploadToast, null),
+    viewingReportedClip ? React.createElement(ClipViewerModal, {
+      post: viewingReportedClip, currentUser: user, hideCheer: true,
+      onClose: function() { setViewingReportedClip(null); }
+    }) : null,
+    _ClipTiming.enabled() ? React.createElement(ClipTimingPanel, null) : null,
     viewingMyClipsForHabit && /*#__PURE__*/React.createElement(ClipGridModal, {
       challenger: {
         userId: user.uid,
@@ -17617,6 +17955,7 @@ function _notifTitle(n) {
     n.type === 'moderation_appeal_approved' ? 'Your review was approved ✓' :
     n.type === 'moderation_appeal_denied_kept' ? 'Review complete — still hidden' :
     n.type === 'moderation_appeal_denied_deleted' ? 'Review complete — content removed' :
+    n.type === 'content_reported' ? 'Your post has been hidden from others' :
     n.type === 'report_actioned' ? 'Update on your report' :
     n.type === 'report_reviewed' ? 'Update on your report' :
     n.type === 'account_warning' ? 'Community guidelines warning' :
@@ -17666,6 +18005,16 @@ function NotificationList(props) {
           title,
           !n.is_read && React.createElement("span", { className: "notif-new" }, "NEW")),
         body && React.createElement("div", { className: "notif-row-text" }, body),
+        // ★ 2026-11-15：對方是從 Habit History（已結束的挑戰）送的邀請 → 獨立的小標籤，不混在句子裡
+        (function() {
+          if (n.type !== 'partner_request') return null;
+          var _d = {}; try { _d = (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) || {}; } catch (e) { _d = {}; }
+          if (!_d.requester_habit_ended_on) return null;
+          var _lbl = String(_d.requester_habit_ended_on);
+          try { _lbl = dateFromISO(_lbl.slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) {}
+          return React.createElement("span", { style: { alignSelf: 'flex-start', display: 'inline-block', margin: '4px 0 2px', padding: '2px 8px', background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase' } },
+            "From a past challenge \u00b7 ended " + _lbl);
+        })(),
         timeLabel && React.createElement("div", { className: "notif-row-time" }, timeLabel)
       )
     ));
@@ -17753,6 +18102,13 @@ function BuddiesPage(_ref_buddies) {
     })();
     var _navPair = _navPairId ? pairs.find(function(p) { return p.id === _navPairId; }) : null;
     if (!n.is_read && n.id && window._markNotificationsRead) window._markNotificationsRead([n.id]);
+
+    // ── ★ 2026-11-15 content_reported：交給 MainApp 帶到那則貼文／留言／影片 ──
+    if (n.type === 'content_reported') {
+      setNotifPanelOpen(false);
+      if (window._openReportedContent) window._openReportedContent(n);
+      return false;
+    }
 
     // ── partner_request：看完整配對報告 + Accept/Decline，不進聊天室 ──
     if (n.type === 'partner_request') {
@@ -17957,7 +18313,7 @@ function BuddiesPage(_ref_buddies) {
         // ★ 修正：同一份 comment_count 沒選到的問題，跟另外兩處 clip 查詢一起補上。
         // ★ 修正（2026-09）：moderation_status/moderation_category/appeal 欄位也一起補，
         //   不然 Buddies 頁點開夥伴分享的 clip，被隱藏的內容一樣會被當正常內容顯示。
-        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at')
+        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
           .in('habit_id', partnerHabitIds)
           .eq('is_habit_clip', true)
           .in('clip_visibility', ['everyone', 'buddies'])
@@ -18395,7 +18751,7 @@ function BuddiesPage(_ref_buddies) {
                         moderationAppealStatus: clip.moderation_appeal_status, moderationAppealAt: clip.moderation_appeal_at
                       }));
                     }
-                  }, React.createElement(_ClipThumb, { url: clip.thumbnail_url, mediaUrl: clip.media_url, compact: true, postId: clip.id, createdAt: clip.created_at })),
+                  }, React.createElement(_ClipThumb, { url: clip.thumbnail_url, mediaUrl: clip.media_url, compact: true, postId: clip.id, createdAt: clip.created_at, reported: _isReportHidden(clip), reportedCover: true })),
                   React.createElement("div", { style:{ flex:1, minWidth:0 } },
                     React.createElement("div", { style:{ fontSize:11, fontWeight:700 } }, (partnerName || 'Your buddy') + ' shared a clip'),
                     React.createElement("div", { style:{ fontSize:10, color:'var(--gray-400)' } },
@@ -18561,7 +18917,8 @@ function BuddiesPage(_ref_buddies) {
                 checkin: rpIsUser ? (md.checkin || null) : (md.myCheckin || null),
                 myCheckin: rpIsUser ? (md.myCheckin || null) : (md.checkin || null),
                 checkinHabitId: rpIsUser ? rp.partner_habit_id : rp.habit_id,
-                myCheckinHabitId: rpIsUser ? rp.habit_id : rp.partner_habit_id
+                myCheckinHabitId: rpIsUser ? rp.habit_id : rp.partner_habit_id,
+                challengeEndedOn: rpIsUser ? null : (md.requesterHabitEndedOn || null)
               }, { label: 'Wants to be your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report for this pair yet.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -18624,7 +18981,8 @@ function BuddiesPage(_ref_buddies) {
                 checkin: vpIsUser ? (vmd.checkin || null) : (vmd.myCheckin || null),
                 myCheckin: vpIsUser ? (vmd.myCheckin || null) : (vmd.checkin || null),
                 checkinHabitId: vpIsUser ? vp.partner_habit_id : vp.habit_id,
-                myCheckinHabitId: vpIsUser ? vp.habit_id : vp.partner_habit_id
+                myCheckinHabitId: vpIsUser ? vp.habit_id : vp.partner_habit_id,
+                challengeEndedOn: vpIsUser ? null : (vmd.requesterHabitEndedOn || null)
               }, { label: 'Your partner', avIdx: 0 }) : '') } })
             : React.createElement("div", { style:{ fontSize:11, color:'#777', padding:'20px 16px' } }, 'No AI match report was saved for this pair.'),
           React.createElement("div", { style:{ display:'flex', gap:8, padding:'12px 16px 16px' } },
@@ -20010,6 +20368,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       console.warn('[values-confirm] failed to load existing values summary:', e && e.message);
     }
 
+    // ★ 2026-11-15：早期版本存的答案可能是中文——配對報告要給對方看，全站又是英文介面，
+    //   所以不顯示中文摘要讓他「確認」，直接請他用英文重新回答一次（可以選選擇題）。
+    if (summaryLines.concat(partnerLines).some(_hasCJK)) {
+      window._updateValuesInstead("We've updated how answers are saved, so please answer once more in English \u2014 your partner will read this in your match report. You can also pick from quick multiple-choice answers below.");
+      return;
+    }
     var body = document.getElementById('surveyBody');
     body.innerHTML =
       '<div style="padding:16px 20px 0;">' +
@@ -20047,13 +20411,70 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     _proceedToMatching(_currentHabit);
   };
 
-  window._updateValuesInstead = function() {
-    // 借用自由輸入路徑重新描述一次 → interpret-values-text 會覆蓋 user_values
-    // 那一列，等於「更新我的答案」；跟第一次填問卷用的是同一套送出邏輯
-    // （_submitFreeTextValues），不用另外寫一套存檔流程。
-    _surveyQuestions = [];
+  // ★ 2026-11-15：「Update my answers」也要能選選擇題。
+  //   原本這裡把題目清空（_surveyQuestions = []），所以只剩自由輸入、沒有「改用選擇題」的連結。
+  //   generate-value-questions 對已經填過的人不會再回傳題目，所以：
+  //   先用當初存的那批題目（user_values.questions）；沒有、或那批是中文的（早期版本產的），
+  //   就用下面這組固定的英文題目。全站介面都是英文，存進去的答案也要是英文，
+  //   不然配對報告會出現中文。
+  var _FALLBACK_VALUE_QUESTIONS = [
+    { id: 'fq1', type: 'self', dimension: 'Motivation', text: 'What keeps you coming back to a habit?', options: [
+      { value: 'A', label: 'Seeing clear progress toward a goal' },
+      { value: 'B', label: 'I simply enjoy doing it' },
+      { value: 'C', label: 'It makes me feel healthier and calmer' },
+      { value: 'D', label: 'Proving to myself that I can stick with it' } ] },
+    { id: 'fq2', type: 'self', dimension: 'Setbacks', text: 'When you miss a day, what do you usually do?', options: [
+      { value: 'A', label: 'Shrug it off and pick it back up the next day' },
+      { value: 'B', label: 'Figure out what got in the way and adjust my plan' },
+      { value: 'C', label: 'I need a nudge from someone to get going again' },
+      { value: 'D', label: 'It takes me a while to get back into it' } ] },
+    { id: 'fq3', type: 'self', dimension: 'Approach', text: 'How do you like to approach a habit?', options: [
+      { value: 'A', label: 'A steady routine at the same time every day' },
+      { value: 'B', label: 'Flexible \u2014 I fit it in around the rest of my life' },
+      { value: 'C', label: 'Pushing myself and taking on bigger challenges' },
+      { value: 'D', label: 'Small, easy steps so it never feels like a chore' } ] },
+    { id: 'fq4', type: 'partner', dimension: 'Support', text: 'What kind of support from a partner helps you most?', options: [
+      { value: 'A', label: 'Regular check-ins that keep me accountable' },
+      { value: 'B', label: 'Encouragement without any pressure or guilt' },
+      { value: 'C', label: 'A bit of friendly competition' },
+      { value: 'D', label: 'Swapping tips and what\u2019s working for us' } ] },
+    { id: 'fq5', type: 'partner', dimension: 'Communication', text: 'How often would you like to hear from a partner?', options: [
+      { value: 'A', label: 'Every day' },
+      { value: 'B', label: 'A few times a week' },
+      { value: 'C', label: 'About once a week' },
+      { value: 'D', label: 'Only when there\u2019s something worth sharing' } ] }
+  ];
+  function _hasCJK(str) { return /[\u3000-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(String(str || '')); }
+  function _questionsLookEnglish(qs) {
+    if (!Array.isArray(qs) || qs.length < 5) return false;
+    return !qs.some(function(q) {
+      return !q || !Array.isArray(q.options) || _hasCJK(q.text) || _hasCJK(q.dimension) || q.options.some(function(o) { return _hasCJK(o && o.label); });
+    });
+  }
+  async function _loadQuestionsForUpdate() {
+    var qs = null;
+    try {
+      var uid = getCurrentUid();
+      if (uid) {
+        var r = await _supabase.from('user_values').select('questions').eq('user_id', uid).maybeSingle();
+        var q = r && r.data && r.data.questions;
+        if (typeof q === 'string') { try { q = JSON.parse(q); } catch (e) { q = null; } }
+        if (_questionsLookEnglish(q)) qs = q;
+      }
+    } catch (e) { console.warn('[values-update] could not load saved questions:', e && e.message); }
+    return qs || _FALLBACK_VALUE_QUESTIONS;
+  }
+  window._updateValuesInstead = async function(noteMsg) {
+    // 預設還是先顯示自由輸入（跟第一次填問卷一樣），下面有「Prefer a quick multiple-choice instead?」可以改選擇題。
+    // 兩條路的送出邏輯都跟第一次一樣，會覆蓋 user_values 那一列，等於「更新我的答案」。
+    var qs = await _loadQuestionsForUpdate();
+    _surveyQuestions = qs;
+    _surveyDimensions = {};
+    qs.forEach(function(q) { _surveyDimensions[q.id] = q.dimension; });
+    _surveyAnswers = {};
+    _surveyIdx = 0;
     _surveyFreeTextMode = true;
-    _renderFreeTextSurvey();
+    _renderFreeTextSurvey(typeof noteMsg === 'string' ? noteMsg : undefined, typeof noteMsg === 'string' ? 'support' : undefined);
   };
 
   function _openSurveyModal(habit) {
@@ -20805,6 +21226,9 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           // ★ 2026-10：伺服器端發現還沒有價值觀資料（問卷必填）→ 直接帶去填
           document.getElementById('matchingOverlay').style.display = 'none';
           _openSurveyModal(habit);
+        } else if (data.error === 'reported_clip') {
+          // ★ 2026-11-15：match-partner v24——這個習慣有影片被檢舉隱藏（不扣點）
+          showMatchingError('Matching paused', data.message || 'Partner matching is paused for this habit because one of its clips was hidden after several reports.');
         } else if (data.error === 'inactive') {
           // ★ 2026-11-02：match-partner v24——這個習慣中斷太久，暫停配對（不扣點）
           showMatchingError('Paused for now \ud83d\udca4', data.message || 'Check in or share a clip on this habit to start matching again.');
@@ -20919,6 +21343,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   // ★ 2026-10：配對報告的內容（頭像/分數/細項/挑戰影片/Why this match）抽成共用函式，
   //   Find Partner 結果頁跟「收到邀請」時看的報告用同一份，外觀、內容完全一致。
   //   opts.label：左上角小標（例如「Match 1 of 5」「Partner request」）；opts.avIdx：頭像配色
+  function _fmtEndedOn(iso) {
+    try { return dateFromISO(String(iso).slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    catch (e) { return String(iso); }
+  }
   function _matchReportBodyHtml(m, opts) {
     opts = opts || {};
     var av = _avStyles[(opts.avIdx || 0) % _avStyles.length];
@@ -20965,6 +21393,18 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       '<div style="height:2px;background:#1a1a1a;margin:0 16px;">' +
         '<div style="height:100%;width:' + score + '%;background:' + av.fg + ';"></div>' +
       '</div>' +
+      // ★ 2026-11-15：送邀請的人是從 Habit History（已經結束的挑戰）找夥伴 → 收到邀請的人看到這行固定文字，
+      //   讓他自己決定要不要接受（這行不交給 AI 寫，日期直接來自送邀請當下存的快照）
+      (m.challengeEndedOn
+        ? '<div role="note" style="margin:14px 16px 0;padding:12px 14px;background:#1c1608;border:1px solid #5c4a1a;display:flex;gap:10px;align-items:flex-start;">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f5c451" stroke-width="2.2" style="flex:0 0 16px;margin-top:1px" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' +
+            '<div>' +
+              '<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#f5c451;margin-bottom:3px;">From a past challenge</div>' +
+              '<div style="font-size:11px;color:#f5e3b3;line-height:1.55;">This isn\u2019t a habit they\u2019re doing right now \u2014 their ' +
+                (m.habitName ? '\u201c' + esc(m.habitName) + '\u201d ' : '') + 'challenge ended on <b>' + esc(_fmtEndedOn(m.challengeEndedOn)) + '</b>.</div>' +
+            '</div>' +
+          '</div>'
+        : '') +
 
       // ★ 2026-11-08（match-partner v23）：有真實打卡紀錄（m.checkin）就顯示「Check-in activity」，
       //   取代原本 Activity／Rhythm／Mind-Body／Duration 四條分數；舊報告沒有這份資料才顯示舊的分數條。
@@ -21368,7 +21808,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     // ★ 2026-11-02：對方這個習慣中斷太久（存著的名單可能是幾天前找到的）
     candidate_inactive: "This person hasn't been active on this habit lately. Try the next one!",
     // ★ 2026-11-02：對方這個習慣已經到期（名單是在到期前找到的）
-    candidate_ended: "This person's challenge for this habit has ended. Try the next one!"
+    candidate_ended: "This person's challenge for this habit has ended. Try the next one!",
+    // ★ 2026-11-15：對方這個習慣的影片被檢舉隱藏（名單是在那之前找到的）
+    candidate_reported: "This person isn't available for matching right now. Try the next one!",
+    my_habit_reported: "Partner matching is paused for this habit because one of its clips was hidden after several reports."
   };
   // 從存起來的名單（pending_match_suggestions）拿掉一位已經不能邀請的人
   function _dropCandidateFromSaved(habitId, candUserId) {
@@ -21420,8 +21863,12 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             .slice(0, 3)
             .map(function(p) { return { postId: p.id, thumbnailUrl: p.thumbnail_url || null, mediaUrl: p.media_url, createdAt: p.created_at, views: null }; });
         } catch (_e) { console.warn('[mrcInviteCard] load my clips skipped:', _e && _e.message); }
+        // ★ 2026-11-15：從 Habit History（已經結束的挑戰）送邀請 → 記下結束日，對方的邀請、報告會顯示一行固定文字
+        var _reqEnd = parseTimeRange((_currentHabit && _currentHabit.timeRange) || '').end;
+        var _reqEndedOn = (_reqEnd && _reqEnd < toISODay()) ? _reqEnd : null;
         var snapshot = {
           requesterClips: _requesterClips,
+          requesterHabitEndedOn: _reqEndedOn,
           score: m.score,
           reason: m.reason || '',
           breakdown: m.breakdown || {},
@@ -21480,6 +21927,29 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 
         // ★ 2026-11-02：送出前再確認一次對方的習慣沒有「中斷太久」——名單可能是幾天前找到的。
         //   查不到資料（舊資料沒有 habitId、網路錯誤）就不擋，照舊送出。
+        // ★ 2026-11-15：自己或對方這個習慣有影片被檢舉隱藏 → 不能送（report_hide.sql 還沒跑時查詢失敗就不擋）
+        try {
+          var _repIds = [_currentHabit.id].concat(m.habitId ? [m.habitId] : []);
+          var _repRes = await _withTimeout(
+            _supabase.from('posts').select('habit_id').eq('is_habit_clip', true).eq('report_hidden', true).in('habit_id', _repIds).limit(5),
+            8000, 'Check reported clips');
+          if (_repRes && !_repRes.error && (_repRes.data || []).length) {
+            var _mine = _repRes.data.some(function(r) { return String(r.habit_id) === String(_currentHabit.id); });
+            _matchSending = false;
+            if (_mine) {
+              _renderMatchCard();
+              if (typeof _showAppToast === 'function') _showAppToast(_INVITE_BLOCK_MESSAGES.my_habit_reported);
+              return;
+            }
+            _matchUnavailable[idx] = 'candidate_reported';
+            _renderMatchCard();
+            if (typeof _showAppToast === 'function') _showAppToast(_INVITE_BLOCK_MESSAGES.candidate_reported);
+            if (window._supabaseClient && window._currentUser) _dropCandidateFromSaved(_currentHabit.id, m.userId);
+            if (_matchCardIdx < _matchCards.length - 1) setTimeout(function(){ _matchCardIdx++; _renderMatchCard(); }, 900);
+            return;
+          }
+        } catch (_e) { console.warn('[mrcInviteCard] reported-clip check skipped:', _e && _e.message); }
+
         if (m.habitId) {
           try {
             var _chRes = await _withTimeout(Promise.all([
@@ -21567,16 +22037,19 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           user_id: m.userId, type: 'partner_request',
           title: 'New Partner Request!',
           body: 'Someone wants to be your habit partner for "' + m.habitName + '".',
-          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name, pair_id: _newPairId }),
+          data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name, pair_id: _newPairId, requester_habit_ended_on: _reqEndedOn || null }),
           is_read: false, created_at: new Date().toISOString()
         }), 8000, 'Send notification');
         // 通知失敗不影響配對請求本身是否成功，只記錄，不擋流程
-        if (notifRes && notifRes.error) console.warn('[mrcInviteCard] notification insert error:', notifRes.error.message);
+        // ★ 2026-11-15：通知寫不進去時（例如 notifications 的 RLS 不允許寫給別人）要看得出來，
+        //   不然對方小鈴鐺沒有邀請、這邊卻顯示成功，很難查。邀請本身照樣算送出。
+        var _notifFailed = !!(notifRes && notifRes.error);
+        if (_notifFailed) console.error('[mrcInviteCard] notification insert error:', notifRes.error.message, notifRes.error);
 
         _matchInvited[idx] = true;
         _matchSending = false;
         _renderMatchCard();
-        if (typeof _showAppToast === 'function') _showAppToast('Invite sent! 🎉');
+        if (typeof _showAppToast === 'function') _showAppToast(_notifFailed ? "Invite sent, but we couldn't send them a notification." : 'Invite sent! 🎉');
         // ★ 這次邀請如果是從背景排程預存的結果送出去的，代表這個習慣的配對
         //   已經有結論了——清掉 pending_match_suggestions，避免 habit 卡片
         //   在邀請都送出去之後還一直顯示「🎉 View your match」這個已經過時的按鈕。
