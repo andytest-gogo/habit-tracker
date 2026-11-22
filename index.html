@@ -898,6 +898,31 @@
         .challengers-seg-label { font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--gray-400); display:flex; align-items:center; gap:8px; margin:16px 0 10px; }
         .challengers-seg-label::after { content:""; flex:1; height:1px; background:var(--gray-100); }
         .challenger-card { border:1px solid var(--gray-200); background:var(--bg-card); margin-bottom:10px; transition:border-color .15s; }
+        /* ★ 2026-11-22：Challenger 卡片改版（方案 A）*/
+        .challenger-card.ch2 { display:flex; gap:12px; padding:10px; }
+        .ch2-thumb { position:relative; width:84px; height:112px; flex-shrink:0; padding:0; border:none; background:var(--gray-800); overflow:hidden; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .challenger-card.ch2.ch2-noclip { padding:12px 12px 10px 14px; }
+        .ch2-play { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,.92); display:flex; align-items:center; justify-content:center; z-index:1; pointer-events:none; }
+        .ch2-count { position:absolute; right:5px; top:5px; z-index:1; display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; color:#fff; background:rgba(0,0,0,.6); padding:2px 5px; }
+        .ch2-date { position:absolute; left:5px; bottom:5px; z-index:1; font-size:9px; font-weight:700; color:#fff; background:rgba(0,0,0,.6); padding:2px 5px; }
+        .ch2-body { flex:1; min-width:0; display:flex; flex-direction:column; }
+        .ch2-top { display:flex; align-items:center; gap:7px; }
+        .ch2-av { width:22px; height:22px; border-radius:50%; flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; }
+        .ch2-av img { width:100%; height:100%; object-fit:cover; }
+        .ch2-name { font-size:12.5px; font-weight:700; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ch2-cat { margin-left:auto; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; flex-shrink:0; }
+        .ch2-habit { margin-top:7px; font-size:16px; font-weight:700; line-height:1.2; color:var(--text-primary); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+        .ch2-prog-row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin:8px 0 5px; }
+        .ch2-days { font-family:var(--din); font-weight:800; font-size:17px; color:var(--text-primary); white-space:nowrap; }
+        .ch2-days span { font-size:11px; font-weight:700; color:var(--gray-500); letter-spacing:.3px; }
+        .ch2-sub { font-size:10.5px; color:var(--gray-500); text-align:right; }
+        .ch2-segs { display:flex; gap:3px; }
+        .ch2-foot { margin-top:9px; display:flex; justify-content:flex-end; }
+        .ch2-cheer { display:flex; align-items:center; gap:5px; min-height:32px; padding:0 12px; background:var(--black); color:var(--white); border:1px solid var(--black); font-family:var(--font); font-size:11px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; cursor:pointer; }
+        .ch2-cheer.done { background:transparent; color:var(--gray-500); border-color:var(--gray-200); cursor:default; }
+        body[data-theme="dark"] .ch2-cheer { background:var(--blue-accent); border-color:var(--blue-accent); color:#0a0a0a; }
+        body[data-theme="dark"] .ch2-cheer.done { background:transparent; color:var(--blue-muted); border-color:var(--border-dk); }
+        body[data-theme="dark"] .ch2-segs div[style*="--gray-200"] { background:var(--bg-subtle) !important; }
         .challenger-card:hover { border-color:var(--gray-500); }
         body[data-theme="dark"] .challenger-card { border-color:var(--border-dk); }
         .challenger-card-top { display:flex; align-items:center; gap:10px; padding:12px 14px 8px; }
@@ -1695,6 +1720,9 @@
             transition:.15s; text-align:center;
         }
         .view-all-posts-btn:hover { opacity:.85; }
+        /* ★ 2026-11-22：無限滾動的載入中轉圈 */
+        .inf-spin { width:14px; height:14px; border:2px solid var(--gray-200); border-top-color:var(--gray-500); border-radius:50%; display:inline-block; animation:infSpin .8s linear infinite; }
+        @keyframes infSpin { to { transform:rotate(360deg); } }
         .load-more-posts-btn {
             display:block; width:100%; padding:12px 16px;
             background:var(--black); color:var(--white);
@@ -4155,6 +4183,38 @@ function _extractBunnyVideoId(url) {
   return m ? m[1] : null;
 }
 
+/* ══ ★ 2026-11-22：無限滾動——清單底部放一個看不見的「感應點」，捲到距離底部 600px 內就自動載入下一批 ══
+   用法：React.createElement(InfiniteSentinel, { hasMore, loading, onLoadMore, dep: 目前顯示幾筆, endText })
+   · dep 每次變（載完一批）都會重新檢查一次：畫面很高、載完感應點還在畫面內，就再接著載
+   · 瀏覽器不支援 IntersectionObserver（極少數舊版）時退回顯示一個按鈕 */
+function InfiniteSentinel(props) {
+  var ref = React.useRef(null);
+  var cbRef = React.useRef(props.onLoadMore);
+  cbRef.current = props.onLoadMore;
+  var hasMore = !!props.hasMore, loading = !!props.loading;
+  var supported = typeof window !== 'undefined' && 'IntersectionObserver' in window;
+  React.useEffect(function() {
+    if (!supported || !hasMore || loading || !ref.current) return;
+    var fired = false;
+    var io = new window.IntersectionObserver(function(entries) {
+      if (!fired && entries.some(function(e) { return e.isIntersecting; })) { fired = true; cbRef.current && cbRef.current(); }
+    }, { rootMargin: '0px 0px 600px 0px' });
+    io.observe(ref.current);
+    return function() { io.disconnect(); };
+  }, [hasMore, loading, props.dep, supported]);
+  var h = React.createElement;
+  if (!hasMore) {
+    return props.endText
+      ? h("div", { style: { textAlign: 'center', padding: '16px 0 24px', fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, props.endText)
+      : null;
+  }
+  if (!supported) {
+    return h("button", { className: "view-all-posts-btn", onClick: function() { cbRef.current && cbRef.current(); }, style: { margin: '8px 0', width: '100%' } }, "Load more");
+  }
+  return h("div", { ref: ref, role: "status", "aria-live": "polite", style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '18px 0 24px', fontSize: 11, color: 'var(--gray-400)', minHeight: 20 } },
+    h("span", { "aria-hidden": "true", className: "inf-spin" }), "Loading\u2026");
+}
+
 var SIGNUP_MIN_AGE = 18; // ★ 2026-11-22：註冊最低年齡改成 18 歲（全區一致；原本 16）
 
 /* ══ ★ 2026-11-22：居住國家 + 配對報告顯示「年齡 · 性別 · 國家」 ══
@@ -6358,6 +6418,7 @@ function AuthPage(_ref2) {
 
 /* ── FEED CARD COMPONENT (Firebase real likes + comments) ── */
 function FeedCard(_ref5) {
+  var _cmShownState = React.useState(20), commentShown = _cmShownState[0], setCommentShown = _cmShownState[1]; // ★ 2026-11-22：留言無限滾動
   var post = _ref5.post,
     currentUser = _ref5.currentUser,
     onLike = _ref5.onLike,
@@ -7252,7 +7313,7 @@ function FeedCard(_ref5) {
     className: "comments-section"
   }, loadingComments && /*#__PURE__*/React.createElement("div", {
     style: { fontSize: 11, color: 'var(--gray-400)', padding: '4px 0' }
-  }, "Loading comments..."), comments.filter(function (c) { return !_isBlockedUser(c.userId || c.user_id); }).map(function (c) {
+  }, "Loading comments..."), comments.filter(function (c) { return !_isBlockedUser(c.userId || c.user_id); }).slice(0, commentShown).map(function (c) {
     var _c$createdAt;
     var cLikedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
     var cLiked = currentUser ? cLikedBy.includes(currentUser.uid) : false;
@@ -7444,6 +7505,9 @@ function FeedCard(_ref5) {
           "\u201cStop commenting\u201d applies to all your posts and habit clips. They won't be told. You can undo it in Profile.")
       )
     )));
+  }), React.createElement(InfiniteSentinel, {
+    hasMore: comments.filter(function (c) { return !_isBlockedUser(c.userId || c.user_id); }).length > commentShown,
+    dep: commentShown, onLoadMore: function() { setCommentShown(function(n) { return n + 20; }); }
   }), comments.length === 0 && !loadingComments && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
@@ -8921,8 +8985,8 @@ function UserPostsPage(_ref_upp) {
                 React.createElement("p", null, _pq ? ('No posts match \u201c' + postSearch + '\u201d.') : 'Share your first post from your profile'))
             : React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "dsp-grid2" }, visiblePosts.map(_renderPostCard)),
-                hasMore && React.createElement("button", { className: "view-all-posts-btn dsp-more",
-                  onClick: function() { setPage(function(prev) { return prev + 1; }); } }, "Load more"))
+                React.createElement(InfiniteSentinel, { hasMore: hasMore, dep: visiblePosts.length,
+                  onLoadMore: function() { setPage(function(prev) { return prev + 1; }); } }))
       ),
       React.createElement("div", { className: "dsp-side" },
         React.createElement("div", { className: "dsp-box dsp-pair" },
@@ -8986,13 +9050,8 @@ function UserPostsPage(_ref_upp) {
                   onDelete: handleDeleteInPage
                 });
               }),
-              hasMore
-                ? /*#__PURE__*/React.createElement('button', {
-                    className: 'view-all-posts-btn',
-                    onClick: function() { setPage(function(prev) { return prev + 1; }); },
-                    style: { margin: '8px 16px', width: 'calc(100% - 32px)' }
-                  }, 'Load more')
-                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '\u2014 All posts loaded \u2014')
+              React.createElement(InfiniteSentinel, { hasMore: hasMore, dep: visiblePosts.length, endText: '\u2014 All posts loaded \u2014',
+                onLoadMore: function() { setPage(function(prev) { return prev + 1; }); } })
             )
     )
   );
@@ -9349,13 +9408,8 @@ function UserCommentsPage(_ref_ucp) {
                   )
                 );
               }),
-              hasMore
-                ? /*#__PURE__*/React.createElement('button', {
-                    className: 'view-all-posts-btn',
-                    onClick: function() { setPage(function(p) { return p + 1; }); },
-                    style: isDesktop ? { margin: '8px 0', width: '100%' } : { margin: '8px 16px', width: 'calc(100% - 32px)' }
-                  }, 'Load more')
-                : /*#__PURE__*/React.createElement('div', { style: { textAlign: 'center', paddingTop: 16, fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, '— All comments loaded —')
+              React.createElement(InfiniteSentinel, { hasMore: hasMore, dep: visibleComments.length, endText: '\u2014 All comments loaded \u2014',
+                onLoadMore: function() { setPage(function(p) { return p + 1; }); } })
             );
 
   // 關掉後重新抓一次，在影片／貼文裡刪掉或新增的留言會反映在這頁
@@ -11636,9 +11690,8 @@ function HistoryPage(_ref15) {
                 React.createElement("p", null, historySearch ? ('No past habits match \u201c' + historySearch + '\u201d.') : 'No past habits in this category.'))
             : React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "dsp-grid2" }, visibleSorted.map(_renderHistoryCard)),
-                hasMore && React.createElement("button", { className: "view-all-posts-btn dsp-more",
-                  onClick: function() { setVisibleCount(function(c) { return c + 10; }); } },
-                  "Load more (" + (searchedSorted.length - visibleCount) + " remaining)"))
+                React.createElement(InfiniteSentinel, { hasMore: hasMore, dep: visibleCount,
+                  onLoadMore: function() { setVisibleCount(function(c) { return c + 10; }); } }))
       ),
       React.createElement("div", { className: "dsp-side" },
         aiCredits != null && React.createElement("div", { className: "dsp-box dark" },
@@ -11807,28 +11860,8 @@ function HistoryPage(_ref15) {
       color: 'var(--gray-300)',
       lineHeight: 1.6
     }
-  }, "No past habits match \u201c", historySearch, "\u201d.")) : visibleSorted.map(_renderHistoryCard), hasMore && /*#__PURE__*/React.createElement("div", {
-    style: { padding: '16px 0 0', textAlign: 'center' }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: function() { setVisibleCount(function(c) { return c + 10; }); },
-    style: {
-      width: '100%',
-      padding: '12px 0',
-      background: 'var(--black)',
-      color: 'var(--white)',
-      border: 'none',
-      fontSize: 12,
-      fontWeight: 700,
-      fontFamily: 'var(--din)',
-      letterSpacing: '1px',
-      textTransform: 'uppercase',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8
-    }
-  }, "Load More (", searchedSorted.length - visibleCount, " remaining)")), /*#__PURE__*/React.createElement("div", {
+  }, "No past habits match \u201c", historySearch, "\u201d.")) : visibleSorted.map(_renderHistoryCard), React.createElement(InfiniteSentinel, { hasMore: hasMore, dep: visibleCount,
+    onLoadMore: function() { setVisibleCount(function(c) { return c + 10; }); } }), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 40,
       background: 'var(--white)'
@@ -13352,6 +13385,7 @@ function MainApp(_ref16) {
     return [];
   });
   var [challengersLoaded, setChallengersLoaded] = React.useState(false);
+  var [challengerShown, setChallengerShown] = React.useState(20); // ★ 2026-11-22：Challengers 無限滾動，目前顯示幾位
   var [cheerMap, setCheerMap] = React.useState({});
   var [viewingChallengerKey, setViewingChallengerKey] = React.useState(null); // Challenger 卡片影片全螢幕檢視（Concept B）
   var [showClipShareForHabit, setShowClipShareForHabit] = React.useState(null); // Home 頁「Add a clip」開啟的分享設定 modal，存目前的 habit 物件
@@ -13543,6 +13577,9 @@ function MainApp(_ref16) {
       var result = [];
       Object.keys(byUser).forEach(function(uid) {
         var arr = byUser[uid];
+        // ★ 2026-11-22：影片改成可有可無後，同一個人有好幾個習慣時優先輪替「有公開影片」的那些
+        var withClip = arr.filter(function(h) { return h._clipCount > 0; });
+        if (withClip.length) arr = withClip;
         // Sort by habit id for deterministic order, then pick by daily rotation
         arr.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
         var idx = todayNum % arr.length;
@@ -13648,14 +13685,16 @@ function MainApp(_ref16) {
       // ── Filter 1（2026-11-02 改）：有上傳過公開習慣影片，而且沒有「中斷太久」──
       //   原本是「今天或昨天有打卡」，只上傳影片沒按打卡的人會整個消失。現在改成：
       //   有影片就上榜；最後一次活動（打卡或影片）距今太久才暫時下榜，再打卡／上傳就回來。
+      // ★ 2026-11-22 再改：至少打卡 1 次才上榜（打卡是 AI 配對報告的分析資料，也決定影片是第幾天）；
+      //   影片可有可無——沒有影片的卡片只是左邊不顯示縮圖。
       list = list.filter(function(h) {
-        if (!(h._clipCount > 0)) return false;
+        if (activeDayCount(h) < 1) return false;
         // 已經到期（進了 Habit History）的習慣不算「正在挑戰」，不上榜
         var _end = parseTimeRange(h.timeRange || '').end;
         if (_end && _end < todayISO) return false;
         return !_isHabitDormant(h, h._lastClipDay);
       });
-      console.log('[Challenger DEBUG] Filter1 後(有公開影片且沒有中斷太久):', list.length, list.map(function(h){return h.name + '(clips=' + (h._clipCount||0) + ', idle=' + _habitDaysSinceActive(h, h._lastClipDay) + 'd)';}));
+      console.log('[Challenger DEBUG] Filter1 後(至少打卡 1 次且沒有中斷太久):', list.length, list.map(function(h){return h.name + '(clips=' + (h._clipCount||0) + ', idle=' + _habitDaysSinceActive(h, h._lastClipDay) + 'd)';}));
 
       // ── Filter 2: 累計打卡 < CHALLENGER_UNLOCK_DAYS（還沒解鎖 AI 配對的挑戰者；滿 7 天就「畢業」）──
       //   2026-11-02：拿掉「至少 1 天」——只有上傳影片、還沒按過打卡的新挑戰者也能上榜
@@ -16236,14 +16275,11 @@ function MainApp(_ref16) {
             onDelete: handleDeletePost
           });
         }),
-        feedPosts.length > 0 && React.createElement("div", { style: { textAlign: "center", padding: "16px 0 24px" } },
-          feedHasMore
-            ? React.createElement("button", {
-                onClick: handleLoadMore, disabled: feedLoadingMore,
-                style: { padding: "10px 28px", background: feedLoadingMore ? "var(--gray-400)" : "var(--black)", border: "none", color: "var(--white)", fontSize: 13, fontWeight: 600, fontFamily: "var(--font)", cursor: feedLoadingMore ? "not-allowed" : "pointer" }
-              }, feedLoadingMore ? "Loading..." : "Load More Posts")
-            : React.createElement("div", { style: { fontSize: 12, color: "var(--gray-400)", padding: "4px 0" } }, "\xe2\x80\x94 All posts loaded \xe2\x80\x94")
-        )
+        // ★ 2026-11-22：改成滑到底自動載入（原本是 Load More Posts 按鈕）
+        feedPosts.length > 0 && React.createElement(InfiniteSentinel, {
+          hasMore: feedHasMore, loading: feedLoadingMore, onLoadMore: handleLoadMore, dep: feedPosts.length,
+          endText: "\u2014 All posts loaded \u2014"
+        })
       );
     };
 
@@ -16252,69 +16288,110 @@ function MainApp(_ref16) {
       //   所以這裡不用再用舊的 21 天門檻分組（那組門檻在目前資料範圍下永遠打不到），
       //   改成三組對齊 Day 1–6：Day 5–6 / Day 3–4 / Day 1–2。使用者選擇 Day 5–6 排最前面
       //   （快解鎖 AI 配對的人優先曝光，製造一點期待感）。
-      var almostUnlocking = challengers.filter(function(c) { return c.streak >= 5; });
-      var buildingMomentum = challengers.filter(function(c) { return c.streak >= 3 && c.streak < 5; });
-      var justStarted = challengers.filter(function(c) { return c.streak < 3; });
+      // ★ 2026-11-22：卡片上的天數、進度條、分段一律用「累計打卡天數」（checkedDates ∪ todayCounts≥1），
+      //   跟上榜／畢業（Filter 2）和 match-partner 解鎖 AI 配對的算法一致。
+      //   原本用 c.streak（連續打卡、而且今天要打卡才算）：累計 5 天但今天還沒打卡的人會顯示 0/7。
+      function _chDays(c) {
+        var set = new Set((c.checkedDates || []).filter(Boolean));
+        var tc = c.todayCounts || {};
+        Object.keys(tc).forEach(function(k) { if ((tc[k] || 0) >= 1) set.add(k); });
+        return set.size;
+      }
+      function _chAgo(iso) {
+        if (!iso) return '';
+        var d = Math.round((dateFromISO(toISODay()) - dateFromISO(toISODay(new Date(iso)))) / 86400000);
+        return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : d + ' days ago';
+      }
+      var almostUnlocking = challengers.filter(function(c) { return _chDays(c) >= 5; });
+      var buildingMomentum = challengers.filter(function(c) { var d = _chDays(c); return d >= 3 && d < 5; });
+      var justStarted = challengers.filter(function(c) { return _chDays(c) < 3; });
+      // ★ 2026-11-22：每個分段裡，有公開影片（沒被隱藏）的人排在前面；同一組裡維持原本的順序
+      function _chHasClip(c) {
+        var all = Array.isArray(c.clips) ? c.clips : (c.clip ? [c.clip] : []);
+        return all.some(function(p) { return p && p.moderation_status !== 'hidden' && !_isReportHidden(p); });
+      }
+      function _clipFirst(arr) {
+        return arr.map(function(c, i) { return { c: c, i: i, v: _chHasClip(c) ? 0 : 1 }; })
+          .sort(function(a, b) { return a.v - b.v || a.i - b.i; })
+          .map(function(x) { return x.c; });
+      }
+      almostUnlocking = _clipFirst(almostUnlocking);
+      buildingMomentum = _clipFirst(buildingMomentum);
+      justStarted = _clipFirst(justStarted);
+      // ★ 2026-11-22：照「快解鎖 → 累積中 → 剛開始」的順序只畫前 challengerShown 位，滑到底再多 20 位
+      var _chOrdered = almostUnlocking.concat(buildingMomentum, justStarted);
+      var _chShownSet = new Set(_chOrdered.slice(0, challengerShown));
+      almostUnlocking = almostUnlocking.filter(function(c) { return _chShownSet.has(c); });
+      buildingMomentum = buildingMomentum.filter(function(c) { return _chShownSet.has(c); });
+      justStarted = justStarted.filter(function(c) { return _chShownSet.has(c); });
+      // ★ 2026-11-22：卡片改版（方案 A）——左邊直式影片縮圖、右邊名字／習慣／打卡天數＋7 格進度條／Cheer
       function ChallengerCard(props) {
         var c = props.challenger;
         var ckey = c.userId + "_" + c.id;
         var cheered = !!cheerMap[ckey];
-        // 匿名機制移除：直接顯示頭像、userid、習慣名稱
         var displayName = c.displayName || (c.userId ? c.userId.slice(0, 8) : "User");
-        var shortUid = c.userId ? c.userId.slice(0, 8) : "user";
         var habitLabel = c.name || "Habit challenge";
         var initials = displayName.slice(0, 2).toUpperCase();
-        // ★ 新增：卡片上色——沿用 getCatColours() 現成的分類配色（跟 Home 側欄
-        //   BY CATEGORY 的色點、習慣卡片標籤是同一組），不是另外發明新色系。
         var cc = getCatColours(c.category);
-        var pct = Math.min(Math.round((c.streak / CHALLENGER_UNLOCK_DAYS) * 100), 100);
-        var isNearEnd = c.streak >= 5;
-        var isJustStarted = c.streak < 3;
-        var daysLeft = Math.max(CHALLENGER_UNLOCK_DAYS - c.streak, 0);
-        var stageText = isNearEnd
-          ? "Almost unlocked \u2014 " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left!"
-          : isJustStarted ? "Just getting started"
-          : "Building momentum";
-        return React.createElement("div", { className: "challenger-card", style: { borderLeft: "4px solid " + cc.bar } },
-          React.createElement("div", { className: "challenger-card-top" },
-            React.createElement("div", { className: "challenger-av", style: { color: cc.text, boxShadow: "0 0 0 2px var(--bg-card), 0 0 0 3px " + cc.bd } },
-              c.userAvatar
-                ? React.createElement("img", { src: c.userAvatar, alt: displayName, onError: function(e) { e.target.style.display = "none"; } })
-                : initials
+        var days = Math.min(_chDays(c), CHALLENGER_UNLOCK_DAYS);
+        var left = Math.max(CHALLENGER_UNLOCK_DAYS - days, 0);
+        var subText = days === 0 ? "No check-ins yet"
+          : left === 0 ? "AI matching unlocked"
+          : "AI matching unlocks after " + left + " more";
+        // 影片：縮圖用「最新一支沒被隱藏的」；角落顯示公開影片數（被隱藏的不算）
+        var allClips = Array.isArray(c.clips) ? c.clips : (c.clip ? [c.clip] : []);
+        var visibleClips = allClips.filter(function(p) { return p && p.moderation_status !== 'hidden' && !_isReportHidden(p); });
+        var thumbClip = visibleClips.length ? visibleClips[visibleClips.length - 1] : c.clip;
+        var clipCount = visibleClips.length;
+        var segs = [];
+        for (var i = 0; i < CHALLENGER_UNLOCK_DAYS; i++) {
+          segs.push(React.createElement("div", { key: i, style: { flex: 1, height: 6, background: i < days ? cc.bar : "var(--gray-200)" } }));
+        }
+        return React.createElement("div", { className: "challenger-card ch2" + (thumbClip ? "" : " ch2-noclip"), style: thumbClip ? null : { borderLeft: "4px solid " + cc.bar } },
+          thumbClip
+            ? React.createElement("button", {
+                className: "ch2-thumb", "aria-label": "Watch " + displayName + "’s clips" + (clipCount > 1 ? " (" + clipCount + ")" : ""),
+                onClick: function(e) { e.stopPropagation(); setViewingChallengerKey(ckey); }
+              },
+                React.createElement(_ClipThumb, { url: thumbClip.thumbnail_url, mediaUrl: thumbClip.media_url, postId: thumbClip.id, createdAt: thumbClip.created_at,
+                  reported: _isReportHidden(thumbClip), reportedCover: !!(thumbClip.user_id && user && String(thumbClip.user_id) !== String(user.uid)) }),
+                React.createElement("span", { className: "ch2-play", "aria-hidden": "true" },
+                  React.createElement("svg", { width: 16, height: 16, viewBox: "0 0 24 24" }, React.createElement("path", { d: "M8 5v14l11-7z", fill: "#0a0a0a" }))),
+                clipCount > 1 && React.createElement("span", { className: "ch2-count" },
+                  React.createElement("svg", { width: 10, height: 10, viewBox: "0 0 24 24", fill: "none", stroke: "#fff", strokeWidth: 2.4, "aria-hidden": "true" },
+                    React.createElement("rect", { x: 7, y: 7, width: 13, height: 13 }), React.createElement("path", { d: "M4 16V4h12" })),
+                  clipCount),
+                thumbClip.created_at && React.createElement("span", { className: "ch2-date" }, _chAgo(thumbClip.created_at))
+              )
+            : null, // ★ 2026-11-22：沒有影片也能上榜，就不顯示縮圖
+          React.createElement("div", { className: "ch2-body" },
+            React.createElement("div", { className: "ch2-top" },
+              React.createElement("div", { className: "ch2-av", style: { background: cc.bg, color: cc.text } },
+                c.userAvatar
+                  ? React.createElement("img", { src: c.userAvatar, alt: "", onError: function(e) { e.target.style.display = "none"; } })
+                  : initials),
+              React.createElement("span", { className: "ch2-name" }, displayName),
+              React.createElement("span", { className: "ch2-cat", style: { color: cc.text } }, c.category || "Other")
             ),
-            React.createElement("div", { className: "challenger-card-info" },
-              React.createElement("div", { className: "challenger-card-user" },
-                React.createElement("span", { className: "challenger-card-name" }, displayName),
-                React.createElement("span", { className: "challenger-card-uid" }, "#" + shortUid)
-              ),
-              React.createElement("div", { className: "challenger-card-habit" }, "\u2728 " + habitLabel)
+            React.createElement("div", { className: "ch2-habit" }, habitLabel),
+            React.createElement("div", { style: { flex: 1 } }),
+            React.createElement("div", { className: "ch2-prog-row" },
+              React.createElement("span", { className: "ch2-days" }, days,
+                React.createElement("span", null, " / " + CHALLENGER_UNLOCK_DAYS + " check-ins")),
+              React.createElement("span", { className: "ch2-sub" }, subText)
             ),
-            React.createElement("span", { style: { fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", padding: "2px 7px", borderRadius: 20, background: cc.bg, color: cc.text, flexShrink: 0, marginRight: c.clip ? 8 : 0 } }, c.category || "Other"),
-            c.clip && React.createElement("div", {
-              className: "challenger-clip-badge",
-              "aria-label": "Watch clip",
-              onClick: function(e) { e.stopPropagation(); setViewingChallengerKey(ckey); },
-              style: { width: 44, height: 44, borderRadius: 8, background: "var(--gray-100)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", overflow: "hidden" }
-            }, React.createElement(_ClipThumb, { url: c.clip.thumbnail_url, mediaUrl: c.clip.media_url, compact: true, postId: c.clip.id, createdAt: c.clip.created_at,
-              reported: _isReportHidden(c.clip), reportedCover: !!(c.clip.user_id && user && String(c.clip.user_id) !== String(user.uid)) }))
-          ),
-          React.createElement("div", { className: "challenger-card-progress" },
-            React.createElement("div", { className: "challenger-card-prog-row" },
-              React.createElement("span", { className: "challenger-card-prog-label" }, "AI Match Unlock"),
-              React.createElement("span", { className: "challenger-card-prog-count", style: { color: cc.text } }, c.streak + "/" + CHALLENGER_UNLOCK_DAYS)
-            ),
-            React.createElement("div", { className: "challenger-card-bar-track" },
-              React.createElement("div", { className: "challenger-card-bar-fill", style: { width: pct + "%", background: cc.bar } })
+            React.createElement("div", { className: "ch2-segs", role: "img", "aria-label": days + " of " + CHALLENGER_UNLOCK_DAYS + " check-in days" }, segs),
+            React.createElement("div", { className: "ch2-foot" },
+              React.createElement("button", {
+                className: "ch2-cheer" + (cheered ? " done" : ""),
+                onClick: function(e) { e.stopPropagation(); if (!cheered) handleCheer(c.userId, c.id); },
+                disabled: cheered
+              },
+                cheered ? "✓ Cheered" : React.createElement(React.Fragment, null,
+                  React.createElement("svg", { width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinejoin: "round", "aria-hidden": "true" },
+                    React.createElement("path", { d: "M13 2L4 14h7l-1 8 9-12h-7z" })),
+                  "Cheer"))
             )
-          ),
-          React.createElement("div", { className: "challenger-card-footer" },
-            React.createElement("span", { className: "challenger-card-stage", style: isNearEnd ? { color: cc.text } : null }, stageText),
-            React.createElement("button", {
-              className: "challenger-cheer-btn" + (cheered ? " done" : ""),
-              style: cheered ? null : { borderColor: cc.bd, color: cc.text },
-              onClick: function(e) { e.stopPropagation(); if (!cheered) handleCheer(c.userId, c.id); },
-              disabled: cheered
-            }, cheered ? "\u2713 Cheered!" : "\u26a1 Cheer on")
           )
         );
       }
@@ -16330,11 +16407,15 @@ function MainApp(_ref16) {
         challengers.length === 0 && challengersLoaded && React.createElement("div", { style: { textAlign: "center", padding: "48px 20px", color: "var(--gray-400)", fontSize: 13 } },
           React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "\ud83c\udfc6"),
           React.createElement("div", null, "No active challengers right now"),
-          React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Share a clip of a public habit to appear here!") /* ★ 2026-11-02：上榜條件改成「有公開影片」 */
+          React.createElement("div", { style: { fontSize: 11, marginTop: 6 } }, "Check in on a public habit to appear here!") /* ★ 2026-11-22：上榜條件改成「至少打卡 1 次」（影片可有可無） */
         ),
-        React.createElement(SegSection, { label: "\u26a1 About to unlock AI matching \u00b7 Day 5\u20136", list: almostUnlocking }),
-        React.createElement(SegSection, { label: "Building momentum \u00b7 Day 3\u20134", list: buildingMomentum }),
-        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 Day 1\u20132", list: justStarted })
+        React.createElement(SegSection, { label: "\u26a1 About to unlock AI matching \u00b7 5\u20136 check-ins", list: almostUnlocking }),
+        React.createElement(SegSection, { label: "Building momentum \u00b7 3\u20134 check-ins", list: buildingMomentum }),
+        React.createElement(SegSection, { label: "\ud83c\udf31 Just started \u00b7 1\u20132 check-ins", list: justStarted }),
+        React.createElement(InfiniteSentinel, {
+          hasMore: _chOrdered.length > challengerShown, dep: challengerShown,
+          onLoadMore: function() { setChallengerShown(function(n) { return n + 20; }); }
+        })
       );
     };
 
