@@ -4814,7 +4814,8 @@ function downloadSafetyTxt() {
 async function _safetyNotify(userId, type, title, body) {
   if (!userId) return;
   try {
-    var r = await _supabase.from('notifications').insert({ user_id: userId, type: type, title: title, body: body, is_read: false, created_at: new Date().toISOString() });
+    // ★ 2026-11-22：notifications.message 是 NOT NULL——一起帶上，不然第一次一定失敗、只剩下面的最小欄位（沒有標題）
+    var r = await _supabase.from('notifications').insert({ user_id: userId, type: type, title: title, body: body, message: body, is_read: false, created_at: new Date().toISOString() });
     if (r.error) {
       var r2 = await _supabase.from('notifications').insert({ user_id: userId, type: type, message: body });
       if (r2.error) console.warn('[Safety] notify failed:', r2.error.message);
@@ -5320,17 +5321,35 @@ async function loadPairs() {
 var _chatPairs = [];      // [{ pairId, userId, partnerId, habitName, msgCount, lastAt }]
 var _chatActivePairId = null;
 
+/* ★ 2026-11-22：分頁抓全部資料
+   Supabase API 一次最多回 1000 筆（就算寫 .limit(20000) 也一樣只回 1000），
+   所以聊天量一大，後台只看得到前 1000 則。這裡用 .range() 每次抓 1000 筆，一直抓到沒有為止。
+   buildQuery：每次都要回傳一個「全新」的查詢（要有固定排序，分頁才不會重複或漏掉）
+   maxRows：安全上限，避免資料量爆炸時把瀏覽器拖垮 */
+async function _fetchAllRows(buildQuery, maxRows) {
+  var CHUNK = 1000, all = [], from = 0;
+  maxRows = maxRows || 200000;
+  while (from < maxRows) {
+    var r = await buildQuery().range(from, from + CHUNK - 1);
+    if (r.error) return { data: all, error: r.error };
+    var rows = r.data || [];
+    all = all.concat(rows);
+    if (rows.length < CHUNK) break;
+    from += CHUNK;
+  }
+  return { data: all, error: null, capped: from >= maxRows };
+}
+
 async function loadChatLogs() {
   var listEl = document.getElementById('chatPairList');
   listEl.innerHTML = '<div class="loading-row" style="padding:16px;text-align:center;color:var(--g400)">Loading...</div>';
   try {
     // 1. 撈所有訊息只取輕量欄位，在前端聚合成「每個 pair 有幾則訊息、最後一則時間」
-    //    （訊息量大的話這裡跟 Engagement 頁一樣加 .limit(20000) 保護一下）
-    var { data: msgs, error: msgsErr } = await _supabase
-      .from('pair_messages')
-      .select('pair_id, created_at')
-      .order('created_at', { ascending: false })
-      .limit(20000);
+    //    ★ 2026-11-22：改成分頁抓全部（原本 .limit(20000) 實際只會回 1000 筆）
+    var { data: msgs, error: msgsErr } = await _fetchAllRows(function() {
+      return _supabase.from('pair_messages').select('pair_id, created_at')
+        .order('created_at', { ascending: false }).order('id', { ascending: false });
+    });
     if (msgsErr) throw msgsErr;
 
     var agg = {}; // pair_id -> { count, lastAt }
@@ -5417,11 +5436,13 @@ async function openChatThread(pairId) {
   bodyEl.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--g400);font-size:12px">Loading...</div>';
 
   try {
-    var { data: msgs, error } = await _supabase
-      .from('pair_messages')
-      .select('sender_id, content, message_type, media_url, media_type, created_at')
-      .eq('pair_id', pairId)
-      .order('created_at', { ascending: true });
+    // ★ 2026-11-22：分頁抓這組配對的全部訊息（原本超過 1000 則後面的會看不到）
+    var { data: msgs, error } = await _fetchAllRows(function() {
+      return _supabase.from('pair_messages')
+        .select('sender_id, content, message_type, media_url, media_type, created_at')
+        .eq('pair_id', pairId)
+        .order('created_at', { ascending: true }).order('id', { ascending: true });
+    });
     if (error) throw error;
 
     countEl.textContent = (msgs || []).length + ' messages';
@@ -5510,8 +5531,9 @@ async function loadEngagement() {
     var since7  = new Date(Date.now() -  7*86400000).toISOString();
 
     var results = await Promise.all([
-      _supabase.from('page_sessions').select('user_id,page,seconds,created_at').gte('created_at', since30).limit(20000),
-      _supabase.from('pair_messages').select('pair_id,sender_id,created_at').order('created_at', { ascending: false }).limit(20000),
+      // ★ 2026-11-22：改成分頁抓全部（原本 .limit(20000) 實際只會回 1000 筆）
+      _fetchAllRows(function() { return _supabase.from('page_sessions').select('user_id,page,seconds,created_at').gte('created_at', since30).order('created_at', { ascending: false }).order('id', { ascending: false }); }),
+      _fetchAllRows(function() { return _supabase.from('pair_messages').select('pair_id,sender_id,created_at').order('created_at', { ascending: false }).order('id', { ascending: false }); }),
       _supabase.from('pairs').select('*').order('created_at', { ascending: false })
     ]);
     var sessions = results[0].data || [];
@@ -6217,6 +6239,7 @@ function _notifyAppealResolved(item, outcome) {
     type: copy.type,
     title: copy.title,
     body: copy.body + (snippet ? ' \u201c' + snippet + '\u201d' : ''),
+    message: copy.body + (snippet ? ' \u201c' + snippet + '\u201d' : ''), // ★ 2026-11-22：notifications.message 是 NOT NULL，沒帶會寫入失敗
     data: JSON.stringify({ outcome: outcome, kind: item.kind || null }),
     is_read: false,
     created_at: new Date().toISOString()

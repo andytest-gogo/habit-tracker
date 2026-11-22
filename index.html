@@ -899,7 +899,8 @@
         .challengers-seg-label::after { content:""; flex:1; height:1px; background:var(--gray-100); }
         .challenger-card { border:1px solid var(--gray-200); background:var(--bg-card); margin-bottom:10px; transition:border-color .15s; }
         /* ★ 2026-11-22：Challenger 卡片改版（方案 A）*/
-        .challenger-card.ch2 { display:flex; gap:12px; padding:10px; }
+        .challenger-card.ch2 { display:flex; gap:12px; padding:10px; border-color:var(--gray-300); }
+        .challenger-card.ch2:hover { border-color:var(--gray-500); }
         .ch2-thumb { position:relative; width:84px; height:112px; flex-shrink:0; padding:0; border:none; background:var(--gray-800); overflow:hidden; cursor:pointer; display:flex; align-items:center; justify-content:center; }
         .challenger-card.ch2.ch2-noclip { padding:12px 12px 10px 14px; }
         .ch2-play { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,.92); display:flex; align-items:center; justify-content:center; z-index:1; pointer-events:none; }
@@ -13317,7 +13318,8 @@ function MainApp(_ref16) {
   //   主要動作跟著失敗，所以整段是 fire-and-forget。
   function _insertNotification(row) {
     if (!window._supabaseClient || !row || !row.user_id) return Promise.resolve();
-    var full = Object.assign({ is_read: false, created_at: new Date().toISOString() }, row);
+    // ★ 2026-11-22：notifications.message 是 NOT NULL——完整欄位那次也帶上，不然每次都會失敗、退回只剩 message 的最小欄位
+    var full = Object.assign({ is_read: false, created_at: new Date().toISOString(), message: row.body || row.message || row.title || '' }, row);
     return window._supabaseClient.from('notifications').insert(full).then(function(r) {
       if (r && r.error) {
         console.warn('[insertNotification] full insert failed, retrying with minimal columns:', r.error.message);
@@ -16347,7 +16349,8 @@ function MainApp(_ref16) {
         for (var i = 0; i < CHALLENGER_UNLOCK_DAYS; i++) {
           segs.push(React.createElement("div", { key: i, style: { flex: 1, height: 6, background: i < days ? cc.bar : "var(--gray-200)" } }));
         }
-        return React.createElement("div", { className: "challenger-card ch2" + (thumbClip ? "" : " ch2-noclip"), style: thumbClip ? null : { borderLeft: "4px solid " + cc.bar } },
+        // ★ 2026-11-22：邊框設計 A——每張卡片左邊 4px 分類色條＋較深的灰框（有沒有影片都一樣）
+        return React.createElement("div", { className: "challenger-card ch2" + (thumbClip ? "" : " ch2-noclip"), style: { borderLeft: "4px solid " + cc.bar } },
           thumbClip
             ? React.createElement("button", {
                 className: "ch2-thumb", "aria-label": "Watch " + displayName + "’s clips" + (clipCount > 1 ? " (" + clipCount + ")" : ""),
@@ -17287,6 +17290,7 @@ function _notifyNewPairMessage(pairId, recipientId, senderName, preview) {
         data: JSON.stringify({ pair_id: pairId }),
         created_at: new Date().toISOString()
       };
+      payload.message = payload.body; // ★ 2026-11-22：notifications.message 是 NOT NULL，沒帶會寫入失敗
       if (existing && existing.id) {
         return sb.from('notifications').update(payload).eq('id', existing.id);
       }
@@ -17340,6 +17344,15 @@ function PairWallPage(_ref_pw) {
   var _inputTextRef = useRef('');
   _inputTextRef.current = inputText; // 每次 render 同步，非同步的審查結果回來時讀得到最新值
   var msgsEndRef = React.useRef(null);
+  // ★ 2026-11-22：聊天紀錄分頁——先載最新 50 則，捲到最上面再載更早的 50 則。
+  //   原本一次 select 全部，但 Supabase API 一次最多回 1000 筆：聊超過 1000 則之後，
+  //   打開聊天室只會拿到「最舊的」1000 則，最新的訊息反而看不到。
+  var CHAT_PAGE = 50;
+  var _cho = useState(false); var hasOlderMsgs = _cho[0]; var setHasOlderMsgs = _cho[1];
+  var _clo = useState(false); var loadingOlderMsgs = _clo[0]; var setLoadingOlderMsgs = _clo[1];
+  var _chatTopRef = React.useRef(null);
+  var _chatAnchorRef = React.useRef(null);   // 載入更早訊息前記下捲動位置，載完補回去，畫面不會跳
+  var _chatReadyRef = React.useRef(false);   // 第一次捲到最底之後才開始偵測「捲到最上面」
   var _sla = useState(null); var partnerLastActive = _sla[0]; var setPartnerLastActive = _sla[1];
   var _sep = useState(false); var showEndConfirm = _sep[0]; var setShowEndConfirm = _sep[1];
   var _send = useState(false); var ending = _send[0]; var setEnding = _send[1];
@@ -17522,12 +17535,16 @@ function PairWallPage(_ref_pw) {
   useEffect(function() {
     if (!user || !pair) return;
     setLoading(true);
+    _chatReadyRef.current = false;
     Promise.all([
       _supabase.from('pair_messages').select('*').eq('pair_id', pair.id)
-        .order('created_at', { ascending: true }),
+        .order('created_at', { ascending: false }).limit(CHAT_PAGE),
       _supabase.from('users').select('last_active').eq('id', partnerId).single()
     ]).then(function(results) {
-      setMessages(results[0].data || []);
+      var _first = (results[0].data || []).slice().reverse();
+      setMessages(_first);
+      setHasOlderMsgs(_first.length === CHAT_PAGE);
+      setTimeout(function() { _chatReadyRef.current = true; }, 900);
       var lastActiveRaw = results[1].data && results[1].data.last_active;
       setPartnerLastActive(lastActiveRaw || null);
       setLoading(false);
@@ -17581,9 +17598,61 @@ function PairWallPage(_ref_pw) {
   }, [messages.length]);
 
   /* scroll to bottom on new messages */
+  // ★ 2026-11-22：只在最後一則訊息換了（收到／送出新訊息）時捲到最底；往上載入更早的訊息時不捲
+  var _lastMsgKey = messages.length ? (messages[messages.length - 1].id || messages[messages.length - 1].created_at) : null;
   useEffect(function() {
     if (msgsEndRef.current) msgsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [_lastMsgKey]);
+
+  // ★ 2026-11-22：往上載入更早的訊息
+  function _chatScrollParent(el) {
+    var n = el && el.parentElement;
+    while (n && n !== document.body) {
+      var oy = window.getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+      n = n.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+  function loadOlderMsgs() {
+    if (loadingOlderMsgs || !hasOlderMsgs || !pair) return;
+    var oldest = messages.find(function(m) { return m && m.created_at && !String(m.id || '').startsWith('tmp'); }) || messages[0];
+    if (!oldest || !oldest.created_at) return;
+    setLoadingOlderMsgs(true);
+    _supabase.from('pair_messages').select('*').eq('pair_id', pair.id)
+      .lt('created_at', oldest.created_at)
+      .order('created_at', { ascending: false }).limit(CHAT_PAGE)
+      .then(function(r) {
+        var older = ((r && r.data) || []).slice().reverse();
+        if (older.length) {
+          var sp = _chatScrollParent(_chatTopRef.current);
+          _chatAnchorRef.current = { el: sp, height: sp.scrollHeight };
+          setMessages(function(prev) {
+            var ids = new Set(prev.map(function(m) { return m.id; }));
+            return older.filter(function(m) { return !ids.has(m.id); }).concat(prev);
+          });
+        }
+        setHasOlderMsgs(older.length === CHAT_PAGE);
+        setLoadingOlderMsgs(false);
+      }, function() { setLoadingOlderMsgs(false); });
+  }
+  // 更早的訊息插到上面之後，把捲動位置往下補回同樣的高度，使用者看到的內容不會跳走
+  React.useLayoutEffect(function() {
+    var a = _chatAnchorRef.current;
+    if (!a) return;
+    _chatAnchorRef.current = null;
+    a.el.scrollTop += a.el.scrollHeight - a.height;
   }, [messages]);
+  // 捲到最上面（距離頂端 400px 內）就自動載入更早的訊息
+  useEffect(function() {
+    var el = _chatTopRef.current;
+    if (!el || !hasOlderMsgs || loadingOlderMsgs || !('IntersectionObserver' in window)) return;
+    var io = new window.IntersectionObserver(function(entries) {
+      if (_chatReadyRef.current && entries.some(function(e) { return e.isIntersecting; })) loadOlderMsgs();
+    }, { rootMargin: '400px 0px 0px 0px' });
+    io.observe(el);
+    return function() { io.disconnect(); };
+  }, [hasOlderMsgs, loadingOlderMsgs, messages.length]);
 
   /* ★ 「7 天沒動靜就自動結束夥伴關係」（checkInactivityEnd）判斷用的是
      pairs.last_post_at，這個聊天室不使用「今日貼文」功能了（已移除），
@@ -18128,6 +18197,11 @@ function PairWallPage(_ref_pw) {
       messages.length === 0
         ? React.createElement('div', { style:{ padding:'16px', fontSize:11, color:'var(--gray-400)', textAlign:'center' } }, 'No messages yet. Say something.')
         : React.createElement('div', { className: 'pw-msgs' },
+            // ★ 2026-11-22：捲到這裡就載入更早的訊息
+            hasOlderMsgs && React.createElement('div', { ref: _chatTopRef, role: 'status', style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '6px 0 10px', fontSize: 11, color: 'var(--gray-400)' } },
+              loadingOlderMsgs ? [React.createElement('span', { key: 's', className: 'inf-spin', 'aria-hidden': 'true' }), 'Loading earlier messages\u2026']
+                : React.createElement('button', { onClick: loadOlderMsgs, style: { background: 'none', border: 'none', color: 'var(--gray-500)', fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font)', textDecoration: 'underline' } }, 'Earlier messages')),
+            !hasOlderMsgs && messages.length >= CHAT_PAGE && React.createElement('div', { style: { textAlign: 'center', padding: '4px 0 10px', fontSize: 10, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 1 } }, 'Start of conversation'),
             messages.map(function(m, idx) {
               var isMe = m.sender_id === user.uid;
               var isLast = idx === messages.length - 1;
@@ -18965,16 +19039,16 @@ function BuddiesPage(_ref_buddies) {
       // ★ 新增：每組「真的配對成功」的配對，抓最新一則訊息，卡片上做聊天預覽用
       var activePairIds = pairsData.filter(function(p) { return p.status === 'active'; }).map(function(p) { return p.id; });
       if (activePairIds.length > 0) {
-        _supabase.from('pair_messages').select('pair_id, sender_id, content, message_type, media_type, created_at, read_at')
-          .in('pair_id', activePairIds)
-          .order('created_at', { ascending: false })
-          .limit(300)
-          .then(function(mr) {
-            if (mr.error || !mr.data) return;
-            var lmap = {};
-            mr.data.forEach(function(m) { if (!lmap[m.pair_id]) lmap[m.pair_id] = m; });
-            setLatestMsgMap(lmap);
-          }).catch(function(){});
+        // ★ 2026-11-22：每組配對各抓最新 1 則（原本所有配對共用最新 300 則，聊很多的那組會把別組的預覽擠掉）
+        Promise.all(activePairIds.map(function(pid) {
+          return _supabase.from('pair_messages').select('pair_id, sender_id, content, message_type, media_type, created_at, read_at')
+            .eq('pair_id', pid).order('created_at', { ascending: false }).limit(1)
+            .then(function(r) { return (r && !r.error && r.data && r.data[0]) || null; }, function() { return null; });
+        })).then(function(rows) {
+          var lmap = {};
+          rows.forEach(function(m) { if (m) lmap[m.pair_id] = m; });
+          setLatestMsgMap(lmap);
+        });
       }
     }).catch(function() { setPairsLoading(false); });
   }, [user]);
@@ -22856,7 +22930,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             // 對方的習慣已經到期（結束日早於今天）→ 也不能邀請
             var _chEnd = _ch ? parseTimeRange(_ch.time_range || '').end : null;
             var _chWhy = (_chEnd && _chEnd < toISODay()) ? 'candidate_ended' : null;
-            if (!_chWhy && _ch && _isHabitDormant({
+            // ★ 2026-11-22 🧪 TEST MODE：兩個測試帳號互相邀請時，對方的習慣暫停中也照樣能邀請
+            //   （跟 match-partner 的測試特權一致，方便測 Home 頁 Find Partner 按鈕的變化）
+            var _isTestPair = (typeof TEST_BYPASS_UIDS !== 'undefined') && TEST_BYPASS_UIDS.has(userId) && TEST_BYPASS_UIDS.has(m.userId);
+            if (!_chWhy && !_isTestPair && _ch && _isHabitDormant({
                   checkedDates: _ch.checked_dates || [], todayCounts: _ch.today_counts || {},
                   intervalDays: _ch.interval_days || 1, timeRange: _ch.time_range || ''
                 }, _chClip && _chClip.created_at ? toISODay(new Date(_chClip.created_at)) : '')) _chWhy = 'candidate_inactive';
@@ -22878,6 +22955,11 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         );
         if (existingRes && existingRes.error) throw new Error(existingRes.error.message || 'Could not check existing request');
         var existingPair = existingRes && existingRes.data;
+        // ★ 2026-11-22 🧪 TEST MODE：兩個測試帳號已經用別的習慣配對過時，用另一個習慣照樣可以再邀請——
+        //   不擋、也不覆蓋原本那筆，下面改成新增一筆 pairs
+        var _testPairNew = (typeof TEST_BYPASS_UIDS !== 'undefined') && TEST_BYPASS_UIDS.has(userId) && TEST_BYPASS_UIDS.has(m.userId)
+          && existingPair && (existingPair.status === 'active' || existingPair.status === 'pending');
+        if (_testPairNew) existingPair = null;
 
         if (existingPair && existingPair.status === 'active') {
           throw new Error("You're already partners with this person.");
@@ -22932,6 +23014,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           user_id: m.userId, type: 'partner_request',
           title: 'New Partner Request!',
           body: 'Someone wants to be your habit partner for "' + m.habitName + '".',
+          // ★ 2026-11-22：notifications.message 是 NOT NULL，沒帶這欄整筆會寫入失敗（對方小鈴鐺收不到邀請）
+          message: 'Someone wants to be your habit partner for "' + m.habitName + '".',
           data: JSON.stringify({ from_user_id: userId, habit_name: _currentHabit.name, pair_id: _newPairId, requester_habit_ended_on: _reqEndedOn || null }),
           is_read: false, created_at: new Date().toISOString()
         }), 8000, 'Send notification');
