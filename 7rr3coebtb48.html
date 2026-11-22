@@ -188,6 +188,36 @@ tr:hover td{background:var(--g50)}
 .ls-idle   {color:#ca8a04;font-weight:600}
 .ls-dormant{color:#dc2626;font-weight:600}
 .ls-never  {color:#9ca3af}
+
+/* ── ★ 2026-11-22：警告 / 停權彈窗（Users 頁、Safety 頁共用） ── */
+.adm-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px}
+.adm-modal{background:var(--surface);color:var(--ink);border:1px solid var(--g200);width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+.adm-modal-hd{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--g200)}
+.adm-modal-ttl{font-family:var(--din);font-size:20px;font-weight:800;letter-spacing:.5px}
+.adm-modal-x{background:none;border:none;color:var(--g400);font-size:22px;cursor:pointer}
+.adm-modal-bd{padding:18px 20px}
+.adm-modal-ft{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--g200)}
+.adm-lbl{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g400);margin:14px 0 6px}
+.adm-lbl:first-child{margin-top:0}
+.adm-input{width:100%;padding:9px 10px;border:1px solid var(--g200);background:var(--g50);color:var(--ink);font-size:12px;font-family:var(--font);outline:none}
+.adm-input:focus{border-color:var(--ink)}
+textarea.adm-input{min-height:92px;resize:vertical;line-height:1.55}
+.adm-strike{display:flex;gap:6px;margin-top:4px}
+.adm-strike span{flex:1;height:6px;background:var(--g200)}
+.adm-strike span.on{background:#f59e0b}
+.adm-strike span.on.last{background:#dc2626}
+.adm-hist{font-size:11px;color:var(--g400);line-height:1.7;margin-top:6px}
+.adm-preview{margin-top:6px;background:#fff;color:#0a0a0a;padding:12px 14px;display:flex;gap:10px;border-left:3px solid #f59e0b}
+.adm-preview-t{font-size:12px;font-weight:700;margin-bottom:3px}
+.adm-preview-b{font-size:11.5px;line-height:1.5;color:#444;white-space:pre-wrap}
+.adm-btn{padding:8px 16px;border:1px solid var(--g200);background:var(--surface);color:var(--ink);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;cursor:pointer;font-family:var(--font)}
+.adm-btn.warn{background:#b45309;border-color:#b45309;color:#fff}
+.adm-btn.danger{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.adm-btn:disabled{opacity:.5;cursor:not-allowed}
+.adm-note{font-size:11px;color:var(--g400);line-height:1.6;margin-top:10px}
+.u-tag{display:inline-block;padding:1px 6px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-left:5px;vertical-align:middle}
+.u-tag.susp{background:#7f1d1d;color:#fff}
+.u-tag.warns{background:rgba(245,158,11,.18);color:#f59e0b}
 </style>
 </head>
 <body>
@@ -279,6 +309,16 @@ tr:hover td{background:var(--g50)}
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
         Safety
         <span id="safetyBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+      </button>
+      <!-- ★ 2026-11-22：停權申訴 ＋ 警告／停權統計 -->
+      <button class="nav-btn" data-page="appeals" id="navAppeals">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6l9-3 9 3M5 6v5m14-5v5M3 11h18M7 11v7m5-7v7m5-7v7M3 21h18"/></svg>
+        Appeals
+        <span id="appealsBadge" style="display:none;background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:2px;margin-left:4px;">0</span>
+      </button>
+      <button class="nav-btn" data-page="moderation" id="navModeration">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
+        Warnings &amp; Suspensions
       </button>
       <button class="nav-btn" data-page="cleanup" id="navCleanup">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -403,6 +443,9 @@ tr:hover td{background:var(--g50)}
           <button class="act-filter"    data-f="idle"    onclick="setActFilter('idle')">🟡 Idle</button>
           <button class="act-filter"    data-f="dormant" onclick="setActFilter('dormant')">🔴 Dormant</button>
           <button class="act-filter"    data-f="never"   onclick="setActFilter('never')">⚪ Never</button>
+          <!-- ★ 2026-11-22：只看被停權 / 被警告過的帳號 -->
+          <button class="act-filter"    data-f="suspended" onclick="setActFilter('suspended')">⛔ Suspended</button>
+          <button class="act-filter"    data-f="warned"  onclick="setActFilter('warned')">⚠ Warned</button>
         </div>
         <select id="userSortSel" onchange="renderUsers(document.getElementById('userSearch').value||'')"
           style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);background:var(--surface);outline:none;cursor:pointer;flex-shrink:0">
@@ -845,7 +888,34 @@ CREATE POLICY "moderation_feedback_insert" ON moderation_feedback FOR INSERT WIT
 DROP POLICY IF EXISTS "moderation_feedback_admin" ON moderation_feedback;
 CREATE POLICY "moderation_feedback_admin"  ON moderation_feedback FOR SELECT USING (is_admin());
 DROP POLICY IF EXISTS "moderation_feedback_admin_update" ON moderation_feedback;
-CREATE POLICY "moderation_feedback_admin_update" ON moderation_feedback FOR UPDATE USING (is_admin());</pre>
+CREATE POLICY "moderation_feedback_admin_update" ON moderation_feedback FOR UPDATE USING (is_admin());
+
+-- ── user_warnings（★ 2026-11-22：Users 頁「⚠ Warn」單獨警告的紀錄，用來算第幾次警告）──
+-- 只需執行一次。被警告的人只能讀自己的紀錄；「我知道了」用下面的 ack_user_warning() 標記。
+CREATE TABLE IF NOT EXISTS user_warnings (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID NOT NULL,
+  reason TEXT NOT NULL,              -- 'HARASSMENT' / 'SPAM' / ...（跟 Safety 頁同一套分類）
+  message TEXT NOT NULL,             -- 使用者實際看到的內容
+  report_id BIGINT,                  -- 從檢舉處理來的才有值
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  acknowledged_at TIMESTAMPTZ        -- 使用者在 App 裡按「I understand」的時間
+);
+CREATE INDEX IF NOT EXISTS idx_user_warnings_user ON user_warnings (user_id, created_at DESC);
+ALTER TABLE user_warnings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "user_warnings_admin" ON user_warnings;
+CREATE POLICY "user_warnings_admin" ON user_warnings FOR ALL USING (is_admin()) WITH CHECK (is_admin());
+DROP POLICY IF EXISTS "user_warnings_own_read" ON user_warnings;
+CREATE POLICY "user_warnings_own_read" ON user_warnings FOR SELECT USING (auth.uid() = user_id);
+CREATE OR REPLACE FUNCTION ack_user_warning(p_id BIGINT)
+RETURNS void AS $$
+  UPDATE user_warnings SET acknowledged_at = now()
+   WHERE id = p_id AND user_id = auth.uid() AND acknowledged_at IS NULL;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
+
+-- ── account_appeals（停權申訴）／ submit_account_appeal ／ 收緊後的 get_match_basics ──
+-- 在 moderation_v2.sql 裡（2026-11-22），整份貼到 SQL Editor 跑一次即可。</pre>
       </div>
 
 
@@ -901,7 +971,7 @@ CREATE POLICY "moderation_feedback_admin_update" ON moderation_feedback FOR UPDA
             <tr><td>Force Google account selection</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">prompt: select_account</td></tr>
             <tr><td>Supabase RLS Policies</td><td><span class="badge" style="background:#fef3c7;color:#92400e">⚠️ Verify in Console</span></td><td style="font-size:11px;color:var(--g500)">Copy rules from Step 2 above</td></tr>
             <tr><td>GDPR conditional analytics</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Umami loads after user consent</td></tr>
-            <tr><td>Age verification (birth year)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">EU min age 16</td></tr>
+            <tr><td>Age verification (date of birth at signup)</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Min age 18 (all regions, since 2026-11-22)</td></tr>
             <tr><td>Privacy Settings / consent withdrawal</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active (index.html)</span></td><td style="font-size:11px;color:var(--g500)">Profile → Privacy Settings</td></tr>
             <tr><td>Supabase DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to supabase.com/privacy</td></tr>
             <tr><td>Supabase Storage DPA reference in Privacy Policy</td><td><span class="badge" style="background:#d1fae5;color:#065f46">✅ Active</span></td><td style="font-size:11px;color:var(--g500)">Links to supabase.com/privacy</td></tr>
@@ -1204,6 +1274,7 @@ await supabase.from('claude_api_calls').insert({
               <option value="actioned">Actioned</option>
               <option value="dismissed">Dismissed</option>
             </select>
+            <button class="refresh" onclick="downloadSafetyTxt()" title="Open reports + what the reporter wrote + the captured messages, in one text file">⬇ Download open (.txt)</button>
             <button class="refresh" onclick="loadSafety()">Refresh</button>
           </div>
         </div>
@@ -1228,6 +1299,66 @@ await supabase.from('claude_api_calls').insert({
             <tbody id="sfBlocksTbody"><tr class="loading-row"><td colspan="3">Loading...</td></tr></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- ══ APPEALS PAGE（2026-11-22）══ 停權申訴；內容不直接列在表格裡，按 Read 看全文或整批下載 .txt -->
+    <div class="pg" id="pg-appeals">
+      <div class="pg-title">Appeals</div>
+      <div class="pg-sub" id="appealsUpdated">Loading...</div>
+      <div id="appealsSetupWarn" style="display:none;background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px;line-height:1.6">⚠️ Run <strong>moderation_v2.sql</strong> in Supabase first — the <code>account_appeals</code> table doesn't exist yet.</div>
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Pending</div><div class="stat-val" id="apPending">—</div><div class="stat-note">Waiting for your decision</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Oldest waiting</div><div class="stat-val" id="apOldest" style="color:#fbbf24">—</div><div class="stat-note">Answer as soon as you can</div></div>
+        <div class="stat" style="border-left:3px solid #34d399"><div class="stat-lbl">Approved · 30d</div><div class="stat-val" id="apApproved" style="color:#34d399">—</div><div class="stat-note">Suspension lifted</div></div>
+        <div class="stat" style="border-left:3px solid var(--g400)"><div class="stat-lbl">Denied · 30d</div><div class="stat-val" id="apDenied">—</div><div class="stat-note">Suspension kept</div></div>
+      </div>
+      <div class="tbl-card">
+        <div class="tbl-hd">
+          <div class="tbl-ttl">Suspension appeals</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="apStatusFilter" onchange="renderAppeals()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface);color:var(--ink)">
+              <option value="pending">Pending</option>
+              <option value="all">All</option>
+              <option value="approved">Approved</option>
+              <option value="denied">Denied</option>
+            </select>
+            <button class="refresh" onclick="downloadAppealsTxt()" title="All pending appeals in one text file — easy to paste into an AI">⬇ Download pending (.txt)</button>
+            <button class="refresh" onclick="loadAppeals()">Refresh</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Submitted</th><th>User</th><th>Suspended for</th><th>Appeal</th><th>Warnings</th><th>Status</th><th></th></tr></thead>
+          <tbody id="appealsTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <p style="font-size:10px;color:var(--g400);padding:10px 4px;line-height:1.6">Only suspensions can be appealed — one appeal per suspension. Warnings can't be appealed.</p>
+    </div>
+
+    <!-- ══ WARNINGS & SUSPENSIONS（2026-11-22）══ 誰被警告幾次、誰被停權 -->
+    <div class="pg" id="pg-moderation">
+      <div class="pg-title">Warnings &amp; Suspensions</div>
+      <div class="pg-sub" id="modUpdated">Loading...</div>
+      <div id="modWarnSetup" style="display:none;background:#fffbe6;border:1px solid #e0c060;padding:12px 16px;font-size:12px;color:#7a6000;margin-bottom:16px">⚠️ <code>user_warnings</code> table not found — run <strong>moderation_v2.sql</strong>.</div>
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stat dark"><div class="stat-lbl">Suspended now</div><div class="stat-val" id="modSuspended">—</div><div class="stat-note">Accounts</div></div>
+        <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Warned users</div><div class="stat-val" id="modWarned" style="color:#f59e0b">—</div><div class="stat-note">At least 1 warning, all time</div></div>
+        <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Warnings · 30d</div><div class="stat-val" id="modWarn30">—</div><div class="stat-note">Sent in the last 30 days</div></div>
+        <div class="stat" style="border-left:3px solid #fbbf24"><div class="stat-lbl">Pending appeals</div><div class="stat-val" id="modPendingAppeals" style="color:#fbbf24">—</div><div class="stat-note">See Appeals</div></div>
+      </div>
+      <div class="tbl-card">
+        <div class="tbl-hd"><div class="tbl-ttl">Suspended accounts</div><button class="refresh" onclick="loadModeration()">Refresh</button></div>
+        <table>
+          <thead><tr><th>User</th><th>Reason</th><th>Since</th><th>Warnings</th><th>Appeal</th><th></th></tr></thead>
+          <tbody id="modSuspTbody"><tr class="loading-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tbl-card">
+        <div class="tbl-hd"><div class="tbl-ttl">Warned users — most warnings first</div></div>
+        <table>
+          <thead><tr><th>User</th><th>Warnings</th><th>Last reason</th><th>Last warned</th><th>Promised not to repeat</th><th>Status</th><th></th></tr></thead>
+          <tbody id="modWarnTbody"><tr class="loading-row"><td colspan="7">Loading...</td></tr></tbody>
+        </table>
       </div>
     </div>
 
@@ -1430,9 +1561,11 @@ await supabase.from('claude_api_calls').insert({
           <option value="hate_speech">Hate speech</option>
           <option value="misinformation">Misinformation</option>
           <option value="inappropriate">Inappropriate</option>
+          <option value="underage">May be under 18</option>
           <option value="other">Other</option>
         </select>
         <button class="refresh" id="reportsRefreshBtn" onclick="loadReports()">Refresh</button>
+        <button class="refresh" onclick="downloadReportsTxt()" title="All pending reports with what the reporter wrote, in one text file">⬇ Download pending (.txt)</button>
         <button class="refresh" style="background:#fef3c7;color:#92400e;border-color:#fbbf24" onclick="purgeReviewedReports(this)" title="Delete all reviewed &amp; dismissed reports from DB">🧹 Clear Reviewed</button>
         <button class="refresh" style="background:#fce7f3;color:#9d174d;border-color:#f9a8d4" onclick="purgeOrphanReports(this)" title="Delete reports whose post no longer exists in DB">🗑 Clear Orphan Reports</button>
         <div style="margin-left:auto;font-size:11px;color:var(--g400)" id="reportsCnt"></div>
@@ -2053,6 +2186,8 @@ document.querySelectorAll('.nav-btn').forEach(function(btn){
     if (btn.dataset.page === 'emailtemplates') loadEmailTemplates();
     if (btn.dataset.page === 'flagged') loadFlaggedContent();
     if (btn.dataset.page === 'safety') loadSafety();
+    if (btn.dataset.page === 'appeals') loadAppeals();
+    if (btn.dataset.page === 'moderation') loadModeration();
   };
 });
 
@@ -2078,6 +2213,8 @@ function loadAll(){
 function _doLoadAll(){
   document.getElementById('lastUpdated').textContent='Loading...';
   refreshSafetyBadge(); // ★ 2026-10-26：側邊欄 Safety 的待處理檢舉數
+  loadWarnStats();      // ★ 2026-11-22：每個人被警告過幾次（Users 頁標籤用）
+  refreshAppealsBadge(); // ★ 2026-11-22：側邊欄 Appeals 的待處理數
   loadMediaGc().catch(function(){}); // ★ 2026-10-26：自動清理停了或出錯時，側邊欄 Media Cleanup 亮紅點
   _loadAllDone = false; // block realtime updates until load is complete
   // Load habits and posts first, THEN load users (which triggers render)
@@ -2352,7 +2489,9 @@ function buildUsers(){
     var createdAt = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt)) : null;
     var usernameChangedAt = u.usernameChangedAt ? (u.usernameChangedAt.toDate ? u.usernameChangedAt.toDate() : new Date(u.usernameChangedAt)) : null;
     map[uid]={uid:uid, name:u.displayName||u.email||'User', email:u.email||'', photoURL:u.photoURL||'',
-              habits:[], posts:[], lastSeen:u.lastSeen, createdAt:createdAt, usernameChangedAt:usernameChangedAt};
+              habits:[], posts:[], lastSeen:u.lastSeen, createdAt:createdAt, usernameChangedAt:usernameChangedAt,
+              // ★ 2026-11-22：停權狀態（users 表 select('*') 本來就會帶回這兩欄）
+              suspendedAt:u.suspended_at||null, suspensionReason:u.suspension_reason||''};
   });
 
   // Supplement habit/post counts only for users already in the map (don't create ghost entries)
@@ -2462,7 +2601,9 @@ function renderUsers(f){
     return bt-at;
   });
   var filtered = sorted.filter(function(u){
-    if(_actFilter!=='all' && userActivity(u.lastSeen)!==_actFilter) return false;
+    if(_actFilter==='suspended'){ if(!u.suspendedAt) return false; }
+    else if(_actFilter==='warned'){ if(!(_warnStats[u.uid] && _warnStats[u.uid].count)) return false; }
+    else if(_actFilter!=='all' && userActivity(u.lastSeen)!==_actFilter) return false;
     if(!f) return true;
     var q=f.toLowerCase();
     return u.name.toLowerCase().includes(q)||u.uid.includes(q)||(u.email||'').toLowerCase().includes(q);
@@ -2492,8 +2633,12 @@ function renderUsers(f){
     var nameChangedHtml = u.usernameChangedAt
       ? nameChangedStr + (daysLeft > 0 ? ' <span style="font-size:9px;color:#d97706;font-weight:700">(' + daysLeft + 'd lock)</span>' : ' <span style="font-size:9px;color:#16a34a;font-weight:700">(unlocked)</span>')
       : '\u2014';
-    return '<tr>'+
-      '<td><div class="uc">'+av+'<div><strong>'+htmlEsc(u.name)+'</strong>'+
+    // ★ 2026-11-22：停權 / 警告次數標籤
+    var ws = _warnStats[u.uid];
+    var tags = (u.suspendedAt ? '<span class="u-tag susp" title="'+htmlEsc(u.suspensionReason||'')+'">Suspended</span>' : '') +
+      (ws && ws.count ? '<span class="u-tag warns" title="Last: '+htmlEsc(ws.lastReason||'')+'">'+ws.count+' warning'+(ws.count>1?'s':'')+'</span>' : '');
+    return '<tr'+(u.suspendedAt?' style="background:rgba(127,29,29,.12)"':'')+'>'+
+      '<td><div class="uc">'+av+'<div><strong>'+htmlEsc(u.name)+'</strong>'+tags+
       '<div style="font-size:10px;color:var(--g400)">'+htmlEsc(u.email||'')+'</div></div></div></td>'+
       '<td><span class="apill apill-'+act+'">'+pillLabel+'</span></td>'+
       '<td style="font-size:11px;white-space:nowrap" class="'+ls.cls+'">'+htmlEsc(ls.txt)+'</td>'+
@@ -2501,7 +2646,12 @@ function renderUsers(f){
       '<td>'+u.habits.length+'</td><td>'+u.posts.length+'</td>'+
       '<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+r+'%"></div></div><div class="bar-pct">'+r+'%</div></div></td>'+
       '<td style="font-size:11px;color:var(--g500);white-space:nowrap">'+nameChangedHtml+'</td>'+
-      '<td><button class="del" style="background:#475569;margin-right:4px" onclick="viewUserMedia(\''+safeUid+'\',\''+safeName+'\')" title="View &amp; manage Bunny media">📁 Media</button>'+
+      '<td style="white-space:nowrap"><button class="del" style="background:#475569;margin-right:4px" onclick="viewUserMedia(\''+safeUid+'\',\''+safeName+'\')" title="View &amp; manage Bunny media">📁 Media</button>'+
+      // ★ 2026-11-22：單獨警告 / 停權（不用先有檢舉）
+      '<button class="del" style="margin-right:4px;color:#f59e0b;border-color:#f59e0b" onclick="openWarnModal(\''+safeUid+'\')" title="Send a community guidelines warning">⚠ Warn</button>'+
+      (u.suspendedAt
+        ? '<button class="del" style="margin-right:4px;color:#34d399;border-color:#34d399" onclick="openSuspendModal(\''+safeUid+'\',false)">Unsuspend</button>'
+        : '<button class="del" style="margin-right:4px;color:#f87171;border-color:#f87171" onclick="openSuspendModal(\''+safeUid+'\',true)">⛔ Suspend</button>')+
       '<button class="del" onclick="deleteUserData(\''+safeUid+'\',\''+safeName+'\')" title="Delete all data + Bunny media">Delete Data</button></td>'+
       '</tr>';
   }).join('');
@@ -3599,6 +3749,7 @@ var REASON_LABELS = {
   hate_speech:   '🚫 Hate speech',
   misinformation:'⚠️ Misinformation',
   inappropriate: '🔞 Inappropriate',
+  underage:      '🪪 May be under 18', // ★ 2026-11-22
   other:         '📝 Other'
 };
 
@@ -3697,10 +3848,14 @@ function renderReports(){
       actionBtns += '<button class="del" style="font-size:9px" '
         + 'onclick="setReportStatus(\'' + rid + '\',\'pending\')">Reopen</button>';
     }
-    var feedbackPreview = r.feedbackText ? htmlEsc(r.feedbackText.slice(0, 120)) + (r.feedbackText.length > 120 ? '…' : '') : '';
-    var feedbackCell = feedbackPreview
-      ? '<div style="font-size:11px;color:var(--g600);line-height:1.45;font-style:italic">“' + feedbackPreview + '”</div>'
+    // ★ 2026-11-22：檢舉人寫的內容不直接列出來，顯示字數，按 Read 用彈窗看（可複製／下載 .txt）
+    var feedbackCell = r.feedbackText
+      ? '<div style="font-size:10px;color:var(--g400);margin-bottom:4px">' + r.feedbackText.length + ' characters</div>'
+        + '<button class="del" style="font-size:9px" onclick="openReportFeedback(\'' + htmlEsc(r.id) + '\')">Read</button>'
       : '<span style="font-size:10px;color:var(--g300)">—</span>';
+    // ★ 2026-11-22：直接從檢舉停權被檢舉的人（例如「可能未滿 18 歲」）
+    if (r.reportedUserId) actionBtns += '<button class="del" style="font-size:9px;color:#f87171;border-color:#f87171;margin-top:3px" '
+      + 'onclick="openSuspendModal(\'' + htmlEsc(r.reportedUserId) + '\',true,' + (r.reason === 'underage' ? '\'UNDERAGE\'' : 'null') + ')">Suspend</button>';
     return '<tr>'
       + '<td><div class="uc">'+avatarHtml(r.reportedUserId, r.reportedUserName||r.reportedUserId)
       + '<div><strong style="font-size:12px">'+reportedUser+'</strong>'
@@ -4420,7 +4575,7 @@ var _sfReports = [], _sfBlocks = [], _sfSuspended = {}, _sfOpenId = null;
 var SAFETY_REASON_LABELS = {
   HARASSMENT: 'Harassment', THREAT: 'Threats / violence', HATE: 'Hate speech', SEXUAL: 'Sexual content',
   SEXUAL_MINORS: 'Sexual content — minors', VIOLENCE: 'Graphic violence', SELF_HARM: 'Self-harm / safety concern',
-  ILLICIT: 'Drugs / weapons / crime', SCAM: 'Scam / fraud', UNDERAGE: 'Possibly under 13', OTHER: 'Other'
+  ILLICIT: 'Drugs / weapons / crime', SCAM: 'Scam / fraud', UNDERAGE: 'Possibly under 18', OTHER: 'Other'
 };
 
 async function loadSafety() {
@@ -4489,7 +4644,7 @@ function renderSafetyReports() {
   var f = (document.getElementById('sfStatusFilter') || {}).value || 'open';
   var list = _sfReports.filter(function(r){ return f === 'all' || r.status === f; });
   // 嚴重的（自動標記、未成年、威脅）排最前面
-  var sev = { SEXUAL_MINORS: 0, THREAT: 1, SELF_HARM: 2 };
+  var sev = { SEXUAL_MINORS: 0, THREAT: 1, SELF_HARM: 2, UNDERAGE: 3 };
   list.sort(function(a, b) {
     var sa = sev[a.reason] != null ? sev[a.reason] : 9, sb = sev[b.reason] != null ? sev[b.reason] : 9;
     return (sa - sb) || (Date.parse(b.created_at) - Date.parse(a.created_at));
@@ -4511,7 +4666,9 @@ function renderSafetyReports() {
       '<td style="font-size:11px">' + htmlEsc(resolveUserName(r.reported_id)) + (suspended ? ' <span class="badge" style="background:#7f1d1d;color:#fff">suspended</span>' : '') + '</td>' +
       '<td style="font-size:11px">' + (r.reporter_id ? htmlEsc(resolveUserName(r.reporter_id)) : '—') + '</td>' +
       '<td><span class="badge" style="' + (severe ? 'background:#f8717122;color:#f87171' : '') + '">' + htmlEsc(SAFETY_REASON_LABELS[r.reason] || r.reason) + '</span></td>' +
-      '<td style="font-size:11px;max-width:220px;white-space:normal">' + (r.details ? htmlEsc(String(r.details).slice(0, 160)) : '<span style="color:var(--g400)">—</span>') + '</td>' +
+      '<td style="font-size:11px;white-space:nowrap">' + (r.details
+        ? '<div style="font-size:10px;color:var(--g400);margin-bottom:4px">' + String(r.details).length + ' characters</div><button class="refresh" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();openSafetyDetails(' + r.id + ')">Read</button>'
+        : '<span style="color:var(--g400)">—</span>') + '</td>' +
       '<td style="font-size:10px;color:var(--g400);white-space:nowrap">' + hist.reports + ' report' + (hist.reports === 1 ? '' : 's') + ' · ' + hist.blocks + ' block' + (hist.blocks === 1 ? '' : 's') + '</td>' +
       '<td><span class="badge" style="background:' + stColor + '22;color:' + stColor + '">' + htmlEsc(r.status) + '</span></td>' +
       '<td style="white-space:nowrap">' + actions + '</td>' +
@@ -4552,10 +4709,105 @@ function renderSafetyOffenders(sinceIso) {
       '<td style="font-family:var(--mono)">' + x.reports + '</td>' +
       '<td style="font-family:var(--mono)">' + x.blocks + '</td>' +
       '<td>' + (s ? '<span class="badge" style="background:#7f1d1d;color:#fff" title="' + htmlEsc(s.suspension_reason || '') + '">suspended</span>' : '<span style="font-size:10px;color:var(--g400)">active</span>') + '</td>' +
-      '<td>' + (s
+      '<td style="white-space:nowrap">' + '<button class="refresh" style="font-size:10px;padding:3px 7px;margin-right:4px;color:#f59e0b;border-color:#f59e0b" onclick="openWarnModal(\'' + x.uid + '\')">Warn</button>' + (s
         ? '<button class="refresh" style="font-size:10px;padding:3px 7px" onclick="safetySetSuspension(\'' + x.uid + '\',false)">Unsuspend</button>'
         : '<button class="refresh" style="font-size:10px;padding:3px 7px;color:#f87171;border-color:#f87171" onclick="safetySetSuspension(\'' + x.uid + '\',true)">Suspend</button>') + '</td></tr>';
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--g400)">Nobody reported or blocked in 30 days</td></tr>';
+}
+
+
+/* ★ 2026-11-22：檢舉人寫的內容 → 點擊用彈窗打開（可複製、下載 .txt），表格裡不直接列 */
+var _tvStore = {};
+function _downloadTxt(filename, text) {
+  var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+}
+function openTextViewer(title, metaLines, text, filename) {
+  var key = 'tv' + Date.now();
+  _tvStore[key] = { text: text, file: filename, full: metaLines.join('\n') + '\n\n--- What they wrote ---\n' + text + '\n' };
+  _openAdmModal(
+    '<div class="adm-modal-hd"><div class="adm-modal-ttl">' + htmlEsc(title) + '</div><button class="adm-modal-x" onclick="_closeAdmModal()">&times;</button></div>' +
+    '<div class="adm-modal-bd">' +
+      '<div class="adm-hist" style="margin-top:0">' + metaLines.map(htmlEsc).join('<br>') + '</div>' +
+      '<label class="adm-lbl">What they wrote · ' + text.length + ' characters</label>' +
+      '<div style="max-height:260px;overflow-y:auto;background:var(--g50);border:1px solid var(--g200);padding:10px 12px;font-size:12.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word">' + htmlEsc(text) + '</div>' +
+    '</div>' +
+    '<div class="adm-modal-ft">' +
+      '<button class="adm-btn" onclick="copyText(_tvStore[\'' + key + '\'].text)">Copy text</button>' +
+      '<button class="adm-btn" onclick="_downloadTxt(_tvStore[\'' + key + '\'].file,_tvStore[\'' + key + '\'].full)">Download .txt</button>' +
+      '<button class="adm-btn" onclick="_closeAdmModal()">Close</button>' +
+    '</div>'
+  );
+}
+function _fmtWhen(v) { try { var d = v && v.toDate ? v.toDate() : new Date(v); return isNaN(d) ? '—' : d.toLocaleString(); } catch (e) { return '—'; } }
+
+// Reports 頁（Community 貼文／留言／影片）
+function _reportMeta(r) {
+  return [
+    'Reported user: ' + (r.reportedUserName || r.reportedUserId || '—') + (r.reportedUserId ? ' (' + r.reportedUserId + ')' : ''),
+    'Reason: ' + (REASON_LABELS[r.reason] || r.reason || '—') + ' · ' + ((r.commentId || r.isComment) ? 'Comment' : 'Post'),
+    'Reported at: ' + _fmtWhen(r.reportedAtDate || r.reportedAt),
+    'Content: ' + String(r.postText || '(no text)').slice(0, 300)
+  ];
+}
+function openReportFeedback(id) {
+  var r = allReports.find(function(x){ return String(x.id) === String(id); });
+  if (!r) return;
+  openTextViewer('Report — what the reporter wrote', _reportMeta(r), r.feedbackText || '', 'report-' + r.id + '.txt');
+}
+function downloadReportsTxt() {
+  var list = allReports.filter(function(r){ return r.status === 'pending'; });
+  if (!list.length) { alert('No pending reports.'); return; }
+  var out = ['FamStreak — pending Community reports', 'Exported ' + new Date().toLocaleString() + ' · ' + list.length + ' report(s)', ''];
+  list.forEach(function(r) {
+    out.push('════════════════════════════════════════', 'Report ' + r.id);
+    out = out.concat(_reportMeta(r));
+    out.push('', '--- What the reporter wrote ---', r.feedbackText || '(nothing)', '');
+  });
+  _downloadTxt('famstreak-reports-' + new Date().toISOString().slice(0, 10) + '.txt', out.join('\n'));
+}
+
+// Safety 頁（聊天室檢舉）
+function _safetyMeta(r) {
+  var hist = _sfHistoryFor(r.reported_id);
+  return [
+    'Reported user: ' + resolveUserName(r.reported_id) + ' (' + r.reported_id + ')',
+    'Reported by: ' + (r.reporter_id ? resolveUserName(r.reporter_id) : 'AI auto-flag'),
+    'Reason: ' + (SAFETY_REASON_LABELS[r.reason] || r.reason),
+    'When: ' + _fmtWhen(r.created_at),
+    'History: ' + hist.reports + ' report(s) · ' + hist.blocks + ' block(s)'
+  ];
+}
+function _safetyEvidenceLines(r) {
+  var ev = Array.isArray(r.evidence) ? r.evidence : [];
+  if (!ev.length) return ['(no messages attached)'];
+  return ev.map(function(m) {
+    var body = m.message_type && m.message_type !== 'text' ? '[' + m.message_type + ']' : (m.content || '');
+    return '[' + _fmtWhen(m.created_at) + '] ' + resolveUserName(m.sender_id) + ': ' + body + (m.blocked ? ' (blocked)' : '');
+  });
+}
+function openSafetyDetails(id) {
+  var r = _sfReports.find(function(x){ return x.id === id; });
+  if (!r) return;
+  openTextViewer('Chat report — what the reporter wrote', _safetyMeta(r), String(r.details || ''), 'chat-report-' + r.id + '.txt');
+  // 下載的檔案順便附上當時抓到的訊息
+  var k = Object.keys(_tvStore).pop();
+  _tvStore[k].full += '\n--- Messages captured at the time ---\n' + _safetyEvidenceLines(r).join('\n') + '\n';
+}
+function downloadSafetyTxt() {
+  var list = _sfReports.filter(function(r){ return r.status === 'open'; });
+  if (!list.length) { alert('No open reports.'); return; }
+  var out = ['FamStreak — open chat reports', 'Exported ' + new Date().toLocaleString() + ' · ' + list.length + ' report(s)', ''];
+  list.forEach(function(r) {
+    out.push('════════════════════════════════════════', 'Report ' + r.id);
+    out = out.concat(_safetyMeta(r));
+    out.push('', '--- What the reporter wrote ---', r.details || '(nothing)', '', '--- Messages captured at the time ---');
+    out = out.concat(_safetyEvidenceLines(r)); out.push('');
+  });
+  _downloadTxt('famstreak-chat-reports-' + new Date().toISOString().slice(0, 10) + '.txt', out.join('\n'));
 }
 
 // 寫通知（跟申訴結果通知同一張表、同一個 is_admin() 寫入權限）
@@ -4580,7 +4832,7 @@ async function safetyResolve(id, kind) {
   var note = kind === 'dismiss' ? null : (prompt('Internal note (optional):', '') || null);
   try {
     if (kind === 'suspend') {
-      var s1 = await _supabase.rpc('admin_set_suspension', { p_user: r.reported_id, p_suspend: true, p_reason: reasonLabel });
+      var s1 = await _supabase.rpc('admin_set_suspension', { p_user: r.reported_id, p_suspend: true, p_reason: r.reason === 'UNDERAGE' ? UNDERAGE_SUSPEND_LABEL : reasonLabel });
       if (s1.error) throw s1.error;
     }
     var status = kind === 'dismiss' ? 'dismissed' : 'actioned';
@@ -4589,8 +4841,9 @@ async function safetyResolve(id, kind) {
     if (s2.error) throw s2.error;
 
     if (kind === 'warn') {
-      await _safetyNotify(r.reported_id, 'account_warning', 'Community guidelines warning',
-        'We reviewed a report about your messages and found they broke our community guidelines (' + reasonLabel + '). Please keep FamStreak kind and safe — further violations can lead to suspension.');
+      // ★ 2026-11-22：改走 _recordWarning——同時寫 user_warnings，才算得出「第幾次警告」
+      await _recordWarning(r.reported_id, WARN_TEMPLATES[r.reason] ? r.reason : 'OTHER',
+        'We reviewed a report about your messages and found they broke our community guidelines (' + reasonLabel + '). Please keep FamStreak kind and safe.', r.id);
     }
     // 通知檢舉的人（自動標記沒有檢舉人）——只說結果，不透露處理細節
     if (r.reporter_id) {
@@ -4608,13 +4861,405 @@ async function safetyResolve(id, kind) {
   }
 }
 
-async function safetySetSuspension(uid, suspend) {
+// 舊的入口（Safety 頁「Most reported」表格）改成跟 Users 頁同一個彈窗
+function safetySetSuspension(uid, suspend) { openSuspendModal(uid, suspend); }
+
+/* ══════════════════════════════════════════════════
+   ★ 2026-11-22：單獨警告（不用先有檢舉）＋ 停權彈窗
+   · 警告：寫一筆 user_warnings（留紀錄、算第幾次）＋ 小鈴鐺通知 account_warning
+   · 建議流程：第 1、2 次警告 → 第 3 次停權（彈窗會顯示目前第幾次，只是提示，不會自動停權）
+   · 停權：沿用 admin_set_suspension RPC；p_reason 存「使用者看得到的原因」
+     （之後 App 的停權畫面會直接顯示這個原因——歐盟 DSA 第 17 條要求要告訴當事人原因）
+   需要先跑 Security & Rules 頁最下面那段 user_warnings 的 SQL。
+══════════════════════════════════════════════════ */
+var WARN_STRIKE_LIMIT = 3; // 第幾次警告之後建議停權（只影響畫面提示）
+var _warnStats = {};       // uid -> { count, lastAt, lastReason, list:[...] }
+var _warnTableMissing = false;
+
+// 每種原因預設的警告內容（英文，因為 App 使用者在北美／歐洲；送出前可以改）
+var WARN_TEMPLATES = {
+  HARASSMENT: 'We received reports that some of your messages were harassing or insulting toward another member. Please keep your conversations respectful.',
+  THREAT: 'Some of your messages included threats or violent language. This is never allowed on FamStreak.',
+  HATE: 'Some of your content included hateful language about a group of people. This is not allowed on FamStreak.',
+  SEXUAL: 'Some of your content or messages were sexual in nature. FamStreak is a habit-building community, so please keep things appropriate.',
+  SEXUAL_MINORS: 'Your account was flagged for content involving minors. This is a serious violation of our guidelines.',
+  VIOLENCE: 'Some of your content showed graphic violence. Please don’t share this kind of material on FamStreak.',
+  SELF_HARM: 'Some of your content promoted self-harm. If you’re going through a hard time, please reach out to someone you trust or a local helpline.',
+  ILLICIT: 'Some of your content promoted drugs, weapons or illegal activity. This is not allowed on FamStreak.',
+  SCAM: 'Some of your messages looked like a scam or asked other members for money or personal details. This is not allowed on FamStreak.',
+  SPAM: 'You have been posting spam or repeated promotional content. Please only share content related to your habits.',
+  OTHER: 'Some of your recent activity broke our community guidelines.'
+};
+var WARN_REASONS = ['HARASSMENT','THREAT','HATE','SEXUAL','SEXUAL_MINORS','VIOLENCE','SELF_HARM','ILLICIT','SCAM','SPAM','OTHER'];
+function _reasonLabel(code) { return SAFETY_REASON_LABELS[code] || (code === 'SPAM' ? 'Spam' : code); }
+function _warnTitle() { return 'Community guidelines warning'; }
+function _warnBody(msg, strikeNo) {
+  return msg + (strikeNo >= WARN_STRIKE_LIMIT - 1
+    ? '\n\nThis is a final warning. Another violation will lead to your account being suspended.'
+    : '\n\nPlease review our community guidelines. Repeated violations can lead to suspension.');
+}
+
+async function loadWarnStats() {
+  try {
+    var r = await _supabase.from('user_warnings').select('id, user_id, reason, message, created_at, created_by, acknowledged_at').order('created_at', { ascending: false }).limit(5000);
+    if (r.error) { _warnTableMissing = true; return; }
+    _warnTableMissing = false;
+    var m = {};
+    (r.data || []).forEach(function(w) {
+      var k = String(w.user_id);
+      if (!m[k]) m[k] = { count: 0, lastAt: w.created_at, lastReason: _reasonLabel(w.reason), list: [] };
+      m[k].count++; m[k].list.push(w);
+    });
+    _warnStats = m;
+    if (_loadAllDone) renderUsers(document.getElementById('userSearch').value || '');
+  } catch (e) { _warnTableMissing = true; }
+}
+
+// 寫警告紀錄＋通知（Users 頁彈窗、Safety 頁檢舉的 Warn 都走這裡）
+async function _recordWarning(uid, reasonCode, message, reportId) {
+  var strikeNo = ((_warnStats[String(uid)] || {}).count || 0) + 1;
+  var body = _warnBody(message, strikeNo);
+  if (!_warnTableMissing) {
+    var ins = await _supabase.from('user_warnings').insert({
+      user_id: uid, reason: reasonCode, message: body, report_id: reportId || null,
+      created_by: auth.currentUser ? auth.currentUser.email : 'admin'
+    });
+    if (ins.error) console.warn('[Warn] user_warnings insert failed:', ins.error.message);
+  }
+  await _safetyNotify(uid, 'account_warning', _warnTitle(), body);
+  await loadWarnStats();
+}
+
+function _closeAdmModal() { var m = document.getElementById('admModal'); if (m) m.remove(); }
+function _openAdmModal(innerHtml) {
+  _closeAdmModal();
+  var bg = document.createElement('div');
+  bg.id = 'admModal'; bg.className = 'adm-modal-bg';
+  bg.onclick = function(e) { if (e.target === bg) _closeAdmModal(); };
+  bg.innerHTML = '<div class="adm-modal" role="dialog" aria-modal="true">' + innerHtml + '</div>';
+  document.body.appendChild(bg);
+  return bg;
+}
+function _strikeBarHtml(count) {
+  var h = '<div class="adm-strike">';
+  for (var i = 1; i <= WARN_STRIKE_LIMIT; i++) h += '<span class="' + (i <= count ? 'on' + (i === WARN_STRIKE_LIMIT ? ' last' : '') : '') + '"></span>';
+  return h + '</div>';
+}
+function _warnHistoryHtml(uid) {
+  var ws = _warnStats[String(uid)];
+  if (!ws || !ws.count) return '<div class="adm-hist">No previous warnings.</div>';
+  return '<div class="adm-hist">' + ws.list.slice(0, 5).map(function(w) {
+    return '• ' + new Date(w.created_at).toLocaleDateString() + ' — ' + htmlEsc(_reasonLabel(w.reason));
+  }).join('<br>') + (ws.count > 5 ? '<br>… and ' + (ws.count - 5) + ' more' : '') + '</div>';
+}
+
+function openWarnModal(uid) {
   var who = resolveUserName(uid);
-  if (!confirm((suspend ? 'Suspend ' : 'Unsuspend ') + who + '?')) return;
-  var reason = suspend ? (prompt('Reason (shown only to admins):', '') || null) : null;
-  var r = await _supabase.rpc('admin_set_suspension', { p_user: uid, p_suspend: suspend, p_reason: reason });
-  if (r.error) { alert('Failed: ' + r.error.message); return; }
-  loadSafety();
+  var prev = ((_warnStats[String(uid)] || {}).count) || 0;
+  var strikeNo = prev + 1;
+  var suggest = strikeNo >= WARN_STRIKE_LIMIT
+    ? '<div class="adm-note" style="color:#f87171">⚠ This user already has ' + prev + ' warnings. Our rule is to suspend at warning ' + WARN_STRIKE_LIMIT + ' — consider <a href="#" style="color:#f87171" onclick="event.preventDefault();openSuspendModal(\'' + uid + '\',true)">suspending instead</a>.</div>'
+    : '';
+  _openAdmModal(
+    '<div class="adm-modal-hd"><div class="adm-modal-ttl">⚠ Warn @' + htmlEsc(who) + '</div><button class="adm-modal-x" onclick="_closeAdmModal()">&times;</button></div>' +
+    '<div class="adm-modal-bd">' +
+      (_warnTableMissing ? '<div class="adm-note" style="color:#f59e0b;margin:0 0 10px">user_warnings table not found — the notification will still be sent, but it won’t be counted. Run the SQL at the bottom of Security &amp; Rules.</div>' : '') +
+      '<label class="adm-lbl">This will be warning ' + strikeNo + ' of ' + WARN_STRIKE_LIMIT + '</label>' + _strikeBarHtml(strikeNo) + _warnHistoryHtml(uid) + suggest +
+      '<label class="adm-lbl" for="wmReason">Reason</label>' +
+      '<select id="wmReason" class="adm-input">' + WARN_REASONS.map(function(c){ return '<option value="' + c + '">' + htmlEsc(_reasonLabel(c)) + '</option>'; }).join('') + '</select>' +
+      '<label class="adm-lbl" for="wmMsg">Message (the user sees this — edit if needed)</label>' +
+      '<textarea id="wmMsg" class="adm-input"></textarea>' +
+      '<label class="adm-lbl">Preview — what they see in their notifications</label>' +
+      '<div class="adm-preview"><div style="font-size:16px">⚠️</div><div><div class="adm-preview-t" id="wmPvT"></div><div class="adm-preview-b" id="wmPvB"></div></div></div>' +
+    '</div>' +
+    '<div class="adm-modal-ft"><button class="adm-btn" onclick="_closeAdmModal()">Cancel</button><button class="adm-btn warn" id="wmSend">Send warning</button></div>'
+  );
+  var sel = document.getElementById('wmReason'), ta = document.getElementById('wmMsg');
+  function upd() { document.getElementById('wmPvT').textContent = _warnTitle(); document.getElementById('wmPvB').textContent = _warnBody(ta.value, strikeNo); }
+  sel.onchange = function() { ta.value = WARN_TEMPLATES[sel.value] || WARN_TEMPLATES.OTHER; upd(); };
+  ta.oninput = upd;
+  sel.onchange();
+  document.getElementById('wmSend').onclick = async function() {
+    var btn = this; var msg = ta.value.trim();
+    if (!msg) { alert('Please write a message.'); return; }
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      await _recordWarning(uid, sel.value, msg, null);
+      _closeAdmModal();
+      showToast('Warning sent to ' + who);
+      if (document.getElementById('pg-moderation').classList.contains('on')) loadModeration();
+    } catch (e) { btn.disabled = false; btn.textContent = 'Send warning'; alert('Failed: ' + (e.message || e)); }
+  };
+}
+
+var UNDERAGE_SUSPEND_LABEL = 'Under the minimum age (18)'; // ★ 2026-11-22：停權畫面上給使用者看的原因
+function openSuspendModal(uid, suspend, presetCode) {
+  var who = resolveUserName(uid);
+  if (!suspend) {
+    _openAdmModal(
+      '<div class="adm-modal-hd"><div class="adm-modal-ttl">Unsuspend @' + htmlEsc(who) + '</div><button class="adm-modal-x" onclick="_closeAdmModal()">&times;</button></div>' +
+      '<div class="adm-modal-bd"><div style="font-size:12px;line-height:1.7">They’ll be able to post, comment, chat and match again. Partnerships that ended when they were suspended do <strong>not</strong> come back.</div>' + _warnHistoryHtml(uid) + '</div>' +
+      '<div class="adm-modal-ft"><button class="adm-btn" onclick="_closeAdmModal()">Cancel</button><button class="adm-btn" id="smGo" style="border-color:#34d399;color:#34d399">Unsuspend</button></div>'
+    );
+  } else {
+    _openAdmModal(
+      '<div class="adm-modal-hd"><div class="adm-modal-ttl">⛔ Suspend @' + htmlEsc(who) + '</div><button class="adm-modal-x" onclick="_closeAdmModal()">&times;</button></div>' +
+      '<div class="adm-modal-bd">' +
+        '<label class="adm-lbl">Warning history</label>' + _strikeBarHtml(((_warnStats[String(uid)] || {}).count) || 0) + _warnHistoryHtml(uid) +
+        '<label class="adm-lbl" for="smReason">Reason (shown to the user on their suspended screen)</label>' +
+        '<select id="smReason" class="adm-input">' + WARN_REASONS.concat(['UNDERAGE']).map(function(c){
+          var lbl = c === 'UNDERAGE' ? UNDERAGE_SUSPEND_LABEL : _reasonLabel(c);
+          return '<option value="' + htmlEsc(lbl) + '"' + (c === presetCode ? ' selected' : '') + '>' + htmlEsc(lbl) + '</option>'; }).join('') + '</select>' +
+        (presetCode === 'UNDERAGE' ? '<div class="adm-note">Under-18 accounts: suspend, then check their appeal — if they show they\u2019re 18 or older, approve it.</div>' : '') +
+        '<div class="adm-note">What happens right away:<br>• They can’t post, comment, chat or match (blocked by the database)<br>• <strong>All their partnerships end</strong> — partners get the usual “partnership ended” notice<br>• They can still sign in, see their own habits, and delete their account</div>' +
+      '</div>' +
+      '<div class="adm-modal-ft"><button class="adm-btn" onclick="_closeAdmModal()">Cancel</button><button class="adm-btn danger" id="smGo">Suspend account</button></div>'
+    );
+  }
+  document.getElementById('smGo').onclick = async function() {
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving…';
+    var reason = suspend ? document.getElementById('smReason').value : null;
+    var r = await _supabase.rpc('admin_set_suspension', { p_user: uid, p_suspend: suspend, p_reason: reason });
+    if (r.error) { btn.disabled = false; btn.textContent = suspend ? 'Suspend account' : 'Unsuspend'; alert('Failed: ' + r.error.message); return; }
+    // 本地快取同步，不用整頁重載
+    if (window.fsUsers && window.fsUsers[uid]) {
+      window.fsUsers[uid].suspended_at = suspend ? new Date().toISOString() : null;
+      window.fsUsers[uid].suspension_reason = reason;
+    }
+    buildUsers(); renderUsers(document.getElementById('userSearch').value || '');
+    if (document.getElementById('pg-safety').classList.contains('on')) loadSafety();
+    if (document.getElementById('pg-moderation').classList.contains('on')) loadModeration();
+    _closeAdmModal();
+    showToast((suspend ? 'Suspended ' : 'Unsuspended ') + who);
+  };
+}
+
+
+/* ══════════════════════════════════════════════════
+   ★ 2026-11-22：APPEALS（停權申訴）＋ WARNINGS & SUSPENSIONS（統計）
+   搭配 moderation_v2.sql（account_appeals / submit_account_appeal）
+   · 申訴內容不直接列在表格裡（有人會寫滿 1000 字）：表格只顯示字數，
+     按「Read」用彈窗看全文，或按「Download pending (.txt)」整批匯出成文字檔（方便丟給 AI 看）
+   · Approve：解除停權（admin_set_suspension）＋ 通知 account_appeal_approved（對方下次打開 App 會跳 Welcome back）
+   · Deny：維持停權 ＋ 回覆會顯示在對方的停權畫面上（另外也寫一則 account_appeal_denied 通知）
+   · 警告不能申訴
+══════════════════════════════════════════════════ */
+var _appeals = [];
+var _appealsTableMissing = false;
+
+async function _loadAppealsData() {
+  var r = await _supabase.from('account_appeals').select('*').order('created_at', { ascending: true }).limit(2000);
+  if (r.error) { _appealsTableMissing = true; _appeals = []; return; }
+  _appealsTableMissing = false;
+  _appeals = r.data || [];
+}
+async function refreshAppealsBadge() {
+  try {
+    var r = await _supabase.from('account_appeals').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    var b = document.getElementById('appealsBadge');
+    if (b && !r.error) { b.textContent = r.count || 0; b.style.display = r.count ? 'inline' : 'none'; }
+  } catch (e) {}
+}
+function _apAgo(iso) {
+  var d = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
+  if (d <= 0) { var h = Math.floor((Date.now() - Date.parse(iso)) / 3600000); return h <= 0 ? 'just now' : h + ' h'; }
+  return d + ' day' + (d === 1 ? '' : 's');
+}
+function _apWarnSummary(uid) {
+  var ws = _warnStats[String(uid)];
+  if (!ws || !ws.count) return 'No warnings before';
+  return ws.count + ' warning' + (ws.count > 1 ? 's' : '') + ': ' + ws.list.slice().reverse().map(function(w) {
+    return new Date(w.created_at).toLocaleDateString() + ' ' + _reasonLabel(w.reason) + (w.acknowledged_at ? ' (promised)' : ' (not confirmed)');
+  }).join(', ');
+}
+
+async function loadAppeals() {
+  var upd = document.getElementById('appealsUpdated');
+  if (upd) upd.textContent = 'Loading...';
+  await Promise.all([_loadAppealsData(), loadWarnStats()]);
+  var warn = document.getElementById('appealsSetupWarn');
+  if (warn) warn.style.display = _appealsTableMissing ? '' : 'none';
+  var pending = _appeals.filter(function(a){ return a.status === 'pending'; });
+  var since30 = Date.now() - 30 * 86400000;
+  document.getElementById('apPending').textContent = pending.length;
+  document.getElementById('apOldest').textContent = pending.length ? _apAgo(pending[0].created_at) : '—';
+  document.getElementById('apApproved').textContent = _appeals.filter(function(a){ return a.status === 'approved' && Date.parse(a.reviewed_at || a.created_at) > since30; }).length;
+  document.getElementById('apDenied').textContent = _appeals.filter(function(a){ return a.status === 'denied' && Date.parse(a.reviewed_at || a.created_at) > since30; }).length;
+  var b = document.getElementById('appealsBadge');
+  if (b) { b.textContent = pending.length; b.style.display = pending.length ? 'inline' : 'none'; }
+  renderAppeals();
+  if (upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function renderAppeals() {
+  var tb = document.getElementById('appealsTbody');
+  if (!tb) return;
+  var f = (document.getElementById('apStatusFilter') || {}).value || 'pending';
+  var list = _appeals.filter(function(a){ return f === 'all' || a.status === f; });
+  if (f !== 'pending') list = list.slice().reverse(); // 待處理：最舊的在上面；其他：最新的在上面
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--g400)">' + (_appealsTableMissing ? 'Run moderation_v2.sql first' : 'Nothing here 🎉') + '</td></tr>'; return; }
+  var stColor = { pending: '#fbbf24', approved: '#34d399', denied: '#8f8f96' };
+  tb.innerHTML = list.map(function(a) {
+    var ws = _warnStats[String(a.user_id)];
+    var c = stColor[a.status] || '#8f8f96';
+    return '<tr>' +
+      '<td style="font-size:11px;color:var(--g400);white-space:nowrap">' + new Date(a.created_at).toLocaleString() + '</td>' +
+      '<td style="font-size:12px;font-weight:700">' + htmlEsc(resolveUserName(a.user_id)) + '</td>' +
+      '<td style="font-size:11px">' + htmlEsc(a.suspension_reason || '—') + '<div style="font-size:10px;color:var(--g400)">since ' + new Date(a.suspension_started_at).toLocaleDateString() + '</div></td>' +
+      '<td style="font-size:11px;color:var(--g400);white-space:nowrap">' + (a.message || '').length + ' characters</td>' +
+      '<td style="font-family:var(--mono);font-size:12px">' + ((ws && ws.count) || 0) + '</td>' +
+      '<td><span class="badge" style="background:' + c + '22;color:' + c + '">' + htmlEsc(a.status) + '</span>' + (a.reviewed_at ? '<div style="font-size:10px;color:var(--g400);margin-top:3px">' + new Date(a.reviewed_at).toLocaleDateString() + '</div>' : '') + '</td>' +
+      '<td><button class="refresh" style="font-size:10px;padding:4px 10px" onclick="openAppealModal(' + a.id + ')">' + (a.status === 'pending' ? 'Read &amp; decide' : 'Read') + '</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function openAppealModal(id) {
+  var a = _appeals.find(function(x){ return x.id === id; });
+  if (!a) return;
+  var who = resolveUserName(a.user_id);
+  var pending = a.status === 'pending';
+  var stillSuspended = !!(window.fsUsers && window.fsUsers[a.user_id] && window.fsUsers[a.user_id].suspended_at);
+  _openAdmModal(
+    '<div class="adm-modal-hd"><div class="adm-modal-ttl">Appeal — @' + htmlEsc(who) + '</div><button class="adm-modal-x" onclick="_closeAdmModal()">&times;</button></div>' +
+    '<div class="adm-modal-bd">' +
+      '<label class="adm-lbl">Suspension</label>' +
+      '<div style="font-size:12px;line-height:1.7">' + htmlEsc(a.suspension_reason || '—') + ' · since ' + new Date(a.suspension_started_at).toLocaleString() +
+        (stillSuspended ? '' : ' <span class="u-tag" style="background:rgba(52,211,153,.18);color:#34d399">no longer suspended</span>') + '</div>' +
+      '<div class="adm-hist">' + htmlEsc(_apWarnSummary(a.user_id)) + '</div>' +
+      '<div class="adm-hist">Why they were suspended: check Safety → reports for this user, or Chat Logs.</div>' +
+      '<label class="adm-lbl">Their appeal · ' + (a.message || '').length + ' characters · ' + new Date(a.created_at).toLocaleString() + '</label>' +
+      '<div id="apText" style="max-height:240px;overflow-y:auto;background:var(--g50);border:1px solid var(--g200);padding:10px 12px;font-size:12.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word">' + htmlEsc(a.message || '') + '</div>' +
+      '<div style="margin-top:6px;display:flex;gap:6px"><button class="adm-btn" style="padding:5px 10px;font-size:10px" onclick="copyText(document.getElementById(\'apText\').textContent)">Copy text</button>' +
+      '<button class="adm-btn" style="padding:5px 10px;font-size:10px" onclick="downloadAppealsTxt([' + a.id + '])">Download .txt</button></div>' +
+      (pending
+        ? '<label class="adm-lbl" for="apReply">Reply (they see this if you deny)</label>' +
+          '<textarea id="apReply" class="adm-input" placeholder="e.g. We looked at the reported messages again and they clearly broke our harassment rules."></textarea>' +
+          '<div class="adm-note">Approve = lift the suspension now. Partnerships that ended don’t come back. They’ll see a “Welcome back” message next time they open the app.<br>Deny = the suspension stays and they can’t appeal it again.</div>'
+        : '<label class="adm-lbl">Decision</label><div style="font-size:12px;line-height:1.6">' + htmlEsc(a.status) + (a.reviewed_by ? ' by ' + htmlEsc(a.reviewed_by) : '') + (a.reviewed_at ? ' · ' + new Date(a.reviewed_at).toLocaleString() : '') +
+          (a.admin_reply ? '<div style="margin-top:6px;color:var(--g400);white-space:pre-wrap">“' + htmlEsc(a.admin_reply) + '”</div>' : '') + '</div>') +
+    '</div>' +
+    '<div class="adm-modal-ft">' +
+      (pending
+        ? '<button class="adm-btn" onclick="_closeAdmModal()">Cancel</button>' +
+          '<button class="adm-btn" style="border-color:#34d399;color:#34d399" onclick="resolveAppeal(' + a.id + ',\'approved\',this)">Approve · lift suspension</button>' +
+          '<button class="adm-btn danger" onclick="resolveAppeal(' + a.id + ',\'denied\',this)">Deny · keep suspended</button>'
+        : '<button class="adm-btn" onclick="_closeAdmModal()">Close</button>') +
+    '</div>'
+  );
+}
+
+async function resolveAppeal(id, outcome, btn) {
+  var a = _appeals.find(function(x){ return x.id === id; });
+  if (!a) return;
+  var reply = ((document.getElementById('apReply') || {}).value || '').trim() || null;
+  if (outcome === 'denied' && !confirm('Deny this appeal? The suspension stays and they can’t appeal it again.')) return;
+  btn.disabled = true;
+  try {
+    if (outcome === 'approved') {
+      var s = await _supabase.rpc('admin_set_suspension', { p_user: a.user_id, p_suspend: false, p_reason: null });
+      if (s.error) throw s.error;
+      if (window.fsUsers && window.fsUsers[a.user_id]) { window.fsUsers[a.user_id].suspended_at = null; window.fsUsers[a.user_id].suspension_reason = null; }
+    }
+    var u = await _supabase.from('account_appeals').update({
+      status: outcome, admin_reply: reply, reviewed_at: new Date().toISOString(),
+      reviewed_by: auth.currentUser ? auth.currentUser.email : 'admin'
+    }).eq('id', id);
+    if (u.error) throw u.error;
+    if (outcome === 'approved') {
+      await _safetyNotify(a.user_id, 'account_appeal_approved', 'Your appeal was approved ✓',
+        'We reviewed your appeal and lifted the suspension on your account. Partnerships that ended can’t be restored, but you can find a new partner anytime.' + (reply ? '\n\n' + reply : ''));
+    } else {
+      await _safetyNotify(a.user_id, 'account_appeal_denied', 'Appeal reviewed — suspension stays',
+        reply || 'We reviewed your appeal and the suspension stays in place.');
+    }
+    _closeAdmModal();
+    showToast(outcome === 'approved' ? 'Approved — ' + resolveUserName(a.user_id) + ' can use the app again' : 'Appeal denied');
+    buildUsers(); renderUsers(document.getElementById('userSearch').value || '');
+    loadAppeals();
+    if (document.getElementById('pg-moderation').classList.contains('on')) loadModeration();
+  } catch (e) {
+    btn.disabled = false;
+    alert('Failed: ' + (e.message || e));
+  }
+}
+
+// 匯出成 .txt：不帶 ids 就是「所有待處理的」
+function downloadAppealsTxt(ids) {
+  var list = ids ? _appeals.filter(function(a){ return ids.indexOf(a.id) !== -1; }) : _appeals.filter(function(a){ return a.status === 'pending'; });
+  if (!list.length) { alert('No pending appeals to download.'); return; }
+  var lines = ['FamStreak — account appeals', 'Exported ' + new Date().toLocaleString() + ' · ' + list.length + ' appeal(s)', ''];
+  list.forEach(function(a) {
+    lines.push('════════════════════════════════════════');
+    lines.push('Appeal #' + a.id + ' · ' + resolveUserName(a.user_id) + ' (' + a.user_id + ')');
+    lines.push('Status: ' + a.status);
+    lines.push('Suspended: ' + new Date(a.suspension_started_at).toLocaleString() + ' — ' + (a.suspension_reason || '—'));
+    lines.push('History: ' + _apWarnSummary(a.user_id));
+    lines.push('Submitted: ' + new Date(a.created_at).toLocaleString());
+    lines.push('');
+    lines.push('--- Their appeal ---');
+    lines.push(a.message || '');
+    if (a.admin_reply) { lines.push(''); lines.push('--- Reply ---'); lines.push(a.admin_reply); }
+    lines.push('');
+  });
+  var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'famstreak-appeals-' + new Date().toISOString().slice(0, 10) + '.txt';
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(function(){ URL.revokeObjectURL(link.href); }, 2000);
+}
+
+// ── Warnings & Suspensions（統計頁）──
+async function loadModeration() {
+  var upd = document.getElementById('modUpdated');
+  if (upd) upd.textContent = 'Loading...';
+  await Promise.all([loadWarnStats(), _loadAppealsData()]);
+  var since30 = Date.now() - 30 * 86400000;
+  var suspended = allUsers.filter(function(u){ return u.suspendedAt; })
+    .sort(function(a, b){ return Date.parse(b.suspendedAt) - Date.parse(a.suspendedAt); });
+  var warnedUids = Object.keys(_warnStats).sort(function(a, b){ return _warnStats[b].count - _warnStats[a].count || Date.parse(_warnStats[b].lastAt) - Date.parse(_warnStats[a].lastAt); });
+  var warn30 = 0;
+  warnedUids.forEach(function(k){ _warnStats[k].list.forEach(function(w){ if (Date.parse(w.created_at) > since30) warn30++; }); });
+  document.getElementById('modSuspended').textContent = suspended.length;
+  document.getElementById('modWarned').textContent = warnedUids.length;
+  document.getElementById('modWarn30').textContent = warn30;
+  document.getElementById('modPendingAppeals').textContent = _appeals.filter(function(a){ return a.status === 'pending'; }).length;
+  document.getElementById('modWarnSetup').style.display = _warnTableMissing ? '' : 'none';
+
+  function latestAppeal(uid, sinceIso) {
+    var l = _appeals.filter(function(a){ return String(a.user_id) === String(uid) && (!sinceIso || Date.parse(a.created_at) >= Date.parse(sinceIso)); });
+    return l.length ? l[l.length - 1] : null;
+  }
+  document.getElementById('modSuspTbody').innerHTML = suspended.length ? suspended.map(function(u) {
+    var ws = _warnStats[u.uid]; var ap = latestAppeal(u.uid, u.suspendedAt);
+    var apTxt = !ap ? '<span style="color:var(--g400)">none</span>'
+      : '<a href="#" onclick="event.preventDefault();openAppealModal(' + ap.id + ')" style="color:' + (ap.status === 'pending' ? '#fbbf24' : 'var(--g400)') + '">' + htmlEsc(ap.status) + '</a>';
+    var safeUid = u.uid.replace(/'/g, "\\'");
+    return '<tr><td style="font-size:12px;font-weight:700">' + htmlEsc(u.name) + '<div style="font-size:10px;color:var(--g400);font-weight:400">' + htmlEsc(u.email || '') + '</div></td>' +
+      '<td style="font-size:11px">' + htmlEsc(u.suspensionReason || '—') + '</td>' +
+      '<td style="font-size:11px;color:var(--g400)">' + new Date(u.suspendedAt).toLocaleDateString() + '</td>' +
+      '<td style="font-family:var(--mono)">' + ((ws && ws.count) || 0) + '</td>' +
+      '<td style="font-size:11px">' + apTxt + '</td>' +
+      '<td><button class="refresh" style="font-size:10px;padding:3px 8px;color:#34d399;border-color:#34d399" onclick="openSuspendModal(\'' + safeUid + '\',false)">Unsuspend</button></td></tr>';
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--g400)">Nobody is suspended</td></tr>';
+
+  document.getElementById('modWarnTbody').innerHTML = warnedUids.length ? warnedUids.map(function(uid) {
+    var ws = _warnStats[uid]; var last = ws.list[0];
+    var u = allUsers.find(function(x){ return x.uid === uid; });
+    var promised = last.acknowledged_at ? '<span style="color:#34d399">✓ ' + new Date(last.acknowledged_at).toLocaleDateString() + '</span>' : '<span style="color:var(--g400)">not yet</span>';
+    var safeUid = uid.replace(/'/g, "\\'");
+    var strikeColor = ws.count >= WARN_STRIKE_LIMIT ? '#f87171' : ws.count >= WARN_STRIKE_LIMIT - 1 ? '#f59e0b' : 'var(--ink)';
+    return '<tr><td style="font-size:12px;font-weight:700">' + htmlEsc(resolveUserName(uid)) + '</td>' +
+      '<td style="font-family:var(--mono);font-weight:700;color:' + strikeColor + '">' + ws.count + ' / ' + WARN_STRIKE_LIMIT + '</td>' +
+      '<td style="font-size:11px">' + htmlEsc(_reasonLabel(last.reason)) + '</td>' +
+      '<td style="font-size:11px;color:var(--g400)">' + new Date(last.created_at).toLocaleDateString() + '</td>' +
+      '<td style="font-size:11px">' + promised + '</td>' +
+      '<td>' + (u && u.suspendedAt ? '<span class="u-tag susp" style="margin:0">Suspended</span>' : '<span style="font-size:10px;color:var(--g400)">active</span>') + '</td>' +
+      '<td style="white-space:nowrap"><button class="refresh" style="font-size:10px;padding:3px 8px;margin-right:4px;color:#f59e0b;border-color:#f59e0b" onclick="openWarnModal(\'' + safeUid + '\')">Warn</button>' +
+      (u && u.suspendedAt ? '' : '<button class="refresh" style="font-size:10px;padding:3px 8px;color:#f87171;border-color:#f87171" onclick="openSuspendModal(\'' + safeUid + '\',true)">Suspend</button>') + '</td></tr>';
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--g400)">Nobody has been warned yet</td></tr>';
+  if (upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
 
 /* ══════════════════════════════════════════════════

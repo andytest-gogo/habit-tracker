@@ -2508,6 +2508,26 @@
         <div class="privacy-settings-body">
             <p class="privacy-settings-intro">You can change your privacy preferences at any time. Changes take effect immediately.</p>
 
+            <!-- ★ 2026-11-22：配對報告上的年齡／性別／國家 -->
+            <div class="priv-row">
+                <div class="priv-row-info">
+                    <strong>Show my age, gender &amp; country</strong>
+                    <span>Shown at the top of your match report to people you're matched with. Turn off to hide all three.</span>
+                </div>
+                <label class="toggle-switch" aria-label="Show my age, gender and country on match reports">
+                    <input type="checkbox" id="showBasicsToggle" checked>
+                    <span class="toggle-slider" role="switch"></span>
+                </label>
+            </div>
+            <div class="priv-row" style="display:block;">
+                <div class="priv-row-info" style="margin-bottom:8px;">
+                    <strong><label for="countrySelect">Country you live in</label></strong>
+                </div>
+                <select id="countrySelect" style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);background:var(--white);color:var(--black);font-size:13px;font-family:var(--font);cursor:pointer;">
+                    <option value="">Not set</option>
+                </select>
+            </div>
+
             <div class="priv-row">
                 <div class="priv-row-info">
                     <strong>Essential Cookies</strong>
@@ -4135,7 +4155,75 @@ function _extractBunnyVideoId(url) {
   return m ? m[1] : null;
 }
 
-var SIGNUP_MIN_AGE = 16; // ★ 2026-11-09：註冊最低年齡（全區一致）
+var SIGNUP_MIN_AGE = 18; // ★ 2026-11-22：註冊最低年齡改成 18 歲（全區一致；原本 16）
+
+/* ══ ★ 2026-11-22：居住國家 + 配對報告顯示「年齡 · 性別 · 國家」 ══
+   · 國家存 ISO 兩碼（例如 'CA'），名稱用瀏覽器內建 Intl.DisplayNames 翻成英文，不用自己維護名稱表
+   · 對方的 users 資料一般使用者讀不到（RLS），所以走資料庫函式 get_match_basics（見 match_basics.sql）：
+     只回傳年齡（用 dob 現算）、性別、國家三欄；對方在 Privacy Settings 關掉顯示就什麼都不回
+   · 未滿 18 歲的人資料庫不回傳年齡（保護未成年） */
+var FS_COUNTRY_CODES = ('AD AE AF AG AI AL AM AO AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GT GU GW GY HK HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW').split(' ');
+function fsCountryName(cc) {
+  if (!cc) return '';
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(cc) || cc; } catch (e) { return cc; }
+}
+function fsCountryFlag(cc) {
+  if (!/^[A-Z]{2}$/.test(cc || '')) return '';
+  return String.fromCodePoint(0x1F1E6 + cc.charCodeAt(0) - 65, 0x1F1E6 + cc.charCodeAt(1) - 65);
+}
+var _fsCountryOptionsCache = null;
+function fsCountryOptions() {
+  if (!_fsCountryOptionsCache) {
+    _fsCountryOptionsCache = FS_COUNTRY_CODES.map(function(c) { return { code: c, name: fsCountryName(c) }; })
+      .sort(function(a, b) { return a.name.localeCompare(b.name); });
+  }
+  return _fsCountryOptionsCache;
+}
+// 用瀏覽器語系猜一個預設值（例如 en-CA → CA），猜不到就空白讓使用者自己選
+function fsGuessCountry() {
+  try {
+    var langs = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || ''];
+    for (var i = 0; i < langs.length; i++) {
+      var m = String(langs[i] || '').match(/[-_]([A-Za-z]{2})\b/);
+      if (m && FS_COUNTRY_CODES.indexOf(m[1].toUpperCase()) !== -1) return m[1].toUpperCase();
+    }
+  } catch (e) {}
+  return '';
+}
+window.fsCountryName = fsCountryName; window.fsCountryOptions = fsCountryOptions; window.fsGuessCountry = fsGuessCountry;
+
+// 「28 · Female · 🇨🇦 Canada」——同一個人只查一次（快取）
+var _fsBasicsCache = {};
+function _fsBasicsText(b) {
+  if (!b) return '';
+  var parts = [];
+  if (b.age_years != null) parts.push(String(b.age_years));
+  if (b.gender) parts.push(b.gender === 'male' ? 'Male' : b.gender === 'female' ? 'Female' : String(b.gender));
+  if (b.country) parts.push((fsCountryFlag(b.country) + ' ' + fsCountryName(b.country)).trim());
+  return parts.join(' \u00b7 ');
+}
+window._fsFillMatchBasics = function(elId, uid) {
+  if (!uid || !window._supabaseClient) return;
+  function paint(b) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var t = _fsBasicsText(b);
+    if (t) { el.textContent = t; el.style.display = ''; } else { el.remove(); }
+  }
+  var key = String(uid);
+  if (Object.prototype.hasOwnProperty.call(_fsBasicsCache, key)) {
+    var c = _fsBasicsCache[key];
+    if (c && typeof c.then === 'function') c.then(paint); else paint(c);
+    return;
+  }
+  _fsBasicsCache[key] = window._supabaseClient.rpc('get_match_basics', { p_ids: [key] }).then(function(r) {
+    var row = (!r.error && r.data && r.data[0]) || null;
+    if (r.error) console.warn('[match basics] 讀取失敗（match_basics.sql 跑過了嗎？）:', r.error.message);
+    _fsBasicsCache[key] = row;
+    return row;
+  }, function() { _fsBasicsCache[key] = null; return null; });
+  _fsBasicsCache[key].then(paint);
+};
 
 /* ── 模組層級：刪貼文時連動刪 Bunny 媒體（供各元件共用）── */
 function _deletePostBunnyMedia(post, user) {
@@ -5503,6 +5591,10 @@ function AuthPage(_ref2) {
     _useStateGender2 = _slicedToArray(_useStateGender1, 2),
     gender = _useStateGender2[0],
     setGender = _useStateGender2[1];
+  // ★ 2026-11-22：居住國家（預設用瀏覽器語系猜，使用者可改）
+  var _useStateCountry = useState(function() { return fsGuessCountry(); }),
+    country = _useStateCountry[0],
+    setCountry = _useStateCountry[1];
   var _useState9 = useState(''),
     _useState0 = _slicedToArray(_useState9, 2),
     error = _useState0[0],
@@ -5812,6 +5904,11 @@ function AuthPage(_ref2) {
           setLoading(false);
           return;
         }
+        if (!country) {
+          setError('Please select the country you live in.');
+          setLoading(false);
+          return;
+        }
 
         var usernameKey = displayName.trim().toLowerCase().replace(/\s+/g, '_');
         var usernameDoc = await db.collection('usernames').doc(usernameKey).get();
@@ -5863,6 +5960,7 @@ function AuthPage(_ref2) {
             localStorage.setItem('ht-pending-age', String(ageNum));
             localStorage.setItem('ht-pending-dob', dobInput);
             localStorage.setItem('ht-pending-gender', gender);
+            localStorage.setItem('ht-pending-country', country);
           } catch(lsErr) { /* ignore */ }
 
           try {
@@ -5873,7 +5971,8 @@ function AuthPage(_ref2) {
                 signup_display_name: displayName.trim(),
                 signup_age: ageNum,
                 signup_dob: dobInput,
-                signup_gender: gender
+                signup_gender: gender,
+                signup_country: country
               }
             });
             if (_metaResult.error) console.warn('[signup] metadata save failed:', _metaResult.error.message);
@@ -6179,6 +6278,21 @@ function AuthPage(_ref2) {
       )
     )
   ),
+  // ★ 2026-11-22：居住國家
+  !isLogin && /*#__PURE__*/React.createElement("div", { className: "fs-fgroup" },
+    /*#__PURE__*/React.createElement("label", { className: "fs-flabel", htmlFor: "signupCountry" }, "Country you live in"),
+    /*#__PURE__*/React.createElement("select", {
+      id: "signupCountry",
+      className: "fs-finput",
+      value: country,
+      onChange: function(e) { setCountry(e.target.value); },
+      style: { cursor: 'pointer' }
+    },
+      /*#__PURE__*/React.createElement("option", { value: "" }, "Select..."),
+      fsCountryOptions().map(function(o) { return /*#__PURE__*/React.createElement("option", { key: o.code, value: o.code }, o.name); })
+    ),
+    /*#__PURE__*/React.createElement("div", { className: "fs-hint" }, "Your age, gender and country appear on your match report. You can hide them anytime in Privacy Settings.")
+  ),
   !isLogin && /*#__PURE__*/React.createElement("div", { className: "legal-checks-wrap" },
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
       /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkTerms" }),
@@ -6193,7 +6307,7 @@ function AuthPage(_ref2) {
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
       /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "checkAge" }),
       /*#__PURE__*/React.createElement("span", { className: "legal-check-label" },
-        "I confirm I am at least ", /*#__PURE__*/React.createElement("strong", null, "16 years old"), "."
+        "I confirm I am at least ", /*#__PURE__*/React.createElement("strong", null, SIGNUP_MIN_AGE + " years old"), "."
       )
     ),
     /*#__PURE__*/React.createElement("label", { className: "legal-check-row" },
@@ -11990,6 +12104,243 @@ function DesktopBuddiesSidebar(props) {
 }
 
 /* ── MAIN APP ── */
+/* ══════════════════════════════════════════════════════════════════
+   ★ 2026-11-22：停權畫面 ＋ 警告承諾視窗 ＋ 停權申訴（搭配 moderation_v2.sql）
+   · 停權：MainApp 直接改畫 SuspendedScreen——Home 清空、分頁點不了，停權訊息擋在最上面。
+     只能：申訴（每次停權一次）、看規範、登出、要求刪除帳號。
+   · 警告：Home 照常顯示，AccountNoticeGate 跳出警告視窗，要勾選「I won't do this again」
+     才能按 I agree（呼叫 ack_user_warning 記錄承諾時間，後台看得到）。警告不能申訴。
+   · 申訴通過：管理員解除停權＋寫 account_appeal_approved 通知 → 下次打開 App 跳一次「Welcome back」。
+══════════════════════════════════════════════════════════════════ */
+var FS_SUPPORT_EMAIL = 'HealthHabitTracker@gmail.com';
+var FS_WARN_STRIKE_LIMIT = 3; // 跟後台 WARN_STRIKE_LIMIT 一致
+var FS_WARN_REASON_LABELS = {
+  HARASSMENT: 'Harassment', THREAT: 'Threats / violence', HATE: 'Hate speech', SEXUAL: 'Sexual content',
+  SEXUAL_MINORS: 'Sexual content involving minors', VIOLENCE: 'Graphic violence', SELF_HARM: 'Self-harm content',
+  ILLICIT: 'Drugs / weapons / crime', SCAM: 'Scam / fraud', SPAM: 'Spam', OTHER: 'Community guidelines'
+};
+var _fsMod = {
+  font: "'DM Sans', sans-serif",
+  din: "'Barlow Condensed', 'DM Mono', monospace",
+  label: { fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#737373' },
+  btnDark: { width: '100%', minHeight: 48, background: '#0a0a0a', color: '#fff', border: 'none', fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' },
+  link: { background: 'none', border: 'none', padding: '6px 2px', fontFamily: "'DM Sans', sans-serif", fontSize: 12.5, color: '#0a0a0a', textDecoration: 'underline', cursor: 'pointer' }
+};
+function _fsFmtDate(iso) {
+  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; }
+}
+function _fsOpenGuidelines() { if (window.openLegalModal) window.openLegalModal('terms'); }
+function _fsRequestDeletion(user) {
+  var subject = encodeURIComponent('Delete my FamStreak account');
+  var body = encodeURIComponent('Please delete my FamStreak account and all my data.\n\nAccount email: ' + ((user && user.email) || '') + '\nUser ID: ' + ((user && user.uid) || ''));
+  window.location.href = 'mailto:' + FS_SUPPORT_EMAIL + '?subject=' + subject + '&body=' + body;
+}
+
+// ── 停權畫面 ──────────────────────────────────────────────────────────
+function SuspendedScreen(props) {
+  var user = props.user, s = props.suspension || {};
+  var _a = React.useState(undefined), appeal = _a[0], setAppeal = _a[1];      // undefined = 讀取中；null = 還沒申訴
+  var _v = React.useState('main'), view = _v[0], setView = _v[1];             // 'main' | 'appeal'
+  var _t = React.useState(''), text = _t[0], setText = _t[1];
+  var _b = React.useState(false), busy = _b[0], setBusy = _b[1];
+  var _e = React.useState(''), err = _e[0], setErr = _e[1];
+
+  React.useEffect(function() {
+    if (!user || !user.uid || !window._supabaseClient) { setAppeal(null); return; }
+    // 這一次停權的申訴（停權開始之後送出的那一筆）
+    window._supabaseClient.from('account_appeals').select('id, status, admin_reply, created_at')
+      .eq('user_id', user.uid).gte('created_at', s.suspended_at || '1970-01-01')
+      .order('created_at', { ascending: false }).limit(1)
+      .then(function(r) { setAppeal((!r.error && r.data && r.data[0]) || null); }, function() { setAppeal(null); });
+  }, [user && user.uid, s.suspended_at]);
+
+  function submit() {
+    var msg = text.trim();
+    if (msg.length < 10) { setErr('Please write at least a sentence so we can understand what happened.'); return; }
+    setBusy(true); setErr('');
+    window._supabaseClient.rpc('submit_account_appeal', { p_message: msg }).then(function(r) {
+      setBusy(false);
+      if (r.error) {
+        var m = r.error.message || '';
+        setErr(/already_appealed/.test(m) ? 'You already appealed this suspension.'
+          : /not_suspended/.test(m) ? 'Your account is no longer suspended. Please reopen the app.'
+          : 'Something went wrong. Please try again.');
+        return;
+      }
+      var row = Array.isArray(r.data) ? r.data[0] : r.data;
+      setAppeal(row || { status: 'pending', created_at: new Date().toISOString() });
+      setView('main');
+    }, function() { setBusy(false); setErr('Something went wrong. Please try again.'); });
+  }
+
+  var h = React.createElement;
+  var shell = { position: 'fixed', inset: 0, zIndex: 5000, background: '#fff', color: '#0a0a0a', fontFamily: _fsMod.font, display: 'flex', flexDirection: 'column' };
+
+  // ── 申訴頁 ──
+  if (view === 'appeal') {
+    return h("div", { style: shell },
+      h("div", { style: { padding: 'calc(10px + env(safe-area-inset-top)) 12px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 } },
+        h("button", { "aria-label": "Back", onClick: function() { setView('main'); setErr(''); }, style: { width: 44, height: 44, background: 'none', border: 'none', fontSize: 26, cursor: 'pointer', color: '#0a0a0a' } }, "‹"),
+        h("div", { style: { fontFamily: _fsMod.din, fontWeight: 800, fontSize: 22, letterSpacing: .5, textTransform: 'uppercase' } }, "Appeal")
+      ),
+      h("div", { style: { padding: '20px 24px calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', maxWidth: 520, width: '100%', boxSizing: 'border-box', margin: '0 auto' } },
+        h("div", { style: _fsMod.label }, "You’re appealing"),
+        h("div", { style: { marginTop: 8, border: '1px solid #e0e0e0', padding: '12px 14px' } },
+          h("div", { style: { fontSize: 15, fontWeight: 700 } }, "Account suspension"),
+          h("div", { style: { marginTop: 3, fontSize: 12.5, color: '#555' } }, (s.suspension_reason || 'Community guidelines') + ' · ' + _fsFmtDate(s.suspended_at))
+        ),
+        h("label", { htmlFor: "fsAppealText", style: Object.assign({}, _fsMod.label, { marginTop: 22 }) }, "Why do you think this is wrong?"),
+        h("textarea", {
+          id: "fsAppealText", value: text, maxLength: 1000,
+          onChange: function(e) { setText(e.target.value); },
+          placeholder: "Tell us what happened. For example: the messages were a joke between friends, or someone else used my account.",
+          style: { marginTop: 8, minHeight: 170, padding: '12px 14px', border: '1.5px solid #c4c4c4', fontFamily: _fsMod.font, fontSize: 14, lineHeight: 1.5, color: '#0a0a0a', resize: 'vertical' }
+        }),
+        h("div", { style: { marginTop: 6, textAlign: 'right', fontSize: 11, color: '#737373' } }, text.length + ' / 1000'),
+        h("div", { style: { marginTop: 14, padding: '12px 14px', background: '#f8f8f8', fontSize: 12.5, lineHeight: 1.6, color: '#3d3d3d' } },
+          "• You can appeal each suspension once.", h("br"),
+          "• We’ll get back to you as soon as possible.", h("br"),
+          "• The result will show on this screen."
+        ),
+        err && h("div", { role: "alert", style: { marginTop: 12, fontSize: 12.5, color: '#b91c1c' } }, err),
+        h("div", { style: { flex: 1, minHeight: 20 } }),
+        h("button", { onClick: submit, disabled: busy, style: Object.assign({}, _fsMod.btnDark, busy ? { opacity: .6 } : {}) }, busy ? 'Sending…' : 'Submit appeal')
+      )
+    );
+  }
+
+  // ── 停權主畫面：背景是清空的 Home ──
+  var status = appeal ? appeal.status : null;
+  return h("div", { style: shell },
+    h("div", { style: { padding: 'calc(14px + env(safe-area-inset-top)) 20px 10px', borderBottom: '1px solid #f0f0f0' } },
+      h("div", { style: { fontFamily: _fsMod.din, fontWeight: 800, fontSize: 24, letterSpacing: .5, textTransform: 'uppercase' } }, "FamStreak"),
+      h("div", { style: { fontSize: 11, color: '#737373' } }, (user && (user.displayName || user.email)) || '')
+    ),
+    h("div", { style: { flex: 1, background: '#f8f8f8' } }),
+    h("div", { "aria-hidden": "true", style: { height: 64, borderTop: '1px solid #f0f0f0', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', alignItems: 'center', textAlign: 'center', fontSize: 10, fontWeight: 700, letterSpacing: .8, textTransform: 'uppercase', color: '#c4c4c4', paddingBottom: 'env(safe-area-inset-bottom)' } },
+      h("div", null, "Home"), h("div", null, "Community"), h("div", null, "Buddies"), h("div", null, "Profile")
+    ),
+    h("div", { style: { position: 'absolute', inset: 0, background: 'rgba(10,10,10,.62)', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 'calc(56px + env(safe-area-inset-top)) 16px 24px', boxSizing: 'border-box' } },
+      h("div", { role: "dialog", "aria-modal": "true", "aria-labelledby": "fsSuspTitle", style: { width: '100%', maxWidth: 420, background: '#fff', borderTop: '4px solid #b91c1c', padding: '22px 20px 18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' } },
+        h("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: '#b91c1c' } }, "Account suspended"),
+        h("h1", { id: "fsSuspTitle", style: { margin: '10px 0 0', fontFamily: _fsMod.din, fontWeight: 800, fontSize: 30, lineHeight: 1, textTransform: 'uppercase' } }, "Your account is suspended"),
+        h("p", { style: { margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.55, color: '#3d3d3d' } }, "We reviewed activity on your account and found it broke our Community Guidelines."),
+        h("div", { style: { marginTop: 14, border: '1px solid #e0e0e0', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' } },
+          h("div", { style: { padding: '10px 12px', borderRight: '1px solid #e0e0e0' } },
+            h("div", { style: _fsMod.label }, "Reason"),
+            h("div", { style: { marginTop: 3, fontSize: 14, fontWeight: 700 } }, s.suspension_reason || 'Community guidelines')),
+          h("div", { style: { padding: '10px 12px' } },
+            h("div", { style: _fsMod.label }, "Since"),
+            h("div", { style: { marginTop: 3, fontSize: 14, fontWeight: 700 } }, _fsFmtDate(s.suspended_at) || '—'))
+        ),
+        h("div", { style: { marginTop: 14, display: 'flex', flexDirection: 'column', gap: 7, fontSize: 12.5, lineHeight: 1.45, color: '#3d3d3d' } },
+          h("div", { style: { display: 'flex', gap: 8 } }, h("span", { "aria-hidden": "true", style: { color: '#b91c1c', fontWeight: 700 } }, "×"), h("span", null, "You can’t use FamStreak while suspended — habits, posts, chat and matching are all paused")),
+          h("div", { style: { display: 'flex', gap: 8 } }, h("span", { "aria-hidden": "true", style: { color: '#b91c1c', fontWeight: 700 } }, "×"), h("span", null, "Your partnerships have ended")),
+          h("div", { style: { display: 'flex', gap: 8 } }, h("span", { "aria-hidden": "true", style: { color: '#15803d', fontWeight: 700 } }, "✓"), h("span", null, "Your data is kept. If your appeal is approved, you can use the app again."))
+        ),
+        appeal === undefined ? h("div", { style: { marginTop: 18, fontSize: 12, color: '#737373', textAlign: 'center' } }, "Loading…")
+        : !appeal ? h("button", { onClick: function() { setView('appeal'); }, style: Object.assign({}, _fsMod.btnDark, { marginTop: 18 }) }, "Appeal this decision")
+        : status === 'denied' ? h("div", { style: { marginTop: 18, padding: '12px 14px', background: '#f8f8f8', color: '#3d3d3d', fontSize: 12.5, lineHeight: 1.5 } },
+            h("strong", { style: { color: '#0a0a0a' } }, "Appeal reviewed — suspension stays."),
+            appeal.admin_reply ? h("div", { style: { marginTop: 4, whiteSpace: 'pre-wrap' } }, '“' + appeal.admin_reply + '”') : null)
+        : h("div", { style: { marginTop: 18, padding: '12px 14px', background: '#eff6ff', color: '#1e3a8a', fontSize: 12.5, lineHeight: 1.5 } },
+            h("strong", null, "Appeal under review."), " Submitted " + _fsFmtDate(appeal.created_at) + ". We’ll get back to you as soon as possible — the result will show here."),
+        h("div", { style: { marginTop: 12, display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '4px 16px' } },
+          h("button", { style: _fsMod.link, onClick: _fsOpenGuidelines }, "Community Guidelines"),
+          h("button", { style: _fsMod.link, onClick: function() { if (props.onLogout) props.onLogout(); } }, "Sign out"),
+          h("button", { style: Object.assign({}, _fsMod.link, { color: '#737373' }), onClick: function() { _fsRequestDeletion(user); } }, "Delete account")
+        )
+      )
+    )
+  );
+}
+
+// ── 警告視窗／申訴通過的歡迎視窗（帳號沒被停權時才會用到）──────────────
+function AccountNoticeGate(props) {
+  var user = props.user;
+  var _w = React.useState(null), warning = _w[0], setWarning = _w[1];     // { id, reason, message, strikeNo }
+  var _n = React.useState(null), welcome = _n[0], setWelcome = _n[1];     // account_appeal_approved 通知
+  var _c = React.useState(false), agreed = _c[0], setAgreed = _c[1];
+  var _b = React.useState(false), busy = _b[0], setBusy = _b[1];
+  var _k = React.useState(0), tick = _k[0], setTick = _k[1];
+
+  React.useEffect(function() {
+    var c = window._supabaseClient;
+    if (!user || !user.uid || !c) return;
+    var cancelled = false;
+    c.from('user_warnings').select('id, reason, message, created_at, acknowledged_at')
+      .eq('user_id', user.uid).order('created_at', { ascending: true }).limit(50)
+      .then(function(r) {
+        if (cancelled) return;
+        var rows = (!r.error && r.data) || [];
+        var idx = rows.findIndex(function(w) { return !w.acknowledged_at; });
+        if (idx !== -1) {
+          var w = rows[idx];
+          setAgreed(false);
+          setWarning({ id: w.id, reason: w.reason, message: w.message || '', strikeNo: idx + 1 });
+          return;
+        }
+        setWarning(null);
+        return c.from('notifications').select('*').eq('user_id', user.uid).eq('type', 'account_appeal_approved').eq('is_read', false)
+          .order('created_at', { ascending: false }).limit(1)
+          .then(function(r2) { if (!cancelled) setWelcome((!r2.error && r2.data && r2.data[0]) || null); });
+      }, function() {});
+    return function() { cancelled = true; };
+  }, [user && user.uid, tick]);
+
+  var h = React.createElement;
+  var overlay = { position: 'fixed', inset: 0, zIndex: 4500, background: 'rgba(10,10,10,.55)', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 'calc(70px + env(safe-area-inset-top)) 16px 24px', boxSizing: 'border-box', fontFamily: _fsMod.font, color: '#0a0a0a' };
+
+  if (warning) {
+    var parts = String(warning.message).split(/\n\n+/);
+    var mainText = parts[0], extra = parts.slice(1).join('\n\n');
+    var strike = Math.min(warning.strikeNo, FS_WARN_STRIKE_LIMIT);
+    var bars = [];
+    for (var i = 1; i <= FS_WARN_STRIKE_LIMIT; i++) bars.push(h("div", { key: i, style: { flex: 1, height: 6, background: i <= strike ? '#d97706' : '#e0e0e0' } }));
+    function agree() {
+      if (!agreed || busy) return;
+      setBusy(true);
+      window._supabaseClient.rpc('ack_user_warning', { p_id: warning.id }).then(function() {
+        setBusy(false); setTick(function(n) { return n + 1; }); // 還有下一則沒確認的警告就接著顯示
+      }, function() { setBusy(false); setWarning(null); });
+    }
+    return ReactDOM.createPortal(h("div", { style: overlay },
+      h("div", { role: "dialog", "aria-modal": "true", "aria-labelledby": "fsWarnTitle", style: { width: '100%', maxWidth: 420, background: '#fff', borderTop: '4px solid #d97706', padding: '22px 20px 18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' } },
+        h("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: '#92400e' } }, 'Warning ' + warning.strikeNo + ' of ' + FS_WARN_STRIKE_LIMIT),
+        h("h2", { id: "fsWarnTitle", style: { margin: '10px 0 0', fontFamily: _fsMod.din, fontWeight: 800, fontSize: 28, lineHeight: 1, textTransform: 'uppercase' } }, "Community guidelines warning"),
+        h("div", { "aria-hidden": "true", style: { marginTop: 12, display: 'flex', gap: 6 } }, bars),
+        h("div", { style: Object.assign({}, _fsMod.label, { marginTop: 14 }) }, "Reason"),
+        h("div", { style: { marginTop: 3, fontSize: 14, fontWeight: 700 } }, FS_WARN_REASON_LABELS[warning.reason] || warning.reason || 'Community guidelines'),
+        h("p", { style: { margin: '8px 0 0', fontSize: 13, lineHeight: 1.55, color: '#3d3d3d', whiteSpace: 'pre-wrap' } }, mainText),
+        extra ? h("p", { style: { margin: '10px 0 0', padding: '9px 11px', background: '#fff7ed', fontSize: 12.5, lineHeight: 1.5, color: '#7c2d12', fontWeight: 500, whiteSpace: 'pre-wrap' } }, extra) : null,
+        h("label", { style: { marginTop: 14, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontSize: 13, lineHeight: 1.45, fontWeight: 500 } },
+          h("input", { type: "checkbox", checked: agreed, onChange: function(e) { setAgreed(e.target.checked); }, style: { width: 20, height: 20, margin: 0, flexShrink: 0, accentColor: '#0a0a0a' } }),
+          h("span", null, "I understand, and I won’t do this again. I’ll follow the Community Guidelines.")
+        ),
+        h("button", { onClick: agree, disabled: !agreed || busy, style: Object.assign({}, _fsMod.btnDark, { marginTop: 14, background: agreed ? '#0a0a0a' : '#9a9a9a', cursor: agreed ? 'pointer' : 'not-allowed' }) }, busy ? 'Saving…' : 'I agree'),
+        h("div", { style: { marginTop: 8, display: 'flex', justifyContent: 'center' } },
+          h("button", { style: _fsMod.link, onClick: _fsOpenGuidelines }, "Read Community Guidelines"))
+      )
+    ), document.body);
+  }
+
+  if (welcome) {
+    function close() {
+      var id = welcome.id; setWelcome(null);
+      if (id != null) window._supabaseClient.from('notifications').update({ is_read: true }).eq('id', id).then(function() {}, function() {});
+    }
+    return ReactDOM.createPortal(h("div", { style: overlay },
+      h("div", { role: "dialog", "aria-modal": "true", "aria-labelledby": "fsWelcomeTitle", style: { width: '100%', maxWidth: 420, background: '#fff', borderTop: '4px solid #15803d', padding: '22px 20px 18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' } },
+        h("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: '#15803d' } }, "Appeal approved"),
+        h("h2", { id: "fsWelcomeTitle", style: { margin: '10px 0 0', fontFamily: _fsMod.din, fontWeight: 800, fontSize: 30, lineHeight: 1, textTransform: 'uppercase' } }, "Welcome back"),
+        h("p", { style: { margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.55, color: '#3d3d3d', whiteSpace: 'pre-wrap' } }, welcome.body || welcome.message || 'We reviewed your appeal and lifted the suspension on your account.'),
+        h("button", { onClick: close, style: Object.assign({}, _fsMod.btnDark, { marginTop: 18 }) }, "Continue")
+      )
+    ), document.body);
+  }
+  return null;
+}
+
 function MainApp(_ref16) {
   var user = _ref16.user,
     onLogout = _ref16.onLogout;
@@ -12766,6 +13117,7 @@ function MainApp(_ref16) {
     moderation_appeal_approved: true, moderation_appeal_denied_kept: true, moderation_appeal_denied_deleted: true,
     // ★ 2026-10-26：檢舉處理結果、社群規範警告——內容本身就是完整說明，點了只標已讀
     report_actioned: true, report_reviewed: true, account_warning: true,
+    account_appeal_approved: true, account_appeal_denied: true,
     // 私下關心通知（Community 貼文裡透露自己想不開時，只有本人收到）
     support_checkin: true,
     // ★ 2026-11-21：邀請被收回／沒被選上／寄出的邀請到期 → 帶到那個習慣的卡片（看得到下一步）
@@ -16580,6 +16932,8 @@ function MainApp(_ref16) {
       onClose: function() { setViewingMyClipsForHabit(null); setViewingMyClipInitialId(null); }
     })
   );
+  // ★ 2026-11-22：被停權 → 不畫 Home，改畫停權畫面（Home 清空、停權訊息擋在最上面）
+  if (mySuspension) return React.createElement(SuspendedScreen, { user: user, suspension: mySuspension, onLogout: onLogout });
   return /*#__PURE__*/React.createElement("div", {
     className: isDesktop ? "desktop-shell" : "app-container"
   }, isDesktop && /*#__PURE__*/React.createElement(DesktopNav, {
@@ -16587,11 +16941,8 @@ function MainApp(_ref16) {
     activeTab: activeTab,
     setActiveTab: function(t) { setShowHistory(false); setShowAllPosts(false); setShowAllComments(false); setActiveTab(t); },
     setSelectedHabit: setSelectedHabit, user: user, onLogout: onLogout, onAddHabit: handleAddHabitClick }),
-  // ★ 2026-10-26：帳號被停權時固定顯示在最上面（發文、留言、聊天、配對都會被資料庫擋下）
-  mySuspension && React.createElement("div", {
-    role: "alert",
-    style: { position: 'sticky', top: 0, zIndex: 3000, background: '#7f1d1d', color: '#fff', padding: '10px 16px', fontSize: 12, lineHeight: 1.5, textAlign: 'center' }
-  }, "Your account is suspended for breaking our community guidelines. You can still view your habits, but you can't post, comment, chat or match. Contact support if you think this is a mistake."), /*#__PURE__*/React.createElement("div", { className: isDesktop ? "desktop-main-col" : undefined }, !isDesktop && /*#__PURE__*/React.createElement("div", {
+  // ★ 2026-11-22：警告承諾視窗／申訴通過的歡迎視窗（用 portal 蓋在畫面最上面）
+  React.createElement(AccountNoticeGate, { user: user }), /*#__PURE__*/React.createElement("div", { className: isDesktop ? "desktop-main-col" : undefined }, !isDesktop && /*#__PURE__*/React.createElement("div", {
     className: "header"
   }, /*#__PURE__*/React.createElement("div", {
     className: "header-title"
@@ -17920,6 +18271,7 @@ function _notifIcon(type) {
     pair_message: '\ud83d\udcac', match_found_alert: '\ud83c\udf89', ai_credit_awarded: '\ud83c\udf81',
     moderation_appeal_approved: '\u2705', moderation_appeal_denied_kept: '\ud83d\udee1\ufe0f', moderation_appeal_denied_deleted: '\ud83d\uddd1\ufe0f',
     report_actioned: '\ud83d\udee1\ufe0f', report_reviewed: '\ud83d\udee1\ufe0f', account_warning: '\u26a0\ufe0f',
+    account_appeal_approved: '\u2705', account_appeal_denied: '\ud83d\udee1\ufe0f',
     support_checkin: '\ud83d\udc9b', video_removed: '\ud83c\udfac',
     media_consent_requested: '\ud83d\udcf7', media_consent_granted: '\ud83d\udcf7', media_consent_declined: '\ud83d\udcf7'
   })[type] || '\ud83d\udd14';
@@ -17956,7 +18308,7 @@ var REPORT_REASONS = [
   { code: 'THREAT',        label: 'Threats or violence' },
   { code: 'SCAM',          label: 'Scam, asking for money' },
   { code: 'SELF_HARM',     label: "I'm worried about their safety" },
-  { code: 'UNDERAGE',      label: 'They may be under 16' },
+  { code: 'UNDERAGE',      label: 'They may be under 18' },
   { code: 'OTHER',         label: 'Something else' }
 ];
 
@@ -18105,6 +18457,8 @@ function _notifTitle(n) {
     n.type === 'report_actioned' ? 'Update on your report' :
     n.type === 'report_reviewed' ? 'Update on your report' :
     n.type === 'account_warning' ? 'Community guidelines warning' :
+    n.type === 'account_appeal_approved' ? 'Your appeal was approved \u2713' :
+    n.type === 'account_appeal_denied' ? 'Appeal reviewed \u2014 suspension stays' :
     n.type === 'support_checkin' ? 'Checking in on you' :
     n.type === 'video_removed' ? 'A video was removed' :
     n.type === 'media_consent_requested' ? 'Photo & video sharing requested' :
@@ -18633,6 +18987,7 @@ function BuddiesPage(_ref_buddies) {
     var pid = isUser ? rp.partner_id : rp.user_id;
     var info = partnerInfoMap[pid];
     return window._matchReportBodyHtml({
+      partnerUid: pid,
       displayName: (info && info.display_name) || String(pid).slice(0, 8),
       avatarUrl: (info && info.photo_url) || null,
       habitName: isUser ? (rp.partner_habit_name || md.partnerHabitName) : (rp.habit_name || md.requesterHabitName),
@@ -19209,6 +19564,7 @@ function BuddiesPage(_ref_buddies) {
           ),
           md
             ? React.createElement("div", { dangerouslySetInnerHTML: { __html: (window._matchReportBodyHtml ? window._matchReportBodyHtml({
+                partnerUid: rpPartnerId,
                 displayName: rpName || rpPartnerId.toString().slice(0, 8),
                 avatarUrl: rpPhoto,
                 // 對方用來配對的習慣（不是我自己的）
@@ -19386,6 +19742,7 @@ function BuddiesPage(_ref_buddies) {
           ),
           vmd
             ? React.createElement("div", { dangerouslySetInnerHTML: { __html: (window._matchReportBodyHtml ? window._matchReportBodyHtml({
+                partnerUid: vpPartnerId,
                 displayName: vpName,
                 avatarUrl: vpPhoto,
                 // 對方用來配對的那個習慣
@@ -19569,6 +19926,7 @@ function App() {
           var _lsPendingKey = '';
           var _lsPendingAge = null;
           var _lsPendingGender = null;
+          var _lsPendingCountry = null;
 
           // 直接呼叫 getUser() 取得最新 metadata，不依賴 session cache
           var freshMeta = {};
@@ -19599,6 +19957,7 @@ function App() {
               _lsPendingAge    = _lsAge ? parseInt(_lsAge, 10) : null;
               _lsPendingGender = localStorage.getItem('ht-pending-gender') || null;
               _lsPendingDob    = localStorage.getItem('ht-pending-dob') || null;
+              _lsPendingCountry = localStorage.getItem('ht-pending-country') || null;
               console.log('[auth] Recovered from localStorage backup — name:', _lsPendingName, 'age:', _lsPendingAge, 'gender:', _lsPendingGender);
             }
           } catch(e) {}
@@ -19610,6 +19969,7 @@ function App() {
           signupAge    = meta.signup_age ? parseInt(meta.signup_age, 10) : (_lsPendingAge || null);
           signupGender = meta.signup_gender || _lsPendingGender || null;
           var signupDob = meta.signup_dob || _lsPendingDob || null;
+          var signupCountry = meta.signup_country || _lsPendingCountry || null;
 
           // Clear localStorage backup after reading
           try {
@@ -19620,6 +19980,7 @@ function App() {
             localStorage.removeItem('ht-pending-age');
             localStorage.removeItem('ht-pending-dob');
             localStorage.removeItem('ht-pending-gender');
+            localStorage.removeItem('ht-pending-country');
           } catch(e) {}
 
           // Resolve final displayName — repair if it looks like an email
@@ -19667,6 +20028,7 @@ function App() {
           if (signupAge && !existing.age) updateDoc.age = signupAge;
           if (signupDob && !existing.dob) updateDoc.dob = signupDob;
           if (signupGender && !existing.gender) updateDoc.gender = signupGender;
+          if (signupCountry && !existing.country) updateDoc.country = signupCountry;
 
           var writePromises = [
             db.collection('users').doc(u.uid).set(updateDoc, { merge: true })
@@ -19936,7 +20298,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
 <p>Your data is retained while your account is active. When you delete your account, your Firebase account and habit data are permanently erased immediately.</p>
 <p><strong>Uploaded media (photos &amp; videos):</strong> Media files stored on Cloudinary are queued for deletion by the administrator on a <strong>best-effort basis</strong>. Due to technical limitations of our media storage infrastructure, we <strong>cannot guarantee complete or immediate removal</strong> of all uploaded media files. Some files — including previously uploaded profile photos or media that was uploaded but never published — may persist on Cloudinary servers for an indeterminate period after account deletion. If you require confirmation or escalation of media removal, please contact us at <a class="_eml" href="mailto:HealthHabitTracker@gmail.com">HealthHabitTracker@gmail.com</a> and we will make every reasonable effort to locate and remove your files.</p>
 <h3>8. Children</h3>
-<p>FamStreak is not intended for users under 16 years old. We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
+<p>FamStreak is not intended for users under 18 years old. We verify age at registration. We do not knowingly collect data from children below this threshold.</p>
 <h3>9. Data Breach Notification</h3>
 <p>In the event of a personal data breach that poses a risk to your rights and freedoms, we will notify the relevant supervisory authority within <strong>72 hours</strong> of becoming aware of the breach, as required by GDPR Art. 33. If the breach is likely to result in high risk to you personally, we will also notify you directly without undue delay, as required by GDPR Art. 34, via the email address associated with your account.</p>
 <h3>10. Changes to This Policy</h3>
@@ -19953,7 +20315,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
   <p><strong>By creating an account or using FamStreak, you agree to these Terms.</strong> If you do not agree, please do not use the app.</p>
 </div>
 <h3>1. Eligibility</h3>
-<p>You must be at least <strong>16 years old</strong> and have the legal capacity to enter a binding agreement. By using the app, you confirm you meet these requirements.</p>
+<p>You must be at least <strong>18 years old</strong> and have the legal capacity to enter a binding agreement. By using the app, you confirm you meet these requirements.</p>
 <h3>2. Your Account</h3>
 <p>You are responsible for keeping your password secure and for all activity under your account. Provide accurate information and notify us immediately of any unauthorized access. You may only maintain one account.</p>
 <h3>3. Acceptable Use</h3>
@@ -20060,10 +20422,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
        AGE GATE (Enhanced: birth year verification)
     ───────────────────────────────────────── */
     var CURRENT_YEAR = new Date().getFullYear();
-    var EU_MIN_AGE = 16;
-    var US_MIN_AGE = 13;
+    var EU_MIN_AGE = 18; // ★ 2026-11-22：全區一律 18（這兩個變數目前沒有在用，只是保留）
+    var US_MIN_AGE = 18;
 
-    // ★ 2026-11-09：拿掉進站的出生年份驗證（Andy 決定），年齡只在註冊時用出生日期檢查（16 歲以上）。
+    // ★ 2026-11-09：拿掉進站的出生年份驗證（Andy 決定），年齡只在註冊時用出生日期檢查（2026-11-22 起 18 歲以上）。
     //   函式名稱保留，載入時直接進到 GDPR 提示。
     function initAgeGate() {
         initGdprBanner();
@@ -20121,6 +20483,22 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         // Sync toggle state with current preference
         var toggle = document.getElementById('analyticsToggle');
         if (toggle) toggle.checked = (localStorage.getItem('ht-gdpr-choice') === 'accepted');
+        // ★ 2026-11-22：國家清單 + 讀目前的設定
+        var cSel = document.getElementById('countrySelect');
+        if (cSel && cSel.options.length <= 1 && window.fsCountryOptions) {
+            window.fsCountryOptions().forEach(function (o) {
+                var op = document.createElement('option'); op.value = o.code; op.textContent = o.name; cSel.appendChild(op);
+            });
+        }
+        var _pu = window._currentUser;
+        if (_pu && _pu.uid && window._supabaseClient) {
+            window._supabaseClient.from('users').select('country, show_basics').eq('id', _pu.uid).maybeSingle().then(function (r) {
+                if (!r || r.error || !r.data) return;
+                if (cSel) cSel.value = r.data.country || '';
+                var sb = document.getElementById('showBasicsToggle');
+                if (sb) sb.checked = r.data.show_basics !== false;
+            });
+        }
         panel.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         setTimeout(function() {
@@ -20152,6 +20530,17 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             localStorage.setItem('ht-gdpr-choice', 'declined');
             localStorage.setItem('ht-gdpr-date', new Date().toISOString());
             disableUmamiAnalytics();
+        }
+        // ★ 2026-11-22：國家 + 顯示開關存進 users（失敗只記錄，不影響其他設定）
+        var _pu2 = window._currentUser;
+        if (_pu2 && _pu2.uid && window._supabaseClient) {
+            var _cs = document.getElementById('countrySelect'), _sb = document.getElementById('showBasicsToggle');
+            window._supabaseClient.from('users').update({
+                country: (_cs && _cs.value) || null,
+                show_basics: _sb ? !!_sb.checked : true
+            }).eq('id', _pu2.uid).then(function (r) {
+                if (r && r.error) console.warn('[privacy] country/show_basics save failed:', r.error.message);
+            });
         }
         closePrivacySettings();
         // Show brief confirmation toast
@@ -20348,6 +20737,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           <button class="report-reason" data-reason="hate_speech"    onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🚫</span></span><span>Hate speech or discrimination</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
           <button class="report-reason" data-reason="misinformation"  onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">⚠️</span></span><span>False or misleading information</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
           <button class="report-reason" data-reason="inappropriate"  onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🔞</span></span><span>Inappropriate or offensive content</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
+          <!-- ★ 2026-11-22：註冊改成 18 歲以上，多一個「可能未滿 18 歲」 -->
+          <button class="report-reason" data-reason="underage"       onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🪪</span></span><span>They may be under 18</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
           <button class="report-reason" data-reason="other"          onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">📝</span></span><span>Other</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
         </div>
         <!-- User feedback textarea -->
@@ -20356,7 +20747,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
             Additional feedback
             <span class="report-feedback-optional">optional</span>
           </div>
-          <textarea class="report-feedback-textarea" id="reportFeedbackText" placeholder="Describe the issue in your own words..." maxlength="300" oninput="window.updateReportCharCount()"></textarea>
+          <textarea class="report-feedback-textarea" id="reportFeedbackText" placeholder="Describe the issue in your own words. If you think they're under 18, tell us why (e.g. they mentioned their age or school grade)." maxlength="300" oninput="window.updateReportCharCount()"></textarea>
           <div class="report-char-count"><span id="reportCharCount">0</span> / 300</div>
           <div class="report-feedback-hint">Your feedback helps us improve community standards.</div>
         </div>
@@ -21772,6 +22163,10 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     var score = m.score || 0;
     // ★ 2026-11-08：舊報告沒有打卡紀錄 → 先顯示舊分數條，背景讀雙方習慣算好後換成 Check-in activity
     var _ckId = 'ckact-' + Math.random().toString(36).slice(2, 9);
+    // ★ 2026-11-22：年齡 · 性別 · 國家（背景查，查到才顯示；對方關掉顯示就整行不出現）
+    var _bxId = 'mbx-' + Math.random().toString(36).slice(2, 9);
+    var _bxUid = m.partnerUid || m.userId || null;
+    if (_bxUid) setTimeout(function() { window._fsFillMatchBasics(_bxId, _bxUid); }, 0);
     if (!m.checkin && (m.checkinHabitId || m.habitId)) {
       setTimeout(function() { window._fillCheckinActivity(_ckId, m.checkinHabitId || m.habitId, m.myCheckinHabitId || null, bd); }, 0);
     }
@@ -21798,6 +22193,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
           '<div style="font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:4px;">' + esc(opts.label || 'Best match found') + '</div>' +
           '<div style="font-size:18px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#fff;line-height:1;font-family:var(--din);">@' + esc(m.displayName || 'partner') + '</div>' +
           '<div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#555;margin-top:5px;">' + esc(m.habitName || '—') + '</div>' +
+          (_bxUid ? '<div id="' + _bxId + '" style="display:none;font-size:11px;font-weight:500;color:#aaa;margin-top:6px;letter-spacing:.2px;"></div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:baseline;gap:5px;flex-shrink:0;">' +
           '<div style="font-size:36px;font-weight:700;line-height:1;font-family:var(--din);color:' + av.fg + ';">' + score + '</div>' +
