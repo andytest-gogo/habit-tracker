@@ -3299,7 +3299,9 @@ if (isFirebaseConfigured) {
       //   moderationAppealAt，同樣的坑先在這裡補上，避免又重演一次上面的問題。
       'moderation_appeal_status':'moderationAppealStatus','moderation_appeal_at':'moderationAppealAt',
       // ★ 2026-11-15：被 9 個不同的人檢舉後自動隱藏（資料庫 trigger 寫入）
-      'report_hidden':'reportHidden','report_count':'reportCount'
+      'report_hidden':'reportHidden','report_count':'reportCount',
+      // ★ 2026-11-28：社群檢舉「疑似 AI 生成」（ai_flag.sql 的 trigger 寫入）
+      'ai_flagged':'aiFlagged','ai_flag_count':'aiFlagCount'
     };
     Object.keys(_snakeToCamel).forEach(function(snake) {
       var camel = _snakeToCamel[snake];
@@ -7145,7 +7147,7 @@ function FeedCard(_ref5) {
     className: "feed-user-info"
   }, /*#__PURE__*/React.createElement("h4", null, post.user), /*#__PURE__*/React.createElement("div", {
     className: "feed-time"
-  }, post.time, isHidden && renderModerationInlineTag(effectiveModCategory)))), /*#__PURE__*/React.createElement("div", {
+  }, post.time, isHidden && renderModerationInlineTag(effectiveModCategory), !isHidden && _isAiFlagged(post) && renderAiFlagTag()))), /*#__PURE__*/React.createElement("div", {
     className: "feed-content"
   }, isEditingPost ? renderModerationEditPanel({
     kind: post.isHabitClip ? 'clip caption' : 'post',
@@ -7390,7 +7392,7 @@ function FeedCard(_ref5) {
       className: "comment-body"
     }, /*#__PURE__*/React.createElement("div", {
       className: "comment-user"
-    }, c.userName),
+    }, c.userName, c.moderationStatus !== 'hidden' && _isAiFlagged(c) && renderAiFlagTag()),
     // [v5 2026-09 REDESIGN] Same treatment as FeedCard posts now: hidden
     // content looks the same whether you wrote it or not (blurred, no extra
     // banner) — see renderModerationHiddenOther. The comment's own author
@@ -7759,6 +7761,24 @@ var MODERATION_CATEGORY_INFO = {
    - 發文者：內容照常顯示，上方多一條橘色提示 */
 var REPORT_HIDE_THRESHOLD = 9; // 只是給畫面參考，真正的門檻在資料庫 trigger
 function _isReportHidden(x) { return !!(x && (x.reportHidden || x.report_hidden)); }
+
+/* ★ 2026-11-28：社群檢舉「疑似 AI 生成」
+   - 檢舉彈窗多一個原因 ai_generated（只有附照片／影片的內容才會出現這個選項）
+   - 3 個不同的「有資格」檢舉者（帳號滿 7 天＋至少打過 1 次卡）→ 資料庫 trigger 標記 ai_flagged
+   - 標記後內容照常顯示，只在時間旁邊多一個「May be AI-generated」小標籤；後台 Flagged Content 會出現待審
+   - 原本 9 個人檢舉就隱藏的規則不變（AI 檢舉也算在那 9 個裡面） */
+var AI_FLAG_THRESHOLD = 3; // 只是給畫面參考，真正的門檻在資料庫（ai_flag.sql 的 v_threshold）
+function _isAiFlagged(x) { return !!(x && (x.aiFlagged || x.ai_flagged)); }
+function _hasMediaForAiReport(x) {
+  if (!x) return false;
+  return !!(x.hasImage || x.hasVideo || x.has_image || x.has_video || x.isHabitClip || x.is_habit_clip || x.mediaUrl || x.media_url);
+}
+function renderAiFlagTag() {
+  return React.createElement("span", {
+    style: { color: '#a16207', fontWeight: 700, cursor: 'help' },
+    title: "Several community members reported this as possibly AI-generated. Our team will take a look."
+  }, ' \u00b7 \uD83E\uDD16 May be AI-generated');
+}
 function _fsFlashFocus(elId) {
   var tries = 0;
   (function attempt() {
@@ -9381,7 +9401,7 @@ function UserCommentsPage(_ref_ucp) {
                                 }) : null
                               )),
                       (editingCommentId !== c.id) && /*#__PURE__*/React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' } },
-                        /*#__PURE__*/React.createElement('div', { className: 'comment-time' }, c.timeStr, c.moderationStatus === 'hidden' && renderModerationInlineTag(c.moderationCategory)),
+                        /*#__PURE__*/React.createElement('div', { className: 'comment-time' }, c.timeStr, c.moderationStatus === 'hidden' && renderModerationInlineTag(c.moderationCategory), c.moderationStatus !== 'hidden' && _isAiFlagged(c) && renderAiFlagTag()),
                         /*#__PURE__*/React.createElement('button', {
                           onClick: function() { handleCommentLike(c.id, c.postId); },
                           style: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: cLiked ? 'var(--black)' : 'var(--gray-400)', fontWeight: 600, padding: 0, fontFamily: 'var(--font)' }
@@ -12591,7 +12611,7 @@ function MainApp(_ref16) {
     //   moderation_appeal_status/moderation_appeal_at，害這幾個欄位在 p 上永遠是
     //   undefined——FeedCard 判斷 isHidden 靠 post.moderationStatus === 'hidden'，
     //   undefined 恆為 false，等於被 AI 標記隱藏的 clip 在這裡完全被當成正常內容處理。
-    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
+    _sbc.from('posts').select('id, habit_id, clip_visibility, thumbnail_url, media_url, media_public_id, has_video, has_image, text, habit, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden, ai_flagged')
       .in('habit_id', habitIds).eq('is_habit_clip', true).eq('user_id', user.uid)
       .order('created_at', { ascending: false })
       .limit(500)
@@ -13226,7 +13246,7 @@ function MainApp(_ref16) {
           avatarUrl: p.avatar_url || p.user_avatar || p.user_avatar_url || null,
           habit: p.habit || '', hasVideo: true, mediaUrl: p.media_url, thumbnailUrl: p.thumbnail_url,
           commentCount: p.comment_count || 0, isHabitClip: true, clipVisibility: p.clip_visibility,
-          habitId: p.habit_id, reportHidden: !!p.report_hidden,
+          habitId: p.habit_id, reportHidden: !!p.report_hidden, aiFlagged: !!p.ai_flagged,
           moderationStatus: p.moderation_status, moderationCategory: p.moderation_category
         }));
       }, function() {});
@@ -13639,7 +13659,7 @@ function MainApp(_ref16) {
     promise = promise.then(function(list) {
       if (!_sb || !list.length) return list;
       // ★ 2026-11-07：這裡一次把卡片要顯示的欄位也抓齊（_clipRows），後面就不用再查一次 posts
-      return _sb.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
+      return _sb.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden, ai_flagged')
         .eq('is_habit_clip', true).eq('clip_visibility', 'everyone')
         .in('habit_id', list.map(function(h) { return h.id; }))
         .order('created_at', { ascending: true })
@@ -13747,7 +13767,7 @@ function MainApp(_ref16) {
         //   別人被 AI 標記隱藏的 clip，在 Challenger 頁點開會整支影片+文字正常播放，
         //   完全沒有套用隱藏邏輯。一併補上 appeal 欄位，跟其他查詢保持一致。
         _sbClient.from('posts')
-          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
+          .select('id, habit_id, user_id, media_url, thumbnail_url, text, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden, ai_flagged')
           .in('habit_id', _habitIds)
           .eq('is_habit_clip', true)
           .eq('clip_visibility', 'everyone')
@@ -18609,6 +18629,7 @@ function _notifTitle(n) {
     n.type === 'moderation_appeal_denied_kept' ? 'Review complete — still hidden' :
     n.type === 'moderation_appeal_denied_deleted' ? 'Review complete — content removed' :
     n.type === 'content_reported' ? 'Your post has been hidden from others' :
+    n.type === 'ai_content_removed' ? 'Removed: looked AI-generated' :
     n.type === 'report_actioned' ? 'Update on your report' :
     n.type === 'report_reviewed' ? 'Update on your report' :
     n.type === 'account_warning' ? 'Community guidelines warning' :
@@ -19003,7 +19024,7 @@ function BuddiesPage(_ref_buddies) {
         // ★ 修正：同一份 comment_count 沒選到的問題，跟另外兩處 clip 查詢一起補上。
         // ★ 修正（2026-09）：moderation_status/moderation_category/appeal 欄位也一起補，
         //   不然 Buddies 頁點開夥伴分享的 clip，被隱藏的內容一樣會被當正常內容顯示。
-        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden')
+        _supabase.from('posts').select('id, habit_id, user_id, media_url, thumbnail_url, text, clip_visibility, created_at, comment_count, moderation_status, moderation_category, moderation_appeal_status, moderation_appeal_at, report_hidden, ai_flagged')
           .in('habit_id', partnerHabitIds)
           .eq('is_habit_clip', true)
           .in('clip_visibility', ['everyone', 'buddies'])
@@ -20887,6 +20908,8 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
         </div>
         <p class="report-section-label">Select a reason</p>
         <div class="report-reasons" role="radiogroup" aria-label="Select reason">
+          <!-- ★ 2026-11-28：疑似 AI 生成（只有附照片／影片的內容才顯示，見 openReportModal） -->
+          <button class="report-reason" data-reason="ai_generated" id="reportReasonAi" onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🤖</span></span><span>AI-generated or fake photo/video</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
           <button class="report-reason" data-reason="spam"           onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">📢</span></span><span>Spam or unwanted advertising</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
           <button class="report-reason" data-reason="harassment"     onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">😡</span></span><span>Harassment or bullying</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
           <button class="report-reason" data-reason="hate_speech"    onclick="window.selectReason(this)" role="radio" aria-checked="false"><span class="report-reason-icon-wrap"><span class="report-reason-icon">🚫</span></span><span>Hate speech or discrimination</span><span class="report-reason-radio"><span class="report-reason-radio-dot"></span></span></button>
@@ -20918,7 +20941,7 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
       <div class="report-success">
         <div class="report-success-icon" aria-hidden="true">✓</div>
         <div class="report-success-title">Report submitted</div>
-        <div class="report-success-desc">
+        <div class="report-success-desc" id="reportSuccessDesc">
           Thank you for helping keep this community safe.<br>
           Our team will review and take action if it violates our guidelines.
         </div>
@@ -20964,6 +20987,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     submitBtn.setAttribute('aria-disabled','true');
     document.getElementById('reportStep1').style.display = '';
     document.getElementById('reportStep2').style.display = 'none';
+
+    // ★ 2026-11-28：「AI 生成」只對有照片／影片的內容有意義，純文字就不顯示這個選項
+    var aiBtn = document.getElementById('reportReasonAi');
+    if (aiBtn) {
+      var _hasMedia = (typeof _hasMediaForAiReport === 'function') ? _hasMediaForAiReport(post) : true;
+      aiBtn.style.display = _hasMedia ? '' : 'none';
+    }
 
     var overlay = document.getElementById('reportOverlay');
     overlay.style.display = 'flex';
@@ -21031,6 +21061,13 @@ We comply with applicable US state privacy laws. We do <strong>not</strong> sell
     }
 
     function onSuccess() {
+      // ★ 2026-11-28：AI 檢舉的感謝訊息說明接下來會發生什麼
+      var _desc = document.getElementById('reportSuccessDesc');
+      if (_desc) {
+        _desc.innerHTML = (reportDoc.reason === 'ai_generated')
+          ? 'Thanks for flagging this.<br>If several members agree, it gets a \u201cMay be AI-generated\u201d label and our team takes a look.'
+          : 'Thank you for helping keep this community safe.<br>Our team will review and take action if it violates our guidelines.';
+      }
       document.getElementById('reportStep1').style.display = 'none';
       document.getElementById('reportStep2').style.display = '';
       btn.textContent = 'Submitted';

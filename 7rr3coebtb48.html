@@ -1372,6 +1372,8 @@ await supabase.from('claude_api_calls').insert({
         <div class="stat" style="border-left:3px solid #9ca3af"><div class="stat-lbl">Spam / Scam / Off-topic</div><div class="stat-val" id="flgQuality" style="color:#6b7280">—</div><div class="stat-note">Quality categories</div></div>
         <div class="stat" style="border-left:3px solid #d97706"><div class="stat-lbl">Pending Appeals</div><div class="stat-val" id="flgAppeals" style="color:#b45309">—</div><div class="stat-note">Author asked for a review</div></div>
         <div class="stat" style="border-left:3px solid #f59e0b"><div class="stat-lbl">Hidden by Reports</div><div class="stat-val" id="flgReported" style="color:#b45309">—</div><div class="stat-note">9+ different people reported it</div></div>
+        <!-- ★ 2026-11-28：社群檢舉「疑似 AI 生成」（ai_flag.sql） -->
+        <div class="stat" style="border-left:3px solid #7c3aed"><div class="stat-lbl">Suspected AI</div><div class="stat-val" id="flgAi" style="color:#7c3aed">—</div><div class="stat-note">3+ eligible members said AI-generated · still visible with a label</div></div>
       </div>
 
       <div class="tbl-card">
@@ -1381,6 +1383,7 @@ await supabase.from('claude_api_calls').insert({
             <select id="flgCategoryFilter" onchange="renderFlaggedContent()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
               <option value="all">All categories</option>
               <option value="REPORTED">Hidden by reports (9+ people)</option>
+              <option value="AI_SUSPECTED">Suspected AI (3+ people)</option>
               <!-- ★ 2026-10-26：FamStreak Content Policy v1（對照 OpenAI Moderation 分類） -->
               <option value="HARASSMENT">Harassment</option>
               <option value="THREAT">Threats / violence</option>
@@ -1556,6 +1559,7 @@ await supabase.from('claude_api_calls').insert({
         </select>
         <select id="reportReasonFilter" onchange="renderReports()" style="padding:7px 10px;border:1px solid var(--g200);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;background:var(--surface)">
           <option value="all">All reasons</option>
+          <option value="ai_generated">AI-generated / fake</option>
           <option value="spam">Spam</option>
           <option value="harassment">Harassment</option>
           <option value="hate_speech">Hate speech</option>
@@ -2238,6 +2242,7 @@ function _doLoadAll(){
   // Quota & Reports load independently
   loadQuota();
   loadReports();
+  refreshAiFlagBadge(); // ★ 2026-11-28
 }
 
 var _usersUnsubscribe = null;
@@ -3744,6 +3749,7 @@ function renderReportStats(){
 var REPORT_HIDE_THRESHOLD = 9; // ★ 2026-11-15：要跟 report_hide.sql 的 v_threshold 一致
 
 var REASON_LABELS = {
+  ai_generated:  '🤖 AI-generated / fake', // ★ 2026-11-28
   spam:          '📢 Spam',
   harassment:    '😡 Harassment',
   hate_speech:   '🚫 Hate speech',
@@ -6062,6 +6068,14 @@ async function loadFlaggedContent() {
         .eq('report_hidden', true).order('report_hidden_at', { ascending: false }).limit(500)
     ]);
 
+    // ★ 2026-11-28：社群檢舉「疑似 AI 生成」（ai_flagged）。ai_flag.sql 還沒跑的話查詢會失敗，直接略過。
+    var [aiPostsRes, aiCommentsRes] = await Promise.all([
+      _supabase.from('posts').select('id, user_id, text, created_at, is_habit_clip, ai_flag_count, ai_flagged_at, has_image, has_video, media_url, media_public_id, thumbnail_url')
+        .eq('ai_flagged', true).order('ai_flagged_at', { ascending: false }).limit(500),
+      _supabase.from('comments').select('id, user_id, post_id, text, created_at, ai_flag_count, ai_flagged_at, has_image, has_video, media_url, media_public_id, thumbnail_url')
+        .eq('ai_flagged', true).order('ai_flagged_at', { ascending: false }).limit(500)
+    ]);
+
     var items = [];
     var _seen = {};
     (postsRes.data || []).forEach(function(p) { _seen['posts|' + p.id] = true; });
@@ -6093,12 +6107,32 @@ async function loadFlaggedContent() {
     // 被檢舉隱藏的排在 AI 標記的後面（AI 標記的有申請複查的排最前面，原本的規則不變）
     _repItems.sort(function(a, b) { return new Date(b.hiddenAt || b.createdAt) - new Date(a.hiddenAt || a.createdAt); });
     items = items.concat(_repItems);
+
+    // ★ 2026-11-28：疑似 AI——已經在上面清單裡（被隱藏）的就在那一列加註，不重複列；其餘單獨一列放最後
+    var _aiItems = [];
+    var _byKey = {};
+    items.forEach(function(i) { _byKey[i.table + '|' + i.id] = i; });
+    function _addAi(table, r, kind) {
+      var ex = _byKey[table + '|' + r.id];
+      if (ex) { ex.aiFlagCount = r.ai_flag_count || AI_FLAG_THRESHOLD; return; }
+      _aiItems.push({ table: table, id: r.id, userId: r.user_id, text: r.text, category: 'AI_SUSPECTED', createdAt: r.created_at, kind: kind, source: 'ai', aiFlagCount: r.ai_flag_count, hiddenAt: r.ai_flagged_at, hasImage: r.has_image, hasVideo: r.has_video, mediaUrl: r.media_url, mediaPublicId: r.media_public_id, thumbnailUrl: r.thumbnail_url, isHabitClip: !!r.is_habit_clip });
+    }
+    if (!aiPostsRes.error) (aiPostsRes.data || []).forEach(function(p) { _addAi('posts', p, p.is_habit_clip ? 'Habit clip' : 'Post'); });
+    if (!aiCommentsRes.error) (aiCommentsRes.data || []).forEach(function(c) { _addAi('comments', c, 'Comment'); });
+    // 習慣影片（打卡證明）排最前面——AI 影片在這裡就是作弊；Community 貼文只是加標籤
+    _aiItems.sort(function(a, b) {
+      if (a.isHabitClip !== b.isHabitClip) return a.isHabitClip ? -1 : 1;
+      return new Date(b.hiddenAt || b.createdAt) - new Date(a.hiddenAt || a.createdAt);
+    });
+    items = items.concat(_aiItems);
+    var aiEl = document.getElementById('flgAi');
+    if (aiEl) aiEl.textContent = (aiPostsRes.error ? 0 : (aiPostsRes.data || []).length) + (aiCommentsRes.error ? 0 : (aiCommentsRes.data || []).length);
     var repEl = document.getElementById('flgReported');
     if (repEl) repEl.textContent = _repItems.length;
     _flaggedItems = items;
     document.getElementById('flgTotal').textContent = items.length;
     document.getElementById('flgHarmful').textContent = items.filter(function(i){ return _HARMFUL_CATEGORIES.indexOf(i.category) !== -1; }).length;
-    document.getElementById('flgQuality').textContent = items.filter(function(i){ return i.source !== 'reports' && _HARMFUL_CATEGORIES.indexOf(i.category) === -1; }).length;
+    document.getElementById('flgQuality').textContent = items.filter(function(i){ return i.source !== 'reports' && i.source !== 'ai' && _HARMFUL_CATEGORIES.indexOf(i.category) === -1; }).length;
     var appealEl = document.getElementById('flgAppeals');
     if (appealEl) appealEl.textContent = items.filter(function(i){ return i.appealStatus === 'pending'; }).length;
     var badge = document.getElementById('flaggedBadge');
@@ -6114,16 +6148,24 @@ async function loadFlaggedContent() {
 function renderFlaggedContent() {
   var tbody = document.getElementById('flaggedTbody');
   var filter = document.getElementById('flgCategoryFilter').value;
-  var rows = filter === 'all' ? _flaggedItems : _flaggedItems.filter(function(i){ return i.category === filter; });
+  var rows = filter === 'all' ? _flaggedItems
+    : filter === 'AI_SUSPECTED' ? _flaggedItems.filter(function(i){ return i.category === 'AI_SUSPECTED' || i.aiFlagCount; })
+    : _flaggedItems.filter(function(i){ return i.category === filter; });
   if (rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--g400)">Nothing flagged right now 🎉</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(function(item) {
     var isReportItem = item.source === 'reports';
-    var label = isReportItem ? ('Reported by ' + (item.reportCount || REPORT_HIDE_THRESHOLD) + ' people') : (MODERATION_CATEGORY_LABELS[item.category] || item.category || '—');
-    var isHarmful = !isReportItem && _HARMFUL_CATEGORIES.indexOf(item.category) !== -1;
-    var catColor = isReportItem ? '#b45309' : isHarmful ? '#99315f' : '#6b7280';
+    var isAiItem = item.source === 'ai';
+    var label = isAiItem ? ('Suspected AI · ' + (item.aiFlagCount || AI_FLAG_THRESHOLD) + ' people')
+      : isReportItem ? ('Reported by ' + (item.reportCount || REPORT_HIDE_THRESHOLD) + ' people') : (MODERATION_CATEGORY_LABELS[item.category] || item.category || '—');
+    var isHarmful = !isReportItem && !isAiItem && _HARMFUL_CATEGORIES.indexOf(item.category) !== -1;
+    var catColor = isAiItem ? '#7c3aed' : isReportItem ? '#b45309' : isHarmful ? '#99315f' : '#6b7280';
+    // 已經被隱藏、同時也被檢舉疑似 AI 的，在分類下面加註
+    var aiNote = (!isAiItem && item.aiFlagCount)
+      ? '<div style="margin-top:3px;font-size:10px;font-weight:700;color:#7c3aed">🤖 Also suspected AI · ' + item.aiFlagCount + ' people</div>'
+      : (isAiItem ? '<div style="margin-top:3px;font-size:10px;color:var(--g400)">' + (item.isHabitClip ? 'Check-in proof — delete if AI' : 'Still visible with a label') + '</div>' : '');
     var isPendingAppeal = item.appealStatus === 'pending';
     // 有申請複查的那一列加左邊色條 + 小標籤,讓它在畫面上比較顯眼(不用另外
     // 開分頁——排序已經把它們放最前面了,這裡只是視覺上再強調一次)。
@@ -6149,15 +6191,20 @@ function renderFlaggedContent() {
     return '<tr' + rowStyle + '>' +
       '<td style="font-size:11px">' + htmlEsc(resolveUserName(item.userId)) + '</td>' +
       '<td style="font-size:11px">' + item.kind + '</td>' +
-      '<td><span class="badge" style="background:' + catColor + '20;color:' + catColor + '">' + htmlEsc(label) + '</span>' + appealNote + '</td>' +
+      '<td><span class="badge" style="background:' + catColor + '20;color:' + catColor + '">' + htmlEsc(label) + '</span>' + appealNote + aiNote + '</td>' +
       '<td style="font-size:11px;max-width:320px;white-space:normal">' + htmlEsc((item.text || '').slice(0, 200)) + mediaPreviewHtml + '</td>' +
       '<td style="font-size:11px;color:var(--g400)">' + (item.createdAt ? new Date(item.createdAt).toLocaleString() : '—') + '</td>' +
       '<td style="white-space:nowrap">' +
-        (isReportItem
+        (isAiItem
+          ? '<button class="refresh" style="margin-right:6px" onclick="clearAiFlag(\'' + item.table + '\',\'' + item.id + '\')" title="Looks real: remove the label; later AI reports start counting from zero">Mark as real</button>'
+          : isReportItem
           ? '<button class="refresh" style="margin-right:6px" onclick="unhideReportedItem(\'' + item.table + '\',\'' + item.id + '\')" title="Show it to everyone again; later reports start counting from zero">Unhide</button>'
           : '<button class="refresh" style="margin-right:6px" onclick="unhideFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Unhide</button>') +
+        ((!isAiItem && item.aiFlagCount) ? '<button class="refresh" style="margin-right:6px" onclick="clearAiFlag(\'' + item.table + '\',\'' + item.id + '\')" title="Remove the AI label only">Not AI</button>' : '') +
         (isPendingAppeal ? '<button class="refresh" style="margin-right:6px" onclick="dismissFlaggedAppeal(\'' + item.table + '\',\'' + item.id + '\')" title="Reviewed, keeping it hidden">Mark Reviewed</button>' : '') +
-        '<button class="refresh" style="color:#dc2626;border-color:#dc2626" onclick="deleteFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Delete</button>' +
+        (isAiItem
+          ? '<button class="refresh" style="color:#dc2626;border-color:#dc2626" onclick="deleteAiFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')" title="Delete and tell the author it was removed for looking AI-generated">Delete (AI)</button>'
+          : '<button class="refresh" style="color:#dc2626;border-color:#dc2626" onclick="deleteFlaggedItem(\'' + item.table + '\',\'' + item.id + '\')">Delete</button>') +
       '</td>' +
     '</tr>';
   }).join('');
@@ -6246,6 +6293,63 @@ function _notifyAppealResolved(item, outcome) {
   }).then(function(r) {
     if (r && r.error) console.warn('[NotifyAppeal] 寫入通知失敗:', r.error.message);
   }).catch(function(e) { console.warn('[NotifyAppeal] 錯誤:', e && e.message); });
+}
+
+// ★ 2026-11-28：疑似 AI——確認是真的：拿掉標籤，之後的新 AI 檢舉從 0 重新算（ai_cleared_at）
+var AI_FLAG_THRESHOLD = 3; // 要跟 ai_flag.sql 的 v_threshold 一致（這裡只是顯示用）
+async function clearAiFlag(table, id) {
+  try {
+    var { error } = await _supabase.from(table).update({
+      ai_flagged: false, ai_flag_count: 0, ai_flagged_at: null, ai_cleared_at: new Date().toISOString()
+    }).eq('id', id);
+    if (error) throw error;
+    loadFlaggedContent();
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+// ★ 2026-11-28：疑似 AI——確認是 AI：刪除（含 Bunny 檔案）＋ 通知作者（App 內小鈴鐺）
+async function deleteAiFlaggedItem(table, id) {
+  var item = _flaggedItems.find(function(i){ return i.table === table && i.id === id; });
+  var what = !item ? 'item' : item.isHabitClip ? 'habit check-in video' : (table === 'posts' ? 'post' : 'comment');
+  if (!window.confirm('Delete this ' + what + ' as AI-generated? The author gets an in-app notice. This cannot be undone.')) return;
+  try {
+    var { error } = await _supabase.from(table).delete().eq('id', id);
+    if (error) throw error;
+    if (item) {
+      _adminCleanupBunnyMedia(item.userId, item.hasImage, item.hasVideo, item.mediaPublicId);
+      var surface = item.isHabitClip ? 'your habit check-in video' : (table === 'comments' ? 'your comment' : 'your Community post');
+      var body = 'We removed ' + surface + ' because it looked AI-generated. Check-ins and posts on FamStreak need to be real photos and videos.';
+      _supabase.from('notifications').insert({
+        user_id: item.userId,
+        type: 'ai_content_removed',
+        title: 'Removed: looked AI-generated',
+        body: body,
+        message: body, // notifications.message 是 NOT NULL
+        data: JSON.stringify({ kind: item.kind || null }),
+        is_read: false,
+        created_at: new Date().toISOString()
+      }).then(function(r) { if (r && r.error) console.warn('[AiRemove] 通知寫入失敗:', r.error.message); });
+    }
+    loadFlaggedContent();
+  } catch (e) {
+    alert('Delete failed: ' + e.message);
+  }
+}
+
+// ★ 2026-11-28：後台一打開就檢查有沒有疑似 AI 待審，有的話 Flagged Content 旁邊亮紅色數字
+//   （不用等你點進 Flagged Content 才知道）
+async function refreshAiFlagBadge() {
+  try {
+    var [a, b] = await Promise.all([
+      _supabase.from('posts').select('id', { count: 'exact', head: true }).eq('ai_flagged', true),
+      _supabase.from('comments').select('id', { count: 'exact', head: true }).eq('ai_flagged', true)
+    ]);
+    var n = (a && !a.error ? (a.count || 0) : 0) + (b && !b.error ? (b.count || 0) : 0);
+    var badge = document.getElementById('flaggedBadge');
+    if (badge && n > 0 && badge.style.display === 'none') { badge.style.display = 'inline-block'; badge.textContent = n; badge.title = n + ' suspected AI'; }
+  } catch (e) { /* ai_flag.sql 還沒跑 → 略過 */ }
 }
 
 // 誤判（false positive）：解除隱藏，改回一般可見的貼文/留言。
